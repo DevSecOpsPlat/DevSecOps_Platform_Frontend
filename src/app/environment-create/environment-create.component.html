@@ -1,0 +1,48 @@
+<div class="env-page">
+  <section class="env-hero-card">
+    <header class="env-header">
+      <h1>Environment Creation</h1>
+      <p>Create an ephemeral test environment from your Attijari Git repository.</p>
+    </header>
+
+    <form class="env-form">
+      <div class="env-field">
+        <label for="git-url">Git Repository URL</label>
+        <div class="env-input-shell">
+          <span class="env-field-icon">
+             <img src="assets/images/gitIcon.png" alt="Git icon" />
+          </span>
+           <input id="git-url" type="text" placeholder="https://git.attijari-bank.tn/projects/app-repo.git" />
+        </div>
+
+      </div>
+
+      <div class="env-field env-field-inline">
+        <div>
+          <label for="branch-name">Branch Name</label>
+          <div class="env-input-shell">
+            <span class="env-field-icon"><img src="assets/images/brancheIcon.png" alt="Branch icon" /></span>
+            <input id="branch-name" type="text" placeholder="feature/env-improvements" />
+          </div>
+        </div>
+        <div>
+          <label for="duration">Session Duration</label>
+          <div class="env-input-shell">
+            <span class="env-field-icon"><img src="assets/images/timerIcon.png" alt="Timer icon" /></span>
+            <input id="duration" type="text" placeholder="e.g. 4 hours" />
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="env-primary-btn">
+        Deploy Your Application Now
+      </button>
+
+      <p class="env-footnote">
+        EnviroTest will provision a secure, isolated environment, run your DevSecOps checks,
+        and provide a temporary URL for testing.
+      </p>
+    </form>
+  </section>
+</div>
+

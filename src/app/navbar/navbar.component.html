@@ -1,0 +1,27 @@
+<header class="app-bar" role="banner">
+  <div class="app-bar-inner">
+    <a routerLink="/home" class="brand">
+      <div class="brand-logos">
+        <img src="assets/images/attijari.png" alt="Attijari Bank logo" class="brand-logo-attijari">
+        <img src="assets/images/enviroTestLogorembg.png" alt="EnviroTest logo" class="brand-logo-envirotest">
+      </div>
+      <span class="brand-text">
+        EnviroTest
+        <span class="brand-tagline">On‑Demand Environments. Instant Testing.</span>
+      </span>
+    </a>
+
+    <button type="button" class="menu-toggle" aria-label="Toggle menu" (click)="menuOpen = !menuOpen" [attr.aria-expanded]="menuOpen">
+      <span class="menu-toggle-bar"></span>
+      <span class="menu-toggle-bar"></span> 
+      <span class="menu-toggle-bar"></span>
+    </button>
+
+    <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
+      <a routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Home</a>
+      <a routerLink="/environment-create" routerLinkActive="active" class="nav-link" (click)="menuOpen = false">Environment Creation</a>
+      <a routerLink="/sign-in" routerLinkActive="active" class="nav-link" (click)="menuOpen = false">Sign In</a>
+      <a routerLink="/sign-up" routerLinkActive="active" class="nav-link nav-link-cta" (click)="menuOpen = false">Sign Up</a>
+    </nav>
+  </div>
+</header>
