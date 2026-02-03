@@ -2,7 +2,7 @@
   <div class="sign-up-container">
     <div class="sign-up-visual">
       <div class="visual-content">
-        <span class="visual-icon"><img src="assets/images/Logormbg.png" alt="Logo " /></span>
+        <span class="visual-icon">🚀</span>
         <h2>Join the platform</h2>
         <p>Create an account to get API keys, manage secrets, and run audits.</p>
         <a routerLink="/sign-in" class="btn btn-outline-light">Already have an account? Sign in</a>
@@ -10,27 +10,59 @@
     </div>
     <div class="sign-up-form-panel">
       <h1>Create account</h1>
-      <p class="form-subtitle">Get started with DevSecOps Platform.</p>
-      <form class="auth-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="signup-firstname">First name</label>
-            <input id="signup-firstname" type="text" placeholder="First name" />
-          </div>
-          <div class="form-group">
-            <label for="signup-lastname">Last name</label>
-            <input id="signup-lastname" type="text" placeholder="Last name" />
+      <p class="form-subtitle">Get started with EnviroTest Platform.</p>
+
+      <div *ngIf="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+
+      <form [formGroup]="formSignup" class="auth-form" (ngSubmit)="signup()">
+        <div class="form-group">
+          <label for="signup-username">Username</label>
+          <input
+            id="signup-username"
+            type="text"
+            placeholder="Username"
+            formControlName="username"
+            [class.error]="formSignup.get('username')?.invalid && formSignup.get('username')?.touched" />
+          <div *ngIf="formSignup.get('username')?.invalid && formSignup.get('username')?.touched" class="field-error">
+            <span *ngIf="formSignup.get('username')?.errors?.['required']">Username is required</span>
+            <span *ngIf="formSignup.get('username')?.errors?.['minlength']">At least 2 characters</span>
           </div>
         </div>
         <div class="form-group">
           <label for="signup-email">Email</label>
-          <input id="signup-email" type="email" placeholder="Email" />
+          <input
+            id="signup-email"
+            type="email"
+            placeholder="Email"
+            formControlName="email"
+            [class.error]="formSignup.get('email')?.invalid && formSignup.get('email')?.touched" />
+          <div *ngIf="formSignup.get('email')?.invalid && formSignup.get('email')?.touched" class="field-error">
+            <span *ngIf="formSignup.get('email')?.errors?.['required']">Email is required</span>
+            <span *ngIf="formSignup.get('email')?.errors?.['email']">Please enter a valid email</span>
+          </div>
         </div>
         <div class="form-group">
           <label for="signup-password">Password</label>
-          <input id="signup-password" type="password" placeholder="Password" />
+          <input
+            id="signup-password"
+            type="password"
+            placeholder="Password (min. 6 characters)"
+            formControlName="password"
+            [class.error]="formSignup.get('password')?.invalid && formSignup.get('password')?.touched" />
+          <div *ngIf="formSignup.get('password')?.invalid && formSignup.get('password')?.touched" class="field-error">
+            <span *ngIf="formSignup.get('password')?.errors?.['required']">Password is required</span>
+            <span *ngIf="formSignup.get('password')?.errors?.['minlength']">Password must be at least 6 characters</span>
+          </div>
         </div>
-        <button type="button" class="btn btn-primary btn-block">Create account</button>
+        <button
+          type="submit"
+          class="btn btn-primary btn-block"
+          [disabled]="isLoading || formSignup.invalid">
+          <span *ngIf="!isLoading">Create account</span>
+          <span *ngIf="isLoading">Creating account...</span>
+        </button>
       </form>
       <p class="form-footer">
         Already have an account? <a routerLink="/sign-in">Sign in</a>
