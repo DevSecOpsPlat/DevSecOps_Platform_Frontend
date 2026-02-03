@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
+import { AuthService } from '../services/auth/auth.service';
 
 @Component({
   selector: 'app-navbar',
@@ -6,5 +7,26 @@ import { Component } from '@angular/core';
   styleUrls: ['./navbar.component.css']
 })
 export class NavbarComponent {
-menuOpen = false;
+  menuOpen = false;
+  userMenuOpen = false;
+
+  constructor(public authService: AuthService) {}
+
+  get user() {
+    return this.authService.getCurrentUser();
+  }
+
+  logout(): void {
+    this.userMenuOpen = false;
+    this.menuOpen = false;
+    this.authService.logout();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (this.userMenuOpen && target && !target.closest('.user-menu-wrap')) {
+      this.userMenuOpen = false;
+    }
+  }
 }

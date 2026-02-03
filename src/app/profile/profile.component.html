@@ -1,0 +1,43 @@
+<div class="profile-page">
+  <div class="profile-header">
+    <div class="profile-avatar">
+      <span class="avatar-icon" aria-hidden="true">🧑</span>
+    </div>
+    <h1>{{ user?.username || 'Mon profil' }}</h1>
+    <p class="profile-tagline">Compte EnviroTest · Attijari Bank</p>
+  </div>
+
+  <section class="profile-card" *ngIf="user">
+    <h2 class="card-title">Informations du compte</h2>
+    <div class="profile-grid">
+      <div class="profile-field">
+        <span class="field-label">Nom d'utilisateur</span>
+        <span class="field-value">{{ user.username }}</span>
+      </div>
+      <div class="profile-field" *ngIf="user.email">
+        <span class="field-label">Email</span>
+        <span class="field-value">{{ user.email }}</span>
+      </div>
+      <!--  
+      <div class="profile-field" *ngIf="user.roles?.length">
+        <span class="field-label">Rôles</span>
+        <span class="field-value">
+          <span class="role-badge" *ngFor="let role of user.roles">{{ role }}</span>
+        </span>
+      </div>
+      -->
+      <div class="profile-field">
+        <span class="field-label">Update</span>
+        <span class="field-value">
+          <span class="role-badge">Update your profile</span>
+        </span>
+      </div>
+    </div>
+    <div class="profile-actions">
+      <a routerLink="/environment-create" class="btn-profile">Créer un environnement</a>
+      <a routerLink="/home" class="btn-profile btn-profile-outline">Retour à l'accueil</a>
+    </div>
+  </section>
+</div>
+
+

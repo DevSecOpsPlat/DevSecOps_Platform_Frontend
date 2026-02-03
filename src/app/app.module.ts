@@ -9,6 +9,7 @@ import { HomeComponent } from './home/home.component';
 import { SignUpComponent } from './sign-up/sign-up.component';
 import { EnvironmentCreateComponent } from './environment-create/environment-create.component';
 import { SignInComponent } from './sign-in/sign-in.component';
+import { ProfileComponent } from './profile/profile.component';
 import { ReactiveFormsModule } from '@angular/forms';
 
 @NgModule({
@@ -18,7 +19,8 @@ import { ReactiveFormsModule } from '@angular/forms';
     HomeComponent,
     SignInComponent,
     SignUpComponent,
-    EnvironmentCreateComponent
+    EnvironmentCreateComponent,
+    ProfileComponent
   ],
   imports: [
     BrowserModule,
