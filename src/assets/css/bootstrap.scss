@@ -1,0 +1,51 @@
+/******* Customized Bootstrap ********/
+
+$primary-green: #65B661;
+$secondary-green: #9cce9c;
+$primary-blue: #006db0;
+$secondary-blue: #9AD3D8;
+$primary-orange: #F39436;
+$secondary-orange: #ffcba4;
+$accent-orange: #F39436;
+$light-orange: #ffcc99;
+$light-gray: #f9f9f9;
+$medium-gray: #e0e0e0;
+$dark-gray: #333;
+$white: #fff;
+
+// Bootstrap Color Overrides
+$primary: $primary-orange;
+$secondary: $secondary-blue;
+$success: $primary-green;
+$info: $secondary-blue;
+$warning: $secondary-orange;
+$light: $light-gray;
+$dark: $dark-gray;
+
+$font-family-base: 'Rubik', sans-serif;
+
+$headings-font-family: 'Plus Jakarta Sans', sans-serif;
+
+$body-color: #757575;
+
+$headings-color: $dark;
+
+$headings-font-weight: 500;
+
+$display-font-weight: 700;
+
+$enable-responsive-font-sizes: true;
+
+$border-radius: 10px;
+
+$border-radius-sm: $border-radius;
+
+$border-radius-lg: $border-radius;
+
+$link-decoration: none;
+
+$enable-negative-margins: true;
+
+@import "bootstrap/scss/bootstrap";
+@import 'ngx-owl-carousel-o/lib/styles/scss/owl.carousel';
+@import 'ngx-owl-carousel-o/lib/styles/scss/owl.theme.default';

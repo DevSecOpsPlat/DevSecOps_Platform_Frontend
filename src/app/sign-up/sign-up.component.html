@@ -1,0 +1,40 @@
+<div class="sign-up-page">
+  <div class="sign-up-container">
+    <div class="sign-up-visual">
+      <div class="visual-content">
+        <span class="visual-icon"><img src="assets/images/Logormbg.png" alt="Logo " /></span>
+        <h2>Join the platform</h2>
+        <p>Create an account to get API keys, manage secrets, and run audits.</p>
+        <a routerLink="/sign-in" class="btn btn-outline-light">Already have an account? Sign in</a>
+      </div>
+    </div>
+    <div class="sign-up-form-panel">
+      <h1>Create account</h1>
+      <p class="form-subtitle">Get started with DevSecOps Platform.</p>
+      <form class="auth-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="signup-firstname">First name</label>
+            <input id="signup-firstname" type="text" placeholder="First name" />
+          </div>
+          <div class="form-group">
+            <label for="signup-lastname">Last name</label>
+            <input id="signup-lastname" type="text" placeholder="Last name" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Email</label>
+          <input id="signup-email" type="email" placeholder="Email" />
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input id="signup-password" type="password" placeholder="Password" />
+        </div>
+        <button type="button" class="btn btn-primary btn-block">Create account</button>
+      </form>
+      <p class="form-footer">
+        Already have an account? <a routerLink="/sign-in">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
