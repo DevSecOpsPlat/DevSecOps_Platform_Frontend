@@ -28,7 +28,7 @@
 
       <div class="user-menu-wrap" *ngIf="authService.isLoggedIn$ | async">
         <button type="button" class="user-menu-trigger" (click)="userMenuOpen = !userMenuOpen" [attr.aria-expanded]="userMenuOpen" aria-label="Menu utilisateur">
-          <span class="user-icon" aria-hidden="true">🧑</span>
+          <span class="user-icon" aria-hidden="true"><img src="assets/images/user.png" alt="userIcon " /></span>
           <span class="user-name">{{ user?.username || 'Compte' }}</span>
         </button>
         <div class="user-dropdown" [class.user-dropdown-open]="userMenuOpen">

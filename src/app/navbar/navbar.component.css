@@ -226,8 +226,10 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.user-icon {
+.user-icon img {
   font-size: 1.1rem;
+   width: 30px;   /* taille de l'icône */
+  height: 30px;
 }
 .user-name {
   max-width: 120px;
