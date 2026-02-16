@@ -3,17 +3,44 @@
     <div class="sign-in-form-panel">
       <h1>Sign in</h1>
       <p class="form-subtitle">Welcome back. Sign in to your account.</p>
-      <form class="auth-form">
+      
+      <div *ngIf="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+
+      <form [formGroup]="formSignin" class="auth-form" (ngSubmit)="signin()">
         <div class="form-group">
-          <label for="signin-email">Email or username</label>
-          <input id="signin-email" type="text" placeholder="Email or username" />
+          <label for="signin-username">Username</label>
+          <input 
+            id="signin-username" 
+            type="text" 
+            placeholder="Username" 
+            formControlName="username"
+            [class.error]="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" />
+          <div *ngIf="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" class="field-error">
+            Username is required
+          </div>
         </div>
         <div class="form-group">
           <label for="signin-password">Password</label>
-          <input id="signin-password" type="password" placeholder="Password" />
+          <input 
+            id="signin-password" 
+            type="password" 
+            placeholder="Password" 
+            formControlName="password"
+            [class.error]="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" />
+          <div *ngIf="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" class="field-error">
+            Password is required
+          </div>
         </div>
         <a routerLink="/sign-up" class="forgot-link">Forgot password?</a>
-        <button type="button" class="btn btn-primary btn-block">Sign in</button>
+        <button 
+          type="submit" 
+          class="btn btn-primary btn-block"
+          [disabled]="isLoading || formSignin.invalid">
+          <span *ngIf="!isLoading">Sign in</span>
+          <span *ngIf="isLoading">Signing in...</span>
+        </button>
       </form>
       <p class="form-footer">
         Don't have an account? <a routerLink="/sign-up">Sign up</a>

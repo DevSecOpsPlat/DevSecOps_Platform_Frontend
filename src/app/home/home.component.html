@@ -9,7 +9,7 @@
       </p>
       <div class="hero-actions">
         <a routerLink="/environment-create" class="btn btn-primary">Deploy your application now</a>
-        <a routerLink="/sign-in" class="btn btn-outline">Sign in</a>
+        <a *ngIf="!(authService.isLoggedIn$ | async)" routerLink="/sign-in" class="btn btn-outline">Sign in</a>
       </div>
     </div>
     <div class="hero-visual">
