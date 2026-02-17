@@ -14,6 +14,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 import { MyApplicationsComponent } from './my-applications/my-applications.component';
 import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
+import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
 
 @NgModule({
   declarations: [
@@ -26,7 +27,8 @@ import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.co
     ProfileComponent,
     AdminDashboardComponent,
     MyApplicationsComponent,
-    PipelineDetailsComponent
+    PipelineDetailsComponent,
+    PipelinesListComponent
   ],
   imports: [
     BrowserModule,

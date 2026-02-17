@@ -33,6 +33,12 @@
          class="nav-link"
          (click)="menuOpen = false">Applications</a>
 
+      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
+         routerLink="/pipelines"
+         routerLinkActive="active"
+         class="nav-link"
+         (click)="menuOpen = false">Pipelines</a>
+
       <!-- Lien admin supplémentaire dans la barre principale -->
       <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin"
          routerLink="/admin-dashboard"
@@ -64,6 +70,11 @@
              routerLink="/my-applications"
              class="user-dropdown-item"
              (click)="userMenuOpen = false; menuOpen = false">Mes applications</a>
+
+          <a *ngIf="isTester"
+             routerLink="/pipelines"
+             class="user-dropdown-item"
+             (click)="userMenuOpen = false; menuOpen = false">Pipelines</a>
 
           <button type="button"
                   class="user-dropdown-item user-dropdown-item-logout"

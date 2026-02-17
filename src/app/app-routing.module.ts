@@ -9,6 +9,7 @@ import { ProfileComponent } from './profile/profile.component';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 import { MyApplicationsComponent } from './my-applications/my-applications.component';
 import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
+import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 
@@ -20,6 +21,7 @@ const routes: Routes = [
   { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'environments', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },
+  { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
   // Administration

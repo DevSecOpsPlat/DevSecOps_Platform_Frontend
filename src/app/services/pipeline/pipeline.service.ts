@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
+import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;
@@ -22,20 +23,39 @@ export class PipelineService {
     });
   }
 
+  listPipelines(): Observable<PipelineListItem[]> {
+    return this.http.get<PipelineListItem[]>(BASE + 'api/pipelines', {
+      headers: this.authHeaders()
+    });
+  }
+
   getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
-    return this.http.get<PipelineScanResponse>(BASE + `api/environments/${envId}/pipeline`, {
+    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}`, {
+      headers: this.authHeaders()
+    });
+  }
+
+  getByPipelineId(pipelineId: number): Observable<PipelineScanResponse> {
+    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/${pipelineId}`, {
+      headers: this.authHeaders()
+    });
+  }
+
+  cancelPipeline(pipelineId: number): Observable<void> {
+    return this.http.post<void>(BASE + `api/pipelines/${pipelineId}/cancel`, null, {
       headers: this.authHeaders()
     });
   }
 
   getJobLogs(jobId: number): Observable<string> {
-    return this.http.get(BASE + `api/pipeline/jobs/${jobId}/logs`, {
+    return this.http.get(BASE + `api/pipelines/jobs/${jobId}/logs`, {
+      headers: this.authHeaders(),
       responseType: 'text'
     });
   }
 
   getScanResults(jobId: number): Observable<any> {
-    return this.http.get(BASE + `api/scan-results/${jobId}`, {
+    return this.http.get(BASE + `api/pipelines/jobs/${jobId}/scan`, {
       headers: this.authHeaders()
     });
   }
