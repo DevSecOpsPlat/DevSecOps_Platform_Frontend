@@ -41,38 +41,25 @@ export class SignInComponent implements OnInit {
       this.isLoading = true;
       this.errorMessage = '';
 
-      const username = this.formSignin.get('username')?.value;
-
-      // First check if user exists and is not banned
-      this.userService.getUserByUsername(username).pipe(
+      // Login direct (le backend gère compte APPROVED/PENDING)
+      this.authService.login(this.formSignin.value).pipe(
         catchError((error) => {
-          console.error('Error fetching user:', error);
-          // Continue with login attempt even if user fetch fails
+          this.isLoading = false;
+          console.error('Login error:', error);
+          this.errorMessage = error.error?.message || 'Invalid username or password';
+          this.showAlert(this.errorMessage);
           return of(null);
         })
-      ).subscribe((user: User | null) => {
-        if (user && user.isBanned) {
+      ).subscribe((response) => {
+        if (response) {
           this.isLoading = false;
-          this.errorMessage = `User is banned until ${user.banDate}`;
-          this.showAlert(this.errorMessage);
-          return;
-        }
-
-        // Proceed with login
-        this.authService.login(this.formSignin.value).pipe(
-          catchError((error) => {
-            this.isLoading = false;
-            console.error('Login error:', error);
-            this.errorMessage = error.error?.message || 'Invalid username or password';
-            this.showAlert(this.errorMessage);
-            return of(null);
-          })
-        ).subscribe((response) => {
-          if (response) {
-            this.isLoading = false;
-            this.router.navigate(['/home']);
+          const roles = response.roles || [];
+          if (roles.includes('ROLE_ADMIN')) {
+            this.router.navigate(['/admin-dashboard']);
+          } else {
+            this.router.navigate(['/environments']);
           }
-        });
+        }
       });
     } else {
       this.errorMessage = 'Please fill in all required fields.';

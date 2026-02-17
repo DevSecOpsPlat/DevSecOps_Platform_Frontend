@@ -10,7 +10,12 @@
     </div>
     <div *ngIf="successResult" class="env-success">
       <p><strong>Pipeline lancé.</strong> Environnement : {{ successResult.environmentName }}</p>
-      <a [href]="successResult.pipelineWebUrl" target="_blank" rel="noopener" class="env-success-link">Voir le pipeline GitLab →</a>
+      <a [routerLink]="['/pipeline', successResult.environmentId]" class="env-success-link">
+        Voir les détails du pipeline →
+      </a>
+      <a [href]="successResult.pipelineWebUrl" target="_blank" rel="noopener" class="env-success-link secondary">
+        Ouvrir dans GitLab →
+      </a>
     </div>
 
     <form [formGroup]="form" class="env-form" (ngSubmit)="deploy()">

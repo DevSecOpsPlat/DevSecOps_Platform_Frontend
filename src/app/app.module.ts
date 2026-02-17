@@ -11,6 +11,9 @@ import { EnvironmentCreateComponent } from './environment-create/environment-cre
 import { SignInComponent } from './sign-in/sign-in.component';
 import { ProfileComponent } from './profile/profile.component';
 import { ReactiveFormsModule } from '@angular/forms';
+import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
+import { MyApplicationsComponent } from './my-applications/my-applications.component';
+import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
 
 @NgModule({
   declarations: [
@@ -20,7 +23,10 @@ import { ReactiveFormsModule } from '@angular/forms';
     SignInComponent,
     SignUpComponent,
     EnvironmentCreateComponent,
-    ProfileComponent
+    ProfileComponent,
+    AdminDashboardComponent,
+    MyApplicationsComponent,
+    PipelineDetailsComponent
   ],
   imports: [
     BrowserModule,

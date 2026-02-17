@@ -16,6 +16,14 @@ export class NavbarComponent {
     return this.authService.getCurrentUser();
   }
 
+  get isAdmin(): boolean {
+    return this.authService.hasRole('ROLE_ADMIN');
+  }
+
+  get isTester(): boolean {
+    return this.authService.hasRole('ROLE_TESTER');
+  }
+
   logout(): void {
     this.userMenuOpen = false;
     this.menuOpen = false;

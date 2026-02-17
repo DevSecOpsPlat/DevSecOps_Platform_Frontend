@@ -1,0 +1,75 @@
+<div class="pipeline-page" *ngIf="data">
+  <div class="header">
+    <div>
+      <h1>Pipeline #{{ data.pipelineId }}</h1>
+      <a [href]="data.webUrl" target="_blank" rel="noopener noreferrer">Ouvrir dans GitLab</a>
+    </div>
+    <div class="status">
+      <span [ngClass]="statusClass(data.status)">
+        {{ data.status | uppercase }}
+      </span>
+      <div *ngIf="isRunning()" class="spinner"></div>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <div class="jobs-card">
+      <h2>Jobs</h2>
+      <ul class="jobs-list">
+        <li *ngFor="let job of data.jobs"
+            (click)="selectJob(job)"
+            [class.selected]="job.id === selectedJob?.id">
+          <div class="job-main">
+            <span class="job-name">{{ job.name }}</span>
+            <span [ngClass]="statusClass(job.status)">{{ job.status }}</span>
+          </div>
+          <div class="job-meta">
+            <span class="job-stage">{{ job.stage }}</span>
+            <span *ngIf="job.duration">⏱ {{ job.duration }}s</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="details-card">
+      <h2>Détails du job</h2>
+
+      <div *ngIf="!selectedJob" class="placeholder">
+        Sélectionnez un job pour voir les logs et le résultat du scan.
+      </div>
+
+      <div *ngIf="selectedJob">
+        <h3>{{ selectedJob.name }}</h3>
+        <p class="job-info">
+          <span class="badge badge-muted">{{ selectedJob.stage }}</span>
+          <span [ngClass]="statusClass(selectedJob.status)">{{ selectedJob.status }}</span>
+        </p>
+
+        <div *ngIf="loadingJob" class="loading-state">
+          <div class="spinner"></div>
+          <span>Chargement des logs...</span>
+        </div>
+
+        <div class="logs-section" *ngIf="selectedJobLogs">
+          <h4>Logs</h4>
+          <pre>{{ selectedJobLogs }}</pre>
+        </div>
+
+        <div class="logs-section" *ngIf="selectedJobScanJson">
+          <h4>Résultat du scan (JSON brut)</h4>
+          <pre>{{ selectedJobScanJson | json }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="loading && !data" class="loading-page">
+  <div class="spinner"></div>
+  <span>Chargement du pipeline...</span>
+</div>
+
+<div *ngIf="error" class="error-banner">
+  {{ error }}
+</div>
+

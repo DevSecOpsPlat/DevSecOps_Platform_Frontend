@@ -19,7 +19,26 @@
 
     <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
       <a routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Home</a>
-      <a routerLink="/environment-create" routerLinkActive="active" class="nav-link" (click)="menuOpen = false">Environment Creation</a>
+
+      <!-- Liens visibles pour les utilisateurs connectés (testeurs) -->
+      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
+         routerLink="/environment-create"
+         routerLinkActive="active"
+         class="nav-link"
+         (click)="menuOpen = false">Environment Creation</a>
+
+      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
+         routerLink="/my-applications"
+         routerLinkActive="active"
+         class="nav-link"
+         (click)="menuOpen = false">Applications</a>
+
+      <!-- Lien admin supplémentaire dans la barre principale -->
+      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin"
+         routerLink="/admin-dashboard"
+         routerLinkActive="active"
+         class="nav-link"
+         (click)="menuOpen = false">Admin</a>
 
       <ng-container *ngIf="!(authService.isLoggedIn$ | async)">
         <a routerLink="/sign-in" routerLinkActive="active" class="nav-link" (click)="menuOpen = false">Sign In</a>
@@ -32,8 +51,23 @@
           <span class="user-name">{{ user?.username || 'Compte' }}</span>
         </button>
         <div class="user-dropdown" [class.user-dropdown-open]="userMenuOpen">
-          <a routerLink="/profile" class="user-dropdown-item" (click)="userMenuOpen = false; menuOpen = false">Profil</a>
-          <button type="button" class="user-dropdown-item user-dropdown-item-logout" (click)="logout()">Déconnexion</button>
+          <a routerLink="/profile"
+             class="user-dropdown-item"
+             (click)="userMenuOpen = false; menuOpen = false">Profil</a>
+
+          <a *ngIf="isAdmin"
+             routerLink="/admin-dashboard"
+             class="user-dropdown-item"
+             (click)="userMenuOpen = false; menuOpen = false">Admin Dashboard</a>
+
+          <a *ngIf="isTester"
+             routerLink="/my-applications"
+             class="user-dropdown-item"
+             (click)="userMenuOpen = false; menuOpen = false">Mes applications</a>
+
+          <button type="button"
+                  class="user-dropdown-item user-dropdown-item-logout"
+                  (click)="logout()">Déconnexion</button>
         </div>
       </div>
     </nav>

@@ -1,0 +1,37 @@
+<div class="apps-page">
+  <h1 class="page-title">Mes applications</h1>
+
+  <div *ngIf="loading" class="loading-state">
+    <div class="spinner"></div>
+    <span>Chargement de vos applications...</span>
+  </div>
+
+  <div *ngIf="error" class="error-banner">
+    {{ error }}
+  </div>
+
+  <div class="cards-grid" *ngIf="!loading && !error">
+    <div *ngIf="applications.length === 0" class="empty-state-card">
+      <p>Aucune application pour le moment.</p>
+      <button class="btn-primary" (click)="openEnvironments()">Déployer une nouvelle application</button>
+    </div>
+
+    <div class="app-card" *ngFor="let app of applications">
+      <div class="app-header">
+        <h2>{{ app.name }}</h2>
+        <span class="badge badge-secondary">{{ app.createdByUsername }}</span>
+      </div>
+      <p class="repo-url">{{ app.gitRepositoryUrl }}</p>
+      <p class="meta">
+        Créée le {{ app.createdAt | date: 'short' }}
+      </p>
+      <div class="tags">
+        <span class="tag">Dockerfile: {{ app.dockerfilePath || './Dockerfile' }}</span>
+        <span class="tag" [class.tag-success]="app.hasGithubToken" [class.tag-muted]="!app.hasGithubToken">
+          {{ app.hasGithubToken ? 'Token GitHub configuré' : 'Pas de token GitHub' }}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
