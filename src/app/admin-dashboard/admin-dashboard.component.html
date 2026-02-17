@@ -1,48 +1,61 @@
-<div class="admin-page">
-  <h1 class="page-title">Administration des utilisateurs</h1>
+<div class="admin-layout">
+  <!-- Sidebar admin -->
+  <aside class="admin-sidebar">
+    <h2 class="sidebar-title">Admin</h2>
+    <nav class="sidebar-nav">
+      <a routerLink="/admin-dashboard" routerLinkActive="active" class="sidebar-link">Utilisateurs</a>
+      <a routerLink="/my-applications" routerLinkActive="active" class="sidebar-link">Applications</a>
+      <a routerLink="/environments" routerLinkActive="active" class="sidebar-link">Pipelines / Déploiements</a>
+    </nav>
+  </aside>
 
-  <div *ngIf="loading" class="loading-state">
-    <div class="spinner"></div>
-    <span>Chargement des utilisateurs en attente...</span>
-  </div>
+  <!-- Contenu principal -->
+  <main class="admin-page">
+    <h1 class="page-title">Administration des utilisateurs</h1>
 
-  <div *ngIf="error" class="error-banner">
-    {{ error }}
-  </div>
-
-  <div *ngIf="!loading && !error" class="card">
-    <div class="card-header">
-      <h2>Utilisateurs en attente</h2>
-      <span class="badge badge-light">{{ pendingUsers.length }} en attente</span>
+    <div *ngIf="loading" class="loading-state">
+      <div class="spinner"></div>
+      <span>Chargement des utilisateurs en attente...</span>
     </div>
 
-    <div *ngIf="pendingUsers.length === 0" class="empty-state">
-      <p>Aucun utilisateur en attente de validation.</p>
+    <div *ngIf="error" class="error-banner">
+      {{ error }}
     </div>
 
-    <div *ngIf="pendingUsers.length > 0" class="table-wrapper">
-      <table class="users-table">
-        <thead>
-        <tr>
-          <th>Username</th>
-          <th>Email</th>
-          <th>Créé le</th>
-          <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr *ngFor="let user of pendingUsers">
-          <td>{{ user.username }}</td>
-          <td>{{ user.email }}</td>
-          <td>{{ user.createdAt | date: 'short' }}</td>
-          <td class="actions">
-            <button class="btn btn-approve" (click)="approve(user)">Approuver</button>
-            <button class="btn btn-reject" (click)="reject(user)">Rejeter</button>
-          </td>
-        </tr>
-        </tbody>
-      </table>
+    <div *ngIf="!loading && !error" class="card">
+      <div class="card-header">
+        <h2>Utilisateurs en attente</h2>
+        <span class="badge badge-light">{{ pendingUsers.length }} en attente</span>
+      </div>
+
+      <div *ngIf="pendingUsers.length === 0" class="empty-state">
+        <p>Aucun utilisateur en attente de validation.</p>
+      </div>
+
+      <div *ngIf="pendingUsers.length > 0" class="table-wrapper">
+        <table class="users-table">
+          <thead>
+          <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Créé le</th>
+            <th>Actions</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr *ngFor="let user of pendingUsers">
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.createdAt | date: 'short' }}</td>
+            <td class="actions">
+              <button class="btn btn-approve" (click)="approve(user)">Approuver</button>
+              <button class="btn btn-reject" (click)="reject(user)">Rejeter</button>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
+  </main>
 </div>
 
