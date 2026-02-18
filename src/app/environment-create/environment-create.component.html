@@ -23,7 +23,7 @@
         <label for="git-url">Git Repository URL</label>
         <div class="env-input-shell">
           <span class="env-field-icon">
-            <img src="assets/images/gitIcon.png" alt="Git icon" />
+            <img src="/assets/images/gitIcon.png" alt="Git icon" />
           </span>
           <input id="git-url" type="text" formControlName="gitRepositoryUrl" placeholder="https://github.com/owner/repo.git" />
         </div>
@@ -45,7 +45,7 @@
         <div>
           <label for="branch-name">Branch Name</label>
           <div class="env-input-shell">
-            <span class="env-field-icon"><img src="assets/images/brancheIcon.png" alt="Branch icon" /></span>
+            <span class="env-field-icon"><img src="/assets/images/brancheIcon.png" alt="Branch icon" /></span>
             <input id="branch-name" type="text" formControlName="branch" placeholder="main" />
           </div>
           <div class="field-error" *ngIf="form.get('branch')?.invalid && form.get('branch')?.touched">Branche requise</div>
@@ -53,7 +53,7 @@
         <div>
           <label for="duration">Session Duration (hours)</label>
           <div class="env-input-shell">
-            <span class="env-field-icon"><img src="assets/images/timerIcon.png" alt="Timer icon" /></span>
+            <span class="env-field-icon"><img src="/assets/images/timerIcon.png" alt="Timer icon" /></span>
             <input id="duration" type="number" formControlName="sessionDurationHours" placeholder="4" min="1" max="72" />
           </div>
           <div class="field-error" *ngIf="form.get('sessionDurationHours')?.invalid && form.get('sessionDurationHours')?.touched">Entre 1 et 72</div>

@@ -93,5 +93,53 @@ export class PipelineDetailsComponent implements OnInit {
         return 'badge badge-muted';
     }
   }
+
+  getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
+    if (!this.data?.jobs) return [];
+    const stageMap = new Map<string, PipelineJobInfo[]>();
+    this.data.jobs.forEach(job => {
+      const stage = job.stage || 'unknown';
+      if (!stageMap.has(stage)) {
+        stageMap.set(stage, []);
+      }
+      stageMap.get(stage)!.push(job);
+    });
+    return Array.from(stageMap.entries()).map(([name, jobs]) => {
+      const statuses = jobs.map(j => j.status?.toLowerCase() || 'unknown');
+      let overallStatus = 'success';
+      if (statuses.some(s => s === 'failed' || s === 'canceled')) {
+        overallStatus = 'failed';
+      } else if (statuses.some(s => s === 'running' || s === 'pending')) {
+        overallStatus = 'running';
+      }
+      return { name, jobs, status: overallStatus };
+    });
+  }
+
+  formatDuration(seconds: number | undefined): string {
+    if (!seconds) return '—';
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  }
+
+  hasVulnerabilities(scanJson: any): boolean {
+    if (!scanJson) return false;
+    return scanJson.vulnerabilities?.length > 0 || 
+           scanJson.Vulnerabilities?.length > 0 ||
+           scanJson.results?.some((r: any) => r.Vulnerabilities?.length > 0);
+  }
+
+  countVulnerabilities(scanJson: any): number {
+    if (!scanJson) return 0;
+    if (scanJson.vulnerabilities) return scanJson.vulnerabilities.length;
+    if (scanJson.Vulnerabilities) return scanJson.Vulnerabilities.length;
+    if (scanJson.results) {
+      return scanJson.results.reduce((sum: number, r: any) => 
+        sum + (r.Vulnerabilities?.length || 0), 0);
+    }
+    return 0;
+  }
 }
 

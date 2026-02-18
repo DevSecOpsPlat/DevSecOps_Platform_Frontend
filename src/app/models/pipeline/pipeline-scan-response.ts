@@ -8,11 +8,12 @@ export interface PipelineJobInfo {
 }
 
 export interface PipelineScanResponse {
-  pipelineId: number;
+  pipelineId: number | null;
   status: string;
-  webUrl: string;
+  webUrl: string | null;
   jobStatusCount: Record<string, number>;
   jobs: PipelineJobInfo[];
   securityReports: Record<string, any>;
+  hasValidGitLabId?: boolean;
 }
 

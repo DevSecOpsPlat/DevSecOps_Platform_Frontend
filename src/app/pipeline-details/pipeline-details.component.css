@@ -72,6 +72,55 @@
   background: #eef2ff;
 }
 
+.jobs-list li.job-success {
+  border-left: 3px solid #66bb6a;
+}
+
+.jobs-list li.job-failed {
+  border-left: 3px solid #ef5350;
+}
+
+.jobs-list li.job-running {
+  border-left: 3px solid #42a5f5;
+}
+
+.stages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stage-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fafafa;
+}
+
+.stage-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.stage-status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.job-link {
+  font-size: 0.7rem;
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+.job-link:hover {
+  text-decoration: underline;
+}
+
 .job-main {
   display: flex;
   justify-content: space-between;
@@ -172,6 +221,85 @@
   background: #fee2e2;
   color: #b91c1c;
   font-size: 0.9rem;
+}
+
+.warning-banner {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+  color: #92400e;
+}
+
+.warning-banner strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.warning-banner p {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.empty-state {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-state p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.empty-hint {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.scan-results {
+  margin-top: 1rem;
+}
+
+.vulnerabilities-summary {
+  padding: 0.75rem;
+  background: #fef2f2;
+  border-left: 3px solid #ef5350;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.vulnerabilities-summary h5 {
+  margin: 0 0 0.25rem 0;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.vuln-count {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #7f1d1d;
+}
+
+.json-details {
+  margin-top: 0.5rem;
+}
+
+.json-details summary {
+  cursor: pointer;
+  padding: 0.5rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.json-details summary:hover {
+  background: #e5e7eb;
 }
 
 @media (max-width: 900px) {

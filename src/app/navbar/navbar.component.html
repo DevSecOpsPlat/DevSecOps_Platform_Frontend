@@ -2,8 +2,8 @@
   <div class="app-bar-inner">
     <a routerLink="/home" class="brand">
       <div class="brand-logos">
-        <img src="assets/images/attijari.png" alt="Attijari Bank logo" class="brand-logo-attijari">
-        <img src="assets/images/enviroTestLogorembg.png" alt="EnviroTest logo" class="brand-logo-envirotest">
+        <img src="/assets/images/attijari.png" alt="Attijari Bank logo" class="brand-logo-attijari">
+        <img src="/assets/images/enviroTestLogorembg.png" alt="EnviroTest logo" class="brand-logo-envirotest">
       </div>
       <span class="brand-text">
         EnviroTest
@@ -53,7 +53,7 @@
 
       <div class="user-menu-wrap" *ngIf="authService.isLoggedIn$ | async">
         <button type="button" class="user-menu-trigger" (click)="userMenuOpen = !userMenuOpen" [attr.aria-expanded]="userMenuOpen" aria-label="Menu utilisateur">
-          <span class="user-icon" aria-hidden="true"><img src="assets/images/user.png" alt="userIcon " /></span>
+          <span class="user-icon" aria-hidden="true"><img src="/assets/images/user.png" alt="userIcon " /></span>
           <span class="user-name">{{ user?.username || 'Compte' }}</span>
         </button>
         <div class="user-dropdown" [class.user-dropdown-open]="userMenuOpen">

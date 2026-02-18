@@ -1,8 +1,8 @@
 <div class="pipeline-page" *ngIf="data">
   <div class="header">
     <div>
-      <h1>Pipeline #{{ data.pipelineId }}</h1>
-      <a [href]="data.webUrl" target="_blank" rel="noopener noreferrer">Ouvrir dans GitLab</a>
+      <h1>Pipeline <span *ngIf="data.pipelineId">#{{ data.pipelineId }}</span><span *ngIf="!data.pipelineId">(ID GitLab invalide)</span></h1>
+      <a *ngIf="data.webUrl" [href]="data.webUrl" target="_blank" rel="noopener noreferrer">Ouvrir dans GitLab</a>
     </div>
     <div class="status">
       <span [ngClass]="statusClass(data.status)">
@@ -12,23 +12,46 @@
     </div>
   </div>
 
+  <div *ngIf="!data.pipelineId || data.pipelineId <= 0" class="warning-banner">
+    <strong>⚠️ Pipeline sans ID GitLab valide</strong>
+    <p>Ce pipeline n'a pas d'ID GitLab valide. Les détails (stages, jobs, logs) ne peuvent pas être récupérés depuis GitLab.</p>
+    <p>Statut actuel depuis la base de données : <strong>{{ data.status }}</strong></p>
+  </div>
+
   <div class="content-grid">
     <div class="jobs-card">
-      <h2>Jobs</h2>
-      <ul class="jobs-list">
-        <li *ngFor="let job of data.jobs"
-            (click)="selectJob(job)"
-            [class.selected]="job.id === selectedJob?.id">
-          <div class="job-main">
-            <span class="job-name">{{ job.name }}</span>
-            <span [ngClass]="statusClass(job.status)">{{ job.status }}</span>
-          </div>
-          <div class="job-meta">
-            <span class="job-stage">{{ job.stage }}</span>
-            <span *ngIf="job.duration">⏱ {{ job.duration }}s</span>
-          </div>
-        </li>
-      </ul>
+      <h2>Stages & Jobs</h2>
+      <div *ngIf="!data.jobs || data.jobs.length === 0" class="empty-state">
+        <p>Aucun job disponible.</p>
+        <p *ngIf="!data.pipelineId || data.pipelineId <= 0" class="empty-hint">
+          Les jobs ne peuvent pas être récupérés car le pipeline n'a pas d'ID GitLab valide.
+        </p>
+      </div>
+      <div class="stages-container" *ngIf="data.jobs && data.jobs.length > 0">
+        <div *ngFor="let stage of getStages()" class="stage-group">
+          <h3 class="stage-title">
+            <span [ngClass]="statusClass(stage.status)">{{ stage.name }}</span>
+            <span class="stage-status">{{ stage.status }}</span>
+          </h3>
+          <ul class="jobs-list">
+            <li *ngFor="let job of stage.jobs"
+                (click)="selectJob(job)"
+                [class.selected]="job.id === selectedJob?.id"
+                [class.job-success]="job.status === 'success'"
+                [class.job-failed]="job.status === 'failed' || job.status === 'canceled'"
+                [class.job-running]="job.status === 'running' || job.status === 'pending'">
+              <div class="job-main">
+                <span class="job-name">{{ job.name }}</span>
+                <span [ngClass]="statusClass(job.status)">{{ job.status }}</span>
+              </div>
+              <div class="job-meta">
+                <span *ngIf="job.duration">⏱ {{ formatDuration(job.duration) }}</span>
+                <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" class="job-link">Voir dans GitLab</a>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
 
     <div class="details-card">
@@ -56,8 +79,17 @@
         </div>
 
         <div class="logs-section" *ngIf="selectedJobScanJson">
-          <h4>Résultat du scan (JSON brut)</h4>
-          <pre>{{ selectedJobScanJson | json }}</pre>
+          <h4>Résultat du scan</h4>
+          <div class="scan-results">
+            <div *ngIf="hasVulnerabilities(selectedJobScanJson)" class="vulnerabilities-summary">
+              <h5>Vulnérabilités détectées</h5>
+              <p class="vuln-count">{{ countVulnerabilities(selectedJobScanJson) }} vulnérabilité(s) trouvée(s)</p>
+            </div>
+            <details class="json-details">
+              <summary>Voir le JSON complet</summary>
+              <pre>{{ selectedJobScanJson | json }}</pre>
+            </details>
+          </div>
         </div>
       </div>
     </div>
