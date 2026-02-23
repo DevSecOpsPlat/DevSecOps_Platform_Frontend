@@ -10,12 +10,16 @@ import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.compo
 import { MyApplicationsComponent } from './my-applications/my-applications.component';
 import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
+import { AdminHomeComponent } from './admin-home/admin-home.component';
+import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: 'home', component: HomeComponent },
+  { path: 'admin-home', component: AdminHomeComponent, canActivate: [AdminGuard] },
+  { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
 
   // Utilisateur connecté : création / gestion des environnements
   { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },

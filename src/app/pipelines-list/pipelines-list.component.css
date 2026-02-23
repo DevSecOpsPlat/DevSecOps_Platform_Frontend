@@ -1,7 +1,10 @@
 .pipelines-page {
-  padding: 2rem;
-  max-width: 1200px;
+  padding: 3rem 2.5rem;
+  max-width: 1400px;
   margin: 0 auto;
+  margin-top: 64px;
+  min-height: calc(100vh - 64px);
+  background: #f8fafc;
 }
 
 .page-header {

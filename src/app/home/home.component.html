@@ -1,4 +1,4 @@
-<div class="home-page">
+<div class="home-page" *ngIf="!(authService.isLoggedIn$ | async) || !authService.hasRole('ROLE_ADMIN')">
   <!-- Hero -->
   <section class="hero">
     <div class="hero-content">

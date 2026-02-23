@@ -61,8 +61,7 @@ export class SignUpComponent implements OnInit {
       ).subscribe((response) => {
         this.isLoading = false;
         if (response !== null) {
-          alert('Compte créé avec succès. Merci de patienter pendant la validation par un administrateur.');
-          this.router.navigate(['/sign-in']);
+          this.router.navigate(['/approval-waiting']);
         }
       });
     } else {

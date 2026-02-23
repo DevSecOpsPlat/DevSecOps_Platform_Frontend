@@ -15,6 +15,9 @@ import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.compo
 import { MyApplicationsComponent } from './my-applications/my-applications.component';
 import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
+import { AdminHomeComponent } from './admin-home/admin-home.component';
+import { AdminSidebarComponent } from './shared/admin-sidebar/admin-sidebar.component';
+import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 
 @NgModule({
   declarations: [
@@ -28,7 +31,10 @@ import { PipelinesListComponent } from './pipelines-list/pipelines-list.componen
     AdminDashboardComponent,
     MyApplicationsComponent,
     PipelineDetailsComponent,
-    PipelinesListComponent
+    PipelinesListComponent,
+    AdminHomeComponent,
+    AdminSidebarComponent,
+    ApprovalWaitingMessageComponent
   ],
   imports: [
     BrowserModule,

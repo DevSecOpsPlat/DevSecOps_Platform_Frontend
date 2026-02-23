@@ -1,6 +1,6 @@
 <header class="app-bar" role="banner">
   <div class="app-bar-inner">
-    <a routerLink="/home" class="brand">
+    <a [routerLink]="(authService.isLoggedIn$ | async) && isAdmin ? '/admin-home' : '/home'" class="brand">
       <div class="brand-logos">
         <img src="/assets/images/attijari.png" alt="Attijari Bank logo" class="brand-logo-attijari">
         <img src="/assets/images/enviroTestLogorembg.png" alt="EnviroTest logo" class="brand-logo-envirotest">
@@ -18,7 +18,8 @@
     </button>
 
     <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
-      <a routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Home</a>
+      <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Home</a>
+      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin" routerLink="/admin-home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Admin Home</a>
 
       <!-- Liens visibles pour les utilisateurs connectés (testeurs) -->
       <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
@@ -61,6 +62,10 @@
              class="user-dropdown-item"
              (click)="userMenuOpen = false; menuOpen = false">Profil</a>
 
+          <a *ngIf="isAdmin"
+             routerLink="/admin-home"
+             class="user-dropdown-item"
+             (click)="userMenuOpen = false; menuOpen = false">Admin Home</a>
           <a *ngIf="isAdmin"
              routerLink="/admin-dashboard"
              class="user-dropdown-item"
