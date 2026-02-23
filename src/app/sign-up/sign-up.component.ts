@@ -59,24 +59,9 @@ export class SignUpComponent implements OnInit {
           return of(null);
         })
       ).subscribe((response) => {
+        this.isLoading = false;
         if (response !== null) {
-          const loginPayload = {
-            username: payload.username,
-            password: payload.password
-          };
-          this.authService.login(loginPayload).pipe(
-            catchError((err) => {
-              this.isLoading = false;
-              console.error('Auto-login error:', err);
-              this.router.navigate(['/sign-in']);
-              return of(null);
-            })
-          ).subscribe((loginResponse) => {
-            this.isLoading = false;
-            if (loginResponse) {
-              this.router.navigate(['/home']);
-            }
-          });
+          this.router.navigate(['/approval-waiting']);
         }
       });
     } else {

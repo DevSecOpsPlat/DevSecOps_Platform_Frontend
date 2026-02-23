@@ -6,12 +6,33 @@ import { EnvironmentCreateComponent } from './environment-create/environment-cre
 import { SignInComponent } from './sign-in/sign-in.component';
 import { SignUpComponent } from './sign-up/sign-up.component';
 import { ProfileComponent } from './profile/profile.component';
+import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
+import { MyApplicationsComponent } from './my-applications/my-applications.component';
+import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
+import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
+import { AdminHomeComponent } from './admin-home/admin-home.component';
+import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
+import { AuthGuard } from './guards/auth.guard';
+import { AdminGuard } from './guards/admin.guard';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: 'home', component: HomeComponent },
-  { path: 'environment-create', component: EnvironmentCreateComponent },
-  { path: 'profile', component: ProfileComponent },
+  { path: 'admin-home', component: AdminHomeComponent, canActivate: [AdminGuard] },
+  { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
+
+  // Utilisateur connecté : création / gestion des environnements
+  { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
+  { path: 'environments', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
+  { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },
+  { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
+  { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
+
+  // Administration
+  { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [AdminGuard] },
+
+  // Auth
+  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
   { path: 'sign-in', component: SignInComponent },
   { path: 'sign-up', component: SignUpComponent }
 ];

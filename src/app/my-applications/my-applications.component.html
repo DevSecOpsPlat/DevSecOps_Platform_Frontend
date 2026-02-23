@@ -1,0 +1,73 @@
+<div class="apps-page">
+  <div class="apps-header">
+    <div>
+      <h1 class="page-title">Mes applications</h1>
+      <p class="page-subtitle">Gérez vos applications et leurs configurations</p>
+    </div>
+    <button class="btn-primary btn-new-app" (click)="openEnvironments()">
+      <span class="btn-icon">+</span>
+      <span>Nouvelle application</span>
+    </button>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <div class="spinner"></div>
+    <span>Chargement de vos applications...</span>
+  </div>
+
+  <div *ngIf="error" class="error-banner">
+    {{ error }}
+  </div>
+
+  <div class="cards-grid" *ngIf="!loading && !error">
+    <div *ngIf="applications.length === 0" class="empty-state-card">
+      <div class="empty-icon">📦</div>
+      <h3>Aucune application</h3>
+      <p>Commencez par créer votre première application pour déployer des environnements de test.</p>
+      <button class="btn-primary" (click)="openEnvironments()">
+        <span class="btn-icon">+</span>
+        <span>Créer une application</span>
+      </button>
+    </div>
+
+    <div class="app-card" *ngFor="let app of applications">
+      <div class="app-card-header">
+        <div class="app-icon">📦</div>
+        <div class="app-title-section">
+          <h2 class="app-title">{{ app.name }}</h2>
+          <span class="app-creator">Par {{ app.createdByUsername }}</span>
+        </div>
+      </div>
+      
+      <div class="app-repo-section">
+        <div class="repo-label">Repository</div>
+        <div class="repo-url">{{ app.gitRepositoryUrl }}</div>
+      </div>
+
+      <div class="app-meta-section">
+        <div class="meta-item">
+          <span class="meta-label">Créée le</span>
+          <span class="meta-value">{{ app.createdAt | date: 'medium' }}</span>
+        </div>
+      </div>
+
+      <div class="app-tags">
+        <span class="tag tag-dockerfile">
+          <span class="tag-icon">🐳</span>
+          <span>{{ app.dockerfilePath || './Dockerfile' }}</span>
+        </span>
+        <span class="tag" [class.tag-success]="app.hasGithubToken" [class.tag-warning]="!app.hasGithubToken">
+          <span class="tag-icon">{{ app.hasGithubToken ? '✓' : '⚠' }}</span>
+          <span>{{ app.hasGithubToken ? 'Token GitHub configuré' : 'Token GitHub requis' }}</span>
+        </span>
+      </div>
+
+      <div class="app-actions">
+        <button class="btn-action btn-view" (click)="openEnvironments()">
+          Voir les environnements
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+

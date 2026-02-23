@@ -1,0 +1,246 @@
+.pipelines-page {
+  padding: 3rem 2.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  margin-top: 64px;
+  min-height: calc(100vh - 64px);
+  background: #f8fafc;
+}
+
+.page-header {
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #4b5563;
+}
+
+.error-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.table-wrap {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.pipelines-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pipelines-table th {
+  text-align: left;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pipelines-table td {
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.pipeline-row:hover {
+  background: #fafafa;
+}
+
+.col-status {
+  width: 120px;
+  vertical-align: top;
+}
+
+.col-status .status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.status-success { background: #dcfce7; color: #166534; }
+.status-danger { background: #fee2e2; color: #b91c1c; }
+.status-warning { background: #fef3c7; color: #92400e; }
+.status-muted { background: #e5e7eb; color: #4b5563; }
+
+.col-status .spinner.small {
+  width: 14px;
+  height: 14px;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+.col-status .duration {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.col-pipeline {
+  min-width: 200px;
+}
+
+.pipeline-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.pipeline-id {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.pipeline-title {
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.pipeline-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.pipeline-meta .ref { margin-right: 0.5rem; }
+.pipeline-meta .sha { font-family: ui-monospace, monospace; }
+
+.time-ago {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+.col-created .created-by {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.col-stages .stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.job-status {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.job-success { background: #dcfce7; color: #166534; }
+.job-danger { background: #fee2e2; color: #b91c1c; }
+.job-warning { background: #fef3c7; color: #92400e; }
+.job-muted { background: #e5e7eb; color: #4b5563; }
+
+.col-stages .no-stages {
+  color: #9ca3af;
+}
+
+.col-actions {
+  white-space: nowrap;
+}
+
+.col-actions .btn {
+  margin-right: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-view {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.btn-view:hover {
+  background: #e0e7ff;
+}
+
+.btn-cancel {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.btn-cancel:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-link {
+  display: inline-block;
+  text-decoration: none;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-link:hover {
+  background: #e5e7eb;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #6366f1;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .pipelines-page { padding: 1rem; }
+  .table-wrap { overflow-x: auto; }
+  .pipelines-table { min-width: 700px; }
+}

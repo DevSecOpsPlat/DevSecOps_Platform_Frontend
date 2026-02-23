@@ -11,6 +11,13 @@ import { EnvironmentCreateComponent } from './environment-create/environment-cre
 import { SignInComponent } from './sign-in/sign-in.component';
 import { ProfileComponent } from './profile/profile.component';
 import { ReactiveFormsModule } from '@angular/forms';
+import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
+import { MyApplicationsComponent } from './my-applications/my-applications.component';
+import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
+import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
+import { AdminHomeComponent } from './admin-home/admin-home.component';
+import { AdminSidebarComponent } from './shared/admin-sidebar/admin-sidebar.component';
+import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 
 @NgModule({
   declarations: [
@@ -20,7 +27,14 @@ import { ReactiveFormsModule } from '@angular/forms';
     SignInComponent,
     SignUpComponent,
     EnvironmentCreateComponent,
-    ProfileComponent
+    ProfileComponent,
+    AdminDashboardComponent,
+    MyApplicationsComponent,
+    PipelineDetailsComponent,
+    PipelinesListComponent,
+    AdminHomeComponent,
+    AdminSidebarComponent,
+    ApprovalWaitingMessageComponent
   ],
   imports: [
     BrowserModule,

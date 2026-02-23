@@ -46,4 +46,20 @@ export class AuthService {
   isAuthenticated(): boolean {
     return !!this.userService.getToken();
   }
+
+  /**
+   * Retourne true si l'utilisateur courant possède le rôle donné (ex: 'ROLE_ADMIN').
+   */
+  hasRole(role: string): boolean {
+    const user = this.getCurrentUser();
+    return !!user && Array.isArray(user.roles) && user.roles.includes(role);
+  }
+
+  /**
+   * Rôles de l'utilisateur connecté.
+   */
+  getRoles(): string[] {
+    const user = this.getCurrentUser();
+    return user && Array.isArray(user.roles) ? user.roles : [];
+  }
 }

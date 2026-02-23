@@ -1,0 +1,107 @@
+<div class="pipeline-page" *ngIf="data">
+  <div class="header">
+    <div>
+      <h1>Pipeline <span *ngIf="data.pipelineId">#{{ data.pipelineId }}</span><span *ngIf="!data.pipelineId">(ID GitLab invalide)</span></h1>
+      <a *ngIf="data.webUrl" [href]="data.webUrl" target="_blank" rel="noopener noreferrer">Ouvrir dans GitLab</a>
+    </div>
+    <div class="status">
+      <span [ngClass]="statusClass(data.status)">
+        {{ data.status | uppercase }}
+      </span>
+      <div *ngIf="isRunning()" class="spinner"></div>
+    </div>
+  </div>
+
+  <div *ngIf="!data.pipelineId || data.pipelineId <= 0" class="warning-banner">
+    <strong>⚠️ Pipeline sans ID GitLab valide</strong>
+    <p>Ce pipeline n'a pas d'ID GitLab valide. Les détails (stages, jobs, logs) ne peuvent pas être récupérés depuis GitLab.</p>
+    <p>Statut actuel depuis la base de données : <strong>{{ data.status }}</strong></p>
+  </div>
+
+  <div class="content-grid">
+    <div class="jobs-card">
+      <h2>Stages & Jobs</h2>
+      <div *ngIf="!data.jobs || data.jobs.length === 0" class="empty-state">
+        <p>Aucun job disponible.</p>
+        <p *ngIf="!data.pipelineId || data.pipelineId <= 0" class="empty-hint">
+          Les jobs ne peuvent pas être récupérés car le pipeline n'a pas d'ID GitLab valide.
+        </p>
+      </div>
+      <div class="stages-container" *ngIf="data.jobs && data.jobs.length > 0">
+        <div *ngFor="let stage of getStages()" class="stage-group">
+          <h3 class="stage-title">
+            <span [ngClass]="statusClass(stage.status)">{{ stage.name }}</span>
+            <span class="stage-status">{{ stage.status }}</span>
+          </h3>
+          <ul class="jobs-list">
+            <li *ngFor="let job of stage.jobs"
+                (click)="selectJob(job)"
+                [class.selected]="job.id === selectedJob?.id"
+                [class.job-success]="job.status === 'success'"
+                [class.job-failed]="job.status === 'failed' || job.status === 'canceled'"
+                [class.job-running]="job.status === 'running' || job.status === 'pending'">
+              <div class="job-main">
+                <span class="job-name">{{ job.name }}</span>
+                <span [ngClass]="statusClass(job.status)">{{ job.status }}</span>
+              </div>
+              <div class="job-meta">
+                <span *ngIf="job.duration">⏱ {{ formatDuration(job.duration) }}</span>
+                <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" class="job-link">Voir dans GitLab</a>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="details-card">
+      <h2>Détails du job</h2>
+
+      <div *ngIf="!selectedJob" class="placeholder">
+        Sélectionnez un job pour voir les logs et le résultat du scan.
+      </div>
+
+      <div *ngIf="selectedJob">
+        <h3>{{ selectedJob.name }}</h3>
+        <p class="job-info">
+          <span class="badge badge-muted">{{ selectedJob.stage }}</span>
+          <span [ngClass]="statusClass(selectedJob.status)">{{ selectedJob.status }}</span>
+        </p>
+
+        <div *ngIf="loadingJob" class="loading-state">
+          <div class="spinner"></div>
+          <span>Chargement des logs...</span>
+        </div>
+
+        <div class="logs-section" *ngIf="selectedJobLogs">
+          <h4>Logs</h4>
+          <pre>{{ selectedJobLogs }}</pre>
+        </div>
+
+        <div class="logs-section" *ngIf="selectedJobScanJson">
+          <h4>Résultat du scan</h4>
+          <div class="scan-results">
+            <div *ngIf="hasVulnerabilities(selectedJobScanJson)" class="vulnerabilities-summary">
+              <h5>Vulnérabilités détectées</h5>
+              <p class="vuln-count">{{ countVulnerabilities(selectedJobScanJson) }} vulnérabilité(s) trouvée(s)</p>
+            </div>
+            <details class="json-details">
+              <summary>Voir le JSON complet</summary>
+              <pre>{{ selectedJobScanJson | json }}</pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="loading && !data" class="loading-page">
+  <div class="spinner"></div>
+  <span>Chargement du pipeline...</span>
+</div>
+
+<div *ngIf="error" class="error-banner">
+  {{ error }}
+</div>
+
