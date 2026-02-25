@@ -1,14 +1,24 @@
+  <app-user-sidebar></app-user-sidebar>
 <div class="pipeline-page" *ngIf="data">
-  <div class="header">
-    <div>
+  <div class="pipeline-header">
+    <div class="pipeline-main-title">
       <h1>Pipeline <span *ngIf="data.pipelineId">#{{ data.pipelineId }}</span><span *ngIf="!data.pipelineId">(ID GitLab invalide)</span></h1>
-      <a *ngIf="data.webUrl" [href]="data.webUrl" target="_blank" rel="noopener noreferrer">Ouvrir dans GitLab</a>
+      <p class="pipeline-meta">
+        Branche&nbsp;: <strong>{{ data.ref || 'main' }}</strong> ·
+        Lancé par <strong>{{ data.triggeredBy || '—' }}</strong>
+      </p>
+      <p class="pipeline-meta secondary" *ngIf="data.durationSeconds != null">
+        Durée totale&nbsp;: {{ formatDuration(data.durationSeconds) }}
+      </p>
     </div>
-    <div class="status">
+    <div class="pipeline-header-actions">
       <span [ngClass]="statusClass(data.status)">
         {{ data.status | uppercase }}
       </span>
       <div *ngIf="isRunning()" class="spinner"></div>
+      <a *ngIf="data.webUrl" [href]="data.webUrl" target="_blank" rel="noopener noreferrer" class="btn-link">
+        Ouvrir dans GitLab
+      </a>
     </div>
   </div>
 

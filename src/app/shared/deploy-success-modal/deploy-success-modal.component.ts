@@ -19,10 +19,18 @@ export class DeploySuccessModalComponent {
   constructor(private router: Router) {}
 
   trackProgress(): void {
-    if (this.applicationId) {
+    if (this.environmentId) {
+      localStorage.setItem('envirotest-last-pipeline-env', this.environmentId);
+      if (this.applicationId) {
+        this.router.navigate(
+          ['/pipeline', this.environmentId],
+          { queryParams: { appId: this.applicationId } }
+        );
+      } else {
+        this.router.navigate(['/pipeline', this.environmentId]);
+      }
+    } else if (this.applicationId) {
       this.router.navigate(['/project', this.applicationId, 'overview']);
-    } else {
-      this.router.navigate(['/pipeline', this.environmentId]);
     }
     this.close.emit();
   }

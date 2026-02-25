@@ -15,12 +15,12 @@
     </div>
   </div>
 
-  <div *ngIf="!loading && deployments.length === 0" class="empty-state">
+  <div *ngIf="!loading && filtered.length === 0" class="empty-state">
     <p>Aucun déploiement trouvé.</p>
   </div>
 
-  <div *ngIf="!loading && deployments.length > 0" class="deployments-timeline">
-    <div *ngFor="let d of deployments; let i = index" class="timeline-item">
+  <div *ngIf="!loading && filtered.length > 0" class="deployments-timeline">
+    <div *ngFor="let d of filtered; let i = index" class="timeline-item">
       <div class="timeline-marker" [class.success]="d.pipelineStatus === 'SUCCESS'" [class.failed]="d.pipelineStatus === 'FAILED' || d.pipelineStatus === 'CANCELED'" [class.running]="d.pipelineStatus === 'RUNNING' || d.pipelineStatus === 'PENDING'"></div>
       <div class="timeline-content">
         <div class="commit-line">

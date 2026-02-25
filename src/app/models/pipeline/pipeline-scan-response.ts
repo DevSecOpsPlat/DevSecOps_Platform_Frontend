@@ -5,6 +5,10 @@ export interface PipelineJobInfo {
   stage: string;
   duration?: number;
   webUrl?: string;
+    ref?: string;
+  triggeredBy?: string;
+  durationSeconds?: number;
+ 
 }
 
 export interface PipelineScanResponse {
@@ -15,5 +19,8 @@ export interface PipelineScanResponse {
   jobs: PipelineJobInfo[];
   securityReports: Record<string, any>;
   hasValidGitLabId?: boolean;
+  ref: 'main';
+  triggeredBy: 'admin';
+  durationSeconds: 125;
 }
 

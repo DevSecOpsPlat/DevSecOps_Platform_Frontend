@@ -14,6 +14,8 @@ export class ProjectDeploymentsComponent implements OnInit {
   deployments: DeploymentHistoryItem[] = [];
   loading = true;
   branchFilter = '';
+  statusFilter: string | null = null;
+  filtered: DeploymentHistoryItem[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -22,9 +24,12 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   ngOnInit(): void {
     this.appId = this.route.parent?.snapshot.paramMap.get('appId') || null;
-    if (this.appId) {
-      this.loadDeployments();
-    }
+    this.route.queryParamMap.subscribe(params => {
+      this.statusFilter = params.get('status');
+      if (this.appId) {
+        this.loadDeployments();
+      }
+    });
   }
 
   loadDeployments(): void {
@@ -33,6 +38,7 @@ export class ProjectDeploymentsComponent implements OnInit {
     this.applicationService.getDeploymentHistory(this.appId, this.branchFilter || undefined).subscribe({
       next: items => {
         this.deployments = items;
+        this.filtered = this.applyStatusFilter(items);
         this.loading = false;
       },
       error: () => {
@@ -56,6 +62,17 @@ export class ProjectDeploymentsComponent implements OnInit {
   formatDate(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
+  }
+
+  private applyStatusFilter(items: DeploymentHistoryItem[]): DeploymentHistoryItem[] {
+    const status = (this.statusFilter || '').toUpperCase();
+    if (!status || status === 'ALL') {
+      return items;
+    }
+    if (status === 'SUCCESS' || status === 'FAILED' || status === 'PENDING' || status === 'RUNNING') {
+      return items.filter(d => (d.pipelineStatus || '').toUpperCase() === status);
+    }
+    return items;
   }
 
   viewPipeline(envId: string): void {

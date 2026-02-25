@@ -32,34 +32,49 @@
   margin: 0 auto;
 }
 
-.header {
+.pipeline-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
 }
 
-.header h1 {
+.pipeline-main-title h1 {
   font-size: 1.6rem;
   font-weight: 600;
   margin: 0;
 }
 
-.header a {
-  display: inline-block;
+.pipeline-meta {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0.25rem 0 0;
+}
+
+.pipeline-meta.secondary {
   font-size: 0.8rem;
-  color: #4f46e5;
-  text-decoration: none;
+  color: #9ca3af;
 }
 
-.header a:hover {
-  text-decoration: underline;
-}
-
-.status {
+.pipeline-header-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  background: #e0e7ff;
 }
 
 .content-grid {
