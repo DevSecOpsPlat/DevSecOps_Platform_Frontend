@@ -1,0 +1,49 @@
+<div class="project-layout" *ngIf="authService.isLoggedIn$ | async">
+  <aside class="project-sidebar">
+    <div class="sidebar-search">
+      <span class="search-icon">⌕</span>
+      <input type="text" placeholder="Rechercher..." />
+      <span class="search-shortcut">⌘F</span>
+    </div>
+
+    <div class="sidebar-project">
+      <button class="back-link" (click)="backToApplications()">← Applications</button>
+      <div class="project-name" *ngIf="project">{{ project.name }}</div>
+      <div class="project-repo" *ngIf="project">{{ project.gitRepositoryUrl }}</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a routerLink="/project/{{ appId }}/overview" routerLinkActive="active" class="nav-item">
+        <span class="nav-icon">◫</span>
+        <span>Overview</span>
+      </a>
+      <a routerLink="/project/{{ appId }}/deployments" routerLinkActive="active" class="nav-item">
+        <span class="nav-icon">▦</span>
+        <span>Deployments</span>
+      </a>
+      <a routerLink="/pipelines" routerLinkActive="active" class="nav-item">
+        <span class="nav-icon">☰</span>
+        <span>Pipelines</span>
+      </a>
+      <a routerLink="/project/{{ appId }}/security" routerLinkActive="active" class="nav-item">
+        <span class="nav-icon">⬡</span>
+        <span>Security Insights</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <span class="user-name">{{ authService.getCurrentUser()?.username || 'User' }}</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="project-main">
+    <div *ngIf="loading" class="loading-state">
+      <div class="spinner"></div>
+      <span>Chargement du projet...</span>
+    </div>
+    <div *ngIf="error" class="error-banner">{{ error }}</div>
+    <router-outlet *ngIf="!loading && !error"></router-outlet>
+  </main>
+</div>

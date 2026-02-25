@@ -1,0 +1,21 @@
+<div class="logs-page">
+  <header class="logs-header">
+    <div>
+      <h1>Logs</h1>
+      <p class="muted">
+        Les logs détaillés des jobs du pipeline sont disponibles sur la page de détail du pipeline.
+      </p>
+      <a [routerLink]="['/project', appId, 'overview']" class="back-link">
+        ← Retour à l'Overview
+      </a>
+    </div>
+    <button type="button" class="follow-btn" (click)="toggleFollow()">
+      {{ following ? 'Following' : 'Follow' }}
+    </button>
+  </header>
+
+  <section class="logs-panel" #logContainer>
+    <pre class="logs-content">{{ placeholderLogs.join('\n') }}</pre>
+  </section>
+</div>
+

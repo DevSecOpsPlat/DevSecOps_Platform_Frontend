@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { PipelineService } from '../services/pipeline/pipeline.service';
 import { PipelineListItem } from '../models/pipeline/pipeline-list-item';
+import { ToastService } from '../services/ui/toast.service';
 
 @Component({
   selector: 'app-pipelines-list',
@@ -14,14 +15,17 @@ export class PipelinesListComponent implements OnInit {
   loading = false;
   error: string | null = null;
   cancelingId: number | null = null;
+  private previousStatuses = new Map<number, string>();
 
   constructor(
     private pipelineService: PipelineService,
-    private router: Router
+    private router: Router,
+    private toastService: ToastService
   ) {}
 
   ngOnInit(): void {
     this.loadPipelines();
+    setInterval(() => this.refreshPipelinesForNotifications(), 10000);
   }
 
   loadPipelines(): void {
@@ -30,11 +34,43 @@ export class PipelinesListComponent implements OnInit {
     this.pipelineService.listPipelines().subscribe({
       next: (list) => {
         this.pipelines = list;
+        this.pipelines.forEach(item => {
+          if (item.pipelineId != null) {
+            this.previousStatuses.set(item.pipelineId, (item.status || item.pipelineStatus || '').toUpperCase());
+          }
+        });
         this.loading = false;
       },
       error: (err) => {
         this.loading = false;
         this.error = err.error?.message || 'Erreur lors du chargement des pipelines';
+      }
+    });
+  }
+
+  private refreshPipelinesForNotifications(): void {
+    this.pipelineService.listPipelines().subscribe({
+      next: (list) => {
+        list.forEach(item => {
+          if (!item.pipelineId) {
+            return;
+          }
+          const id = item.pipelineId;
+          const newStatus = (item.status || item.pipelineStatus || '').toUpperCase();
+          const oldStatus = this.previousStatuses.get(id);
+          if (oldStatus && (oldStatus === 'RUNNING' || oldStatus === 'PENDING')
+              && (newStatus === 'SUCCESS' || newStatus === 'FAILED' || newStatus === 'CANCELED')) {
+            const type = newStatus === 'SUCCESS' ? 'success' : 'error';
+            const title = newStatus === 'SUCCESS' ? 'Deployment succeeded' : 'Deployment finished';
+            const msg = `Pipeline #${id} for env ${item.environmentName} is now ${newStatus}.`;
+            this.toastService.push(type, title, msg);
+          }
+          this.previousStatuses.set(id, newStatus);
+        });
+        this.pipelines = list;
+      },
+      error: () => {
+        // silencieux
       }
     });
   }

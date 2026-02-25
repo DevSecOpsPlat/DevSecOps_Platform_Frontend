@@ -55,9 +55,9 @@ export class SignInComponent implements OnInit {
           this.isLoading = false;
           const roles = response.roles || [];
           if (roles.includes('ROLE_ADMIN')) {
-            this.router.navigate(['/admin-dashboard']);
+            this.router.navigate(['/admin-home']);
           } else {
-            this.router.navigate(['/environments']);
+            this.router.navigate(['/home']);
           }
         }
       });

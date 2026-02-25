@@ -1,14 +1,13 @@
 .admin-home-layout {
   display: flex;
   min-height: calc(100vh - 64px);
-  margin-top: 64px;
 }
 
 .admin-home-content {
   flex: 1;
   padding: 3rem 2.5rem;
   max-width: 1400px;
-  margin: 0 auto;
+  margin: 0 auto 0 280px;
   width: 100%;
   background: #f8fafc;
 }

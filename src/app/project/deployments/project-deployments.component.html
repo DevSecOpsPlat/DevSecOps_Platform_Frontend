@@ -1,0 +1,41 @@
+<div class="deployments-page">
+  <header class="deployments-header">
+    <h1>Deployments</h1>
+    <div class="filters">
+      <input type="text" [(ngModel)]="branchFilter" (ngModelChange)="onBranchFilterChange()"
+             placeholder="Filtrer par branche..." class="filter-input" />
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="loading-state skeleton-wrap">
+    <div class="skeleton-card">
+      <div class="skeleton-line w-70"></div>
+      <div class="skeleton-line w-50"></div>
+      <div class="skeleton-line w-80"></div>
+    </div>
+  </div>
+
+  <div *ngIf="!loading && deployments.length === 0" class="empty-state">
+    <p>Aucun déploiement trouvé.</p>
+  </div>
+
+  <div *ngIf="!loading && deployments.length > 0" class="deployments-timeline">
+    <div *ngFor="let d of deployments; let i = index" class="timeline-item">
+      <div class="timeline-marker" [class.success]="d.pipelineStatus === 'SUCCESS'" [class.failed]="d.pipelineStatus === 'FAILED' || d.pipelineStatus === 'CANCELED'" [class.running]="d.pipelineStatus === 'RUNNING' || d.pipelineStatus === 'PENDING'"></div>
+      <div class="timeline-content">
+        <div class="commit-line">
+          <span class="commit-message">{{ d.commitMessage || d.environmentName }}</span>
+          <span *ngIf="d.shortSha" class="commit-sha">{{ d.shortSha }}</span>
+        </div>
+        <div class="timeline-meta">
+          <span class="meta-branch">{{ d.gitBranch }}</span>
+          <span class="meta-sep">·</span>
+          <span [class]="'badge ' + statusClass(d.pipelineStatus)">{{ d.pipelineStatus }}</span>
+          <span class="meta-sep">·</span>
+          <span class="meta-time">{{ formatDate(d.createdAt) }} par {{ d.triggeredByUsername || '—' }}</span>
+        </div>
+        <button class="btn-sm" (click)="viewPipeline(d.environmentId)">Voir pipeline</button>
+      </div>
+    </div>
+  </div>
+</div>

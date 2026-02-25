@@ -12,7 +12,7 @@ export class EnvironmentCreateComponent {
 
   form: FormGroup;
   errorMessage: string | null = null;
-  successResult: { environmentId: string; pipelineWebUrl: string; environmentName: string } | null = null;
+  successResult: { environmentId: string; applicationId?: string; pipelineWebUrl: string; environmentName: string } | null = null;
   loading = false;
 
   constructor(private environmentService: EnvironmentService) {
@@ -46,6 +46,7 @@ export class EnvironmentCreateComponent {
         this.loading = false;
         this.successResult = {
           environmentId: res.environmentId,
+          applicationId: res.applicationId,
           pipelineWebUrl: res.pipelineWebUrl,
           environmentName: res.environmentName
         };

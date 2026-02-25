@@ -1,8 +1,17 @@
+.user-shell {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.user-main {
+  flex: 1;
+  margin-left: 280px;
+}
+
 .pipelines-page {
   padding: 3rem 2.5rem;
   max-width: 1400px;
   margin: 0 auto;
-  margin-top: 64px;
   min-height: calc(100vh - 64px);
   background: #f8fafc;
 }

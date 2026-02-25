@@ -1,0 +1,79 @@
+<div class="overview-page">
+  <header class="overview-header">
+    <h1>Overview</h1>
+    <div class="header-actions">
+      <a routerLink="/environment-create" class="btn-link">Nouveau déploiement</a>
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="loading-state skeleton-wrap">
+    <div class="skeleton-card">
+      <div class="skeleton-line w-40"></div>
+      <div class="skeleton-line w-60"></div>
+      <div class="skeleton-line w-80"></div>
+    </div>
+  </div>
+
+  <div *ngIf="!loading && latestDeployment" class="deployment-card">
+    <div class="card-preview">
+      <div class="preview-content">
+        <div class="status-badge-wrap">
+          <span [class]="'badge badge-pulse ' + statusClass(latestDeployment.pipelineStatus)" [class.pulse]="isRunning(latestDeployment.pipelineStatus)">
+            {{ latestDeployment.pipelineStatus | uppercase }}
+          </span>
+        </div>
+        <a *ngIf="previewUrl" [href]="previewUrl" target="_blank" rel="noopener noreferrer" class="preview-url">{{ previewUrl }}</a>
+        <p *ngIf="!previewUrl" class="preview-url-placeholder">—</p>
+        <div class="ttl-circular" *ngIf="environmentSummary">
+          <svg viewBox="0 0 36 36">
+            <path class="ttl-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="ttl-fill" [style.stroke-dasharray]="getTtlDashArray()" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          </svg>
+          <span class="ttl-value">{{ formatRemaining() }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-details">
+      <div class="detail-row">
+        <span class="detail-label">Environnement</span>
+        <span class="detail-value">{{ latestDeployment.environmentName }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Branche</span>
+        <span class="detail-value">{{ latestDeployment.gitBranch }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Créé</span>
+        <span class="detail-value">{{ formatTimeAgo(latestDeployment.createdAt) }} par {{ latestDeployment.triggeredByUsername || '—' }}</span>
+      </div>
+      <div class="detail-row btn-row">
+        <button class="btn-primary" (click)="viewPipeline(latestDeployment.environmentId)">Voir le pipeline →</button>
+        <button *ngIf="previewUrl" class="btn-outline share-btn" (click)="copyPreviewUrl()">{{ copied ? '✓ Copied!' : 'Share Preview URL' }}</button>
+      </div>
+      <div class="pipeline-steps" *ngIf="latestDeployment">
+        <h3 class="steps-title">Pipeline</h3>
+        <ol class="stepper">
+          <li
+            *ngFor="let step of pipelineSteps; let i = index"
+            class="step"
+            [ngClass]="getStepState(i)"
+          >
+            <div class="step-icon">
+              <span *ngIf="getStepState(i) === 'done'">✔</span>
+              <span *ngIf="getStepState(i) === 'active'">⏳</span>
+              <span *ngIf="getStepState(i) === 'pending'">●</span>
+              <span *ngIf="getStepState(i) === 'failed'">✖</span>
+            </div>
+            <div class="step-label">{{ step }}</div>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!loading && !latestDeployment" class="empty-state">
+    <p>Aucun déploiement pour ce projet.</p>
+    <a routerLink="/environment-create" class="btn-primary">Créer un environnement</a>
+  </div>
+</div>

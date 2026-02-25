@@ -1,0 +1,75 @@
+<div class="security-page">
+  <header class="security-header">
+    <h1>Security Insights</h1>
+    <p class="subtitle">Vulnérabilités détectées par les scans (Trivy, SonarQube)</p>
+  </header>
+
+  <div *ngIf="loading" class="loading-state">
+    <div class="spinner"></div>
+    <span>Chargement...</span>
+  </div>
+
+  <div *ngIf="!loading && deployments.length > 0" class="security-content">
+    <div class="env-selector">
+      <label>Environnement</label>
+      <select [(ngModel)]="selectedEnvId" (ngModelChange)="selectEnvironment($event)">
+        <option *ngFor="let d of deployments" [ngValue]="d.environmentId">
+          {{ d.environmentName }} ({{ d.pipelineStatus }})
+        </option>
+      </select>
+    </div>
+
+    <div *ngIf="loadingSecurity" class="loading-state">Chargement du résumé...</div>
+
+    <div *ngIf="securitySummary && !loadingSecurity" class="insights-card">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total vulnerabilities</div>
+          <div class="kpi-value">{{ totalVulnerabilities }}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Critical & High</div>
+          <div class="kpi-value">
+            {{ (securitySummary.critical || 0) + (securitySummary.high || 0) }}
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Medium / Low / Info</div>
+          <div class="kpi-value">
+            {{ (securitySummary.medium || 0) + (securitySummary.low || 0) + (securitySummary.info || 0) }}
+          </div>
+        </div>
+      </div>
+
+      <div class="insights-body">
+        <div class="donut-wrapper">
+          <div class="donut-chart" [ngStyle]="donutStyle">
+            <div class="donut-center">
+              <span class="donut-count">{{ totalVulnerabilities }}</span>
+              <span class="donut-label">Vulns</span>
+            </div>
+          </div>
+          <p class="donut-caption">Répartition par sévérité</p>
+        </div>
+
+        <div class="badges-column">
+          <div class="badges-row">
+            <span class="badge badge-critical" *ngIf="securitySummary.critical > 0">Critical: {{ securitySummary.critical }}</span>
+            <span class="badge badge-high" *ngIf="securitySummary.high > 0">High: {{ securitySummary.high }}</span>
+            <span class="badge badge-medium" *ngIf="securitySummary.medium > 0">Medium: {{ securitySummary.medium }}</span>
+            <span class="badge badge-low" *ngIf="securitySummary.low > 0">Low: {{ securitySummary.low }}</span>
+            <span class="badge badge-info" *ngIf="securitySummary.info > 0">Info: {{ securitySummary.info }}</span>
+            <span *ngIf="!(securitySummary.critical + securitySummary.high + securitySummary.medium + securitySummary.low + securitySummary.info)">
+              Aucune vulnérabilité détectée
+            </span>
+          </div>
+          <button class="btn-primary" (click)="viewFullPipeline(securitySummary.environmentId)">Voir le pipeline complet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!loading && deployments.length === 0" class="empty-state">
+    <p>Aucun déploiement. Lancez un pipeline pour voir les rapports de sécurité.</p>
+  </div>
+</div>

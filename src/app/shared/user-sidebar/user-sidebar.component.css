@@ -1,0 +1,29 @@
+.user-sidebar {
+  width: 280px;
+  padding: 1rem;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  position: fixed;
+  top: 64px;
+  left: 0;
+}
+
+.user-sidebar button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.user-sidebar button:hover {
+  background: #e5e7eb;
+}
+

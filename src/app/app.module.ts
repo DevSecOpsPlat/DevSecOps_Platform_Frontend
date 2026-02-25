@@ -10,14 +10,21 @@ import { SignUpComponent } from './sign-up/sign-up.component';
 import { EnvironmentCreateComponent } from './environment-create/environment-create.component';
 import { SignInComponent } from './sign-in/sign-in.component';
 import { ProfileComponent } from './profile/profile.component';
-import { ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 import { MyApplicationsComponent } from './my-applications/my-applications.component';
 import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin-home/admin-home.component';
-import { AdminSidebarComponent } from './shared/admin-sidebar/admin-sidebar.component';
+import { ToastContainerComponent } from './shared/toast-container/toast-container.component';
+import { ProjectLayoutComponent } from './project/project-layout.component';
+import { ProjectOverviewComponent } from './project/overview/project-overview.component';
+import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
+import { ProjectLogsComponent } from './project/logs/project-logs.component';
+import { ProjectSecurityComponent } from './project/security/project-security.component';
+import { DeploySuccessModalComponent } from './shared/deploy-success-modal/deploy-success-modal.component';
 import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
+import { AdminSidebarComponent } from './shared/admin-sidebar/admin-sidebar.component';
 
 @NgModule({
   declarations: [
@@ -34,13 +41,21 @@ import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-messa
     PipelinesListComponent,
     AdminHomeComponent,
     AdminSidebarComponent,
-    ApprovalWaitingMessageComponent
+    ApprovalWaitingMessageComponent,
+    ToastContainerComponent,
+    ProjectLayoutComponent,
+    ProjectOverviewComponent,
+    ProjectDeploymentsComponent,
+    ProjectLogsComponent,
+    ProjectSecurityComponent,
+    DeploySuccessModalComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
     HttpClientModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    FormsModule
   ],
   providers: [],
   bootstrap: [AppComponent]

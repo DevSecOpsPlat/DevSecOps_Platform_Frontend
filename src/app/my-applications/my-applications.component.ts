@@ -14,7 +14,7 @@ export class MyApplicationsComponent implements OnInit {
   loading = false;
   error: string | null = null;
 
-  constructor(private appService: ApplicationService, private router: Router) {}
+  constructor(private applicationService: ApplicationService, private router: Router) {}
 
   ngOnInit(): void {
     this.loadApplications();
@@ -23,7 +23,7 @@ export class MyApplicationsComponent implements OnInit {
   loadApplications(): void {
     this.loading = true;
     this.error = null;
-    this.appService.getMyApplications().subscribe({
+    this.applicationService.getMyApplications().subscribe({
       next: apps => {
         this.applications = apps;
         this.loading = false;
@@ -36,7 +36,11 @@ export class MyApplicationsComponent implements OnInit {
   }
 
   openEnvironments(): void {
-    this.router.navigate(['/environments']);
+    this.router.navigate(['/environment-create']);
+  }
+
+  openProject(app: ApplicationResponse): void {
+    this.router.navigate(['/project', app.id, 'overview']);
   }
 }
 

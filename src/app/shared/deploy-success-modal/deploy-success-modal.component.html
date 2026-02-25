@@ -1,0 +1,18 @@
+<div class="modal-backdrop" *ngIf="visible" (click)="onBackdropClick()">
+  <div class="modal-panel" (click)="$event.stopPropagation()">
+    <div class="check-icon">
+      <svg viewBox="0 0 52 52" class="checkmark">
+        <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+        <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+      </svg>
+    </div>
+    <h2>Deployment Initiated Successfully!</h2>
+    <p class="modal-sub">Environnement {{ environmentName }} créé.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-primary" (click)="trackProgress()">Track Progress</button>
+      <button type="button" class="btn-outline" (click)="openGitLab()">
+        <span class="gitlab-icon">GitLab</span> Open GitLab
+      </button>
+    </div>
+  </div>
+</div>

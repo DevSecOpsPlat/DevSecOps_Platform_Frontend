@@ -14,6 +14,11 @@ import { AdminHomeComponent } from './admin-home/admin-home.component';
 import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
+import { ProjectLayoutComponent } from './project/project-layout.component';
+import { ProjectOverviewComponent } from './project/overview/project-overview.component';
+import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
+import { ProjectLogsComponent } from './project/logs/project-logs.component';
+import { ProjectSecurityComponent } from './project/security/project-security.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -21,7 +26,21 @@ const routes: Routes = [
   { path: 'admin-home', component: AdminHomeComponent, canActivate: [AdminGuard] },
   { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
 
-  // Utilisateur connecté : création / gestion des environnements
+  // Projet (style Vercel) : sidebar + Overview, Deployments, Logs, Security
+  {
+    path: 'project/:appId',
+    component: ProjectLayoutComponent,
+    canActivate: [AuthGuard],
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', component: ProjectOverviewComponent },
+      { path: 'deployments', component: ProjectDeploymentsComponent },
+      { path: 'logs', component: ProjectLogsComponent },
+      { path: 'security', component: ProjectSecurityComponent }
+    ]
+  },
+
+  // Utilisateur connecté
   { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'environments', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },

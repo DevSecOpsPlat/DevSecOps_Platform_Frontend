@@ -1,0 +1,9 @@
+<aside class="user-sidebar" *ngIf="authService.isLoggedIn$ | async">
+  <nav>
+    <button (click)="navigate('/home')">Dashboard</button>
+    <button (click)="navigate('/environment-create')">New Environment</button>
+    <button (click)="navigate('/my-applications')">Applications</button>
+    <button (click)="navigate('/pipelines')">Pipelines & Details</button>
+  </nav>
+</aside>
+

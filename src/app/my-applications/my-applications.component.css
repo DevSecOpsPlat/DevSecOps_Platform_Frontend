@@ -257,7 +257,7 @@
 
 .badge-secondary {
   background: #eef2ff;
-  color: #4338ca;
+  color: #f36c21;
 }
 
 .btn-primary {
@@ -265,7 +265,7 @@
   border: none;
   border-radius: 999px;
   padding: 0.45rem 1.2rem;
-  background: #4f46e5;
+  background: #f36c21;
   color: #ffffff;
   font-size: 0.85rem;
   font-weight: 500;
@@ -274,7 +274,7 @@
 }
 
 .btn-primary:hover {
-  background: #4338ca;
+  background: #d85b16;
 }
 
 .loading-state {

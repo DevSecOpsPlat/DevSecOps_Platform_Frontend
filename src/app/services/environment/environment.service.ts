@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
 import { DeployRequest } from '../../models/environment/deploy-request';
 import { DeployResponse } from '../../models/environment/deploy-response';
+import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 
 const BASE = environment.BASE_URL;
 
@@ -28,6 +29,12 @@ export class EnvironmentService {
 
   deploy(request: DeployRequest): Observable<DeployResponse> {
     return this.http.post<DeployResponse>(BASE + 'api/deploy', request, {
+      headers: this.authHeaders()
+    });
+  }
+
+  getEnvironment(envId: string): Observable<EnvironmentSummaryResponse> {
+    return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/${envId}`, {
       headers: this.authHeaders()
     });
   }
