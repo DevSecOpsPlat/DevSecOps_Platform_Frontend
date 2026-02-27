@@ -6,6 +6,7 @@ import { UserService } from '../user/user.service';
 import { DeployRequest } from '../../models/environment/deploy-request';
 import { DeployResponse } from '../../models/environment/deploy-response';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
+import { map } from 'rxjs/operators';
 
 const BASE = environment.BASE_URL;
 
@@ -14,7 +15,7 @@ const BASE = environment.BASE_URL;
 })
 export class EnvironmentService {
 
-  constructor(
+   constructor(
     private http: HttpClient,
     private userService: UserService
   ) {}
@@ -27,6 +28,45 @@ export class EnvironmentService {
     });
   }
 
+  getEnvironmentById(id: string): Observable<EnvironmentSummaryResponse> {
+    return this.http.get<any>(`${BASE}api/environments/${id}`, {
+      headers: this.authHeaders()
+    }).pipe(
+      map(response => this.convertEnvironment(response))
+    );
+  }
+
+  private convertEnvironment(data: any): EnvironmentSummaryResponse {
+    return {
+      id: data.id,
+      environmentName: data.environmentName,
+      gitRepositoryUrl: data.gitRepositoryUrl,
+      gitBranch: data.gitBranch,
+      ttlHours: data.ttlHours,
+      status: data.status,
+      previewUrl: data.previewUrl,
+      createdAt: this.convertDateArray(data.createdAt),
+      expiresAt: this.convertDateArray(data.expiresAt),
+      latestPipelineId: data.latestPipelineId,
+      latestPipelineStatus: data.latestPipelineStatus
+    };
+  }
+
+  private convertDateArray(dateArray: any[] | null): string {
+    if (!dateArray || !Array.isArray(dateArray) || dateArray.length < 6) {
+      return new Date().toISOString();
+    }
+    
+    // Tableau: [année, mois, jour, heure, minute, seconde, nanoseconde]
+    const [year, month, day, hour, minute, second] = dateArray;
+    
+    // Créer une date (mois est 0-indexé en JS, donc on soustrait 1)
+    const date = new Date(year, month - 1, day, hour, minute, second);
+    
+    return date.toISOString();
+  }
+
+
   deploy(request: DeployRequest): Observable<DeployResponse> {
     return this.http.post<DeployResponse>(BASE + 'api/deploy', request, {
       headers: this.authHeaders()
@@ -38,4 +78,5 @@ export class EnvironmentService {
       headers: this.authHeaders()
     });
   }
+
 }

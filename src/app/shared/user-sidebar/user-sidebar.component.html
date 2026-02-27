@@ -36,7 +36,7 @@
         <span class="section-badge">3</span>
       </h3>
       <div class="nav-items">
-        <button class="nav-item" (click)="navigate('/overview')" routerLinkActive="active">
+        <button class="nav-item" (click)="goToProjectOverview()" routerLinkActive="active">
           <span class="nav-dot"></span>
           <span class="nav-text">Vue d'ensemble</span>
           <span class="nav-badge">nouveau</span>
@@ -75,52 +75,121 @@
     </section>
 
     <!-- Déploiements -->
-    <section class="sidebar-section">
-      <h3 class="section-label">
-        <span>🔄 Déploiements</span>
-      </h3>
-      <div class="nav-items">
-        <button class="nav-item" (click)="navigate('/deployments/active')">
-          <span class="nav-indicator pulse success"></span>
-          <span class="nav-text">En cours</span>
-          <span class="nav-count warning">3</span>
-        </button>
-        <button class="nav-item" (click)="navigate('/deployments/history')">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Historique</span>
-          <span class="nav-count">24</span>
-        </button>
-      </div>
-    </section>
+  <!-- DÉPLOIEMENTS - Correction des URLs -->
+   <!-- DÉPLOIEMENTS (Environnements de test) -->
+<section class="sidebar-section">
+  <h3 class="section-label">
+    <span>🌍 Déploiements</span>
+    <span class="section-badge" *ngIf="totalDeploymentsCount > 0">{{ totalDeploymentsCount }}</span>
+  </h3>
+  
+  <div class="nav-items">
+    <!-- En cours (RUNNING/PENDING) -->
+    <button class="nav-item" 
+            (click)="goToDeployments('active')"
+            [class.active]="isActiveDeploymentsPage()">
+      <span class="nav-indicator pulse success"></span>
+      <span class="nav-text">En cours</span>
+      <span class="nav-count warning">{{ activeDeploymentsCount }}</span>
+    </button>
+    
+    <!-- Historique (tous les déploiements) -->
+    <button class="nav-item" 
+            (click)="goToDeployments('history')"
+            [class.active]="isHistoryDeploymentsPage()">
+      <span class="nav-dot"></span>
+      <span class="nav-text">Historique</span>
+      <span class="nav-count">{{ totalDeploymentsCount }}</span>
+    </button>
+    
+    <!-- Dernier déploiement (raccourci) -->
+   <button class="nav-item" 
+        *ngIf="lastDeploymentEnvId" 
+        (click)="goToLastDeployment()"
+        [class.active]="isOnLastDeploymentPage()">
+  <span class="nav-icon">🌍</span>  <!-- Changé d'horloge à globe -->
+  <span class="nav-text">Dernier environnement</span>
+  <span class="nav-badge" *ngIf="isEnvironmentActive(lastDeploymentEnvId)">actif</span>
+</button>
+  </div>
+  
+  <!-- Indicateur de filtrage actuel (optionnel) -->
+  <div class="active-filters" *ngIf="currentDeploymentsFilter">
+    <span class="filter-chip">
+      {{ currentDeploymentsFilter }}
+      <button class="clear-filter" (click)="clearDeploymentsFilter()">✕</button>
+    </span>
+  </div>
+</section>
 
-    <!-- Pipelines pour l'application courante -->
-    <section class="sidebar-section" *ngIf="currentAppId">
-      <h3 class="section-label">
-        <span>🚀 Pipelines</span>
-      </h3>
-      <div class="nav-items">
-        <button class="nav-item" (click)="goToProjectPipelines()">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Tous les pipelines</span>
-        </button>
-        <button class="nav-item" (click)="goToProjectPipelines('SUCCESS')">
-          <span class="nav-dot" style="background: #10b981;"></span>
-          <span class="nav-text">Réussis</span>
-        </button>
-        <button class="nav-item" (click)="goToProjectPipelines('FAILED')">
-          <span class="nav-dot" style="background: #ef4444;"></span>
-          <span class="nav-text">Échoués</span>
-        </button>
-        <button class="nav-item" (click)="goToProjectPipelines('PENDING')">
-          <span class="nav-dot" style="background: #f59e0b;"></span>
-          <span class="nav-text">En attente</span>
-        </button>
-        <button class="nav-item" (click)="goToLastPipeline()">
-          <span class="nav-dot" style="background: #5c10b9;"></span>
-          <span class="nav-text">Dernier Pipeline</span>
-        </button>
-      </div>
-    </section>
+    <!-- Section PIPELINES avec les compteurs -->
+<section class="sidebar-section" *ngIf="currentAppId">
+  <h3 class="section-label">
+    <span>🚀 Pipelines</span>
+  </h3>
+  <div class="nav-items">
+    <!-- Tous les pipelines -->
+    <button class="nav-item" (click)="goToProjectPipelines()">
+      <span class="nav-dot"></span>
+      <span class="nav-text">Tous les pipelines</span>
+      <span class="nav-count">{{ getPipelineCount() }}</span>
+    </button>
+    
+    <!-- Réussis -->
+    <button class="nav-item" (click)="goToProjectPipelines('SUCCESS')">
+      <span class="nav-dot" style="background: #10b981;"></span>
+      <span class="nav-text">Réussis</span>
+      <span class="nav-count success">{{ getSuccessCount() }}</span>
+    </button>
+    
+    <!-- Échoués -->
+    <button class="nav-item" (click)="goToProjectPipelines('FAILED,CANCELED')">
+      <span class="nav-dot" style="background: #ef4444;"></span>
+      <span class="nav-text">Échoués</span>
+      <span class="nav-count danger">{{ getFailedCount() }}</span>
+    </button>
+    
+    <!-- En attente / En cours -->
+    <button class="nav-item" (click)="goToProjectPipelines('PENDING,RUNNING')">
+      <span class="nav-dot" style="background: #f59e0b;"></span>
+      <span class="nav-text">En attente / En cours</span>
+      <span class="nav-count warning">{{ getPendingCount() }}</span>
+    </button>
+    
+    <!-- Dernier Pipeline -->
+    <button class="nav-item" (click)="goToLastPipeline()" 
+            [class.active]="isOnPipelinePage()">
+      <span class="nav-dot" style="background: #8b5cf6;"></span>
+      <span class="nav-text">Dernier Pipeline</span>
+      <span class="nav-badge" *ngIf="lastEnvId">▶️ actif</span>
+    </button>
+  </div>
+</section>
+
+<!-- Section globale (si pas d'application courante) -->
+<section class="sidebar-section" *ngIf="!currentAppId">
+  <h3 class="section-label">
+    <span>🚀 Tous les pipelines</span>
+  </h3>
+  <div class="nav-items">
+    <button class="nav-item" (click)="navigate('/pipelines')">
+      <span class="nav-dot"></span>
+      <span class="nav-text">Tous les pipelines</span>
+    </button>
+    <button class="nav-item" (click)="navigate('/pipelines?status=SUCCESS')">
+      <span class="nav-dot" style="background: #10b981;"></span>
+      <span class="nav-text">Réussis</span>
+    </button>
+    <button class="nav-item" (click)="navigate('/pipelines?status=FAILED,CANCELED')">
+      <span class="nav-dot" style="background: #ef4444;"></span>
+      <span class="nav-text">Échoués</span>
+    </button>
+    <button class="nav-item" (click)="navigate('/pipelines?status=PENDING,RUNNING')">
+      <span class="nav-dot" style="background: #f59e0b;"></span>
+      <span class="nav-text">En cours</span>
+    </button>
+  </div>
+</section>
 
     <!-- Sécurité -->
     <section class="sidebar-section">

@@ -13,6 +13,8 @@ import { EnvironmentSummaryResponse } from '../../models/environment/environment
 })
 export class ProjectOverviewComponent implements OnInit {
 
+  
+
   appId: string | null = null;
   latestDeployment: DeploymentHistoryItem | null = null;
   deployments: DeploymentHistoryItem[] = [];

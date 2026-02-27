@@ -26,6 +26,9 @@ import { DeploySuccessModalComponent } from './shared/deploy-success-modal/deplo
 import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 import { AdminSidebarComponent } from './shared/admin-sidebar/admin-sidebar.component';
 import { UserSidebarComponent } from './shared/user-sidebar/user-sidebar.component';
+import { ApplicationsActiveComponent } from './applications-active/applications-active.component';
+import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
+import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
 
 @NgModule({
   declarations: [
@@ -50,7 +53,10 @@ import { UserSidebarComponent } from './shared/user-sidebar/user-sidebar.compone
     ProjectLogsComponent,
     ProjectSecurityComponent,
     DeploySuccessModalComponent,
-    UserSidebarComponent
+    UserSidebarComponent,
+    ApplicationsActiveComponent,
+    SecurityAiFixesComponent,
+    EnvironmentDetailsComponent
   ],
   imports: [
     BrowserModule,

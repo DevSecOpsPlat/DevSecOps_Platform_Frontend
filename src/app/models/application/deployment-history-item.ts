@@ -4,6 +4,9 @@ export interface DeploymentHistoryItem {
   gitBranch: string;
   pipelineId: number | null;
   pipelineStatus: string;
+  environmentStatus: string;
+  ttlHours: number;      
+  expiresAt: string;  
   shortSha?: string | null;
   commitMessage?: string | null;
   createdAt: string;

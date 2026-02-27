@@ -1,7 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
 import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { ENVIRONMENT_STATUS } from 'src/app/models/environment/status-types';
+import { FormatService } from 'src/app/models/environment/format.service';
 
 @Component({
   selector: 'app-project-deployments',
@@ -9,73 +11,255 @@ import { DeploymentHistoryItem } from '../../models/application/deployment-histo
   styleUrls: ['./project-deployments.component.css']
 })
 export class ProjectDeploymentsComponent implements OnInit {
-
   appId: string | null = null;
-  deployments: DeploymentHistoryItem[] = [];
+  appName: string = '';
+  environments: DeploymentHistoryItem[] = [];
+  filteredEnvironments: DeploymentHistoryItem[] = [];
   loading = true;
-  branchFilter = '';
+  error: string | null = null;
+  
+  // Filtres
+  branchFilter: string = '';
   statusFilter: string | null = null;
-  filtered: DeploymentHistoryItem[] = [];
+  
+  // Stats
+  activeCount: number = 0;
+  expiredCount: number = 0;
+  totalCount: number = 0;
+
+  // Constantes pour les statuts
+  readonly ENV_STATUS = ENVIRONMENT_STATUS;
 
   constructor(
     private route: ActivatedRoute,
-    private applicationService: ApplicationService
+    private router: Router,
+    private applicationService: ApplicationService,
+    public format: FormatService
   ) {}
 
   ngOnInit(): void {
     this.appId = this.route.parent?.snapshot.paramMap.get('appId') || null;
+    
+    if (this.appId) {
+      this.loadAppName();
+    }
+    
     this.route.queryParamMap.subscribe(params => {
       this.statusFilter = params.get('status');
       if (this.appId) {
-        this.loadDeployments();
+        this.loadEnvironments();
       }
     });
   }
 
-  loadDeployments(): void {
+  private loadAppName(): void {
     if (!this.appId) return;
+    this.applicationService.getApplicationById(this.appId).subscribe({
+      next: (app) => this.appName = app.name
+    });
+  }
+
+  loadEnvironments(): void {
+    if (!this.appId) return;
+    
     this.loading = true;
+    this.error = null;
+    
     this.applicationService.getDeploymentHistory(this.appId, this.branchFilter || undefined).subscribe({
-      next: items => {
-        this.deployments = items;
-        this.filtered = this.applyStatusFilter(items);
+      next: (items) => {
+        this.environments = items;
+        this.calculateStats();
+        this.applyFilter();
         this.loading = false;
       },
-      error: () => {
+      error: (err) => {
         this.loading = false;
+        this.error = err.error?.message || 'Erreur lors du chargement';
       }
     });
+  }
+
+  calculateStats(): void {
+    this.totalCount = this.environments.length;
+    this.activeCount = this.environments.filter(env => 
+      this.isEnvironmentActive(env.environmentStatus)
+    ).length;
+    this.expiredCount = this.environments.filter(env => 
+      env.environmentStatus === 'EXPIRED' || env.environmentStatus === 'DESTROYED'
+    ).length;
+  }
+
+  applyFilter(): void {
+    let filtered = [...this.environments];
+    
+    // Filtre par branche
+    if (this.branchFilter?.trim()) {
+      const filter = this.branchFilter.toLowerCase().trim();
+      filtered = filtered.filter(env => 
+        env.gitBranch?.toLowerCase().includes(filter)
+      );
+    }
+    
+    // Filtre par statut d'ENVIRONNEMENT
+    if (this.statusFilter) {
+      const statuses = this.statusFilter.split(',');
+      filtered = filtered.filter(env => {
+        const envStatus = env.environmentStatus?.toUpperCase() || '';
+        return statuses.some(s => {
+          // CORRECTION: Utiliser ENV_STATUS au lieu de this.ENV_STATUS
+          if (s === 'ACTIVE') return ENVIRONMENT_STATUS.ACTIVE.includes(envStatus as any);
+          if (s === 'IN_PROGRESS') return ENVIRONMENT_STATUS.IN_PROGRESS.includes(envStatus as any);
+          if (s === 'TERMINATED') return ENVIRONMENT_STATUS.TERMINATED.includes(envStatus as any);
+          return envStatus === s;
+        });
+      });
+    }
+    
+    this.filteredEnvironments = filtered;
   }
 
   onBranchFilterChange(): void {
-    this.loadDeployments();
+    this.applyFilter();
   }
 
-  statusClass(status: string): string {
+  clearFilters(): void {
+    this.branchFilter = '';
+    this.statusFilter = null;
+    
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'deployments']);
+    }
+    
+    this.applyFilter();
+  }
+
+  // Classes CSS pour les statuts
+  environmentStatusClass(status: string | undefined): string {
     const s = (status || '').toUpperCase();
-    if (s === 'SUCCESS') return 'status-success';
-    if (s === 'FAILED' || s === 'CANCELED') return 'status-danger';
-    if (s === 'RUNNING' || s === 'PENDING') return 'status-warning';
-    return 'status-muted';
+    // CORRECTION: Utiliser ENVIRONMENT_STATUS directement
+    if (ENVIRONMENT_STATUS.ACTIVE.includes(s as any)) return 'env-status-active';
+    if (ENVIRONMENT_STATUS.IN_PROGRESS.includes(s as any)) return 'env-status-building';
+    if (s === 'EXPIRED') return 'env-status-expired';
+    if (s === 'FAILED') return 'env-status-failed';
+    if (s === 'DESTROYED') return 'env-status-destroyed';
+    return 'env-status-default';
   }
 
-  formatDate(iso: string | null): string {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString();
+  pipelineStatusClass(status: string | undefined): string {
+    const s = (status || '').toUpperCase();
+    if (s === 'SUCCESS') return 'pipeline-success';
+    if (s === 'FAILED') return 'pipeline-failed';
+    if (s === 'CANCELED') return 'pipeline-canceled';
+    if (['RUNNING', 'PENDING'].includes(s)) return 'pipeline-running';
+    return 'pipeline-default';
   }
 
-  private applyStatusFilter(items: DeploymentHistoryItem[]): DeploymentHistoryItem[] {
-    const status = (this.statusFilter || '').toUpperCase();
-    if (!status || status === 'ALL') {
-      return items;
-    }
-    if (status === 'SUCCESS' || status === 'FAILED' || status === 'PENDING' || status === 'RUNNING') {
-      return items.filter(d => (d.pipelineStatus || '').toUpperCase() === status);
-    }
-    return items;
+  // Utilisation directe du format service
+  getEnvironmentStatusIcon(status: string | undefined): string {
+    return this.format.getEnvironmentStatusIcon(status || '');
+  }
+
+  getEnvironmentStatusDescription(status: string | undefined): string {
+    return this.format.getEnvironmentStatusDescription(status || '');
+  }
+
+  // Vérifications
+  isEnvironmentActive(status: string | undefined): boolean {
+    return (status || '').toUpperCase() === 'RUNNING';
+  }
+
+  isEnvironmentExpired(env: DeploymentHistoryItem): boolean {
+  // Vérifier d'abord le statut
+  if (env.environmentStatus === 'EXPIRED' || env.environmentStatus === 'DESTROYED') {
+    return true;
+  }
+  
+  // Vérifier par la date d'expiration si elle existe
+  if (env.expiresAt) {
+    return new Date(env.expiresAt) < new Date();
+  }
+  
+  return false;
+}
+
+  // Navigation
+  viewEnvironment(envId: string): void {
+    this.router.navigate(['/environment', envId], {
+      queryParams: { appId: this.appId }
+    });
   }
 
   viewPipeline(envId: string): void {
-    window.location.href = `/pipeline/${envId}`;
+    this.router.navigate(['/pipeline', envId], {
+      queryParams: { appId: this.appId }
+    });
   }
+
+  goBackToProject(): void {
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'overview']);
+    }
+  }
+
+  createNewEnvironment(): void {
+    if (this.appId) {
+      this.router.navigate(['/environment-create'], {
+        queryParams: { appId: this.appId }
+      });
+    } else {
+      this.router.navigate(['/environment-create']);
+    }
+  }
+
+  matchesBranchFilter(env: DeploymentHistoryItem): boolean {
+    return !!(this.branchFilter && 
+              env.gitBranch && 
+              env.gitBranch.toLowerCase().includes(this.branchFilter.toLowerCase()));
+  }
+
+  getEnvironmentUrl(envId: string): string {
+    return `https://${envId}.test.com`;
+  }
+
+
+// Formater la date de création
+getCreatedAtDate(env: DeploymentHistoryItem): string {
+  if (!env.createdAt) return '—';
+  return this.format.formatDate(env.createdAt);
+}
+
+// Formater le temps relatif (il y a X minutes)
+getCreatedAtTimeAgo(env: DeploymentHistoryItem): string {
+  if (!env.createdAt) return '';
+  return this.format.formatTimeAgo(env.createdAt);
+}
+
+// Formater la date d'expiration
+getExpiresAtDate(env: DeploymentHistoryItem): string {
+  if (!env.expiresAt) return '—';
+  return this.format.formatDate(env.expiresAt);
+}
+
+// Obtenir le temps restant avant expiration
+getTimeRemaining(env: DeploymentHistoryItem): string {
+  if (!env.expiresAt) return '—';
+  return this.format.getTimeRemaining(env.expiresAt);
+}
+
+// Vérifier si l'environnement est expiré (déjà défini)
+// isEnvironmentExpired(env) existe déjà
+
+// Obtenir la classe CSS pour l'expiration
+getExpiryClass(env: DeploymentHistoryItem): string {
+  if (this.isEnvironmentExpired(env)) return 'expired';
+  if (!env.expiresAt) return '';
+  
+  const expiryDate = new Date(env.expiresAt);
+  const now = new Date();
+  const diffHours = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+  
+  if (diffHours < 1) return 'expiring-soon';
+  if (diffHours < 3) return 'expiring';
+  return '';
+}
 }
