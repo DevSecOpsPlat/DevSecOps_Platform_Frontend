@@ -4,7 +4,7 @@
       <h1 class="page-title">Mes applications</h1>
       <p class="page-subtitle">Gérez vos applications et leurs configurations</p>
     </div>
-    <button class="btn-primary btn-new-app" (click)="openEnvironments()">
+    <button class="btn-primary btn-view btn-new-app" (click)="openEnvironments()">
       <span class="btn-icon">+</span>
       <span>Nouvelle application</span>
     </button>
@@ -64,7 +64,10 @@
 
       <div class="app-actions">
         <button class="btn-action btn-view" (click)="openEnvironments()">
-          Voir les environnements
+          Nouveau déploiement
+        </button>
+        <button class="btn-action btn-secondary" (click)="openProject(app)">
+          Voir le projet
         </button>
       </div>
     </div>

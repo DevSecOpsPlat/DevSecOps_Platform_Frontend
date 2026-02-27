@@ -14,19 +14,55 @@ import { AdminHomeComponent } from './admin-home/admin-home.component';
 import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
+import { ProjectLayoutComponent } from './project/project-layout.component';
+import { ProjectOverviewComponent } from './project/overview/project-overview.component';
+import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
+import { ProjectLogsComponent } from './project/logs/project-logs.component';
+import { ProjectSecurityComponent } from './project/security/project-security.component';
+import { ApplicationsActiveComponent } from './applications-active/applications-active.component';
+import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
+import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: 'home', component: HomeComponent },
+  { path: 'overview', component: HomeComponent },
   { path: 'admin-home', component: AdminHomeComponent, canActivate: [AdminGuard] },
   { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
 
-  // Utilisateur connecté : création / gestion des environnements
+  // Projet (style Vercel) : sidebar + Overview, Deployments, Logs, Security
+  {
+    path: 'project/:appId',
+    component: ProjectLayoutComponent,
+    canActivate: [AuthGuard],
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', component: ProjectOverviewComponent },
+      { path: 'deployments', component: ProjectDeploymentsComponent },
+      { path: 'logs', component: ProjectLogsComponent },
+      { path: 'security', component: ProjectSecurityComponent },
+      { path: 'pipelines', component: PipelinesListComponent }
+    ]
+  },
+
+  // Utilisateur connecté
   { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'environments', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
+  { path: 'environment/:envId', component: EnvironmentDetailsComponent, canActivate: [AuthGuard] },
+  {
+    path: 'applications',
+    canActivate: [AuthGuard],
+    children: [
+      { path: '', component: MyApplicationsComponent },
+      { path: 'active', component: ApplicationsActiveComponent }
+    ]
+  },
   { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
+
+  // Sécurité IA
+  { path: 'security/fixes', component: SecurityAiFixesComponent, canActivate: [AuthGuard] },
 
   // Administration
   { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [AdminGuard] },

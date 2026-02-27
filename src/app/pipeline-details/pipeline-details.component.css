@@ -1,40 +1,83 @@
-.pipeline-page {
-  padding: 3rem 2.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
-  margin-top: 64px;
+.user-shell {
+  display: flex;
   min-height: calc(100vh - 64px);
-  background: #f8fafc;
 }
 
-.header {
+.user-main {
+  flex: 1;
+  margin-left: 280px;
+  margin-left: 280px;
+}
+
+.pipeline-layout {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.pipeline-sidebar {
+  width: 320px;
+  min-width: 320px;
+  border-right: 1px solid var(--color-border-soft);
+  background: var(--color-bg-card);
+  overflow-y: auto;
+}
+
+.pipeline-main {
+  flex: 1;
+  background: #f8fafc;
+  padding: 3rem 2.5rem;
+}
+
+.pipeline-page {
+  max-width: 1400px;
+  margin: 0 auto;
+   padding: 3rem 2.5rem;
+  min-height: calc(100vh - 64px);
+}
+
+.pipeline-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
 }
 
-.header h1 {
+.pipeline-main-title h1 {
   font-size: 1.6rem;
   font-weight: 600;
   margin: 0;
 }
 
-.header a {
-  display: inline-block;
+.pipeline-meta {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0.25rem 0 0;
+}
+
+.pipeline-meta.secondary {
   font-size: 0.8rem;
-  color: #4f46e5;
-  text-decoration: none;
+  color: #9ca3af;
 }
 
-.header a:hover {
-  text-decoration: underline;
-}
-
-.status {
+.pipeline-header-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  background: #e0e7ff;
 }
 
 .content-grid {

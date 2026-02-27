@@ -1,89 +1,65 @@
-<header class="app-bar" role="banner">
+<header class="app-bar" role="banner" [class.dark]="themeService.current === 'dark'">
   <div class="app-bar-inner">
-    <a [routerLink]="(authService.isLoggedIn$ | async) && isAdmin ? '/admin-home' : '/home'" class="brand">
-      <div class="brand-logos">
-        <img src="/assets/images/attijari.png" alt="Attijari Bank logo" class="brand-logo-attijari">
-        <img src="/assets/images/enviroTestLogorembg.png" alt="EnviroTest logo" class="brand-logo-envirotest">
-      </div>
-      <span class="brand-text">
+    <!-- Gauche: Logos + nom + séparateur + menu application -->
+    <div class="brand-section">
+      <a [routerLink]="(authService.isLoggedIn$ | async) && isAdmin ? '/admin-home' : '/home'" class="brand">
+        <div class="brand-logos">
+          <img src="/assets/images/attijari.png" alt="Attijari" class="brand-logo-attijari">
+          <img src="/assets/images/enviroTestLogorembg.png" alt="EnviroTest" class="brand-logo-envirotest">
+        </div>
+       <span class="brand-text">
         EnviroTest
         <span class="brand-tagline">On‑Demand Environments. Instant Testing.</span>
       </span>
-    </a>
+      </a>
+      <span class="separator" *ngIf="authService.isLoggedIn$ | async"></span>
+     
+    </div>
 
-    <button type="button" class="menu-toggle" aria-label="Toggle menu" (click)="menuOpen = !menuOpen" [attr.aria-expanded]="menuOpen">
+    <button type="button" class="menu-toggle" aria-label="Menu" (click)="menuOpen = !menuOpen" [attr.aria-expanded]="menuOpen">
       <span class="menu-toggle-bar"></span>
-      <span class="menu-toggle-bar"></span> 
+      <span class="menu-toggle-bar"></span>
       <span class="menu-toggle-bar"></span>
     </button>
 
     <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
-      <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Home</a>
-      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin" routerLink="/admin-home" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link" (click)="menuOpen = false">Admin Home</a>
+      <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" class="nav-link">Home</a>
+      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin" routerLink="/admin-home" routerLinkActive="active" class="nav-link">Admin</a>
 
-      <!-- Liens visibles pour les utilisateurs connectés (testeurs) -->
-      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
-         routerLink="/environment-create"
-         routerLinkActive="active"
-         class="nav-link"
-         (click)="menuOpen = false">Environment Creation</a>
-
-      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
-         routerLink="/my-applications"
-         routerLinkActive="active"
-         class="nav-link"
-         (click)="menuOpen = false">Applications</a>
-
-      <a *ngIf="(authService.isLoggedIn$ | async) && isTester"
-         routerLink="/pipelines"
-         routerLinkActive="active"
-         class="nav-link"
-         (click)="menuOpen = false">Pipelines</a>
-
-      <!-- Lien admin supplémentaire dans la barre principale -->
-      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin"
-         routerLink="/admin-dashboard"
-         routerLinkActive="active"
-         class="nav-link"
-         (click)="menuOpen = false">Admin</a>
+      <ng-container *ngIf="(authService.isLoggedIn$ | async) && isTester">
+        <a routerLink="/my-applications" routerLinkActive="active" class="nav-link">
+          Applications
+        </a>
+        <a routerLink="/environment-create" routerLinkActive="active" class="nav-link">
+         <span class="btn-icon">+</span> New Deployment
+        </a>
+        
+        <button type="button" class="icon-btn" aria-label="Notifications">
+          <span class="bell-icon">🔔</span>
+        </button>
+        <button type="button" class="icon-btn theme-toggle" (click)="themeService.toggle()" [attr.aria-label]="themeService.current === 'dark' ? 'Mode clair' : 'Mode sombre'">
+          <span *ngIf="themeService.current === 'light'">🌙</span>
+          <span *ngIf="themeService.current === 'dark'">☀️</span>
+        </button>
+      </ng-container>
 
       <ng-container *ngIf="!(authService.isLoggedIn$ | async)">
-        <a routerLink="/sign-in" routerLinkActive="active" class="nav-link" (click)="menuOpen = false">Sign In</a>
-        <a routerLink="/sign-up" routerLinkActive="active" class="nav-link nav-link-cta" (click)="menuOpen = false">Sign Up</a>
+        <a routerLink="/sign-in" class="nav-link">Sign In</a>
+        <a routerLink="/sign-up" class="nav-link nav-link-cta">Sign Up</a>
       </ng-container>
 
       <div class="user-menu-wrap" *ngIf="authService.isLoggedIn$ | async">
-        <button type="button" class="user-menu-trigger" (click)="userMenuOpen = !userMenuOpen" [attr.aria-expanded]="userMenuOpen" aria-label="Menu utilisateur">
-          <span class="user-icon" aria-hidden="true"><img src="/assets/images/user.png" alt="userIcon " /></span>
+        <button type="button" class="user-menu-trigger" (click)="userMenuOpen = !userMenuOpen">
+           <span class="user-icon" aria-hidden="true"><img src="/assets/images/user.png" alt="userIcon " /></span>
           <span class="user-name">{{ user?.username || 'Compte' }}</span>
         </button>
         <div class="user-dropdown" [class.user-dropdown-open]="userMenuOpen">
-          <a routerLink="/profile"
-             class="user-dropdown-item"
-             (click)="userMenuOpen = false; menuOpen = false">Profil</a>
-
-          <a *ngIf="isAdmin"
-             routerLink="/admin-home"
-             class="user-dropdown-item"
-             (click)="userMenuOpen = false; menuOpen = false">Admin Home</a>
-          <a *ngIf="isAdmin"
-             routerLink="/admin-dashboard"
-             class="user-dropdown-item"
-             (click)="userMenuOpen = false; menuOpen = false">Admin Dashboard</a>
-
-          <a *ngIf="isTester"
-             routerLink="/my-applications"
-             class="user-dropdown-item"
-             (click)="userMenuOpen = false; menuOpen = false">Mes applications</a>
-
-          <a *ngIf="isTester"
-             routerLink="/pipelines"
-             class="user-dropdown-item"
-             (click)="userMenuOpen = false; menuOpen = false">Pipelines</a>
-
-          <button type="button"
-                  class="user-dropdown-item user-dropdown-item-logout"
-                  (click)="logout()">Déconnexion</button>
+          <a routerLink="/profile" class="user-dropdown-item" (click)="userMenuOpen = false">Profil</a>
+          <a *ngIf="isAdmin" routerLink="/admin-home" class="user-dropdown-item" (click)="userMenuOpen = false">Admin Home</a>
+          <a *ngIf="isAdmin" routerLink="/admin-dashboard" class="user-dropdown-item" (click)="userMenuOpen = false">Dashboard</a>
+          <a *ngIf="isTester" routerLink="/my-applications" class="user-dropdown-item" (click)="userMenuOpen = false">Applications</a>
+          <a *ngIf="isTester" routerLink="/pipelines" class="user-dropdown-item" (click)="userMenuOpen = false">Pipelines</a>
+          <button type="button" class="user-dropdown-item user-dropdown-item-logout" (click)="logout()">Déconnexion</button>
         </div>
       </div>
     </nav>

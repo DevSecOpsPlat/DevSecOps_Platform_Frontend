@@ -1,0 +1,48 @@
+<div class="apps-page">
+  <div class="apps-header">
+    <div>
+      <h1 class="page-title">Applications actives</h1>
+      <p class="page-subtitle">Applications actuellement actives dans vos environnements</p>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <div class="spinner"></div>
+    <span>Chargement des applications actives...</span>
+  </div>
+
+  <div *ngIf="error" class="error-banner">
+    {{ error }}
+  </div>
+
+  <div class="cards-grid" *ngIf="!loading && !error">
+    <div *ngIf="applications.length === 0" class="empty-state-card">
+      <div class="empty-icon">📦</div>
+      <h3>Aucune application active</h3>
+      <p>Lancez un déploiement pour activer une application.</p>
+    </div>
+
+    <div class="app-card" *ngFor="let app of applications">
+      <div class="app-card-header">
+        <div class="app-icon">📦</div>
+        <div class="app-title-section">
+          <h2 class="app-title">{{ app.name }}</h2>
+          <span class="app-creator">Par {{ app.createdByUsername }}</span>
+        </div>
+      </div>
+
+      <div class="app-repo-section">
+        <div class="repo-label">Repository</div>
+        <div class="repo-url">{{ app.gitRepositoryUrl }}</div>
+      </div>
+
+      <div class="app-meta-section">
+        <div class="meta-item">
+          <span class="meta-label">Créée le</span>
+          <span class="meta-value">{{ app.createdAt | date: 'medium' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

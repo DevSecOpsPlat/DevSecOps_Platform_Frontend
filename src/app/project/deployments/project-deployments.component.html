@@ -1,0 +1,247 @@
+<div class="deployments-container">
+  <!-- Header avec titre et stats -->
+  <header class="deployments-header">
+    <div class="header-title">
+      <h1>
+        <span class="back-link" (click)="goBackToProject()">←</span>
+        Environnements de test
+        <span *ngIf="appName" class="app-name">• {{ appName }}</span>
+      </h1>
+      <p class="subtitle">Environnements éphémères créés pour les tests</p>
+    </div>
+    
+    <div class="header-stats">
+      <div class="stat-item">
+        <span class="stat-value">{{ totalCount }}</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value active">{{ activeCount }}</span>
+        <span class="stat-label">Actifs</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Barre de filtres -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <div class="filter-input-wrapper">
+        <span class="filter-icon">🔍</span>
+        <input 
+          type="text" 
+          [(ngModel)]="branchFilter" 
+          (ngModelChange)="onBranchFilterChange()"
+          placeholder="Filtrer par branche..." 
+          class="filter-input" />
+        <button *ngIf="branchFilter" class="clear-filter" (click)="branchFilter = ''; onBranchFilterChange()">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">Statut:</span>
+      <div class="status-filters">
+        <button 
+          class="status-filter-btn" 
+          [class.active]="!statusFilter"
+          (click)="statusFilter = null; applyFilter()">
+          Tous
+        </button>
+        <button 
+          class="status-filter-btn active-btn" 
+          [class.active]="statusFilter === 'ACTIVE'"
+          (click)="statusFilter = 'ACTIVE'; applyFilter()">
+          ✅ Actifs
+        </button>
+        <button 
+          class="status-filter-btn in-progress-btn" 
+          [class.active]="statusFilter === 'IN_PROGRESS'"
+          (click)="statusFilter = 'IN_PROGRESS'; applyFilter()">
+          🔄 En cours
+        </button>
+        <button 
+          class="status-filter-btn terminated-btn" 
+          [class.active]="statusFilter === 'TERMINATED'"
+          (click)="statusFilter = 'TERMINATED'; applyFilter()">
+          ⏰ Terminés
+        </button>
+      </div>
+    </div>
+
+    <button *ngIf="branchFilter || statusFilter" class="clear-all-btn" (click)="clearFilters()">
+      Effacer les filtres
+    </button>
+  </div>
+
+  <!-- États de chargement -->
+  <div *ngIf="loading" class="loading-state">
+    <div class="skeleton-list">
+      <div class="skeleton-card" *ngFor="let i of [1,2,3]">
+        <div class="skeleton-header">
+          <div class="skeleton-line w-60"></div>
+          <div class="skeleton-line w-20"></div>
+        </div>
+        <div class="skeleton-body">
+          <div class="skeleton-line w-40"></div>
+          <div class="skeleton-line w-70"></div>
+          <div class="skeleton-line w-50"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Message d'erreur -->
+  <div *ngIf="error && !loading" class="error-state">
+    <span class="error-icon">⚠️</span>
+    <p>{{ error }}</p>
+    <button class="retry-btn" (click)="loadEnvironments()">Réessayer</button>
+  </div>
+
+  <!-- Liste vide -->
+  <div *ngIf="!loading && !error && filteredEnvironments.length === 0" class="empty-state">
+    <div class="empty-icon">🌍</div>
+    <h3>Aucun environnement trouvé</h3>
+    <p *ngIf="branchFilter || statusFilter">
+      Aucun environnement ne correspond à vos filtres.
+      <button class="link-btn" (click)="clearFilters()">Effacer les filtres</button>
+    </p>
+    <p *ngIf="!branchFilter && !statusFilter">
+      Commencez par créer un nouvel environnement de test.
+    </p>
+    <button class="create-btn" (click)="createNewEnvironment()">
+      + Créer un environnement
+    </button>
+  </div>
+
+  <!-- Liste des environnements -->
+  <div *ngIf="!loading && !error && filteredEnvironments.length > 0" class="environments-list">
+    <div *ngFor="let env of filteredEnvironments" 
+         class="environment-card" 
+         [class.active]="isEnvironmentActive(env.environmentStatus)"
+         [class.expired]="isEnvironmentExpired(env)">
+      
+      <!-- En-tête de la carte -->
+      <div class="card-header">
+        <div class="header-left">
+          <span class="status-indicator" [class]="environmentStatusClass(env.environmentStatus)">
+            {{ getEnvironmentStatusIcon(env.environmentStatus) }}
+          </span>
+          <div class="env-title">
+            <h3>{{ env.environmentName }}</h3>
+            <span class="env-badge" *ngIf="isEnvironmentActive(env.environmentStatus)">
+              ACTIF
+            </span>
+          </div>
+        </div>
+        <span class="env-time">{{ format.formatTimeAgo(env.createdAt) }}</span>
+      </div>
+
+      <!-- Corps de la carte -->
+      <!-- Corps de la carte - Remplacer toute cette section -->
+<div class="card-body">
+  <!-- Statut environnement -->
+  <div class="info-row">
+    <span class="info-icon">⏱️</span>
+    <span class="info-label">Statut env:</span>
+    <span class="info-value">
+      <span class="status-badge" [class]="environmentStatusClass(env.environmentStatus)">
+        {{ getEnvironmentStatusDescription(env.environmentStatus) }}
+      </span>
+    </span>
+  </div>
+
+  <!-- Info pipeline -->
+  <div class="info-row" *ngIf="env.pipelineStatus">
+    <span class="info-icon">⚙️</span>
+    <span class="info-label">Pipeline:</span>
+    <span class="info-value">
+      <span class="pipeline-badge" [class]="pipelineStatusClass(env.pipelineStatus)">
+        {{ env.pipelineStatus }}
+      </span>
+    </span>
+  </div>
+
+  <!-- Branche et commit -->
+  <div class="info-row">
+    <span class="info-icon">🌿</span>
+    <span class="info-label">Branche:</span>
+    <span class="info-value">
+      {{ env.gitBranch }}
+      <span class="commit-hash" *ngIf="env.shortSha">{{ env.shortSha }}</span>
+    </span>
+  </div>
+
+  <!-- Message de commit -->
+  <div class="info-row" *ngIf="env.commitMessage">
+    <span class="info-icon">📝</span>
+    <span class="info-label">Commit:</span>
+    <span class="info-value commit-msg">{{ env.commitMessage }}</span>
+  </div>
+
+  <!-- Créé par -->
+  <div class="info-row">
+    <span class="info-icon">👤</span>
+    <span class="info-label">Créé par:</span>
+    <span class="info-value">{{ env.triggeredByUsername || '—' }}</span>
+  </div>
+
+  <!-- DATE DE CRÉATION - NOUVEAU -->
+  <div class="info-row">
+    <span class="info-icon">📅</span>
+    <span class="info-label">Créé le:</span>
+    <span class="info-value">
+      {{ getCreatedAtDate(env) }}
+      <span class="time-ago" *ngIf="getCreatedAtTimeAgo(env)">({{ getCreatedAtTimeAgo(env) }})</span>
+    </span>
+  </div>
+
+  <!-- EXPIRATION - AMÉLIORÉ -->
+  <div class="info-row">
+    <span class="info-icon">⏳</span>
+    <span class="info-label">Expire le:</span>
+    <span class="info-value" [class]="getExpiryClass(env)">
+      {{ getExpiresAtDate(env) }}
+      <span *ngIf="!isEnvironmentExpired(env) && getTimeRemaining(env) !== '—'" class="time-remaining">
+        ({{ getTimeRemaining(env) }})
+      </span>
+      <span *ngIf="isEnvironmentExpired(env)" class="expired-badge">Expiré</span>
+    </span>
+  </div>
+
+  <!-- Date de fin (pour environnements terminés) -->
+  <div class="info-row" *ngIf="env.finishedAt && !isEnvironmentActive(env.environmentStatus)">
+    <span class="info-icon">🏁</span>
+    <span class="info-label">Terminé le:</span>
+    <span class="info-value">{{ format.formatDate(env.finishedAt) }}</span>
+  </div>
+</div>
+
+      <!-- Actions de la carte -->
+      <div class="card-actions">
+        <button class="btn-primary" (click)="viewEnvironment(env.environmentId)">
+          <span class="btn-icon">🔍</span>
+          Voir l'environnement
+        </button>
+        
+        <button class="btn-secondary" (click)="viewPipeline(env.environmentId)">
+          <span class="btn-icon">⚙️</span>
+          Voir le pipeline
+        </button>
+        
+        <a *ngIf="isEnvironmentActive(env.environmentStatus)" 
+           [href]="getEnvironmentUrl(env.environmentId)" 
+           target="_blank" 
+           class="btn-link">
+          <span class="btn-icon">🌐</span>
+          Ouvrir l'app
+        </a>
+      </div>
+
+      <!-- Badge de filtre actif -->
+      <div *ngIf="matchesBranchFilter(env)" class="match-badge">
+        Correspond au filtre
+      </div>
+    </div>
+  </div>
+</div>

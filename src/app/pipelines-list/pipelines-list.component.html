@@ -1,10 +1,10 @@
 <div class="pipelines-page">
+ <div class="pipelines-page">
   <header class="page-header">
-    <h1>Pipelines</h1>
-    <p class="subtitle">Tous les pipelines lancés par votre compte</p>
+    <h1>{{ getPageTitle() }}</h1>
+    <p class="subtitle">{{ getSubtitle() }}</p>
   </header>
-
-  <div *ngIf="loading && pipelines.length === 0" class="loading-state">
+  <div *ngIf="loading && filtered.length === 0" class="loading-state">
     <div class="spinner"></div>
     <span>Chargement des pipelines...</span>
   </div>
@@ -13,7 +13,7 @@
     {{ error }}
   </div>
 
-  <div *ngIf="!loading || pipelines.length > 0" class="table-wrap">
+  <div *ngIf="!loading || filtered.length > 0" class="table-wrap">
     <table class="pipelines-table">
       <thead>
         <tr>
@@ -25,7 +25,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let item of pipelines" class="pipeline-row">
+        <tr *ngFor="let item of filtered" class="pipeline-row">
           <td class="col-status">
             <span [ngClass]="statusClass(item.status || item.pipelineStatus)">
               {{ (item.status || item.pipelineStatus) | uppercase }}
@@ -67,6 +67,6 @@
         </tr>
       </tbody>
     </table>
-    <p *ngIf="!loading && pipelines.length === 0" class="empty">Aucun pipeline pour le moment.</p>
+    <p *ngIf="!loading && filtered.length === 0" class="empty">Aucun pipeline pour le moment.</p>
   </div>
 </div>

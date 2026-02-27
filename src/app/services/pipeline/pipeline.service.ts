@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
+import { SecuritySummaryResponse } from '../../models/pipeline/security-summary-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import { UserService } from '../user/user.service';
 
@@ -31,6 +32,12 @@ export class PipelineService {
 
   getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
     return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}`, {
+      headers: this.authHeaders()
+    });
+  }
+
+  getSecuritySummary(envId: string): Observable<SecuritySummaryResponse> {
+    return this.http.get<SecuritySummaryResponse>(BASE + `api/environments/${envId}/security-summary`, {
       headers: this.authHeaders()
     });
   }

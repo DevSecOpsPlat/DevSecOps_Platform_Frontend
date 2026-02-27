@@ -1,0 +1,14 @@
+<div class="user-shell" *ngIf="authService.isLoggedIn$ | async">
+  <app-user-sidebar></app-user-sidebar>
+
+  <main class="user-main">
+    <div class="project-main">
+      <div *ngIf="loading" class="loading-state">
+        <div class="spinner"></div>
+        <span>Chargement du projet...</span>
+      </div>
+      <div *ngIf="error" class="error-banner">{{ error }}</div>
+      <router-outlet *ngIf="!loading && !error"></router-outlet>
+    </div>
+  </main>
+</div>
