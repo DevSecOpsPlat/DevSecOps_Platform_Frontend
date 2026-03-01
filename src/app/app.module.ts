@@ -29,6 +29,7 @@ import { UserSidebarComponent } from './shared/user-sidebar/user-sidebar.compone
 import { ApplicationsActiveComponent } from './applications-active/applications-active.component';
 import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
+import { TimeAgoPipe } from './pipes/time-ago.pipe';
 
 @NgModule({
   declarations: [
@@ -56,7 +57,8 @@ import { EnvironmentDetailsComponent } from './shared/environment-details/enviro
     UserSidebarComponent,
     ApplicationsActiveComponent,
     SecurityAiFixesComponent,
-    EnvironmentDetailsComponent
+    EnvironmentDetailsComponent,
+    TimeAgoPipe 
   ],
   imports: [
     BrowserModule,

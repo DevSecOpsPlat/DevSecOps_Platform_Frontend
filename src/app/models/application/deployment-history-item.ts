@@ -1,3 +1,4 @@
+import { PipelineJobInfo } from "../pipeline/pipeline-scan-response";
 export interface DeploymentHistoryItem {
   environmentId: string;
   environmentName: string;
@@ -12,5 +13,6 @@ export interface DeploymentHistoryItem {
   createdAt: string;
   finishedAt: string | null;
   triggeredByUsername: string | null;
+  jobs?: PipelineJobInfo[]; 
 }
 

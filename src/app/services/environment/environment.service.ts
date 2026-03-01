@@ -72,6 +72,11 @@ export class EnvironmentService {
       headers: this.authHeaders()
     });
   }
+   getMyEnvironments(): Observable<EnvironmentSummaryResponse[]> {
+    return this.http.get<EnvironmentSummaryResponse[]>(`${BASE}api/environments`, {
+      headers: this.authHeaders()
+    });
+  }
 
   getEnvironment(envId: string): Observable<EnvironmentSummaryResponse> {
     return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/${envId}`, {
