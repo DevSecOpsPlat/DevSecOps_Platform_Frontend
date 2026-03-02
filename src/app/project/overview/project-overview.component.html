@@ -129,22 +129,35 @@
         </div>
         
         <!-- Pipeline steps -->
-        <div class="pipeline-steps">
-          <h3>Pipeline</h3>
-          <ol class="stepper">
-            <li *ngFor="let step of pipelineSteps; let i = index"
-                class="step"
-                [ngClass]="getStepState(i)">
-              <div class="step-icon">
-                <span *ngIf="getStepState(i) === 'done'">✓</span>
-                <span *ngIf="getStepState(i) === 'active'">⏳</span>
-                <span *ngIf="getStepState(i) === 'pending'">○</span>
-                <span *ngIf="getStepState(i) === 'failed'">✗</span>
-              </div>
-              <span class="step-label">{{ step }}</span>
-            </li>
-          </ol>
-        </div>
+       <!-- Pipeline steps - Stepper dynamique -->
+<!-- Pipeline steps - Version ultra-sécurisée -->
+<div class="pipeline-steps" *ngIf="latestDeployment && latestDeployment.jobs && latestDeployment.jobs.length > 0">
+  <h3>Pipeline</h3>
+  <ol class="stepper">
+    <li *ngFor="let stage of getPipelineStagesWithStatus()"
+        class="step"
+        [ngClass]="stage.status">
+      <div class="step-icon">
+        <span *ngIf="stage.status === 'done'">✓</span>
+        <span *ngIf="stage.status === 'active'">⏳</span>
+        <span *ngIf="stage.status === 'pending'">○</span>
+        <span *ngIf="stage.status === 'failed'">✗</span>
+      </div>
+      <span class="step-label">{{ stage.name }}</span>
+    </li>
+  </ol>
+</div>
+
+<!-- Message de chargement -->
+<div *ngIf="loadingPipelineDetails" class="loading-stages">
+  <div class="spinner small"></div>
+  <span>Chargement des stages...</span>
+</div>
+
+<!-- Message si pas de stages -->
+<div *ngIf="!loadingPipelineDetails && latestDeployment && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)" class="no-stages">
+  <p>Aucune information de pipeline disponible</p>
+</div>
         
         <div class="deployment-actions">
           <button class="btn-primary" (click)="viewPipeline(latestDeployment.environmentId)">

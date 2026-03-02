@@ -1,4 +1,4 @@
-// project-overview.component.ts (version corrigée)
+// project-overview.component.ts (version nettoyée)
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
@@ -24,30 +24,27 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   appId: string | null = null;
   appName: string = '';
   
-  // Données principales
   latestDeployment: DeploymentHistoryItem | null = null;
   deployments: DeploymentHistoryItem[] = [];
   environmentSummary: EnvironmentSummaryResponse | null = null;
   pendingDeployments: number = 0;
   pendingDeploymentsList: any[] = [];
-  // Données du dashboard
   recentActivities: ActivityItem[] = [];
   recentPipelines: DashboardPipelineItem[] = [];
   activeEnvironments: DashboardEnvironmentItem[] = [];
   recentVulnerabilities: DashboardVulnerabilityItem[] = [];
+
+  loadingPipelineDetails: boolean = false;
   
-  // Statistiques
   totalDeployments: number = 0;
   successfulDeployments: number = 0;
   failedDeployments: number = 0;
   criticalVulnerabilities: number = 0;
   
-  // États
   loading = true;
   error: string | null = null;
   copied = false;
   
-  // Timer
   remainingSeconds?: number;
   totalSeconds?: number;
   private countdownIntervalId?: any;
@@ -70,7 +67,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.appId = this.route.parent?.snapshot.paramMap.get('appId') || null;
     if (this.appId) {
-      this.loadAppData(); // ← Maintenant public
+      this.loadAppData();
     } else {
       this.error = 'ID d\'application invalide';
       this.loading = false;
@@ -83,54 +80,83 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-   getPipelineStagesWithStatus(): { name: string; status: 'done' | 'active' | 'pending' | 'failed' }[] {
-    if (!this.latestDeployment) {
-      return this.pipelineSteps.map(step => ({ name: step, status: 'pending' }));
-    }
-    
-    const jobs = this.latestDeployment.jobs || [];
-    const pipelineStatus = this.latestDeployment.pipelineStatus?.toUpperCase() || '';
-    
-    // Si on a des jobs, on les utilise pour déterminer le statut de chaque étape
-    if (jobs.length > 0) {
-      const stageMap = new Map<string, any[]>();
-      
-      // Grouper les jobs par stage
-      jobs.forEach(job => {
-        const stage = job.stage || 'unknown';
-        if (!stageMap.has(stage)) {
-          stageMap.set(stage, []);
-        }
-        stageMap.get(stage)!.push(job);
-      });
-      
-      // Convertir en tableau de stages avec statut
-      return Array.from(stageMap.entries()).map(([stageName, stageJobs]) => {
-        const jobStatuses = stageJobs.map(j => j.status?.toLowerCase() || '');
-        
-        let status: 'done' | 'active' | 'pending' | 'failed' = 'pending';
-        if (jobStatuses.some(s => s === 'failed' || s === 'canceled')) {
-          status = 'failed';
-        } else if (jobStatuses.every(s => s === 'success')) {
-          status = 'done';
-        } else if (jobStatuses.some(s => s === 'running' || s === 'pending')) {
-          status = 'active';
-        }
-        
-        return {
-          name: this.getDisplayName(stageName),
-          status: status
-        };
-      });
-    }
-    
-    // Fallback basé sur le statut global
-    return this.pipelineSteps.map((step, index) => ({
-      name: step,
-      status: this.getStepStatusFallback(index, pipelineStatus)
-    }));
+  getPipelineStagesWithStatus(): { name: string; status: 'done' | 'active' | 'pending' | 'failed' }[] {
+  if (!this.latestDeployment) {
+    return [];
+  }
+
+  const jobs = this.latestDeployment.jobs || [];
+
+  if (jobs.length === 0) {
+    return [];
   }
   
+  const seenStages = new Set<string>();
+  const stagesInOrder: { name: string; jobs: any[] }[] = [];
+  
+  jobs.forEach((job: any) => {
+    const stage = job.stage || 'unknown';
+    if (!seenStages.has(stage)) {
+      seenStages.add(stage);
+      stagesInOrder.push({ name: stage, jobs: [] });
+    }
+    
+    const stageEntry = stagesInOrder.find(s => s.name === stage);
+    if (stageEntry) {
+      stageEntry.jobs.push(job);
+    }
+  });
+  
+  const stages = stagesInOrder.map(stageEntry => {
+    const jobStatuses = stageEntry.jobs.map((j: any) => j.status?.toLowerCase() || '');
+    
+    let status: 'done' | 'active' | 'pending' | 'failed' = 'pending';
+    
+    if (jobStatuses.some(s => s === 'failed' || s === 'canceled')) {
+      status = 'failed';
+    } else if (jobStatuses.every(s => s === 'success')) {
+      status = 'done';
+    } else if (jobStatuses.some(s => s === 'running' || s === 'pending')) {
+      status = 'active';
+    }
+    
+    return {
+      name: this.formatStageName(stageEntry.name),
+      status: status
+    };
+  });
+  
+  // 🔥 INVERSER L'ORDRE
+  return stages.reverse();
+}
+
+  loadLatestPipelineDetails(): void {
+    if (!this.latestDeployment?.environmentId) {
+      return;
+    }
+    
+    this.pipelineService.getPipelineAndScan(this.latestDeployment.environmentId).subscribe({
+      next: (pipelineDetails) => {
+        if (this.latestDeployment) {
+          this.latestDeployment.jobs = pipelineDetails.jobs;
+          this.latestDeployment = { ...this.latestDeployment };
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement pipeline details:', err);
+      }
+    });
+  }
+
+  private formatStageName(stage: string): string {
+    if (!stage) return 'Unknown';
+    let formatted = stage.replace(/[-_]/g, ' ');
+    formatted = formatted.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    return formatted;
+  }
+
   private getDisplayName(stage: string): string {
     switch(stage.toLowerCase()) {
       case 'clone': return 'Clone';
@@ -161,14 +187,12 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Rendre cette méthode publique
   loadAppData(): void {
     if (!this.appId) return;
     
     this.loading = true;
     this.error = null;
     
-    // Charger les informations de l'application
     this.applicationService.getApplicationById(this.appId).subscribe({
       next: (app) => {
         this.appName = app.name;
@@ -178,11 +202,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       }
     });
     
-    // Charger toutes les données en parallèle
     forkJoin({
       deployments: this.applicationService.getDeploymentHistory(this.appId),
       pipelines: this.pipelineService.listPipelines(),
-      environments: this.environmentService.getMyEnvironments(), // ← Maintenant disponible
+      environments: this.environmentService.getMyEnvironments(),
       vulnerabilities: this.securityService.getRecentVulnerabilities(5)
     }).subscribe({
       next: (data) => {
@@ -198,7 +221,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   private processDashboardData(data: any): void {
-    // Filtrer les données pour cette application
     const appDeployments = data.deployments || [];
     const appPipelines = (data.pipelines || []).filter((p: any) => 
       p.environmentId && appDeployments.some((d: any) => d.environmentId === p.environmentId)
@@ -206,23 +228,28 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const appEnvironments = (data.environments || []).filter((e: any) => 
       e.id && appDeployments.some((d: any) => d.environmentId === e.id)
     );
+    
     this.pendingDeployments = appDeployments.filter((d: DeploymentHistoryItem) => 
-  ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
-).length;
+      ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
+    ).length;
 
-this.pendingDeploymentsList = appDeployments
-  .filter((d: DeploymentHistoryItem) => ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || ''))
-  .slice(0, 3)
-  .map((d: DeploymentHistoryItem) => ({
-    ...d,
-    progress: d.pipelineStatus?.toUpperCase() === 'PENDING' ? 30 : 60
-  }));
+    this.latestDeployment = appDeployments.length > 0 ? appDeployments[0] : null;
 
-    // Mettre à jour les données principales
+    if (this.latestDeployment) {
+      this.loadLatestPipelineDetails();
+    }
+
+    this.pendingDeploymentsList = appDeployments
+      .filter((d: DeploymentHistoryItem) => ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || ''))
+      .slice(0, 3)
+      .map((d: DeploymentHistoryItem) => ({
+        ...d,
+        progress: d.pipelineStatus?.toUpperCase() === 'PENDING' ? 30 : 60
+      }));
+
     this.deployments = appDeployments;
     this.latestDeployment = appDeployments.length > 0 ? appDeployments[0] : null;
     
-    // Calculer les statistiques
     this.totalDeployments = appDeployments.length;
     this.successfulDeployments = appDeployments.filter((d: any) => 
       d.pipelineStatus?.toUpperCase() === 'SUCCESS'
@@ -231,17 +258,14 @@ this.pendingDeploymentsList = appDeployments
       ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
     ).length;
     
-    // Charger le résumé de l'environnement si disponible
     if (this.latestDeployment) {
       this.loadEnvironmentSummary(this.latestDeployment.environmentId);
     }
     
-    // Construire les listes pour le dashboard
     this.buildRecentActivities(appDeployments, appPipelines, appEnvironments);
     this.buildRecentPipelines(appPipelines);
     this.buildActiveEnvironments(appEnvironments);
     
-    // Vulnérabilités
     this.recentVulnerabilities = data.vulnerabilities || [];
     this.criticalVulnerabilities = this.recentVulnerabilities.filter(v => 
       v.severity === 'CRITICAL' || v.severity === 'HIGH'
@@ -255,7 +279,6 @@ this.pendingDeploymentsList = appDeployments
   ): void {
     const activities: ActivityItem[] = [];
     
-    // Ajouter les déploiements récents
     deployments.slice(0, 3).forEach(d => {
       activities.push({
         id: d.environmentId,
@@ -269,7 +292,6 @@ this.pendingDeploymentsList = appDeployments
       });
     });
     
-    // Ajouter les pipelines récents
     pipelines.slice(0, 3).forEach(p => {
       activities.push({
         id: String(p.pipelineId || ''),
@@ -283,7 +305,6 @@ this.pendingDeploymentsList = appDeployments
       });
     });
     
-    // Trier par date (plus récent d'abord)
     this.recentActivities = activities
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5);
@@ -444,7 +465,6 @@ this.pendingDeploymentsList = appDeployments
     return 'severity-info';
   }
 
-  // Navigation
   viewPipeline(envId: string): void {
     this.router.navigate(['/pipeline', envId], {
       queryParams: { appId: this.appId }
