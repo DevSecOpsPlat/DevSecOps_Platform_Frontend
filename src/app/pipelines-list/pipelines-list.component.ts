@@ -4,6 +4,7 @@ import { PipelineService } from '../services/pipeline/pipeline.service';
 import { PipelineListItem } from '../models/pipeline/pipeline-list-item';
 import { ToastService } from '../services/ui/toast.service';
 import { ApplicationService } from '../services/application/application.service';
+import { DeploymentHistoryItem } from '../models/application/deployment-history-item';
 
 @Component({
   selector: 'app-pipelines-list',
@@ -20,7 +21,7 @@ export class PipelinesListComponent implements OnInit {
   statusFilter: string | null = null;
   filtered: PipelineListItem[] = [];
 
-    appId: string | null = null;
+  appId: string | null = null;
   isProjectContext = false;
   appName: string | null = null;
 
@@ -32,7 +33,7 @@ export class PipelinesListComponent implements OnInit {
     private toastService: ToastService
   ) {}
 
-   ngOnInit(): void {
+  ngOnInit(): void {
     // Vérifier si on est dans le contexte d'un projet
     this.route.queryParamMap.subscribe(params => {
       this.statusFilter = params.get('status');
@@ -71,63 +72,73 @@ export class PipelinesListComponent implements OnInit {
     this.error = null;
     
     this.pipelineService.listPipelines().subscribe({
-      next: (list) => {
+      next: (list: PipelineListItem[]) => {
         // Filtrer par application si on est dans le contexte d'un projet
         if (this.isProjectContext && this.appId) {
-          // ICI LA MAGIE : On filtre les pipelines pour ne garder que ceux de l'application courante
-          // Note: Il faut que votre API retourne l'applicationId ou que vous ayez un moyen de lier
-          this.pipelines = list.filter(item => {
-            // Option 1: Si votre PipelineListItem a un champ applicationId
-            // return item.applicationId === this.appId;
-            
-            // Option 2: Sinon, on doit charger les déploiements de l'application
-            // et ne garder que les pipelines qui correspondent aux environmentId de l'app
-            this.loadApplicationPipelines(list);
-            return true; // Temporaire, sera remplacé par la méthode ci-dessus
-          });
+          // Appeler la méthode de filtrage
+          this.loadApplicationPipelines(list);
         } else {
           this.pipelines = list;
+          this.filtered = this.applyStatusFilter(this.pipelines);
+          this.updatePreviousStatuses(this.pipelines);
+          this.loading = false;
         }
-        
-        this.filtered = this.applyStatusFilter(this.pipelines);
-        this.pipelines.forEach(item => {
-          if (item.pipelineId != null) {
-            this.previousStatuses.set(item.pipelineId, (item.status || item.pipelineStatus || '').toUpperCase());
-          }
-        });
-        this.loading = false;
       },
-      error: (err) => {
+      error: (err: any) => {
         this.loading = false;
         this.error = err.error?.message || 'Erreur lors du chargement des pipelines';
       }
     });
   }
-    // Méthode pour charger les pipelines spécifiques à l'application
+
+  // Méthode pour charger les pipelines spécifiques à l'application
   private loadApplicationPipelines(allPipelines: PipelineListItem[]): void {
-    if (!this.appId) return;
+    if (!this.appId) {
+      this.pipelines = allPipelines;
+      this.filtered = this.applyStatusFilter(this.pipelines);
+      this.updatePreviousStatuses(this.pipelines);
+      this.loading = false;
+      return;
+    }
     
     // Récupérer d'abord les environnements/déploiements de l'application
-    this.applicationService.getDeploymentHistory(this.appId).subscribe({
-      next: (deployments) => {
+    this.applicationService.getDeploymentHistory(this.appId, 0, 100).subscribe({
+      next: (deployments: DeploymentHistoryItem[]) => {
         // Récupérer tous les environmentIds de l'application
-        const appEnvIds = deployments.map(d => d.environmentId);
+        const appEnvIds = deployments.map((d: DeploymentHistoryItem) => d.environmentId);
         
         // Filtrer les pipelines qui appartiennent à ces environnements
-        this.pipelines = allPipelines.filter(pipeline => 
+        this.pipelines = allPipelines.filter((pipeline: PipelineListItem) => 
           pipeline.environmentId && appEnvIds.includes(pipeline.environmentId)
         );
         
         this.filtered = this.applyStatusFilter(this.pipelines);
+        this.updatePreviousStatuses(this.pipelines);
+        this.loading = false;
       },
       error: () => {
         // En cas d'erreur, on garde tous les pipelines
         this.pipelines = allPipelines;
         this.filtered = this.applyStatusFilter(this.pipelines);
+        this.updatePreviousStatuses(this.pipelines);
+        this.loading = false;
       }
     });
   }
-    getPageTitle(): string {
+
+  // Mettre à jour le map des statuts précédents
+  private updatePreviousStatuses(pipelines: PipelineListItem[]): void {
+    pipelines.forEach((item: PipelineListItem) => {
+      if (item.pipelineId != null) {
+        this.previousStatuses.set(
+          item.pipelineId, 
+          (item.status || item.pipelineStatus || '').toUpperCase()
+        );
+      }
+    });
+  }
+
+  getPageTitle(): string {
     if (this.isProjectContext && this.appName) {
       return `Pipelines - ${this.appName}`;
     }
@@ -141,33 +152,30 @@ export class PipelinesListComponent implements OnInit {
     return 'Tous les pipelines lancés par votre compte';
   }
 
-
-
- private applyStatusFilter(list: PipelineListItem[]): PipelineListItem[] {
-  const s = (this.statusFilter || '').toUpperCase();
-  
-  // Si pas de filtre ou filtre ALL, retourner tout
-  if (!s || s === 'ALL') return list;
-  
-  // Si le filtre contient une virgule (filtre multiple)
-  if (s.includes(',')) {
-    const statuses = s.split(',');
-    return list.filter(item => {
-      const itemStatus = (item.status || item.pipelineStatus || '').toUpperCase();
-      return statuses.includes(itemStatus);
-    });
+  private applyStatusFilter(list: PipelineListItem[]): PipelineListItem[] {
+    const s = (this.statusFilter || '').toUpperCase();
+    
+    // Si pas de filtre ou filtre ALL, retourner tout
+    if (!s || s === 'ALL') return list;
+    
+    // Si le filtre contient une virgule (filtre multiple)
+    if (s.includes(',')) {
+      const statuses = s.split(',');
+      return list.filter((item: PipelineListItem) => {
+        const itemStatus = (item.status || item.pipelineStatus || '').toUpperCase();
+        return statuses.includes(itemStatus);
+      });
+    }
+    
+    // Filtre simple
+    if (['SUCCESS', 'FAILED', 'CANCELED', 'PENDING', 'RUNNING'].includes(s)) {
+      return list.filter((item: PipelineListItem) => 
+        (item.status || item.pipelineStatus || '').toUpperCase() === s
+      );
+    }
+    
+    return list;
   }
-  
-  // Filtre simple
-  if (['SUCCESS', 'FAILED', 'CANCELED', 'PENDING', 'RUNNING'].includes(s)) {
-    return list.filter(item => (item.status || item.pipelineStatus || '').toUpperCase() === s);
-  }
-  
-  return list;
-}
-
-
-  
 
   statusClass(status: string | undefined): string {
     const s = (status || '').toUpperCase();
@@ -236,18 +244,17 @@ export class PipelinesListComponent implements OnInit {
     parts.push(m > 0 ? `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `00:${s.toString().padStart(2, '0')}`);
     return parts.join(' ');
   }
-    private refreshPipelinesForNotifications(): void {
+
+  private refreshPipelinesForNotifications(): void {
     this.pipelineService.listPipelines().subscribe({
-      next: (list) => {
+      next: (list: PipelineListItem[]) => {
         // Appliquer le même filtre si on est dans le contexte projet
-        let pipelinesToProcess = list;
-        
         if (this.isProjectContext && this.appId) {
           // Re-filtrer
           this.applicationService.getDeploymentHistory(this.appId).subscribe({
-            next: (deployments) => {
-              const appEnvIds = deployments.map(d => d.environmentId);
-              pipelinesToProcess = list.filter(p => 
+            next: (deployments: DeploymentHistoryItem[]) => {
+              const appEnvIds = deployments.map((d: DeploymentHistoryItem) => d.environmentId);
+              const pipelinesToProcess = list.filter((p: PipelineListItem) => 
                 p.environmentId && appEnvIds.includes(p.environmentId)
               );
               this.processNotifications(pipelinesToProcess);
@@ -266,29 +273,29 @@ export class PipelinesListComponent implements OnInit {
     });
   }
   
- private processNotifications(list: PipelineListItem[]): void {
-  list.forEach(item => {
-    if (!item.pipelineId) {
-      return;
-    }
-    const id = item.pipelineId;
-    const newStatus = (item.status || item.pipelineStatus || '').toUpperCase();
-    const oldStatus = this.previousStatuses.get(id);
+  private processNotifications(list: PipelineListItem[]): void {
+    list.forEach((item: PipelineListItem) => {
+      if (!item.pipelineId) {
+        return;
+      }
+      const id = item.pipelineId;
+      const newStatus = (item.status || item.pipelineStatus || '').toUpperCase();
+      const oldStatus = this.previousStatuses.get(id);
+      
+      // Notification quand le pipeline change de statut
+      if (oldStatus && (oldStatus === 'RUNNING' || oldStatus === 'PENDING')
+          && (newStatus === 'SUCCESS' || newStatus === 'FAILED' || newStatus === 'CANCELED')) {
+        const type = newStatus === 'SUCCESS' ? 'success' : 'error';
+        const title = newStatus === 'SUCCESS' ? 'Déploiement réussi' : 'Déploiement terminé';
+        const msg = `Pipeline #${id} pour ${item.environmentName} est maintenant ${newStatus}.`;
+        this.toastService.push(type, title, msg);
+      }
+      
+      this.previousStatuses.set(id, newStatus);
+    });
     
-    // Notification quand le pipeline change de statut
-    if (oldStatus && (oldStatus === 'RUNNING' || oldStatus === 'PENDING')
-        && (newStatus === 'SUCCESS' || newStatus === 'FAILED' || newStatus === 'CANCELED')) {
-      const type = newStatus === 'SUCCESS' ? 'success' : 'error';
-      const title = newStatus === 'SUCCESS' ? 'Déploiement réussi' : 'Déploiement terminé';
-      const msg = `Pipeline #${id} pour ${item.environmentName} est maintenant ${newStatus}.`;
-      this.toastService.push(type, title, msg);
-    }
-    
-    this.previousStatuses.set(id, newStatus);
-  });
-  
-  // Mettre à jour la liste avec le filtre actuel
-  this.pipelines = list;
-  this.filtered = this.applyStatusFilter(list);
-}
+    // Mettre à jour la liste avec le filtre actuel
+    this.pipelines = list;
+    this.filtered = this.applyStatusFilter(list);
+  }
 }

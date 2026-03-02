@@ -58,7 +58,7 @@ import { TimeAgoPipe } from './pipes/time-ago.pipe';
     ApplicationsActiveComponent,
     SecurityAiFixesComponent,
     EnvironmentDetailsComponent,
-    TimeAgoPipe 
+    TimeAgoPipe,
   ],
   imports: [
     BrowserModule,

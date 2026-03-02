@@ -24,11 +24,11 @@ export class PipelineService {
     });
   }
 
-  listPipelines(): Observable<PipelineListItem[]> {
-    return this.http.get<PipelineListItem[]>(BASE + 'api/pipelines', {
-      headers: this.authHeaders()
-    });
-  }
+  listPipelines(page: number = 0, size: number = 10): Observable<any> {
+  return this.http.get(`${BASE}api/pipelines?page=${page}&size=${size}`, {
+    headers: this.authHeaders()
+  });
+}
 
   getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
     return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}`, {
