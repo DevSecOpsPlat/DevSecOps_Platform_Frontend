@@ -1,10 +1,24 @@
-/* recent-activity-page.component.css */
+/* recent-activity-page.component.css - aligned with overview light theme */
+:host {
+  --overview-bg: #f8fafc;
+  --overview-surface: #ffffff;
+  --overview-surface-elevated: #f1f5f9;
+  --overview-border: #e2e8f0;
+  --overview-text: #0f172a;
+  --overview-text-muted: #64748b;
+  --accent-orange: #f97316;
+  --accent-orange-light: #fb923c;
+  --success: #22c55e;
+  --danger: #ef4444;
+}
+
 .activity-page-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
-  min-height: 100vh;
+  min-height: 100%;
   background: var(--overview-bg);
+  color: var(--overview-text);
 }
 
 /* Header */
@@ -428,5 +442,135 @@
 
   .view-link {
     align-self: flex-end;
+  }
+}
+
+/* Ajoutez ces styles à la fin du fichier CSS */
+
+/* Skeleton Loading */
+.skeleton-title {
+  width: 200px;
+  height: 32px;
+  background: linear-gradient(90deg, var(--overview-surface) 25%, var(--overview-surface-elevated) 50%, var(--overview-surface) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 6px;
+}
+
+.skeleton-timeline {
+  padding: 1rem 0;
+}
+
+.skeleton-item {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
+.skeleton-marker {
+  width: 1rem;
+  height: 1rem;
+  background: var(--overview-surface-elevated);
+  border-radius: 50%;
+  margin-top: 0.5rem;
+  animation: pulse 1.5s infinite;
+}
+
+.skeleton-content {
+  flex: 1;
+  background: var(--overview-surface);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.skeleton-line {
+  height: 16px;
+  background: linear-gradient(90deg, var(--overview-surface) 25%, var(--overview-surface-elevated) 50%, var(--overview-surface) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.skeleton-line:last-child {
+  margin-bottom: 0;
+}
+
+.w-60 { width: 60%; }
+.w-80 { width: 80%; }
+.w-40 { width: 40%; }
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Spinning animation for refresh icon */
+.spinning {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+/* Load More Button */
+.load-more {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.load-more-btn {
+  padding: 0.6rem 1.5rem;
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 999px;
+  color: var(--overview-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.load-more-btn:hover {
+  background: var(--overview-surface-elevated);
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+/* View arrow animation */
+.view-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.timeline-content:hover .view-arrow {
+  transform: translateX(4px);
+}
+
+/* Last item style */
+.timeline-item.last .timeline-marker {
+  background: var(--overview-text-muted);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .timeline-title {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .activity-icon {
+    margin-bottom: 0.5rem;
+  }
+  
+  .timeline-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .meta-item {
+    width: fit-content;
   }
 }

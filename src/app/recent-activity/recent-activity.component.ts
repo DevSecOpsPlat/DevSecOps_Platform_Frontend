@@ -1,37 +1,48 @@
-// recent-activity-page.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of, Subject } from 'rxjs';
+import { takeUntil, catchError, finalize } from 'rxjs/operators';
 import { PipelineService } from '../services/pipeline/pipeline.service';
 import { ApplicationService } from '../services/application/application.service';
-import { EnvironmentService } from '../services/environment/environment.service';
 import { FormatService } from '../models/environment/format.service';
 import { ActivityItem } from '../models/ActivityItem';
 
 @Component({
-  selector: 'app-recent-activity-',
+  selector: 'app-recent-activity',
   templateUrl: './recent-activity.component.html',
   styleUrls: ['./recent-activity.component.css']
 })
-export class RecentActivityComponent implements OnInit {
+export class RecentActivityComponent implements OnInit, OnDestroy {
   appId: string | null = null;
   appName: string = '';
   activities: ActivityItem[] = [];
+  filteredActivities: ActivityItem[] = [];
   loading = true;
   error: string | null = null;
+  activeFilter: 'all' | 'deployment' | 'pipeline' = 'all';
+  
+  // Pagination
+  currentPage: number = 0;
+  pageSize: number = 20;
+  allActivities: ActivityItem[] = [];
+  hasMore: boolean = true;
+  
+  private destroy$ = new Subject<void>();
+  private cache = new Map<string, { data: ActivityItem[]; timestamp: number }>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   constructor(
     private route: ActivatedRoute,
     public router: Router,
     private applicationService: ApplicationService,
     private pipelineService: PipelineService,
-    private environmentService: EnvironmentService,
     public format: FormatService
   ) {}
 
   ngOnInit(): void {
-    // appId est sur la route parente (project/:appId), pas sur l'enfant (activity)
-    this.appId = this.route.parent?.snapshot.paramMap.get('appId') ?? this.route.snapshot.paramMap.get('appId');
+    this.appId = this.route.parent?.snapshot.paramMap.get('appId') ?? 
+                 this.route.snapshot.paramMap.get('appId');
+    
     if (this.appId) {
       this.loadActivityData();
     } else {
@@ -40,35 +51,85 @@ export class RecentActivityComponent implements OnInit {
     }
   }
 
-  loadActivityData(): void {
-    const appId = this.appId ?? this.route.parent?.snapshot.paramMap.get('appId') ?? this.route.snapshot.paramMap.get('appId');
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Charge les données d'activité avec cache
+   */
+  loadActivityData(forceRefresh = false): void {
+    const appId = this.appId;
     if (!appId) {
       this.error = 'ID d\'application invalide';
       this.loading = false;
       return;
     }
-    this.appId = appId;
+
+    // Vérifier le cache
+    const cacheKey = `activity-${appId}`;
+    const cached = this.cache.get(cacheKey);
+    
+    if (!forceRefresh && cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      console.log('📦 Utilisation du cache pour les activités');
+      this.allActivities = cached.data;
+      this.initializeActivities();
+      this.loading = false;
+      return;
+    }
+
     this.loading = true;
     this.error = null;
 
     forkJoin({
-      appInfo: this.applicationService.getApplicationById(appId),
-      deployments: this.applicationService.getDeploymentHistory(appId, 0, 20),
-      pipelines: this.pipelineService.listPipelines(0, 20)
-    }).subscribe({
+      appInfo: this.applicationService.getApplicationById(appId).pipe(
+        catchError(err => {
+          console.error('Erreur chargement application:', err);
+          return of(null);
+        })
+      ),
+      deployments: this.applicationService.getDeploymentHistory(appId, 0, 50).pipe(
+        catchError(err => {
+          console.error('Erreur chargement déploiements:', err);
+          return of([]);
+        })
+      ),
+      pipelines: this.pipelineService.listPipelines(0, 50).pipe(
+        catchError(err => {
+          console.error('Erreur chargement pipelines:', err);
+          return of([]);
+        })
+      )
+    }).pipe(
+      takeUntil(this.destroy$),
+      finalize(() => this.loading = false)
+    ).subscribe({
       next: (data) => {
-        this.appName = data.appInfo.name;
-        this.buildActivities(data.deployments, data.pipelines);
-        this.loading = false;
+        if (data.appInfo) {
+          this.appName = data.appInfo.name;
+        }
+        
+        this.buildActivities(data.deployments || [], data.pipelines || []);
+        
+        // Mettre en cache
+        this.cache.set(cacheKey, {
+          data: this.allActivities,
+          timestamp: Date.now()
+        });
+        
+        console.log('✅ Activités chargées et mises en cache');
       },
       error: (err) => {
         console.error('Erreur chargement activités:', err);
         this.error = 'Erreur lors du chargement des activités';
-        this.loading = false;
       }
     });
   }
 
+  /**
+   * Construit la liste complète des activités
+   */
   private buildActivities(deployments: any[], pipelines: any[]): void {
     const activities: ActivityItem[] = [];
 
@@ -111,25 +172,83 @@ export class RecentActivityComponent implements OnInit {
       });
     });
 
-    // Trier par date (plus récent d'abord) - utiliser une méthode de parsing directe
-    this.activities = activities
-      .sort((a, b) => {
-        const dateA = this.parseDate(a.timestamp)?.getTime() || 0;
-        const dateB = this.parseDate(b.timestamp)?.getTime() || 0;
-        return dateB - dateA;
-      });
+    // Trier par date (plus récent d'abord)
+    this.allActivities = activities.sort((a, b) => {
+      const dateA = this.parseDate(a.timestamp)?.getTime() || 0;
+      const dateB = this.parseDate(b.timestamp)?.getTime() || 0;
+      return dateB - dateA;
+    });
+
+    this.initializeActivities();
   }
 
-  // Méthode de parsing de date locale (sans utiliser FormatService)
+  /**
+   * Initialise l'affichage avec la première page
+   */
+  private initializeActivities(): void {
+    this.currentPage = 0;
+    this.hasMore = this.allActivities.length > this.pageSize;
+    this.activities = this.allActivities.slice(0, this.pageSize);
+    this.applyFilter();
+  }
+
+  /**
+   * Applique le filtre actif
+   */
+  applyFilter(filter?: 'all' | 'deployment' | 'pipeline'): void {
+    if (filter) {
+      this.activeFilter = filter;
+      this.currentPage = 0; // Reset à la première page quand on change de filtre
+    }
+
+    // Filtrer toutes les activités
+    const filtered = this.activeFilter === 'all' 
+      ? this.allActivities 
+      : this.allActivities.filter(a => a.type === this.activeFilter);
+    
+    // Appliquer la pagination
+    this.activities = filtered.slice(0, this.pageSize);
+    this.filteredActivities = this.activities;
+    this.hasMore = filtered.length > this.pageSize;
+  }
+
+  /**
+   * Charge plus d'activités (pagination)
+   */
+  loadMore(): void {
+    if (!this.hasMore || this.loading) return;
+    
+    this.loading = true;
+    this.currentPage++;
+    
+    // Simuler un délai pour l'UX
+    setTimeout(() => {
+      const filtered = this.activeFilter === 'all' 
+        ? this.allActivities 
+        : this.allActivities.filter(a => a.type === this.activeFilter);
+      
+      const start = this.currentPage * this.pageSize;
+      const end = start + this.pageSize;
+      const moreActivities = filtered.slice(start, end);
+      
+      if (moreActivities.length > 0) {
+        this.activities = [...this.activities, ...moreActivities];
+        this.filteredActivities = this.activities;
+      }
+      
+      this.hasMore = end < filtered.length;
+      this.loading = false;
+    }, 300);
+  }
+
+  /**
+   * Parse une date depuis différents formats
+   */
   private parseDate(dateValue: any): Date | null {
     if (!dateValue) return null;
     
     try {
-      if (typeof dateValue === 'string') {
-        const date = new Date(dateValue);
-        return isNaN(date.getTime()) ? null : date;
-      }
-      if (typeof dateValue === 'number') {
+      if (typeof dateValue === 'string' || typeof dateValue === 'number') {
         const date = new Date(dateValue);
         return isNaN(date.getTime()) ? null : date;
       }
@@ -144,6 +263,9 @@ export class RecentActivityComponent implements OnInit {
     }
   }
 
+  /**
+   * Retourne l'icône selon le statut
+   */
   private getStatusIcon(status: string): string {
     const s = (status || '').toUpperCase();
     if (s === 'SUCCESS') return '✅';
@@ -154,6 +276,9 @@ export class RecentActivityComponent implements OnInit {
     return '•';
   }
 
+  /**
+   * Retourne la classe CSS pour le statut
+   */
   getStatusClass(status: string): string {
     const s = (status || '').toUpperCase();
     if (s === 'SUCCESS') return 'status-success';
@@ -164,6 +289,9 @@ export class RecentActivityComponent implements OnInit {
     return 'status-unknown';
   }
 
+  /**
+   * Formate une date en "il y a X temps"
+   */
   getTimeAgo(timestamp: any): string {
     const date = this.parseDate(timestamp);
     if (!date) return '—';
@@ -176,17 +304,30 @@ export class RecentActivityComponent implements OnInit {
     if (diffSec < 60) return `Il y a ${diffSec} secondes`;
     
     const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `Il y a ${diffMin} minute${diffMin > 1 ? 's' : ''}`;
+    if (diffMin < 60) {
+      return `Il y a ${diffMin} minute${diffMin > 1 ? 's' : ''}`;
+    }
     
     const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `Il y a ${diffHour} heure${diffHour > 1 ? 's' : ''}`;
+    if (diffHour < 24) {
+      return `Il y a ${diffHour} heure${diffHour > 1 ? 's' : ''}`;
+    }
     
     const diffDay = Math.floor(diffHour / 24);
-    if (diffDay < 7) return `Il y a ${diffDay} jour${diffDay > 1 ? 's' : ''}`;
+    if (diffDay < 7) {
+      return `Il y a ${diffDay} jour${diffDay > 1 ? 's' : ''}`;
+    }
     
-    return date.toLocaleDateString('fr-FR');
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
   }
 
+  /**
+   * Retourne la date complète formatée
+   */
   getFullDate(timestamp: any): string {
     const date = this.parseDate(timestamp);
     if (!date) return 'Date inconnue';
@@ -201,6 +342,9 @@ export class RecentActivityComponent implements OnInit {
     });
   }
 
+  /**
+   * Formate une durée en secondes
+   */
   formatDuration(seconds: number): string {
     if (!seconds) return '—';
     
@@ -215,6 +359,9 @@ export class RecentActivityComponent implements OnInit {
     return `${hour}h ${min}m`;
   }
 
+  /**
+   * Retourne à la page précédente
+   */
   goBack(): void {
     if (this.appId) {
       this.router.navigate(['/project', this.appId, 'overview']);
@@ -223,21 +370,22 @@ export class RecentActivityComponent implements OnInit {
     }
   }
 
+  /**
+   * Rafraîchit les données
+   */
   refresh(): void {
-    this.appId = this.route.parent?.snapshot.paramMap.get('appId') ?? this.route.snapshot.paramMap.get('appId');
-    if (this.appId) {
-      this.loadActivityData();
-    }
+    this.loadActivityData(true);
   }
 
+  /**
+   * Navigue vers le détail d'une activité
+   */
   navigateToActivity(activity: ActivityItem): void {
-  try {
     if (activity.link) {
       this.router.navigateByUrl(activity.link);
       return;
     }
     
-    // Fallback par défaut
     if (activity.id) {
       switch (activity.type) {
         case 'deployment':
@@ -251,14 +399,14 @@ export class RecentActivityComponent implements OnInit {
             queryParams: { appId: this.appId }
           });
           break;
-        default:
-          console.warn('Type d\'activité inconnu:', activity.type);
       }
     }
-  } catch (error) {
-    console.error('Erreur de navigation:', error);
   }
-}
 
-
+  /**
+   * Retourne le compteur pour chaque type
+   */
+  getCountByType(type: 'deployment' | 'pipeline'): number {
+    return this.allActivities.filter(a => a.type === type).length;
+  }
 }
