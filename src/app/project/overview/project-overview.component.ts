@@ -6,6 +6,7 @@ import { DeploymentHistoryItem } from '../../models/application/deployment-histo
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
+import { ApplicationResponse } from 'src/app/models/application/application-response';
 import { 
   ActivityItem, 
   DashboardPipelineItem, 
@@ -15,6 +16,14 @@ import {
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { SecurityService } from 'src/app/security/security.service';
+import { FormatService } from 'src/app/models/environment/format.service';
+
+export interface ChartSegment {
+  label: string;
+  value: number;
+  color: string;
+  percent?: number;
+}
 
 @Component({
   selector: 'app-project-overview',
@@ -24,6 +33,7 @@ import { SecurityService } from 'src/app/security/security.service';
 export class ProjectOverviewComponent implements OnInit, OnDestroy {
   appId: string | null = null;
   appName: string = '';
+  appDetails: ApplicationResponse | null = null;
   
   // Données principales
   latestDeployment: DeploymentHistoryItem | null = null;
@@ -31,6 +41,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   environmentSummary: EnvironmentSummaryResponse | null = null;
   pendingDeployments: number = 0;
   pendingDeploymentsList: any[] = [];
+  
+  // Chart data
+  deploymentChartData: ChartSegment[] = [];
+  vulnerabilityChartData: ChartSegment[] = [];
   
   // Données du dashboard
   recentActivities: ActivityItem[] = [];
@@ -65,7 +79,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     private applicationService: ApplicationService,
     private environmentService: EnvironmentService,
     private pipelineService: PipelineService,
-    private securityService: SecurityService
+    private securityService: SecurityService,
+    private format: FormatService
   ) {}
 
   get previewUrl(): string | null {
@@ -120,6 +135,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: (quickData) => {
         if (quickData.appInfo) {
+          this.appDetails = quickData.appInfo;
           this.appName = quickData.appInfo.name;
         }
         
@@ -194,13 +210,13 @@ refreshData(): void {
     this.loadingSlow = true;
     
     forkJoin({
-      deployments: this.applicationService.getDeploymentHistory(this.appId, 1, 10).pipe(
+      deployments: this.applicationService.getDeploymentHistory(this.appId, 0, 10).pipe(
         catchError(err => {
           console.error('Erreur chargement déploiements:', err);
           return of([]);
         })
       ),
-      pipelines: this.pipelineService.listPipelines(1, 10).pipe(
+      pipelines: this.pipelineService.listPipelines(0, 10).pipe(
         catchError(err => {
           console.error('Erreur chargement pipelines:', err);
           return of([]);
@@ -238,6 +254,10 @@ refreshData(): void {
         this.pendingDeployments = this.deployments.filter(d => 
           ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
         ).length;
+        
+        // Chart data: deployment status
+        this.deploymentChartData = this.buildDeploymentChartData();
+        this.vulnerabilityChartData = this.buildVulnerabilityChartData();
         
         // Construire les activités récentes
         this.buildRecentActivities();
@@ -298,6 +318,81 @@ refreshData(): void {
     this.recentActivities = activities
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5);
+  }
+
+  /**
+   * Données pour le graphique des déploiements (success / failed / pending)
+   */
+  private buildDeploymentChartData(): ChartSegment[] {
+    const total = this.totalDeployments || 1;
+    return [
+      { label: 'Réussis', value: this.successfulDeployments, color: '#22c55e', percent: (this.successfulDeployments / total) * 100 },
+      { label: 'Échoués', value: this.failedDeployments, color: '#ef4444', percent: (this.failedDeployments / total) * 100 },
+      { label: 'En cours', value: this.pendingDeployments, color: '#f97316', percent: (this.pendingDeployments / total) * 100 }
+    ].filter(s => s.value > 0);
+  }
+
+  /**
+   * Données pour le graphique des vulnérabilités par sévérité
+   */
+  private buildVulnerabilityChartData(): ChartSegment[] {
+    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+    this.recentVulnerabilities.forEach(v => {
+      const s = (v.severity || 'INFO').toUpperCase();
+      if (counts.hasOwnProperty(s)) (counts as any)[s]++;
+    });
+    const total = this.recentVulnerabilities.length || 1;
+    const colors: Record<string, string> = {
+      CRITICAL: '#dc2626',
+      HIGH: '#ea580c',
+      MEDIUM: '#facc15',
+      LOW: '#84cc16',
+      INFO: '#64748b'
+    };
+    return (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const)
+      .filter(level => (counts[level] || 0) > 0)
+      .map(level => ({
+        label: level.charAt(0) + level.slice(1).toLowerCase(),
+        value: counts[level],
+        color: colors[level],
+        percent: (counts[level] / total) * 100
+      }));
+  }
+
+  /**
+   * Nom court du repo pour affichage (ex: owner/repo)
+   */
+  getRepoDisplayName(url: string | undefined): string {
+    if (!url) return '—';
+    try {
+      const path = url.replace(/^https?:\/\//, '').replace(/\.git$/, '').trim();
+      const parts = path.split('/').filter(Boolean);
+      return parts.length >= 2 ? `${parts[parts.length - 2]}/${parts[parts.length - 1]}` : path;
+    } catch {
+      return url;
+    }
+  }
+
+  /**
+   * Date de création de l'application (formatée comme dans environment-details)
+   */
+
+  getAppCreatedAtTimeAgo(): string {
+    if (!this.appDetails?.createdAt) return '';
+    return this.format.formatTimeAgo(this.appDetails.createdAt);
+  }
+
+  
+
+  /**
+   * Offset pour le donut SVG (démarrage en haut, segments consécutifs)
+   */
+  getDonutOffset(index: number): number {
+    let sum = 0;
+    for (let j = 0; j < index; j++) {
+      sum += this.deploymentChartData[j].percent || 0;
+    }
+    return -25 - sum; // 25 = start at 12 o'clock in 0–100 circle
   }
 
   /**
@@ -447,6 +542,74 @@ refreshData(): void {
     }
   }
 
+  // Dans project-overview.component.ts - Ajoutez cette méthode
+private safeParseDate(dateValue: any): Date | null {
+  if (!dateValue) return null;
+  
+  try {
+    // Si c'est déjà une string ISO
+    if (typeof dateValue === 'string') {
+      const date = new Date(dateValue);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    
+    // Si c'est un tableau [année, mois, jour, heure, minute, seconde]
+    if (Array.isArray(dateValue) && dateValue.length >= 3) {
+      const [year, month, day, hour = 0, minute = 0, second = 0] = dateValue;
+      // Mois est 0-indexé en JS, donc month - 1
+      const date = new Date(year, month - 1, day, hour, minute, second);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn('Erreur parsing date:', dateValue, e);
+    return null;
+  }
+}
+
+  // Dans le composant
+get stats() {
+  return [
+    { 
+      label: 'Déploiements', 
+      value: this.totalDeployments, 
+      icon: '📦', 
+      color: '#3b82f6',
+      iconBg: 'rgba(59, 130, 246, 0.2)'
+    },
+    { 
+      label: 'Réussis', 
+      value: this.successfulDeployments, 
+      icon: '✅', 
+      color: '#22c55e',
+      iconBg: 'rgba(34, 197, 94, 0.2)',
+      trend: this.totalDeployments ? `${Math.round(this.successfulDeployments/this.totalDeployments*100)}%` : '0%'
+    },
+    { 
+      label: 'En attente', 
+      value: this.pendingDeployments, 
+      icon: '⏳', 
+      color: '#f97316',
+      iconBg: 'rgba(249, 115, 22, 0.2)'
+    },
+    { 
+      label: 'Échoués', 
+      value: this.failedDeployments, 
+      icon: '❌', 
+      color: '#ef4444',
+      iconBg: 'rgba(239, 68, 68, 0.2)'
+    },
+    { 
+      label: 'Vulnérabilités', 
+      value: this.criticalVulnerabilities, 
+      icon: '🛡️', 
+      color: '#8b5cf6',
+      iconBg: 'rgba(139, 92, 246, 0.2)'
+    }
+  ];
+}
+
   /**
    * Formate le temps restant pour l'affichage
    */
@@ -519,20 +682,76 @@ refreshData(): void {
   /**
    * Formate une date en "il y a X temps"
    */
-  formatTimeAgo(iso: string | null): string {
-    if (!iso) return '—';
-    try {
-      const date = new Date(iso);
-      const now = new Date();
-      const sec = Math.floor((now.getTime() - date.getTime()) / 1000);
-      if (sec < 60) return 'à l\'instant';
-      if (sec < 3600) return `il y a ${Math.floor(sec / 60)} min`;
-      if (sec < 86400) return `il y a ${Math.floor(sec / 3600)} h`;
-      return date.toLocaleDateString();
-    } catch (e) {
-      return '—';
+  /**
+ * Formate une date en "il y a X temps"
+ */
+formatTimeAgo(iso: string | null | any): string {
+  const date = this.safeParseDate(iso);
+  if (!date) return '—';
+  
+  try {
+    const now = new Date();
+    const sec = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (sec < 30) return 'à l\'instant';
+    if (sec < 60) return `il y a ${sec} secondes`;
+    if (sec < 3600) {
+      const min = Math.floor(sec / 60);
+      return `il y a ${min} minute${min > 1 ? 's' : ''}`;
     }
+    if (sec < 86400) {
+      const h = Math.floor(sec / 3600);
+      return `il y a ${h} heure${h > 1 ? 's' : ''}`;
+    }
+    if (sec < 604800) {
+      const d = Math.floor(sec / 86400);
+      return `il y a ${d} jour${d > 1 ? 's' : ''}`;
+    }
+    
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch (e) {
+    return '—';
   }
+}
+
+/**
+ * Formate une date complète
+ */
+formatFullDate(dateValue: any): string {
+  const date = this.safeParseDate(dateValue);
+  if (!date) return 'Date non disponible';
+  
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * Date de création de l'application (formatée)
+ */
+getAppCreatedAt(): string {
+  if (!this.appDetails?.createdAt) return 'Date non disponible';
+  return this.formatFullDate(this.appDetails.createdAt);
+}
+
+/**
+ * Date de création du déploiement (pour l'affichage)
+ */
+getDeploymentCreatedAt(deployment: DeploymentHistoryItem): string {
+  return this.formatFullDate(deployment.createdAt);
+}
+
+getDeploymentTimeAgo(deployment: DeploymentHistoryItem): string {
+  return this.formatTimeAgo(deployment.createdAt);
+}
 
   /**
    * Retourne la classe CSS pour la sévérité d'une vulnérabilité

@@ -1,121 +1,201 @@
-<!-- project-overview.component.html -->
+<!-- project-overview.component.html - Dark blue / orange / yellow theme -->
 <div class="overview-container">
-  <!-- En-tête -->
-  <header class="overview-header">
-    <div>
-      <h1>{{ appName || 'Application' }}</h1>
-      <p class="subtitle">Tableau de bord du projet</p>
-    </div>
-    <div class="header-actions">
-      <button class="btn-primary" (click)="createNewEnvironment()">
-        + Nouvel environnement
-      </button>
-    </div>
-  </header>
+  <!-- Hero & Application summary -->
+  <header class="overview-hero">
+  <div class="hero-content">
+    <div class="hero-badge">PROJECT DASHBOARD</div>
+    <h1 class="hero-title">
+      {{ appName || 'Application' }}
+      <span class="hero-status" *ngIf="latestDeployment?.pipelineStatus">
+        <span class="status-dot" [ngClass]="statusClass(latestDeployment?.pipelineStatus || '')"></span>
+        {{ latestDeployment?.pipelineStatus }}
+      </span>
+    </h1>
+    <p class="hero-subtitle" *ngIf="appDetails?.description">{{ appDetails?.description }}</p>
+    <p class="hero-subtitle muted" *ngIf="!appDetails?.description">Tableau de bord du projet</p>
+      <div class="hero-meta">
+        <div class="meta-item" *ngIf="appDetails?.gitRepositoryUrl">
+          <span class="meta-icon">📦</span>
+          <a [href]="appDetails?.gitRepositoryUrl" target="_blank" rel="noopener" class="repo-link">
+            {{ getRepoDisplayName(appDetails?.gitRepositoryUrl) }}
+          </a>
+        </div>
+        <div class="meta-item" *ngIf="appDetails?.createdAt">
+  <span class="meta-icon">📅</span>
+  <span>
+    Créé le {{ getAppCreatedAt() }}
+   
+    par {{ appDetails?.createdByUsername }}
+  </span>
+</div>
+      </div>
+  </div>
+  <div class="hero-actions">
+    <button class="btn-cta" (click)="createNewEnvironment()">
+      <span class="btn-icon">+</span>
+      Nouvel environnement
+    </button>
+    <button class="btn-icon-only" (click)="refreshData()" [disabled]="loading" title="Actualiser">
+      🔄
+    </button>
+  </div>
+</header>
 
-  <!-- Statistiques rapides -->
+  <!-- Application details card -->
+  <section class="app-details-card" *ngIf="appDetails && !loading">
+    <h2 class="section-title">Détails de l'application</h2>
+    <div class="app-details-grid">
+      <div class="detail-item">
+        <span class="detail-label">Nom</span>
+        <span class="detail-value">{{ appDetails.name }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Repository</span>
+        <a [href]="appDetails.gitRepositoryUrl" target="_blank" rel="noopener" class="detail-value link">
+          {{ getRepoDisplayName(appDetails.gitRepositoryUrl) }}
+        </a>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Dockerfile</span>
+        <span class="detail-value">{{ appDetails.dockerfilePath || './Dockerfile' }}</span>
+      </div>
+      <div class="detail-item">
+  <span class="detail-label">Créé le</span>
+  <span class="detail-value">
+    {{ getAppCreatedAt() }}
+    
+  </span>
+</div>
+      <div class="detail-item">
+        <span class="detail-label">Créé par</span>
+        <span class="detail-value">{{ appDetails.createdByUsername }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Token GitHub</span>
+        <span class="detail-value">{{ appDetails.hasGithubToken ? 'Configuré' : 'Non configuré' }}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats KPI cards -->
   <div class="stats-grid" *ngIf="!loading">
-    <div class="stat-card">
-      <div class="stat-icon">📦</div>
-      <div class="stat-content">
-        <span class="stat-value">{{ totalDeployments }}</span>
-        <span class="stat-label">Déploiements</span>
+    <div class="stat-card" *ngFor="let stat of stats">
+      <div class="stat-icon-wrapper" [style.background]="stat.iconBg">
+        <span class="stat-icon">{{ stat.icon }}</span>
       </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">✅</div>
       <div class="stat-content">
-        <span class="stat-value">{{ successfulDeployments }}</span>
-        <span class="stat-label">Réussis</span>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">⏳</div>
-      <div class="stat-content">
-        <span class="stat-value">{{ pendingDeployments }}</span>
-        <span class="stat-label">En attente</span>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">❌</div>
-      <div class="stat-content">
-        <span class="stat-value">{{ failedDeployments }}</span>
-        <span class="stat-label">Échoués</span>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <div class="stat-icon">🛡️</div>
-      <div class="stat-content">
-        <span class="stat-value">{{ criticalVulnerabilities }}</span>
-        <span class="stat-label">Vulnérabilités</span>
+        <span class="stat-value">{{ stat.value }}</span>
+        <span class="stat-label">{{ stat.label }}</span>
+        <span class="stat-trend" *ngIf="stat.trend">{{ stat.trend }}</span>
       </div>
     </div>
   </div>
 
-  <!-- État de chargement -->
-  <div *ngIf="loading" class="loading-state">
-    <div class="spinner"></div>
-    <span>Chargement du tableau de bord...</span>
+  <!-- Loading -->
+  <div *ngIf="loading" class="loading-skeleton">
+    <div class="skeleton-hero"></div>
+    <div class="skeleton-grid">
+      <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]"></div>
+    </div>
+    <div class="skeleton-chart"></div>
   </div>
 
-  <!-- Message d'erreur -->
+  <!-- Error -->
   <div *ngIf="error && !loading" class="error-state">
     <span class="error-icon">⚠️</span>
     <p>{{ error }}</p>
     <button class="retry-btn" (click)="loadAppData()">Réessayer</button>
   </div>
 
-  <!-- Contenu principal -->
+  <!-- Main content -->
   <div *ngIf="!loading && !error" class="dashboard-content">
-    
-    <!-- Section: Dernier déploiement -->
-    <section class="dashboard-section" *ngIf="latestDeployment">
-      <h2>Dernier déploiement</h2>
+    <!-- Charts row -->
+    <div class="charts-row">
+      <section class="chart-card">
+        <h2 class="chart-title">Statut des déploiements</h2>
+        <div class="chart-body" *ngIf="deploymentChartData.length > 0">
+          <div class="donut-chart">
+            <svg viewBox="0 0 100 100" class="donut-svg">
+              <circle cx="50" cy="50" r="40" fill="none" stroke="var(--overview-card-border)" stroke-width="12"/>
+              <ng-container *ngFor="let seg of deploymentChartData; let i = index">
+                <circle cx="50" cy="50" r="40" fill="none" [attr.stroke]="seg.color" stroke-width="12"
+                  [attr.stroke-dasharray]="(seg.percent || 0) + ' ' + (100 - (seg.percent || 0))"
+                  [attr.stroke-dashoffset]="getDonutOffset(i)"/>
+              </ng-container>
+            </svg>
+            <div class="donut-center">
+              <span class="donut-total">{{ totalDeployments }}</span>
+              <span class="donut-label">Total</span>
+            </div>
+          </div>
+          <ul class="chart-legend">
+            <li *ngFor="let seg of deploymentChartData">
+              <span class="legend-dot" [style.background]="seg.color"></span>
+              <span>{{ seg.label }}</span>
+              <span class="legend-value">{{ seg.value }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="chart-empty" *ngIf="deploymentChartData.length === 0">
+          <p>Aucun déploiement pour l’instant</p>
+        </div>
+      </section>
+      <section class="chart-card">
+        <h2 class="chart-title">Vulnérabilités par sévérité</h2>
+        <div class="chart-body" *ngIf="vulnerabilityChartData.length > 0">
+          <div class="bar-chart">
+            <div *ngFor="let seg of vulnerabilityChartData" class="bar-row">
+              <span class="bar-label">{{ seg.label }}</span>
+              <div class="bar-track">
+                <div class="bar-fill" [style.width.%]="seg.percent" [style.background]="seg.color"></div>
+              </div>
+              <span class="bar-value">{{ seg.value }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-empty" *ngIf="vulnerabilityChartData.length === 0">
+          <p>Aucune vulnérabilité détectée</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Last deployment -->
+    <section class="dashboard-section deployment-section" *ngIf="latestDeployment">
+      <h2 class="section-title">Dernier déploiement</h2>
       <div class="deployment-card">
         <div class="deployment-main">
           <div class="deployment-info">
             <div class="info-row">
-              <span class="info-label">Environnement:</span>
+              <span class="info-label">Environnement</span>
               <span class="info-value">{{ latestDeployment.environmentName }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Branche:</span>
+              <span class="info-label">Branche</span>
               <span class="info-value">{{ latestDeployment.gitBranch }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Statut:</span>
-              <span class="info-value">
-                <span class="status-badge" [class]="statusClass(latestDeployment.pipelineStatus)">
-                  {{ latestDeployment.pipelineStatus }}
-                </span>
+              <span class="info-label">Statut</span>
+              <span class="status-badge" [ngClass]="statusClass(latestDeployment.pipelineStatus)">
+                {{ latestDeployment.pipelineStatus }}
               </span>
             </div>
             <div class="info-row">
-              <span class="info-label">Créé par:</span>
+              <span class="info-label">Créé par</span>
               <span class="info-value">{{ latestDeployment.triggeredByUsername || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Il y a:</span>
-              <span class="info-value">{{ formatTimeAgo(latestDeployment.createdAt) }}</span>
-            </div>
+  <span class="info-label">Il y a</span>
+  <span class="info-value">{{ formatTimeAgo(latestDeployment.createdAt) }}</span>
+</div>
           </div>
-          
           <div class="deployment-preview" *ngIf="previewUrl">
             <div class="preview-header">
               <span class="preview-label">URL de prévisualisation</span>
-              <button class="copy-btn" (click)="copyPreviewUrl()">
+              <button class="copy-btn" (click)="copyPreviewUrl()" [attr.aria-label]="'Copier'">
                 {{ copied ? '✓' : '📋' }}
               </button>
             </div>
-            <a [href]="previewUrl" target="_blank" class="preview-url">
-              {{ previewUrl }}
-            </a>
-            
-            <!-- Timer TTL -->
+            <a [href]="previewUrl" target="_blank" rel="noopener" class="preview-url">{{ previewUrl }}</a>
             <div class="ttl-container" *ngIf="environmentSummary">
               <div class="ttl-header">
                 <span class="ttl-label">Temps restant</span>
@@ -127,53 +207,39 @@
             </div>
           </div>
         </div>
-        
-        <!-- Pipeline steps -->
-       <!-- Pipeline steps - Stepper dynamique -->
-<!-- Pipeline steps - Version ultra-sécurisée -->
-<div class="pipeline-steps" *ngIf="latestDeployment && latestDeployment.jobs && latestDeployment.jobs.length > 0">
-  <h3>Pipeline</h3>
-  <ol class="stepper">
-    <li *ngFor="let stage of getPipelineStagesWithStatus()"
-        class="step"
-        [ngClass]="stage.status">
-      <div class="step-icon">
-        <span *ngIf="stage.status === 'done'">✓</span>
-        <span *ngIf="stage.status === 'active'">⏳</span>
-        <span *ngIf="stage.status === 'pending'">○</span>
-        <span *ngIf="stage.status === 'failed'">✗</span>
-      </div>
-      <span class="step-label">{{ stage.name }}</span>
-    </li>
-  </ol>
-</div>
-
-<!-- Message de chargement -->
-<div *ngIf="loadingPipelineDetails" class="loading-stages">
-  <div class="spinner small"></div>
-  <span>Chargement des stages...</span>
-</div>
-
-<!-- Message si pas de stages -->
-<div *ngIf="!loadingPipelineDetails && latestDeployment && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)" class="no-stages">
-  <p>Aucune information de pipeline disponible</p>
-</div>
-        
+        <div class="pipeline-steps" *ngIf="latestDeployment.jobs && latestDeployment.jobs.length > 0">
+          <h3>Pipeline</h3>
+          <ol class="stepper">
+            <li *ngFor="let stage of getPipelineStagesWithStatus()" class="step" [ngClass]="stage.status">
+              <div class="step-icon">
+                <span *ngIf="stage.status === 'done'">✓</span>
+                <span *ngIf="stage.status === 'active'">⏳</span>
+                <span *ngIf="stage.status === 'pending'">○</span>
+                <span *ngIf="stage.status === 'failed'">✗</span>
+              </div>
+              <span class="step-label">{{ stage.name }}</span>
+            </li>
+          </ol>
+        </div>
+        <div *ngIf="loadingPipelineDetails" class="loading-stages">
+          <div class="spinner small"></div>
+          <span>Chargement des stages...</span>
+        </div>
+        <div *ngIf="!loadingPipelineDetails && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)" class="no-stages">
+          <p>Aucune information de pipeline disponible</p>
+        </div>
         <div class="deployment-actions">
-          <button class="btn-primary" (click)="viewPipeline(latestDeployment.environmentId)">
-            Voir les détails du pipeline
-          </button>
+          <button class="btn-cta" (click)="viewPipeline(latestDeployment.environmentId)">Voir les détails du pipeline</button>
         </div>
       </div>
     </section>
 
-    <!-- Section: Déploiements en attente (NOUVEAU) -->
+    <!-- Pending deployments -->
     <section class="dashboard-section" *ngIf="pendingDeploymentsList.length > 0">
       <div class="section-header">
-        <h2>⏳ Déploiements en attente</h2>
+        <h2 class="section-title">Déploiements en attente</h2>
         <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
       </div>
-      
       <div class="pending-deployments-grid">
         <div *ngFor="let deployment of pendingDeploymentsList" class="pending-card" (click)="viewPipeline(deployment.environmentId)">
           <div class="pending-header">
@@ -182,7 +248,7 @@
               <h4>{{ deployment.environmentName }}</h4>
               <p class="pending-branch">🌿 {{ deployment.gitBranch }}</p>
             </div>
-            <span class="pending-time">{{ deployment.createdAt | timeAgo }}</span>
+            <span class="pending-time">{{ formatTimeAgo(deployment.createdAt) }}</span>
           </div>
           <div class="pending-progress">
             <div class="progress-bar">
@@ -192,75 +258,63 @@
           </div>
           <div class="pending-footer">
             <span class="pending-trigger">par {{ deployment.triggeredByUsername || '—' }}</span>
-            <span class="pending-status status-warning">EN ATTENTE</span>
+            <span class="pending-status">EN ATTENTE</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Grille à 2 colonnes -->
+    <!-- Two columns: Activity + Pipelines -->
     <div class="dashboard-grid">
-      <!-- Colonne de gauche : Activité récente -->
       <section class="dashboard-section">
         <div class="section-header">
-          <h2>Activité récente</h2>
+          <h2 class="section-title">Activité récente</h2>
           <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
         </div>
-        
         <div class="activity-list" *ngIf="recentActivities.length > 0">
           <div *ngFor="let activity of recentActivities" class="activity-item">
             <span class="activity-icon">{{ activity.icon }}</span>
             <div class="activity-content">
               <p class="activity-title">{{ activity.title }}</p>
               <p class="activity-description">{{ activity.description }}</p>
-              <span class="activity-time">{{ activity.timestamp | timeAgo }}</span>
+              <span class="activity-time">{{ formatTimeAgo(activity.timestamp) }}</span>
             </div>
-            <span class="activity-status" [class]="statusClass(activity.status)">
-              {{ activity.status }}
-            </span>
+            <span class="activity-status" [ngClass]="statusClass(activity.status)">{{ activity.status }}</span>
           </div>
         </div>
-        
         <div *ngIf="recentActivities.length === 0" class="empty-list">
           <p>Aucune activité récente</p>
         </div>
       </section>
-
-      <!-- Colonne de droite : Pipelines récents -->
       <section class="dashboard-section">
         <div class="section-header">
-          <h2>Pipelines récents</h2>
+          <h2 class="section-title">Pipelines récents</h2>
           <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
         </div>
-        
         <div class="pipelines-list" *ngIf="recentPipelines.length > 0">
           <div *ngFor="let pipeline of recentPipelines" class="pipeline-item" (click)="viewPipeline(pipeline.environmentId)">
             <div class="pipeline-header">
               <span class="pipeline-name">{{ pipeline.name }}</span>
-              <span class="pipeline-badge" [class]="statusClass(pipeline.status)">
-                {{ pipeline.status }}
-              </span>
+              <span class="pipeline-badge" [ngClass]="statusClass(pipeline.status)">{{ pipeline.status }}</span>
             </div>
             <div class="pipeline-details">
               <span class="pipeline-branch">🌿 {{ pipeline.branch }}</span>
-              <span class="pipeline-time">{{ pipeline.createdAt | timeAgo }}</span>
+              <span class="pipeline-time">{{ formatTimeAgo(pipeline.createdAt) }}</span>
             </div>
           </div>
         </div>
-        
         <div *ngIf="recentPipelines.length === 0" class="empty-list">
           <p>Aucun pipeline récent</p>
         </div>
       </section>
     </div>
 
-    <!-- Section: Environnements actifs -->
+    <!-- Active environments -->
     <section class="dashboard-section">
       <div class="section-header">
-        <h2>Environnements actifs</h2>
+        <h2 class="section-title">Environnements actifs</h2>
         <a class="view-all" (click)="viewAllEnvironments()">Voir tout →</a>
       </div>
-      
       <div class="environments-grid" *ngIf="activeEnvironments.length > 0">
         <div *ngFor="let env of activeEnvironments" class="environment-card" (click)="viewEnvironment(env.id)">
           <div class="env-header">
@@ -273,32 +327,27 @@
           </div>
         </div>
       </div>
-      
       <div *ngIf="activeEnvironments.length === 0" class="empty-list">
         <p>Aucun environnement actif</p>
         <button class="btn-link" (click)="createNewEnvironment()">Créer un environnement</button>
       </div>
     </section>
 
-    <!-- Section: Vulnérabilités récentes -->
+    <!-- Recent vulnerabilities -->
     <section class="dashboard-section">
       <div class="section-header">
-        <h2>Vulnérabilités récentes</h2>
+        <h2 class="section-title">Vulnérabilités récentes</h2>
         <a class="view-all" (click)="viewAllVulnerabilities()">Voir tout →</a>
       </div>
-      
       <div class="vulnerabilities-list" *ngIf="recentVulnerabilities.length > 0">
         <div *ngFor="let vuln of recentVulnerabilities" class="vulnerability-item">
-          <span class="vuln-severity" [class]="getSeverityClass(vuln.severity)">
-            {{ vuln.severity }}
-          </span>
+          <span class="vuln-severity" [ngClass]="getSeverityClass(vuln.severity)">{{ vuln.severity }}</span>
           <div class="vuln-content">
             <p class="vuln-title">{{ vuln.title }}</p>
             <p class="vuln-component">{{ vuln.component }} {{ vuln.version }}</p>
           </div>
         </div>
       </div>
-      
       <div *ngIf="recentVulnerabilities.length === 0" class="empty-list">
         <p>Aucune vulnérabilité détectée</p>
       </div>
