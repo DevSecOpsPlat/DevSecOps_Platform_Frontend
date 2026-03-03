@@ -4,6 +4,7 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ApplicationService } from '../../services/application/application.service';
 import { ApplicationResponse } from 'src/app/models/application/application-response';
 import { PipelineService } from 'src/app/services/pipeline/pipeline.service';
+import { EnvironmentService } from 'src/app/services/environment/environment.service'; // ← AJOUTER
 
 @Component({
   selector: 'app-user-sidebar',
@@ -14,72 +15,162 @@ export class UserSidebarComponent implements OnInit {
   currentAppId: string | null = null;
   lastEnvId: string | null = null;
   currentApp: ApplicationResponse | null = null;
-   project: ApplicationResponse | null = null;
-   pipelineCounts = {
-  total: 0,
-  success: 0,
-  failed: 0,
-  pending: 0
-};
-totalDeploymentsCount: number = 0;
-activeDeploymentsCount: number = 0;
-lastDeploymentEnvId: string | null = null;
-currentDeploymentsFilter: string | null = null;
+  project: ApplicationResponse | null = null;
+  
+  pipelineCounts = {
+    total: 0,
+    success: 0,
+    failed: 0,
+    pending: 0
+  };
+  
+  totalDeploymentsCount: number = 0;
+  activeDeploymentsCount: number = 0;
+  lastDeploymentEnvId: string | null = null;
+  currentDeploymentsFilter: string | null = null;
+
+  // ✅ AJOUTER CES PROPRIÉTÉS
+  lastPipelineId: string | null = null;
+  lastPipelineEnvId: string | null = null;
+  lastEnvironmentId: string | null = null;
 
   constructor(
     public authService: AuthService,
     private router: Router,
     private applicationService: ApplicationService,
-     private pipelineService: PipelineService
+    private pipelineService: PipelineService,
+    private environmentService: EnvironmentService // ← AJOUTER
   ) {}
 
   ngOnInit(): void {
-  this.lastEnvId = localStorage.getItem('envirotest-last-pipeline-env');
-
-  this.updateCurrentAppId(this.router.url);
-
-  this.lastDeploymentEnvId = localStorage.getItem('envirotest-last-env-id') || this.lastEnvId;
+    this.lastEnvId = localStorage.getItem('envirotest-last-pipeline-env');
+    this.lastDeploymentEnvId = localStorage.getItem('envirotest-last-env-id') || this.lastEnvId;
+    
+    // ✅ Charger les derniers éléments
+    this.loadLatestItems();
+    
     this.updateCurrentAppId(this.router.url);
-  this.router.events.subscribe(ev => {
-    if (ev instanceof NavigationEnd) {
-      this.updateCurrentAppId(ev.urlAfterRedirects);
-      this.lastEnvId = localStorage.getItem('envirotest-last-pipeline-env');
-      this.lastDeploymentEnvId = localStorage.getItem('envirotest-last-env-id') || this.lastEnvId;
-      this.detectCurrentFilter(ev.urlAfterRedirects);
-    }
-  });
-}
+    
+    this.router.events.subscribe(ev => {
+      if (ev instanceof NavigationEnd) {
+        this.updateCurrentAppId(ev.urlAfterRedirects);
+        this.lastEnvId = localStorage.getItem('envirotest-last-pipeline-env');
+        this.lastDeploymentEnvId = localStorage.getItem('envirotest-last-env-id') || this.lastEnvId;
+        this.detectCurrentFilter(ev.urlAfterRedirects);
+      }
+    });
+  }
 
-getPipelineCount(): number {
-  return this.pipelineCounts.total;
-}
+  loadLatestItems(): void {
+    // Récupérer le dernier pipeline (pour affichage éventuel)
+    this.pipelineService.getLatestPipeline().subscribe({
+      next: latestPipeline => {
+        if (latestPipeline) {
+          this.lastPipelineId = latestPipeline.id;
+          this.lastPipelineEnvId = latestPipeline.environmentId;
+          localStorage.setItem('last-pipeline-id', latestPipeline.id);
+          localStorage.setItem('last-pipeline-env-id', latestPipeline.environmentId);
+        }
+      },
+      error: () => {
+        // Fallback sur la valeur stockée localement
+        this.lastPipelineId = localStorage.getItem('last-pipeline-id');
+        this.lastPipelineEnvId = localStorage.getItem('last-pipeline-env-id');
+      }
+    });
+    
+    // Récupérer le dernier environnement (pour affichage éventuel)
+    this.environmentService.getLatestEnvironment().subscribe({
+      next: latestEnv => {
+        if (latestEnv) {
+          this.lastEnvironmentId = latestEnv.id;
+          localStorage.setItem('last-environment-id', latestEnv.id);
+        }
+      },
+      error: () => {
+        this.lastEnvironmentId = localStorage.getItem('last-environment-id');
+      }
+    });
+  }
 
-getSuccessCount(): number {
-  return this.pipelineCounts.success;
-}
+  // ✅ UNE SEULE MÉTHODE goToLastPipeline (supprimer l'autre)
+  goToLastPipeline(): void {
+    // Toujours récupérer dynamiquement le dernier pipeline existant
+    this.pipelineService.getLatestPipeline().subscribe({
+      next: latest => {
+        if (latest && latest.environmentId) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/pipeline', latest.environmentId], { queryParams });
+        } else {
+          this.goToProjectPipelines();
+        }
+      },
+      error: () => {
+        this.goToProjectPipelines();
+      }
+    });
+  }
 
-getFailedCount(): number {
-  return this.pipelineCounts.failed;
-}
+  goToLastEnvironment(): void {
+    // Toujours récupérer dynamiquement le dernier environnement existant
+    this.environmentService.getLatestEnvironment().subscribe({
+      next: latest => {
+        if (latest && latest.id) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', latest.id], { queryParams });
+        } else if (this.lastDeploymentEnvId) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
+        }
+      },
+      error: () => {
+        if (this.lastDeploymentEnvId) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
+        }
+      }
+    });
+  }
 
-getPendingCount(): number {
-  return this.pipelineCounts.pending;
-}
+  getPipelineCount(): number {
+    return this.pipelineCounts.total;
+  }
 
-isOnPipelinePage(): boolean {
-  return this.router.url.includes('/pipeline/');
-}
+  getSuccessCount(): number {
+    return this.pipelineCounts.success;
+  }
+
+  getFailedCount(): number {
+    return this.pipelineCounts.failed;
+  }
+
+  getPendingCount(): number {
+    return this.pipelineCounts.pending;
+  }
+
+  isOnPipelinePage(): boolean {
+    return this.router.url.includes('/pipeline/') || this.router.url.includes('/pipeline-id/');
+  }
+
   private updateCurrentAppId(url: string): void {
     let newId: string | null = null;
     
-    // 1) cas /project/:appId/...
     const projectMatch = url.match(/\/project\/([^\/]+)/);
     if (projectMatch) {
       newId = projectMatch[1];
-    } 
-    // 2) cas /pipeline/:envId?appId=...
-    else {
-      // Extraire les query params de l'URL complète
+    } else {
       const urlParts = url.split('?');
       if (urlParts.length > 1) {
         const queryParams = new URLSearchParams(urlParts[1]);
@@ -100,7 +191,7 @@ isOnPipelinePage(): boolean {
     }
   }
 
-   private loadCurrentApp(): void {
+  private loadCurrentApp(): void {
     if (!this.currentAppId) return;
     
     this.applicationService.getApplicationById(this.currentAppId).subscribe({
@@ -115,7 +206,6 @@ isOnPipelinePage(): boolean {
     });
   }
 
-
   navigate(path: string): void {
     this.router.navigate([path]);
   }
@@ -128,7 +218,7 @@ isOnPipelinePage(): boolean {
     }
   }
 
-   goToProjectPipelines(status?: string): void {
+  goToProjectPipelines(status?: string): void {
     if (!this.currentAppId) {
       this.router.navigate(['/pipelines'], { 
         queryParams: status ? { status } : {} 
@@ -142,27 +232,12 @@ isOnPipelinePage(): boolean {
       { queryParams }
     );
   }
-  goToLastPipeline(): void {
-    const envId = this.lastEnvId || localStorage.getItem('envirotest-last-pipeline-env');
-    if (envId) {
-      // IMPORTANT: Si on a un currentAppId, on le passe en queryParam
-      const queryParams: any = {};
-      if (this.currentAppId) {
-        queryParams.appId = this.currentAppId;
-      }
-      
-      this.router.navigate(['/pipeline', envId], { queryParams });
-    } else {
-      // Si pas de dernier pipeline, rediriger vers la liste
-      this.goToProjectPipelines();
-    }
-  }
 
   logout(): void {
     this.authService.logout();
   }
+
   openGrafana(): void {
-    // Logique pour ouvrir Grafana
     window.open('https://grafana.example.com', '_blank');
   }
 
@@ -170,154 +245,151 @@ isOnPipelinePage(): boolean {
     this.router.navigate(['/my-applications']);
   }
 
-  // Détecter le filtre actuel dans l'URL
-private detectCurrentFilter(url: string): void {
-  if (url.includes('status=')) {
-    const match = url.match(/status=([^&]*)/);
-    if (match) {
-      const status = match[1];
-      if (status.includes('RUNNING') || status.includes('PENDING')) {
-        this.currentDeploymentsFilter = 'En cours';
-      } else if (status.includes('SUCCESS')) {
-        this.currentDeploymentsFilter = 'Réussis';
-      } else if (status.includes('FAILED')) {
-        this.currentDeploymentsFilter = 'Échoués';
+  private detectCurrentFilter(url: string): void {
+    if (url.includes('status=')) {
+      const match = url.match(/status=([^&]*)/);
+      if (match) {
+        const status = match[1];
+        if (status.includes('RUNNING') || status.includes('PENDING')) {
+          this.currentDeploymentsFilter = 'En cours';
+        } else if (status.includes('SUCCESS')) {
+          this.currentDeploymentsFilter = 'Réussis';
+        } else if (status.includes('FAILED')) {
+          this.currentDeploymentsFilter = 'Échoués';
+        }
       }
+    } else {
+      this.currentDeploymentsFilter = null;
     }
-  } else {
-    this.currentDeploymentsFilter = null;
   }
-}
 
-goToDeployments(type: 'active' | 'history'): void {
-  if (!this.currentAppId) {
+  goToDeployments(type: 'active' | 'history'): void {
+    if (!this.currentAppId) {
+      if (type === 'active') {
+        this.router.navigate(['/deployments'], { 
+          queryParams: { status: 'ACTIVE' }
+        });
+      } else {
+        this.router.navigate(['/deployments']);
+      }
+      return;
+    }
+    
     if (type === 'active') {
-      this.router.navigate(['/deployments'], { 
-        queryParams: { status: 'ACTIVE' } // Filtrer par environnement RUNNING
-      });
+      this.router.navigate(
+        ['/project', this.currentAppId, 'deployments'],
+        { queryParams: { status: 'ACTIVE' } }
+      );
+    } else {
+      this.router.navigate(['/project', this.currentAppId, 'deployments']);
+    }
+  }
+
+  isActiveDeploymentsPage(): boolean {
+    const url = this.router.url;
+    return url.includes('/deployments') && 
+           (url.includes('status=RUNNING') || url.includes('status=PENDING'));
+  }
+
+  isHistoryDeploymentsPage(): boolean {
+    const url = this.router.url;
+    return url.includes('/deployments') && !url.includes('status=');
+  }
+
+  clearDeploymentsFilter(): void {
+    if (this.currentAppId) {
+      this.router.navigate(['/project', this.currentAppId, 'deployments']);
     } else {
       this.router.navigate(['/deployments']);
     }
-    return;
+    this.currentDeploymentsFilter = null;
   }
-  
-  if (type === 'active') {
-    this.router.navigate(
-      ['/project', this.currentAppId, 'deployments'],
-      { queryParams: { status: 'ACTIVE' } } // ← Changé !
-    );
-  } else {
-    this.router.navigate(['/project', this.currentAppId, 'deployments']);
-  }
-}
 
-// Vérifier si on est sur la page des déploiements actifs
-isActiveDeploymentsPage(): boolean {
-  const url = this.router.url;
-  return url.includes('/deployments') && 
-         (url.includes('status=RUNNING') || url.includes('status=PENDING'));
-}
+  private updateDeploymentsCounts(): void {
+    if (!this.currentAppId) return;
+    
+    this.applicationService.getDeploymentHistory(this.currentAppId).subscribe({
+      next: (deployments) => {
+        this.totalDeploymentsCount = deployments.length;
+        this.activeDeploymentsCount = deployments.filter(d => 
+          d.environmentStatus?.toUpperCase() === 'RUNNING'
+        ).length;
 
-// Vérifier si on est sur la page d'historique
-isHistoryDeploymentsPage(): boolean {
-  const url = this.router.url;
-  return url.includes('/deployments') && !url.includes('status=');
-}
-
-// Effacer le filtre actuel
-clearDeploymentsFilter(): void {
-  if (this.currentAppId) {
-    this.router.navigate(['/project', this.currentAppId, 'deployments']);
-  } else {
-    this.router.navigate(['/deployments']);
-  }
-  this.currentDeploymentsFilter = null;
-}
-
-// Mettre à jour les compteurs de déploiements
-private updateDeploymentsCounts(): void {
-  if (!this.currentAppId) return;
-  
-  this.applicationService.getDeploymentHistory(this.currentAppId).subscribe({
-    next: (deployments) => {
-      this.totalDeploymentsCount = deployments.length;
-      
-      // Compter les environnements RUNNING (actifs)
-      this.activeDeploymentsCount = deployments.filter(d => 
-        d.environmentStatus?.toUpperCase() === 'RUNNING'
-      ).length;
-
-      // Dernier déploiement
-      if (deployments.length > 0) {
-        const sorted = [...deployments].sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        this.lastDeploymentEnvId = sorted[0]?.environmentId || null;
+        if (deployments.length > 0) {
+          const sorted = [...deployments].sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          this.lastDeploymentEnvId = sorted[0]?.environmentId || null;
+        }
       }
-    }
-  });
-}
+    });
+  }
 
-// Surcharger loadPipelineCounts pour aussi charger les compteurs de déploiements
-private loadPipelineCounts(): void {
-  if (!this.currentAppId) return;
-  
-  this.applicationService.getDeploymentHistory(this.currentAppId).subscribe({
-    next: (deployments) => {
-      // Compteurs pipelines (pour la section pipelines)
-      this.pipelineCounts.total = deployments.length;
-      this.pipelineCounts.success = deployments.filter(d => 
-        d.pipelineStatus?.toUpperCase() === 'SUCCESS').length;
-      this.pipelineCounts.failed = deployments.filter(d => 
-        ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')).length;
-      this.pipelineCounts.pending = deployments.filter(d => 
-        ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')).length;
-      
-      // Compteurs déploiements (pour la section déploiements)
-      this.totalDeploymentsCount = deployments.length;
-      this.activeDeploymentsCount = this.pipelineCounts.pending;
-      
-      // Dernier déploiement
-      if (deployments.length > 0) {
-        const sorted = [...deployments].sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        this.lastDeploymentEnvId = sorted[0]?.environmentId || this.lastEnvId;
+  private loadPipelineCounts(): void {
+    if (!this.currentAppId) return;
+    
+    this.applicationService.getDeploymentHistory(this.currentAppId).subscribe({
+      next: (deployments) => {
+        this.pipelineCounts.total = deployments.length;
+        this.pipelineCounts.success = deployments.filter(d => 
+          d.pipelineStatus?.toUpperCase() === 'SUCCESS').length;
+        this.pipelineCounts.failed = deployments.filter(d => 
+          ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')).length;
+        this.pipelineCounts.pending = deployments.filter(d => 
+          ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')).length;
+        
+        this.totalDeploymentsCount = deployments.length;
+        this.activeDeploymentsCount = this.pipelineCounts.pending;
+        
+        if (deployments.length > 0) {
+          const sorted = [...deployments].sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          this.lastDeploymentEnvId = sorted[0]?.environmentId || this.lastEnvId;
+        }
       }
-    }
-  });
-}
+    });
+  }
 
-// Remplacer la méthode goToLastDeployment()
-goToLastDeployment(): void {
-  const envId = this.lastDeploymentEnvId;
-  if (envId) {
-    const queryParams: any = {};
-    if (this.currentAppId) {
-      queryParams.appId = this.currentAppId;
-    }
-    // CORRECTION: Naviguer vers l'environnement, pas vers le pipeline
-    this.router.navigate(['/environment', envId], { queryParams });
+  goToLastDeployment(): void {
+    // Utiliser toujours le dernier environnement retourné par le backend
+    this.environmentService.getLatestEnvironment().subscribe({
+      next: latest => {
+        if (latest && latest.id) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', latest.id], { queryParams });
+        } else if (this.lastDeploymentEnvId) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
+        }
+      },
+      error: () => {
+        if (this.lastDeploymentEnvId) {
+          const queryParams: any = {};
+          if (this.currentAppId) {
+            queryParams.appId = this.currentAppId;
+          }
+          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
+        }
+      }
+    });
+  }
+
+  isEnvironmentActive(envId: string | null): boolean {
+    if (!envId || !this.currentAppId) return false;
+    return true; // À améliorer
+  }
+
+  isOnLastDeploymentPage(): boolean {
+    const url = this.router.url;
+    return url.includes('/environment/') && 
+           this.lastDeploymentEnvId !== null && 
+           url.includes(this.lastDeploymentEnvId);
   }
 }
-// Dans UserSidebarComponent
-isEnvironmentActive(envId: string | null): boolean {
-  if (!envId || !this.currentAppId) return false;
-
-  // Vous pouvez soit avoir stocké le statut, soit faire un appel API
-  // Pour l'instant, on retourne true si c'est le dernier déploiement
-  // Idéalement, il faudrait stocker le statut dans le localStorage aussi
-  return true; // À améliorer selon votre besoin
-}
-
-// Vérifier si on est sur la page du dernier déploiement (environnement)
-isOnLastDeploymentPage(): boolean {
-  const url = this.router.url;
-  return url.includes('/environment/') && 
-         this.lastDeploymentEnvId !== null && 
-         url.includes(this.lastDeploymentEnvId);
-}
-
-
-}
-

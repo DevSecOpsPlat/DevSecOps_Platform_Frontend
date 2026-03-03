@@ -28,13 +28,17 @@ export class EnvironmentService {
     });
   }
 
-  getEnvironmentById(id: string): Observable<EnvironmentSummaryResponse> {
-    return this.http.get<any>(`${BASE}api/environments/${id}`, {
-      headers: this.authHeaders()
-    }).pipe(
-      map(response => this.convertEnvironment(response))
-    );
-  }
+  getEnvironmentById(envId: string): Observable<EnvironmentSummaryResponse> {
+  return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/by-id/${envId}`, {
+    headers: this.authHeaders()
+  });
+}
+
+getLatestEnvironment(): Observable<any> {
+  return this.http.get(BASE + 'api/environments/latest', {
+    headers: this.authHeaders()
+  });
+}
 
   private convertEnvironment(data: any): EnvironmentSummaryResponse {
     return {

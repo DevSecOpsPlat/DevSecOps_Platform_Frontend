@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { EnvironmentSummaryResponse } from 'src/app/models/environment/environment-summary-response';
 import { FormatService } from 'src/app/models/environment/format.service';
 import { EnvironmentService } from 'src/app/services/environment/environment.service';
+import { ToastService } from 'src/app/services/ui/toast.service';
 
 @Component({
   selector: 'app-environment-details',
@@ -16,11 +17,13 @@ export class EnvironmentDetailsComponent implements OnInit {
   loading = true;
   error: string | null = null;
   appId: string | null = null;
+  redirectTimer: any;
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private environmentService: EnvironmentService,
+    private toastService: ToastService,
     public format: FormatService
   ) {}
 
@@ -36,22 +39,90 @@ export class EnvironmentDetailsComponent implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    if (this.redirectTimer) {
+      clearTimeout(this.redirectTimer);
+    }
+  }
+
   loadEnvironment(): void {
     this.loading = true;
     this.error = null;
     
     this.environmentService.getEnvironmentById(this.envId).subscribe({
-      next: (env) => {
+      next: env => {
         this.environment = env;
-        console.log('Environnement converti:', env);
         this.loading = false;
       },
-      error: (err) => {
+      error: err => {
         this.loading = false;
-        this.error = err.error?.message || 'Erreur lors du chargement';
-        console.error('Erreur:', err);
+        
+        if (err.status === 404) {
+          this.handleNotFound();
+        } else {
+          this.error = err.error?.message || 'Erreur lors du chargement';
+          console.error('Erreur:', err);
+        }
       }
     });
+  }
+
+  private handleNotFound(): void {
+    this.error = "Cet environnement n'existe plus";
+
+    // Tenter de récupérer le dernier environnement existant pour l'utilisateur
+    this.environmentService.getLatestEnvironment().subscribe({
+      next: latest => {
+        if (latest && latest.id) {
+          if (this.toastService) {
+            this.toastService.push(
+              'info',
+              'Environnement introuvable',
+              'Redirection vers le dernier environnement disponible...',
+              3000
+            );
+          }
+
+          const queryParams: any = {};
+          if (this.appId) {
+            queryParams.appId = this.appId;
+          }
+
+          this.router.navigate(['/environment', latest.id], {
+            queryParams
+          });
+        } else {
+          this.redirectToEnvironmentsList();
+        }
+      },
+      error: err => {
+        if (err.status === 404) {
+          // Aucun environnement pour l'utilisateur
+          this.redirectToEnvironmentsList();
+        } else {
+          this.redirectToEnvironmentsList();
+        }
+      }
+    });
+  }
+
+  private redirectToEnvironmentsList(): void {
+    if (this.toastService) {
+      this.toastService.push(
+        'info',
+        'Environnement introuvable',
+        'Redirection vers la liste des environnements...',
+        3000
+      );
+    }
+
+    this.redirectTimer = setTimeout(() => {
+      if (this.appId) {
+        this.router.navigate(['/project', this.appId, 'deployments']);
+      } else {
+        this.router.navigate(['/environments']);
+      }
+    }, 3000);
   }
 
   getStatusClass(): string {

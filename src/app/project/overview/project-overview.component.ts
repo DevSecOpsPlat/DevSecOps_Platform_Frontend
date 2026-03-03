@@ -150,7 +150,40 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       }
     });
   }
+  // Dans project-overview.component.ts
+private loadLatestDeployment(): void {
+  if (!this.appId) return;
   
+  this.applicationService.getDeploymentHistory(this.appId, 0, 1).subscribe({
+    next: (deployments) => {
+      const newLatest = deployments.length > 0 ? deployments[0] : null;
+      
+      // Vérifier si le dernier déploiement a changé
+      if (this.latestDeployment?.environmentId !== newLatest?.environmentId) {
+        console.log('🔄 Dernier déploiement mis à jour:', newLatest);
+        this.latestDeployment = newLatest;
+        
+        if (this.latestDeployment) {
+          this.loadEnvironmentSummary(this.latestDeployment.environmentId);
+          this.loadLatestPipelineDetails();
+        }
+      }
+    },
+    error: (err) => {
+      console.error('Erreur chargement dernier déploiement:', err);
+    }
+  });
+}
+
+// Appeler cette méthode après une suppression
+onPipelineDeleted(): void {
+  this.loadLatestDeployment(); // Recharger le dernier déploiement
+}
+
+refreshData(): void {
+  console.log('🔄 Rafraîchissement des données overview');
+  this.loadAppData();
+}
 
   /**
    * Charge les déploiements et pipelines (données plus lentes)

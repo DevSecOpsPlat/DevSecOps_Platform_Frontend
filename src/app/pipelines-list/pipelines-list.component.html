@@ -1,72 +1,103 @@
 <div class="pipelines-page">
- <div class="pipelines-page">
-  <header class="page-header">
-    <h1>{{ getPageTitle() }}</h1>
-    <p class="subtitle">{{ getSubtitle() }}</p>
-  </header>
-  <div *ngIf="loading && filtered.length === 0" class="loading-state">
-    <div class="spinner"></div>
-    <span>Chargement des pipelines...</span>
-  </div>
+  <div class="pipelines-page">
+    <header class="page-header">
+      <h1>{{ getPageTitle() }}</h1>
+      <p class="subtitle">{{ getSubtitle() }}</p>
+    </header>
+    
+    <div *ngIf="loading && filtered.length === 0" class="loading-state">
+      <div class="spinner"></div>
+      <span>Chargement des pipelines...</span>
+    </div>
 
-  <div *ngIf="error" class="error-banner">
-    {{ error }}
-  </div>
+    <div *ngIf="error" class="error-banner">
+      {{ error }}
+    </div>
 
-  <div *ngIf="!loading || filtered.length > 0" class="table-wrap">
-    <table class="pipelines-table">
-      <thead>
-        <tr>
-          <th class="col-status">Status</th>
-          <th class="col-pipeline">Pipeline</th>
-          <th class="col-created">Created by</th>
-          <th class="col-stages">Stages</th>
-          <th class="col-actions">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let item of filtered" class="pipeline-row">
-          <td class="col-status">
-            <span [ngClass]="statusClass(item.status || item.pipelineStatus)">
-              {{ (item.status || item.pipelineStatus) | uppercase }}
-            </span>
-            <span *ngIf="isRunning(item)" class="spinner small"></span>
-            <span *ngIf="item.duration != null && !isRunning(item)" class="duration">
-              {{ formatDuration(item.duration) }}
-            </span>
-          </td>
-          <td class="col-pipeline">
-            <div class="pipeline-info">
-              <span class="pipeline-id" *ngIf="item.pipelineId">#{{ item.pipelineId }}</span>
-              <span class="pipeline-title">Deploy — {{ item.environmentName }}</span>
-              <div class="pipeline-meta">
-                <span class="ref" *ngIf="item.ref">{{ item.ref }}</span>
-                <span class="sha" *ngIf="item.shortSha">{{ item.shortSha }}</span>
-              </div>
-            </div>
-            <span class="time-ago">{{ formatTimeAgo(item.createdAt) }}</span>
-          </td>
-          <td class="col-created">
-            <span class="created-by">{{ item.createdByUsername || '—' }}</span>
-          </td>
-          <td class="col-stages">
-            <div class="stages" *ngIf="item.jobs && item.jobs.length">
-              <span *ngFor="let job of item.jobs" [ngClass]="jobStatusClass(job.status)" [title]="job.name">
-                {{ job.stage || job.name }}
+    <div *ngIf="!loading || filtered.length > 0" class="table-wrap">
+      <table class="pipelines-table">
+        <thead>
+          <tr>
+            <th class="col-status">Status</th>
+            <th class="col-pipeline">Pipeline</th>
+            <th class="col-created">Created by</th>
+            <th class="col-stages">Stages</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of filtered" class="pipeline-row">
+            <td class="col-status">
+              <span [ngClass]="statusClass(item.status || item.pipelineStatus)">
+                {{ (item.status || item.pipelineStatus) | uppercase }}
               </span>
-            </div>
-            <span *ngIf="!item.jobs?.length" class="no-stages">—</span>
-          </td>
-          <td class="col-actions">
-            <button type="button" class="btn btn-view" (click)="viewDetails(item)">Voir détail</button>
-            <button *ngIf="canCancel(item)" type="button" class="btn btn-cancel" (click)="cancel(item)" [disabled]="cancelingId === item.pipelineId">
-              {{ cancelingId === item.pipelineId ? 'Annulation...' : 'Annuler' }}
-            </button>
-            <a *ngIf="item.webUrl" [href]="item.webUrl" target="_blank" rel="noopener noreferrer" class="btn btn-link">GitLab</a>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p *ngIf="!loading && filtered.length === 0" class="empty">Aucun pipeline pour le moment.</p>
+              <span *ngIf="isRunning(item)" class="spinner small"></span>
+              <span *ngIf="item.duration != null && !isRunning(item)" class="duration">
+                {{ formatDuration(item.duration) }}
+              </span>
+            </td>
+            
+            <td class="col-pipeline">
+              <div class="pipeline-info">
+                <span class="pipeline-id" *ngIf="item.pipelineId">#{{ item.pipelineId }}</span>
+                <span class="pipeline-title">Deploy — {{ item.environmentName }}</span>
+                <div class="pipeline-meta">
+                  <span class="ref" *ngIf="item.ref">{{ item.ref }}</span>
+                  <span class="sha" *ngIf="item.shortSha">{{ item.shortSha }}</span>
+                </div>
+              </div>
+              <span class="time-ago">{{ formatTimeAgo(item.createdAt) }}</span>
+            </td>
+            
+            <td class="col-created">
+              <span class="created-by">{{ item.createdByUsername || '—' }}</span>
+            </td>
+            
+            <td class="col-stages">
+              <div class="stages" *ngIf="item.jobs && item.jobs.length">
+                <span *ngFor="let job of item.jobs" [ngClass]="jobStatusClass(job.status)" [title]="job.name">
+                  {{ job.stage || job.name }}
+                </span>
+              </div>
+              <span *ngIf="!item.jobs?.length" class="no-stages">—</span>
+            </td>
+            
+            <!-- UNE SEULE COLONNE ACTIONS avec tous les boutons -->
+            <td class="col-actions">
+              <button type="button" class="btn btn-view" (click)="viewDetails(item)">Voir détail</button>
+              
+              <button *ngIf="canCancel(item)" type="button" class="btn btn-cancel" (click)="cancel(item)" [disabled]="cancelingId === item.pipelineId">
+                {{ cancelingId === item.pipelineId ? 'Annulation...' : 'Annuler' }}
+              </button>
+              
+              <button type="button" class="btn btn-delete" (click)="confirmDelete(item)" [disabled]="deletingId === item.pipelineId">
+                {{ deletingId === item.pipelineId ? 'Suppression...' : '🗑️' }}
+              </button>
+              
+              <a *ngIf="item.webUrl" [href]="item.webUrl" target="_blank" rel="noopener noreferrer" class="btn btn-link">GitLab</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <p *ngIf="!loading && filtered.length === 0" class="empty">Aucun pipeline pour le moment.</p>
+    </div>
+
+  
   </div>
+
+  <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <h3>🗑️ Confirmer la suppression</h3>
+    <p>Êtes-vous sûr de vouloir supprimer le pipeline <strong>#{{ pipelineToDelete?.pipelineId }}</strong> ?</p>
+    <p class="warning-text">
+      <strong>⚠️ Attention :</strong> Cette action supprimera également l'environnement associé 
+      <strong>{{ pipelineToDelete?.environmentName }}</strong> si c'est le dernier pipeline.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-cancel" (click)="cancelDelete()">Annuler</button>
+      <button class="btn-delete-confirm" (click)="deletePipeline()">Supprimer définitivement</button>
+    </div>
+  </div>
+</div>
 </div>

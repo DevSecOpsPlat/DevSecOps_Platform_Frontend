@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PipelineService } from '../services/pipeline/pipeline.service';
 import { PipelineScanResponse, PipelineJobInfo } from '../models/pipeline/pipeline-scan-response';
+import { ToastService } from 'src/app/services/ui/toast.service';
 
 @Component({
   selector: 'app-pipeline-details',
@@ -22,7 +23,9 @@ export class PipelineDetailsComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
-    private pipelineService: PipelineService
+    private router: Router,
+    private pipelineService: PipelineService,
+    private toastService: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -44,9 +47,52 @@ export class PipelineDetailsComponent implements OnInit {
       },
       error: err => {
         this.loading = false;
-        this.error = err.error?.message || 'Erreur lors du chargement du pipeline';
+        if (err.status === 404) {
+          this.handleNotFound();
+        } else {
+          this.error = err.error?.message || 'Erreur lors du chargement du pipeline';
+        }
       }
     });
+  }
+
+  private handleNotFound(): void {
+    this.error = 'Ce pipeline ou son environnement associé n\'existe plus';
+
+    // Tenter de récupérer le dernier pipeline existant pour l'utilisateur
+    this.pipelineService.getLatestPipeline().subscribe({
+      next: latest => {
+        if (latest && latest.environmentId) {
+          if (this.toastService) {
+            this.toastService.push(
+              'info',
+              'Pipeline introuvable',
+              'Redirection vers le dernier pipeline disponible...',
+              3000
+            );
+          }
+
+          this.router.navigate(['/pipeline', latest.environmentId]);
+        } else {
+          this.redirectToPipelinesList();
+        }
+      },
+      error: () => {
+        this.redirectToPipelinesList();
+      }
+    });
+  }
+
+  private redirectToPipelinesList(): void {
+    if (this.toastService) {
+      this.toastService.push(
+        'info',
+        'Pipeline introuvable',
+        'Redirection vers la liste des pipelines...',
+        3000
+      );
+    }
+    this.router.navigate(['/pipelines']);
   }
 
   selectJob(job: PipelineJobInfo): void {

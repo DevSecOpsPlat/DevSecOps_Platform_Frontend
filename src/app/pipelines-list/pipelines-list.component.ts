@@ -5,6 +5,7 @@ import { PipelineListItem } from '../models/pipeline/pipeline-list-item';
 import { ToastService } from '../services/ui/toast.service';
 import { ApplicationService } from '../services/application/application.service';
 import { DeploymentHistoryItem } from '../models/application/deployment-history-item';
+import { EnvironmentService } from '../services/environment/environment.service';
 
 @Component({
   selector: 'app-pipelines-list',
@@ -25,8 +26,13 @@ export class PipelinesListComponent implements OnInit {
   isProjectContext = false;
   appName: string | null = null;
 
+   deletingId: number | null = null;
+  showDeleteConfirm: boolean = false;
+  pipelineToDelete: PipelineListItem | null = null;
+
   constructor(
     private pipelineService: PipelineService,
+     private environmentService: EnvironmentService,
     private applicationService: ApplicationService,
     private router: Router,
     private route: ActivatedRoute,
@@ -298,4 +304,84 @@ export class PipelinesListComponent implements OnInit {
     this.pipelines = list;
     this.filtered = this.applyStatusFilter(list);
   }
+   confirmDelete(item: PipelineListItem): void {
+    this.pipelineToDelete = item;
+    this.showDeleteConfirm = true;
+  }
+
+// Dans pipelines-list.component.ts - Après suppression
+// Dans pipelines-list.component.ts - après suppression
+deletePipeline(): void {
+  if (!this.pipelineToDelete?.pipelineId || this.deletingId != null) return;
+  
+  this.deletingId = this.pipelineToDelete.pipelineId;
+  this.showDeleteConfirm = false;
+  
+  this.pipelineService.deletePipeline(this.pipelineToDelete.pipelineId).subscribe({
+    next: () => {
+      this.deletingId = null;
+      
+      // ✅ Recalculer le dernier élément
+      this.pipelineService.getLatestPipeline().subscribe(latest => {
+        if (latest) {
+          localStorage.setItem('last-pipeline-id', latest.id);
+          localStorage.setItem('last-pipeline-env-id', latest.environmentId);
+        }
+      });
+      
+      this.environmentService.getLatestEnvironment().subscribe(latest => {
+        if (latest) {
+          localStorage.setItem('last-environment-id', latest.id);
+        }
+      });
+      
+      this.toastService.push('success', 'Pipeline supprimé', 
+        `Pipeline #${this.pipelineToDelete?.pipelineId} supprimé`);
+      
+      this.pipelineToDelete = null;
+      this.loadPipelines();
+    },
+    error: (err) => {
+      this.deletingId = null;
+      this.pipelineToDelete = null;
+      this.toastService.push('error', 'Erreur', 'Impossible de supprimer le pipeline');
+    }
+  });
+}
+
+private recalculateLastDeployment(): void {
+  if (!this.appId) return;
+  
+  // Récupérer le dernier déploiement depuis l'API
+  this.applicationService.getDeploymentHistory(this.appId, 0, 1).subscribe({
+    next: (deployments) => {
+      if (deployments.length > 0) {
+        const newLast = deployments[0];
+        localStorage.setItem('envirotest-last-env-id', newLast.environmentId);
+        console.log('✅ Nouveau dernier déploiement stocké:', newLast.environmentId);
+      } else {
+        // Plus aucun déploiement
+        localStorage.removeItem('envirotest-last-env-id');
+        localStorage.removeItem('envirotest-last-app-id');
+        console.log('ℹ️ Plus aucun déploiement');
+      }
+    },
+    error: (err) => {
+      console.error('Erreur recalcul dernier déploiement:', err);
+    }
+  });
+}
+
+  cancelDelete(): void {
+    this.showDeleteConfirm = false;
+    this.pipelineToDelete = null;
+  }
+
+  showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+  // Utiliser votre ToastService existant
+  this.toastService.push(type, type === 'success' ? 'Succès' : 'Information', message);
+}
+
+
+  
 }

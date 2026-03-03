@@ -42,11 +42,17 @@ export class PipelineService {
     });
   }
 
-  getByPipelineId(pipelineId: number): Observable<PipelineScanResponse> {
-    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/${pipelineId}`, {
-      headers: this.authHeaders()
-    });
-  }
+  getPipelineById(pipelineId: number): Observable<PipelineScanResponse> {
+  return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-id/${pipelineId}`, {
+    headers: this.authHeaders()
+  });
+}
+
+getLatestPipeline(): Observable<any> {
+  return this.http.get(BASE + 'api/pipelines/latest', {
+    headers: this.authHeaders()
+  });
+}
 
   cancelPipeline(pipelineId: number): Observable<void> {
     return this.http.post<void>(BASE + `api/pipelines/${pipelineId}/cancel`, null, {
@@ -66,5 +72,12 @@ export class PipelineService {
       headers: this.authHeaders()
     });
   }
+
+  // Dans pipeline.service.ts
+deletePipeline(pipelineId: number): Observable<void> {
+  return this.http.delete<void>(BASE + `api/pipelines/${pipelineId}`, {
+    headers: this.authHeaders()
+  });
+}
 }
 
