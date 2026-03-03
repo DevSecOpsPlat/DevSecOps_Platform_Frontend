@@ -351,6 +351,15 @@ export class UserSidebarComponent implements OnInit {
     });
   }
 
+  // Dans user-sidebar.component.ts
+goToActivity(): void {
+  if (this.currentAppId) {
+    this.router.navigate(['/project', this.currentAppId, 'activity']);
+  } else {
+    this.router.navigate(['/activity']);
+  }
+}
+
   goToLastDeployment(): void {
     // Utiliser toujours le dernier environnement retourné par le backend
     this.environmentService.getLatestEnvironment().subscribe({

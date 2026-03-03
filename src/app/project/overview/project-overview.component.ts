@@ -205,120 +205,168 @@ refreshData(): void {
    * Charge les déploiements et pipelines (données plus lentes)
    */
   loadDeploymentsAndPipelines(): void {
-    if (!this.appId) return;
-    
-    this.loadingSlow = true;
-    
-    forkJoin({
-      deployments: this.applicationService.getDeploymentHistory(this.appId, 0, 10).pipe(
-        catchError(err => {
-          console.error('Erreur chargement déploiements:', err);
-          return of([]);
+  if (!this.appId) return;
+  
+  this.loadingSlow = true;
+  
+  forkJoin({
+    deployments: this.applicationService.getDeploymentHistory(this.appId, 0, 10).pipe(
+      catchError(err => {
+        console.error('Erreur chargement déploiements:', err);
+        return of([]);
+      })
+    ),
+    pipelines: this.pipelineService.listPipelines(0, 10).pipe(
+      catchError(err => {
+        console.error('Erreur chargement pipelines:', err);
+        return of([]);
+      })
+    )
+  }).subscribe({
+    next: (slowData) => {
+      this.deployments = slowData.deployments || [];
+      this.latestDeployment = this.deployments.length > 0 ? this.deployments[0] : null;
+      
+      console.log('📦 Données pipelines brutes:', slowData.pipelines);
+      
+      // Traiter les pipelines récents
+      const rawPipelines = (slowData.pipelines || [])
+        .filter((p: any) => p.environmentId && this.deployments.some((d: any) => d.environmentId === p.environmentId));
+      
+      // Afficher les dates pour debug
+      rawPipelines.forEach((p: any) => {
+        console.log('Pipeline createdAt:', p.createdAt, 'type:', typeof p.createdAt);
+      });
+      
+      this.recentPipelines = rawPipelines
+        .sort((a: any, b: any) => {
+          const dateA = this.safeParseDate(a.createdAt)?.getTime() || 0;
+          const dateB = this.safeParseDate(b.createdAt)?.getTime() || 0;
+          return dateB - dateA;
         })
-      ),
-      pipelines: this.pipelineService.listPipelines(0, 10).pipe(
-        catchError(err => {
-          console.error('Erreur chargement pipelines:', err);
-          return of([]);
-        })
-      )
-    }).subscribe({
-      next: (slowData) => {
-        this.deployments = slowData.deployments || [];
-        this.latestDeployment = this.deployments.length > 0 ? this.deployments[0] : null;
-        
-        // Traiter les pipelines récents
-        this.recentPipelines = (slowData.pipelines || [])
-          .filter((p: any) => p.environmentId && this.deployments.some((d: any) => d.environmentId === p.environmentId))
-          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 5)
-          .map((p: any) => ({
-            id: p.pipelineId,
-            name: `Pipeline #${p.pipelineId}`,
-            branch: p.gitBranch || p.ref || 'main',
-            status: p.status || p.pipelineStatus,
-            createdAt: p.createdAt,
-            environmentId: p.environmentId,
-            environmentName: p.environmentName,
-            triggeredBy: p.createdByUsername
-          }));
-        
-        // Statistiques
-        this.totalDeployments = this.deployments.length;
-        this.successfulDeployments = this.deployments.filter(d => 
-          d.pipelineStatus?.toUpperCase() === 'SUCCESS'
-        ).length;
-        this.failedDeployments = this.deployments.filter(d => 
-          ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
-        ).length;
-        this.pendingDeployments = this.deployments.filter(d => 
-          ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
-        ).length;
-        
-        // Chart data: deployment status
-        this.deploymentChartData = this.buildDeploymentChartData();
-        this.vulnerabilityChartData = this.buildVulnerabilityChartData();
-        
-        // Construire les activités récentes
-        this.buildRecentActivities();
-        
-        // Charger les détails du dernier pipeline
-        if (this.latestDeployment) {
-          this.loadEnvironmentSummary(this.latestDeployment.environmentId);
-          this.loadLatestPipelineDetails();
-        }
-        
-        this.loading = false;
-        this.loadingSlow = false;
-      },
-      error: (err) => {
-        console.error('Erreur chargement données lentes:', err);
-        this.loading = false;
-        this.loadingSlow = false;
-        this.error = 'Erreur lors du chargement des données';
+        .slice(0, 5)
+        .map((p: any) => ({
+          id: p.pipelineId,
+          name: `Pipeline #${p.pipelineId}`,
+          branch: p.gitBranch || p.ref || 'main',
+          status: p.status || p.pipelineStatus,
+          createdAt: this.safeParseDate(p.createdAt)?.toISOString() || 
+                this.safeParseDate(p.startedAt)?.toISOString() || 
+                this.safeParseDate(p.finishedAt)?.toISOString() || 
+                new Date().toISOString(),
+          environmentId: p.environmentId,
+          environmentName: p.environmentName,
+          triggeredBy: p.createdByUsername
+        }));
+      
+      // Statistiques
+      this.totalDeployments = this.deployments.length;
+      this.successfulDeployments = this.deployments.filter(d => 
+        d.pipelineStatus?.toUpperCase() === 'SUCCESS'
+      ).length;
+      this.failedDeployments = this.deployments.filter(d => 
+        ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
+      ).length;
+      this.pendingDeployments = this.deployments.filter(d => 
+        ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
+      ).length;
+      
+      // Chart data: deployment status
+      this.deploymentChartData = this.buildDeploymentChartData();
+      this.vulnerabilityChartData = this.buildVulnerabilityChartData();
+      
+      // Construire les activités récentes
+      this.buildRecentActivities();
+      
+      // Charger les détails du dernier pipeline
+      if (this.latestDeployment) {
+        this.loadEnvironmentSummary(this.latestDeployment.environmentId);
+        this.loadLatestPipelineDetails();
       }
-    });
-  }
+      
+      this.loading = false;
+      this.loadingSlow = false;
+    },
+    error: (err) => {
+      console.error('Erreur chargement données lentes:', err);
+      this.loading = false;
+      this.loadingSlow = false;
+      this.error = 'Erreur lors du chargement des données';
+    }
+  });
+}
+
+  // Dans le composant
+getPipelineCreatedAt(pipeline: DashboardPipelineItem): string {
+  if (!pipeline?.createdAt) return '—';
+  return this.formatFullDate(pipeline.createdAt);
+}
+
+getPipelineTimeAgo(pipeline: DashboardPipelineItem): string {
+  if (!pipeline?.createdAt) return '—';
+  return this.formatTimeAgo(pipeline.createdAt);
+}
+
+// Pour ActivityItem
+getActivityTimeAgo(activity: ActivityItem): string {
+  if (!activity?.timestamp) return '—';
+  return this.formatTimeAgo(activity.timestamp);
+}
 
   /**
    * Construit la liste des activités récentes
    */
-  private buildRecentActivities(): void {
-    const activities: ActivityItem[] = [];
-    
-    // Ajouter les déploiements récents
-    this.deployments.slice(0, 3).forEach(d => {
-      activities.push({
-        id: d.environmentId,
-        type: 'deployment',
-        title: 'Nouveau déploiement',
-        description: `Environnement ${d.environmentName} créé`,
-        timestamp: d.createdAt,
-        status: d.pipelineStatus || 'UNKNOWN',
-        icon: this.getStatusIcon(d.pipelineStatus),
-        link: `/pipeline/${d.environmentId}?appId=${this.appId}`
-      });
+ private buildRecentActivities(): void {
+  const activities: ActivityItem[] = [];
+  
+  // Ajouter les déploiements récents
+  this.deployments.slice(0, 3).forEach(d => {
+    activities.push({
+      id: d.environmentId,
+      type: 'deployment',
+      title: 'Nouveau déploiement',
+      description: `Environnement ${d.environmentName} créé`,
+      timestamp: d.createdAt,
+      status: d.pipelineStatus || 'UNKNOWN',
+      icon: this.getStatusIcon(d.pipelineStatus),
+      link: `/pipeline/${d.environmentId}?appId=${this.appId}`
     });
+  });
+  
+  // Ajouter les pipelines récents
+  this.recentPipelines.slice(0, 3).forEach(p => {
+    // 🔍 Vérifier que la date existe
+    const dateExists = p.createdAt ? 'oui' : 'non';
+    console.log(`Pipeline ${p.id} - date: ${p.createdAt}, existe: ${dateExists}`);
     
-    // Ajouter les pipelines récents
-    this.recentPipelines.slice(0, 3).forEach(p => {
-      activities.push({
-        id: String(p.id || ''),
-        type: 'pipeline',
-        title: 'Pipeline exécuté',
-        description: `Pipeline #${p.id} pour ${p.environmentName}`,
-        timestamp: p.createdAt,
-        status: p.status,
-        icon: '⚙️',
-        link: `/pipeline/${p.environmentId}?appId=${this.appId}`
-      });
+    activities.push({
+      id: String(p.id || ''),
+      type: 'pipeline',
+      title: 'Pipeline exécuté',
+      description: `Pipeline #${p.id} pour ${p.environmentName}`,
+      timestamp: p.createdAt || new Date().toISOString(), // Fallback
+      status: p.status,
+      icon: '⚙️',
+      link: `/pipeline/${p.environmentId}?appId=${this.appId}`
     });
+  });
+  
+  // Trier par date
+  this.recentActivities = activities
+    .sort((a, b) => {
+      const dateA = this.safeParseDate(a.timestamp)?.getTime() || 0;
+      const dateB = this.safeParseDate(b.timestamp)?.getTime() || 0;
+      return dateB - dateA;
+    })
+    .slice(0, 5);
     
-    // Trier par date (plus récent d'abord)
-    this.recentActivities = activities
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 5);
-  }
+  // 🔍 Log final
+  console.log('📊 Activities avec dates:', this.recentActivities.map(a => ({
+    type: a.type,
+    timestamp: a.timestamp,
+    formatted: this.formatTimeAgo(a.timestamp)
+  })));
+}
 
   /**
    * Données pour le graphique des déploiements (success / failed / pending)
@@ -547,6 +595,12 @@ private safeParseDate(dateValue: any): Date | null {
   if (!dateValue) return null;
   
   try {
+    // Si c'est un nombre (timestamp Unix)
+    if (typeof dateValue === 'number') {
+      const date = new Date(dateValue);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    
     // Si c'est déjà une string ISO
     if (typeof dateValue === 'string') {
       const date = new Date(dateValue);

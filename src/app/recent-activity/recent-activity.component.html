@@ -1,0 +1,97 @@
+<!-- recent-activity-page.component.html -->
+<div class="activity-page-container">
+  <!-- En-tête -->
+  <header class="activity-page-header">
+    <button class="back-btn" (click)="goBack()">
+      <span class="back-icon">←</span>
+      Retour
+    </button>
+    <div class="header-title">
+      <h1>Activité récente</h1>
+      <p class="subtitle" *ngIf="appName">{{ appName }}</p>
+    </div>
+    <button class="refresh-btn" (click)="refresh()" [disabled]="loading">
+      <span class="refresh-icon">🔄</span>
+      Actualiser
+    </button>
+  </header>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="activity-loading">
+    <div class="loading-spinner"></div>
+    <span>Chargement des activités...</span>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="error && !loading" class="activity-error">
+    <span class="error-icon">⚠️</span>
+    <p>{{ error }}</p>
+    <button class="retry-btn" (click)="refresh()">Réessayer</button>
+  </div>
+
+  <!-- Liste des activités -->
+  <div *ngIf="!loading && !error" class="activity-content">
+    <!-- Filtres (optionnel) -->
+    <div class="activity-filters">
+      <button class="filter-btn active">Tous</button>
+      <button class="filter-btn">Déploiements</button>
+      <button class="filter-btn">Pipelines</button>
+    </div>
+
+    <!-- Timeline -->
+    <div class="activity-timeline">
+      <div *ngIf="activities.length === 0" class="empty-state">
+        <div class="empty-icon">📭</div>
+        <h3>Aucune activité</h3>
+        <p>Aucune activité récente n'a été trouvée pour cette application</p>
+      </div>
+
+      <div *ngFor="let activity of activities" class="timeline-item">
+        <div class="timeline-marker" [ngClass]="'marker-' + activity.type"></div>
+        
+        <div class="timeline-content" (click)="navigateToActivity(activity)">
+          <div class="timeline-header">
+            <div class="timeline-title">
+              <span class="activity-icon" [ngClass]="'icon-' + activity.type">
+                {{ activity.icon }}
+              </span>
+              <div>
+                <h3>{{ activity.title }}</h3>
+                <p class="timeline-description">{{ activity.description }}</p>
+              </div>
+            </div>
+            <div class="timeline-time" [attr.data-tooltip]="getFullDate(activity.timestamp)">
+              {{ getTimeAgo(activity.timestamp) }}
+            </div>
+          </div>
+
+          <div class="timeline-meta" *ngIf="activity.metadata">
+            <span class="meta-item" *ngIf="activity.metadata.branch">
+              <span class="meta-icon">🌿</span>
+              {{ activity.metadata.branch }}
+            </span>
+            <span class="meta-item" *ngIf="activity.metadata.environment">
+              <span class="meta-icon">🌍</span>
+              {{ activity.metadata.environment }}
+            </span>
+            <span class="meta-item" *ngIf="activity.metadata.triggeredBy">
+              <span class="meta-icon">👤</span>
+              {{ activity.metadata.triggeredBy }}
+            </span>
+            <span class="meta-item" *ngIf="activity.metadata.duration">
+              <span class="meta-icon">⏱️</span>
+              {{ format.formatDuration(activity.metadata.duration) }}
+            </span>
+          </div>
+
+          <div class="timeline-footer">
+            <span class="status-badge" [ngClass]="getStatusClass(activity.status)">
+              {{ activity.status }}
+            </span>
+            <span class="view-link">Voir les détails →</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

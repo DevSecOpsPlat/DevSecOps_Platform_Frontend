@@ -22,6 +22,7 @@ import { ProjectSecurityComponent } from './project/security/project-security.co
 import { ApplicationsActiveComponent } from './applications-active/applications-active.component';
 import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
+import { RecentActivityComponent } from './recent-activity/recent-activity.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -41,7 +42,8 @@ const routes: Routes = [
       { path: 'deployments', component: ProjectDeploymentsComponent },
       { path: 'logs', component: ProjectLogsComponent },
       { path: 'security', component: ProjectSecurityComponent },
-      { path: 'pipelines', component: PipelinesListComponent }
+      { path: 'pipelines', component: PipelinesListComponent },
+      { path: 'activity', component: RecentActivityComponent }
     ]
   },
 

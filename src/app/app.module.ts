@@ -30,6 +30,7 @@ import { ApplicationsActiveComponent } from './applications-active/applications-
 import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
 import { TimeAgoPipe } from './pipes/time-ago.pipe';
+import { RecentActivityComponent } from './recent-activity/recent-activity.component';
 
 @NgModule({
   declarations: [
@@ -59,6 +60,7 @@ import { TimeAgoPipe } from './pipes/time-ago.pipe';
     SecurityAiFixesComponent,
     EnvironmentDetailsComponent,
     TimeAgoPipe,
+    RecentActivityComponent,
   ],
   imports: [
     BrowserModule,

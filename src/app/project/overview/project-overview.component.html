@@ -277,7 +277,7 @@
             <div class="activity-content">
               <p class="activity-title">{{ activity.title }}</p>
               <p class="activity-description">{{ activity.description }}</p>
-              <span class="activity-time">{{ formatTimeAgo(activity.timestamp) }}</span>
+              <span class="activity-time">{{ getActivityTimeAgo(activity) }}</span>
             </div>
             <span class="activity-status" [ngClass]="statusClass(activity.status)">{{ activity.status }}</span>
           </div>
@@ -299,7 +299,7 @@
             </div>
             <div class="pipeline-details">
               <span class="pipeline-branch">🌿 {{ pipeline.branch }}</span>
-              <span class="pipeline-time">{{ formatTimeAgo(pipeline.createdAt) }}</span>
+              <span class="pipeline-time">{{ getPipelineTimeAgo(pipeline) }}</span>
             </div>
           </div>
         </div>
