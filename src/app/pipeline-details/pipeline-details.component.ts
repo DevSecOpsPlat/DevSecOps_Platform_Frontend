@@ -19,6 +19,10 @@ export class PipelineDetailsComponent implements OnInit {
   selectedJob?: PipelineJobInfo;
   selectedJobLogs?: string;
   selectedJobScanJson?: any;
+  /** Message affiché quand les logs ne sont pas disponibles (ex. GitLab indisponible) */
+  jobLogsError: string | null = null;
+  /** Message affiché quand le rapport de scan n'est pas disponible */
+  scanError: string | null = null;
   loadingJob = false;
 
   constructor(
@@ -99,24 +103,33 @@ export class PipelineDetailsComponent implements OnInit {
     this.selectedJob = job;
     this.selectedJobLogs = undefined;
     this.selectedJobScanJson = undefined;
+    this.jobLogsError = null;
+    this.scanError = null;
     this.loadingJob = true;
 
     this.pipelineService.getJobLogs(job.id).subscribe({
       next: logs => {
         this.selectedJobLogs = logs;
+        this.jobLogsError = null;
         this.loadingJob = false;
       },
       error: () => {
         this.loadingJob = false;
+        this.jobLogsError = this.data?.dataSource === 'database'
+          ? 'Logs non disponibles : les données sont affichées depuis la base de données (GitLab indisponible). Les logs ne sont pas stockés en BDD.'
+          : 'Logs non disponibles. GitLab est peut-être indisponible ou les logs ont été purgés.';
       }
     });
 
     this.pipelineService.getScanResults(job.id).subscribe({
       next: json => {
         this.selectedJobScanJson = json;
+        this.scanError = null;
       },
       error: () => {
-        // scan JSON optionnel
+        this.scanError = this.data?.dataSource === 'database'
+          ? 'Rapport de scan non disponible (données depuis la BDD, GitLab indisponible).'
+          : 'Rapport de scan non disponible (GitLab indisponible ou job sans artifact).';
       }
     });
   }

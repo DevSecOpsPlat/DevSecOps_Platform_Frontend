@@ -57,13 +57,22 @@
         </div>
       </header>
 
-      <!-- ── WARNING BANNER ── -->
+      <!-- ── WARNING BANNER (pas d'ID GitLab) ── -->
       <div *ngIf="!data.pipelineId || data.pipelineId <= 0" class="warning-banner">
         <span class="warning-banner-icon">⚠️</span>
         <div class="warning-banner-body">
           <strong>Pipeline sans ID GitLab valide</strong>
           <p>Ce pipeline n'a pas d'ID GitLab valide. Les détails (stages, jobs, logs) ne peuvent pas être récupérés.</p>
           <p>Statut actuel depuis la base de données : <strong>{{ data.status }}</strong></p>
+        </div>
+      </div>
+
+      <!-- ── INFO BANNER (données depuis la BDD, GitLab indisponible) ── -->
+      <div *ngIf="data.dataSource === 'database'" class="info-banner">
+        <span class="info-banner-icon">ℹ️</span>
+        <div class="info-banner-body">
+          <strong>Affichage depuis la base de données</strong>
+          <p>GitLab est temporairement indisponible. Les stages et jobs affichés proviennent de la dernière synchronisation en BDD. Les <strong>logs</strong> et <strong>rapports de scan</strong> ne sont pas stockés en base et ne sont pas disponibles dans ce mode.</p>
         </div>
       </div>
 
@@ -179,6 +188,10 @@
                 </div>
                 <pre>{{ selectedJobLogs }}</pre>
               </div>
+              <div *ngIf="selectedJob && !loadingJob && !selectedJobLogs && jobLogsError" class="logs-unavailable">
+                <span class="logs-unavailable-icon">📄</span>
+                <p>{{ jobLogsError }}</p>
+              </div>
 
               <!-- Scan results -->
               <div class="logs-section" *ngIf="selectedJobScanJson">
@@ -199,6 +212,10 @@
                     <pre>{{ selectedJobScanJson | json }}</pre>
                   </details>
                 </div>
+              </div>
+              <div *ngIf="selectedJob && !selectedJobScanJson && scanError" class="logs-unavailable">
+                <span class="logs-unavailable-icon">🔍</span>
+                <p>{{ scanError }}</p>
               </div>
             </div>
 

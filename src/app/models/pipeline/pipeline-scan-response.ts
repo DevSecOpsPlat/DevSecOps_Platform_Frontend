@@ -18,9 +18,11 @@ export interface PipelineScanResponse {
   jobStatusCount: Record<string, number>;
   jobs: PipelineJobInfo[];
   securityReports: Record<string, any>;
+  /** "gitlab" = données en direct, "database" = affichage depuis la BDD (GitLab indisponible) */
+  dataSource?: 'gitlab' | 'database';
   hasValidGitLabId?: boolean;
-  ref: 'main';
-  triggeredBy: 'admin';
-  durationSeconds: 125;
+  ref?: string;
+  triggeredBy?: string;
+  durationSeconds?: number;
 }
 
