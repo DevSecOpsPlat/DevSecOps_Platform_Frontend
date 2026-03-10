@@ -1,0 +1,100 @@
+<div class="user-shell">
+  <app-user-sidebar></app-user-sidebar>
+  <div class="user-main">
+    <div class="sonar-page">
+      <header class="sonar-header">
+        <h1>Analyse SonarQube</h1>
+        <button class="refresh-btn" (click)="load()" [disabled]="loading">
+          🔄 Actualiser
+        </button>
+      </header>
+
+      <div *ngIf="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Chargement des métriques SonarQube...</p>
+      </div>
+
+      <div *ngIf="!loading && error" class="error-state">
+        <p>{{ error }}</p>
+      </div>
+
+      <div *ngIf="!loading && !error" class="sonar-content">
+        <section class="summary-cards">
+          <div class="card">
+            <h3>Quality Gate</h3>
+            <span class="qg-badge" [ngClass]="qualityGateClass()">
+              {{ getQualityGateStatus() }}
+            </span>
+          </div>
+          <div class="card">
+            <h3>Vulnérabilités</h3>
+            <p class="big-number">{{ metrics?.vulnerabilities || 0 }}</p>
+          </div>
+          <div class="card">
+            <h3>Bugs</h3>
+            <p class="big-number">{{ metrics?.bugs || 0 }}</p>
+          </div>
+          <div class="card">
+            <h3>Code Smells</h3>
+            <p class="big-number">{{ metrics?.code_smells || 0 }}</p>
+          </div>
+          <div class="card">
+            <h3>Couverture</h3>
+            <p class="big-number">
+              {{ metrics?.coverage || '0' }}<span class="unit">%</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="details-grid">
+          <div class="panel">
+            <h2>Issues</h2>
+            <p class="panel-subtitle">Total : {{ totalIssues }}</p>
+            <div class="list" *ngIf="issues && issues.length">
+              <div *ngFor="let issue of issues | slice:0:20" class="issue-item">
+                <span class="severity" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
+                  {{ issue.severity }}
+                </span>
+                <div class="issue-body">
+                  <div class="issue-message">{{ issue.message }}</div>
+                  <div class="issue-meta">
+                    <span *ngIf="issue.component">📄 {{ issue.component }}</span>
+                    <span *ngIf="issue.line">📍 Ligne {{ issue.line }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p *ngIf="!issues || !issues.length" class="empty-text">
+              Aucune issue trouvée.
+            </p>
+          </div>
+
+          <div class="panel">
+            <h2>Hotspots de sécurité</h2>
+            <p class="panel-subtitle">Total : {{ totalHotspots }}</p>
+            <div class="list" *ngIf="hotspots && hotspots.length">
+              <div *ngFor="let h of hotspots | slice:0:20" class="issue-item">
+                <span class="severity sev-hotspot">
+                  {{ h.securityCategory || 'HOTSPOT' }}
+                </span>
+                <div class="issue-body">
+                  <div class="issue-message">{{ h.message }}</div>
+                  <div class="issue-meta">
+                    <span *ngIf="h.component">📄 {{ h.component }}</span>
+                    <span *ngIf="h.vulnerabilityProbability">
+                      🔥 {{ h.vulnerabilityProbability }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
+              Aucun hotspot de sécurité détecté.
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+

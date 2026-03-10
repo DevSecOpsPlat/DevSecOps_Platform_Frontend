@@ -172,6 +172,12 @@
                     <span class="badge" [ngClass]="statusClass(selectedJob.status)">{{ selectedJob.status }}</span>
                   </p>
                 </div>
+                <button *ngIf="isSonarJob(selectedJob)"
+                        class="sonar-btn"
+                        type="button"
+                        (click)="openSonarQubeDashboard()">
+                  Voir le tableau SonarQube
+                </button>
               </div>
 
               <!-- Loading logs -->

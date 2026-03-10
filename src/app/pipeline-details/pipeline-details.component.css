@@ -233,6 +233,23 @@
   box-shadow: var(--shadow-sm);
 }
 
+.sonar-btn {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft);
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.sonar-btn:hover {
+  background: #fde68a;
+  border-color: #fbbf24;
+}
+
 /* Spinner */
 .spinner {
   width: 18px; height: 18px;

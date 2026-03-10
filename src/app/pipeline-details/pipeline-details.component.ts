@@ -134,6 +134,21 @@ export class PipelineDetailsComponent implements OnInit {
     });
   }
 
+  isSonarJob(job?: PipelineJobInfo): boolean {
+    const name = (job?.name || '').toLowerCase();
+    const stage = (job?.stage || '').toLowerCase();
+    return name.includes('sonar') || stage.includes('sonar');
+  }
+
+  openSonarQubeDashboard(): void {
+    const appId = this.route.snapshot.queryParamMap.get('appId');
+    if (appId) {
+      this.router.navigate(['/project', appId, 'sonarqube']);
+    } else {
+      this.router.navigate(['/project', 'sonarqube']);
+    }
+  }
+
   isRunning(): boolean {
     return this.data?.status === 'running' || this.data?.status === 'PENDING';
   }

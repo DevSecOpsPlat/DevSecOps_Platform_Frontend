@@ -31,6 +31,7 @@ import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.
 import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
 import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { RecentActivityComponent } from './recent-activity/recent-activity.component';
+import { SonarqubeComponent } from './sonarqube/sonarqube.component';
 
 @NgModule({
   declarations: [
@@ -61,6 +62,7 @@ import { RecentActivityComponent } from './recent-activity/recent-activity.compo
     EnvironmentDetailsComponent,
     TimeAgoPipe,
     RecentActivityComponent,
+    SonarqubeComponent,
   ],
   imports: [
     BrowserModule,
