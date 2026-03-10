@@ -142,22 +142,26 @@ export class EnvironmentDetailsComponent implements OnInit {
 
   getCreatedAt(): string {
     if (!this.environment?.createdAt) return 'Date non disponible';
-    return this.format.formatDate(this.environment.createdAt);
+    const iso = this.toIsoString(this.environment.createdAt);
+    return iso ? this.format.formatDate(iso) : 'Date non disponible';
   }
 
   getCreatedAtTimeAgo(): string {
     if (!this.environment?.createdAt) return '';
-    return this.format.formatTimeAgo(this.environment.createdAt);
+    const iso = this.toIsoString(this.environment.createdAt);
+    return iso ? this.format.formatTimeAgo(iso) : '';
   }
 
   getExpiresAt(): string {
     if (!this.environment?.expiresAt) return 'Non défini';
-    return this.format.formatDate(this.environment.expiresAt);
+    const iso = this.toIsoString(this.environment.expiresAt);
+    return iso ? this.format.formatDate(iso) : 'Non défini';
   }
 
   getTimeRemaining(): string {
     if (!this.environment?.expiresAt) return '—';
-    return this.format.getTimeRemaining(this.environment.expiresAt);
+    const iso = this.toIsoString(this.environment.expiresAt);
+    return iso ? this.format.getTimeRemaining(iso) : '—';
   }
 
   isExpired(): boolean {
@@ -170,7 +174,8 @@ export class EnvironmentDetailsComponent implements OnInit {
     
     // Vérifier par la date d'expiration
     if (this.environment.expiresAt) {
-      return new Date(this.environment.expiresAt) < new Date();
+      const expiry = this.safeParseDate(this.environment.expiresAt);
+      return expiry ? expiry < new Date() : false;
     }
     
     return false;
@@ -196,5 +201,43 @@ export class EnvironmentDetailsComponent implements OnInit {
     navigator.clipboard.writeText(text).then(() => {
       alert('ID copié dans le presse-papier');
     });
+  }
+
+  /**
+   * Convertit différentes représentations de date (string ISO, timestamp, tableau [année, mois, jour, ...])
+   * en objet Date robuste.
+   */
+  private safeParseDate(dateValue: any): Date | null {
+    if (!dateValue) return null;
+
+    try {
+      if (typeof dateValue === 'number') {
+        const date = new Date(dateValue);
+        return isNaN(date.getTime()) ? null : date;
+      }
+
+      if (typeof dateValue === 'string') {
+        const date = new Date(dateValue);
+        return isNaN(date.getTime()) ? null : date;
+      }
+
+      if (Array.isArray(dateValue) && dateValue.length >= 3) {
+        const [year, month, day, hour = 0, minute = 0, second = 0] = dateValue;
+        const date = new Date(year, month - 1, day, hour, minute, second);
+        return isNaN(date.getTime()) ? null : date;
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Retourne une string ISO normalisée à partir d'une valeur de date quelconque.
+   */
+  private toIsoString(dateValue: any): string | null {
+    const date = this.safeParseDate(dateValue);
+    return date ? date.toISOString() : null;
   }
 }

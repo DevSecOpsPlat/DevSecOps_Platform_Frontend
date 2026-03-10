@@ -23,7 +23,7 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
   
   // Pagination
   currentPage: number = 0;
-  pageSize: number = 20;
+  pageSize: number = 10;
   allActivities: ActivityItem[] = [];
   hasMore: boolean = true;
   
@@ -89,13 +89,13 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
           return of(null);
         })
       ),
-      deployments: this.applicationService.getDeploymentHistory(appId, 0, 50).pipe(
+      deployments: this.applicationService.getDeploymentHistory(appId, 0, 20).pipe(
         catchError(err => {
           console.error('Erreur chargement déploiements:', err);
           return of([]);
         })
       ),
-      pipelines: this.pipelineService.listPipelines(0, 50).pipe(
+      pipelines: this.pipelineService.listPipelines(0, 20).pipe(
         catchError(err => {
           console.error('Erreur chargement pipelines:', err);
           return of([]);

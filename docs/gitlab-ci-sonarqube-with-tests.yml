@@ -1,0 +1,214 @@
+# ============================================================
+# Pipeline simplifié : Hello → Clone → Test (avec couverture) → SonarQube → Report
+# Corrige l'erreur Chrome "Running as root without --no-sandbox"
+# et envoie la couverture de code à SonarCloud.
+#
+# Variables GitLab CI/CD : GIT_REPO_URL, GIT_BRANCH, GITHUB_TOKEN,
+# ENVIRONMENT_ID, SONAR_TOKEN
+# ============================================================
+
+stages:
+  - hello
+  - clone
+  - test
+  - sonarqube
+  - report
+
+variables:
+  GIT_REPO_URL: ""
+  GIT_BRANCH: "main"
+  GITHUB_TOKEN: ""
+  ENVIRONMENT_ID: ""
+
+# ========================================
+# STAGE 1 : HELLO
+# ========================================
+hello-world:
+  stage: hello
+  image: alpine:latest
+  script:
+    - echo "🚀 Pipeline SonarQube - Couverture + Quality Gate"
+    - echo "Environment ID = $ENVIRONMENT_ID"
+    - echo "Repository = $GIT_REPO_URL"
+    - echo "Branch = $GIT_BRANCH"
+
+# ========================================
+# STAGE 2 : CLONE
+# ========================================
+clone-repository:
+  stage: clone
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git bash
+  script:
+    - |
+      echo "📦 Cloning repository"
+      test -n "$GIT_REPO_URL" || exit 1
+      if [ -n "$GITHUB_TOKEN" ]; then
+        AUTH_URL=$(echo "$GIT_REPO_URL" | sed "s|https://|https://oauth2:${GITHUB_TOKEN}@|")
+      else
+        AUTH_URL="$GIT_REPO_URL"
+      fi
+      git clone --depth 1 --branch "$GIT_BRANCH" "$AUTH_URL" user-repo
+      chmod -R 777 user-repo
+      echo "✅ Repository cloné avec succès"
+      ls -la user-repo/
+  artifacts:
+    paths:
+      - user-repo/
+    expire_in: 2 hours
+
+# ========================================
+# STAGE 3 : TESTS ANGULAR + COUVERTURE (Chrome --no-sandbox)
+# ========================================
+test-angular:
+  stage: test
+  image: node:18-bullseye
+  needs: ["clone-repository"]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq wget gnupg
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg
+    - echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    - apt-get update -qq && apt-get install -y -qq google-chrome-stable
+    - export CHROME_BIN=/usr/bin/google-chrome
+  script:
+    - cd user-repo
+
+    # Install des dépendances en premier
+    - npm ci
+
+    # Débug : lister les fichiers karma présents dans le projet
+    - ls -la karma.conf.* 2>/dev/null || true
+    - ls -la *.conf.* 2>/dev/null || true
+
+    # Créer karma-ci.conf.cjs via Node : détecte dynamiquement karma.conf.cjs / .js / .mjs et ajoute Chrome --no-sandbox
+    - |
+      node << 'NODESCRIPT'
+      const fs = require('fs');
+      const path = require('path');
+      const dir = process.cwd();
+      const candidates = ['karma.conf.cjs', 'karma.conf.js'];
+      let basePath = null;
+      for (const name of candidates) {
+        const p = path.join(dir, name);
+        if (fs.existsSync(p)) {
+          basePath = p;
+          console.log('Using base config:', name);
+          break;
+        }
+      }
+      if (!basePath) {
+        const listing = fs.readdirSync(dir).filter(f => f.includes('karma') || f.endsWith('.conf.js') || f.endsWith('.conf.cjs'));
+        throw new Error('No karma.conf.cjs or karma.conf.js in project root. Found: ' + (listing.length ? listing.join(', ') : '(none)'));
+      }
+      require(basePath);
+      const basename = path.basename(basePath);
+      const ciContent = [
+        "const path = require('path');",
+        "const baseConfig = require(path.join(__dirname, '" + basename + "'));",
+        "module.exports = function(config) {",
+        "  baseConfig(config);",
+        "  config.set({",
+        "    customLaunchers: {",
+        "      ChromeHeadlessCI: {",
+        "        base: 'ChromeHeadless',",
+        "        flags: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-setuid-sandbox', '--no-zygote']",
+        "      }",
+        "    },",
+        "    browsers: ['ChromeHeadlessCI']",
+        "  });",
+        "};"
+      ].join("\n");
+      fs.writeFileSync(path.join(dir, 'karma-ci.conf.cjs'), ciContent);
+      console.log('Wrote karma-ci.conf.cjs');
+      NODESCRIPT
+
+    # Lancer les tests avec la config CI (Chrome --no-sandbox) et générer la couverture
+    - npx ng test --karma-config=karma-ci.conf.cjs --watch=false --code-coverage --browsers=ChromeHeadlessCI --no-progress
+
+    # Vérifier que le rapport de couverture existe pour SonarQube
+    - |
+      if [ -f "coverage/*/lcov.info" ] || [ -f "coverage/lcov.info" ]; then
+        echo "✅ Rapport de couverture trouvé"
+        find coverage -name "lcov.info" 2>/dev/null || true
+      else
+        echo "⚠️ Aucun lcov.info trouvé (coverage peut être dans un sous-dossier)"
+        find . -name "lcov.info" 2>/dev/null || true
+      fi
+  artifacts:
+    paths:
+      - user-repo/coverage/
+    expire_in: 1 day
+
+# ========================================
+# STAGE 4 : SONARQUBE (avec couverture)
+# ========================================
+sonarqube-scan:
+  stage: sonarqube
+  image: sonarsource/sonar-scanner-cli:latest
+  needs:
+    - clone-repository
+    - test-angular
+  script:
+    - |
+      echo "🔍 SonarQube Scan - Qualité + Couverture"
+      cd user-repo
+
+      # Chemin du rapport de couverture (Angular met souvent coverage/<project>/lcov.info)
+      LCOV_PATH=""
+      if [ -f "coverage/lcov.info" ]; then
+        LCOV_PATH="coverage/lcov.info"
+      else
+        LCOV_PATH=$(find coverage -name "lcov.info" 2>/dev/null | head -1)
+      fi
+      if [ -z "$LCOV_PATH" ]; then
+        echo "⚠️ lcov.info non trouvé, SonarQube n'aura pas la couverture"
+        LCOV_PATH="coverage/lcov.info"
+      else
+        echo "✅ Couverture: $LCOV_PATH"
+      fi
+
+      sonar-scanner \
+        -Dsonar.projectKey="amanibennaceur-group_EnviroTest" \
+        -Dsonar.organization="amanibennaceur-group" \
+        -Dsonar.sources=. \
+        -Dsonar.host.url="https://sonarcloud.io" \
+        -Dsonar.token="$SONAR_TOKEN" \
+        -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/coverage/**" \
+        -Dsonar.tests=. \
+        -Dsonar.test.inclusions="**/*.spec.ts,**/*.spec.js" \
+        -Dsonar.typescript.lcov.reportPaths="$LCOV_PATH" \
+        -Dsonar.javascript.lcov.reportPaths="$LCOV_PATH" \
+        -Dsonar.coverage.exclusions="**/*.spec.ts,**/*.spec.js,**/test/**" \
+        -Dsonar.verbose=true || echo "❌ SonarQube scan failed"
+
+      cd ..
+      echo "✅ Scan terminé - Voir https://sonarcloud.io/dashboard?id=amanibennaceur-group_EnviroTest"
+  allow_failure: true
+
+# ========================================
+# STAGE 5 : RAPPORT
+# ========================================
+simple-report:
+  stage: report
+  image: alpine:latest
+  needs:
+    - clone-repository
+    - sonarqube-scan
+  script:
+    - |
+      echo "📊 Résumé du pipeline SonarQube"
+      echo "--------------------------------"
+      echo "✅ Repository: $GIT_REPO_URL"
+      echo "✅ Branche: $GIT_BRANCH"
+      echo "✅ Environment ID: $ENVIRONMENT_ID"
+      echo ""
+      echo "🔍 Résultats SonarCloud:"
+      echo "   https://sonarcloud.io/dashboard?id=amanibennaceur-group_EnviroTest"
+      echo ""
+      echo "📝 Quality Gate:"
+      echo "   - Coverage: exécuter les tests (stage test) pour envoyer la couverture"
+      echo "   - Security Hotspots: à revoir manuellement sur SonarCloud"
+      echo ""
+      echo "🚀 Pipeline terminé"
+  allow_failure: true

@@ -130,10 +130,24 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
   transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
 }
 
 .info-card:hover, .pipeline-card:hover {
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.info-card::before,
+.pipeline-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 3px solid rgba(249, 115, 22, 0.6);
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .info-card h3, .pipeline-card h3 {
@@ -148,6 +162,7 @@
 /* ===== LIGNES D'INFORMATION ===== */
 .info-row {
   display: flex;
+  align-items: center;
   margin-bottom: 1rem;
   padding: 0.25rem 0;
   border-bottom: 1px dashed var(--overview-border);
