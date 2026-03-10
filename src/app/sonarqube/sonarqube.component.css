@@ -230,6 +230,12 @@
 }
 
 /* Duplication list */
+.duplication-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 2fr;
+  gap: 1.5rem;
+}
+
 .dup-item {
   display: flex;
   justify-content: space-between;
@@ -238,6 +244,15 @@
   border-radius: 8px;
   background: var(--overview-bg);
   margin-bottom: 0.5rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.dup-item:hover {
+  background: #e0f2fe;
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
 }
 
 .dup-main {
@@ -254,11 +269,59 @@
 .dup-name {
   font-size: 0.9rem;
   color: var(--overview-text);
+  font-weight: 500;
 }
 
 .dup-score {
   font-size: 0.95rem;
   font-weight: 600;
+  color: #2563eb;
+}
+
+.dup-source-panel {
+  max-height: 480px;
+  overflow: auto;
+  background: var(--overview-surface);
+  border-radius: 12px;
+  border: 1px solid var(--overview-border);
+}
+
+.dup-source-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.badge-loading {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(148,163,184,0.15);
+  color: var(--overview-text-muted);
+}
+
+.code-block {
+  background: #0b1120;
+  color: #e5e7eb;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+  overflow: auto;
+}
+
+.line-number {
+  display: inline-block;
+  width: 3ch;
+  margin-right: 0.75rem;
+  color: #6b7280;
+}
+
+@media (max-width: 1024px) {
+  .duplication-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Quality Gate conditions */

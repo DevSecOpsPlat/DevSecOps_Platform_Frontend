@@ -29,8 +29,16 @@ export class SonarqubeComponent implements OnInit {
   branches: string[] = ['master'];
   currentBranch: string = 'master';
   qualityGateConditions: any[] = [];
-  duplicationFiles: { name: string; path: string; duplication: number }[] = [];
+  duplicationFiles: { name: string; path: string; duplication: number; key?: string; url?: string }[] = [];
   duplicationZeroCount = 0;
+
+  private sonarHostUrl: string | null = null;
+  private sonarProjectKey: string | null = null;
+
+  // Détail duplication sélectionné
+  selectedDupFile: any | null = null;
+  selectedDupSourceLines: string[] = [];
+  selectedDupMeta: any = null;
 
   constructor(private sonarService: SonarQubeService) {}
 
@@ -52,15 +60,21 @@ export class SonarqubeComponent implements OnInit {
         this.qualityGate = res.quality_gate || null;
         this.qualityGateConditions = this.qualityGate?.conditions || [];
 
+        this.sonarHostUrl = res.sonar_host_url || null;
+        this.sonarProjectKey = res.sonar_project_key || null;
+
         const rawDup = (res.duplication_components || []) as any[];
         const mapped = rawDup.map(c => {
           const measures = c.measures || [];
           const dupMeasure = measures.find((m: any) => m.metric === 'duplicated_lines_density') || measures[0] || {};
           const val = parseFloat(dupMeasure.value || '0');
+          const key = c.key || c.path || c.name;
           return {
             name: c.name || c.key,
             path: c.path || c.key,
-            duplication: isNaN(val) ? 0 : val
+            duplication: isNaN(val) ? 0 : val,
+            key,
+            url: this.buildSonarFileUrl(key)
           };
         });
         this.duplicationFiles = mapped.filter(f => f.duplication > 0);
@@ -186,6 +200,34 @@ export class SonarqubeComponent implements OnInit {
     if (key.includes('coverage')) return 'Coverage';
     if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
     return metric;
+  }
+
+  private buildSonarFileUrl(componentKey: string | undefined | null): string | undefined {
+    if (!componentKey || !this.sonarHostUrl || !this.sonarProjectKey) return undefined;
+    const base = this.sonarHostUrl.replace(/\/+$/, '');
+    return `${base}/code?id=${encodeURIComponent(this.sonarProjectKey)}&selected=${encodeURIComponent(componentKey)}`;
+  }
+
+  /**
+   * Charge les lignes dupliquées pour un fichier et son code source.
+   */
+  loadDuplicationDetails(file: { key?: string }): void {
+    if (!file.key) return;
+    this.selectedDupFile = { ...file, loading: true };
+    this.selectedDupSourceLines = [];
+    this.selectedDupMeta = null;
+
+    this.sonarService.getFileDuplications(file.key).subscribe({
+      next: res => {
+        const src: string = res.source || '';
+        this.selectedDupSourceLines = src.split(/\r?\n/);
+        this.selectedDupMeta = res.duplications || null;
+        this.selectedDupFile.loading = false;
+      },
+      error: () => {
+        this.selectedDupFile.loading = false;
+      }
+    });
   }
 }
 

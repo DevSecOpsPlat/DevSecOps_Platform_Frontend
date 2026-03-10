@@ -231,28 +231,50 @@
 
         <!-- DUPLICATION -->
         <section *ngIf="activeTab === 'duplication'" class="duplication-tab">
-          <div class="panel">
-            <h2>Duplication par fichier</h2>
-            <p class="panel-subtitle">
-              {{ duplicationFiles.length }} fichiers avec duplication &gt; 0%
-              <span *ngIf="duplicationZeroCount > 0">
-                – {{ duplicationZeroCount }} fichiers supplémentaires ont un score de 0.0%.
-              </span>
-            </p>
-            <div class="list" *ngIf="duplicationFiles && duplicationFiles.length">
-              <div *ngFor="let f of duplicationFiles" class="dup-item">
-                <div class="dup-main">
-                  <div class="dup-path">{{ f.path }}</div>
-                  <div class="dup-name">{{ f.name }}</div>
-                </div>
-                <div class="dup-score">
-                  {{ f.duplication | number:'1.1-1' }}<span class="unit">%</span>
+          <div class="duplication-layout">
+            <div class="panel">
+              <h2>Duplication par fichier</h2>
+              <p class="panel-subtitle">
+                {{ duplicationFiles.length }} fichiers avec duplication &gt; 0%
+                <span *ngIf="duplicationZeroCount > 0">
+                  – {{ duplicationZeroCount }} fichiers supplémentaires ont un score de 0.0%.
+                </span>
+              </p>
+              <div class="list" *ngIf="duplicationFiles && duplicationFiles.length">
+                <div *ngFor="let f of duplicationFiles" class="dup-item" (click)="loadDuplicationDetails(f)">
+                  <div class="dup-main">
+                    <div class="dup-path">{{ f.path }}</div>
+                    <div class="dup-name">{{ f.name }}</div>
+                  </div>
+                  <div class="dup-score">
+                    {{ f.duplication | number:'1.1-1' }}<span class="unit">%</span>
+                  </div>
                 </div>
               </div>
+              <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">
+                Aucune duplication détectée sur les fichiers analysés.
+              </p>
             </div>
-            <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">
-              Aucune duplication détectée sur les fichiers analysés.
-            </p>
+
+            <div class="panel dup-source-panel" *ngIf="selectedDupFile">
+              <h3 class="dup-source-title">
+                {{ selectedDupFile.path }}
+                <span *ngIf="selectedDupFile.loading" class="badge-loading">Chargement...</span>
+              </h3>
+
+              <div class="dup-source-body" *ngIf="!selectedDupFile.loading">
+                <pre class="code-block" *ngIf="selectedDupSourceLines.length">
+<ng-container *ngFor="let line of selectedDupSourceLines; let i = index">
+<span class="line-number">{{ i + 1 }}</span> {{ line }}
+</ng-container>
+                </pre>
+
+                <details *ngIf="selectedDupMeta">
+                  <summary>Métadonnées de duplication (JSON brut SonarQube)</summary>
+                  <pre>{{ selectedDupMeta | json }}</pre>
+                </details>
+              </div>
+            </div>
           </div>
         </section>
       </div>

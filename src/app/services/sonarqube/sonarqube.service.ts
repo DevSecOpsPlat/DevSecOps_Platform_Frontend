@@ -37,5 +37,12 @@ export class SonarQubeService {
       params: { branch }
     });
   }
+
+  getFileDuplications(componentKey: string): Observable<any> {
+    return this.http.get(BASE + 'api/sonarqube/duplications', {
+      headers: this.authHeaders(),
+      params: { componentKey }
+    });
+  }
 }
 
