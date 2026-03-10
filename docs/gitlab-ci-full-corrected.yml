@@ -186,8 +186,7 @@ npm-audit:
   stage: sca-node
   image: node:18-alpine
   needs: ["clone-repository"]
-  rules:
-    - if: $LANG_NODE == "true"
+  
   script:
     - echo "🔍 NPM/Yarn Audit for Node.js"
     - mkdir -p reports/node
@@ -276,26 +275,33 @@ semgrep-scan:
 
 # ========================================
 # STAGE 5b : SAFE (Angular/React) - PARALLEL - CORRIGÉ
+
+#npm install -g @safe/cli || echo "⚠️ SAFE installation failed"
+
+
+#npx @safe/cli scan:source --path . --format json > ../reports/sast/safe-report.json || echo '{"error":"SAFE failed"}' > ../reports/sast/safe-report.json
+      
+      #if [ "$FRAMEWORK" = "angular" ] && [ -f "angular.json" ]; then
+        #npx ng lint --format json --output-file ../reports/sast/angular-lint.json || true
+      #fi
+      #cd ..
 # ========================================
 safe-analysis:
   stage: sast-angular
   image: node:18-alpine
   needs: ["clone-repository"]
-  rules:
-    - if: $FRAMEWORK == "angular"
-    - if: $FRAMEWORK == "react"
+  
   script:
     - echo "🔍 SAFE - Frontend Security"
     - mkdir -p reports/sast
-    - npm install -g @safe/cli || echo "⚠️ SAFE installation failed"
-    
+    - npm install -g @safe-cli/safe || true
     - |
-      cd user-repo
-      npx @safe/cli scan:source --path . --format json > ../reports/sast/safe-report.json || echo '{"error":"SAFE failed"}' > ../reports/sast/safe-report.json
-      
-      if [ "$FRAMEWORK" = "angular" ] && [ -f "angular.json" ]; then
-        npx ng lint --format json --output-file ../reports/sast/angular-lint.json || true
+      if [ ! -f "user-repo/angular.json" ]; then
+        echo "🌐 Pas de projet Angular (angular.json introuvable), skip SAFE."
+        exit 0
       fi
+      cd user-repo
+      safe scan:source --path . --format json > ../reports/sast/safe-report.json || true
       cd ..
   artifacts:
     paths:
@@ -376,8 +382,7 @@ license-scan-node:
   stage: license-node
   image: node:18-alpine
   needs: ["clone-repository"]
-  rules:
-    - if: $LANG_NODE == "true"
+  
   script:
     - echo "📋 License Scan - Node.js"
     - mkdir -p reports/license

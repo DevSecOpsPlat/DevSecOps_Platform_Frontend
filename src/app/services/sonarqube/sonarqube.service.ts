@@ -30,5 +30,12 @@ export class SonarQubeService {
       headers: this.authHeaders()
     });
   }
+
+  getResultsForBranch(branch: string): Observable<any> {
+    return this.http.get(BASE + 'api/sonarqube/results-by-branch', {
+      headers: this.authHeaders(),
+      params: { branch }
+    });
+  }
 }
 

@@ -3,7 +3,10 @@
   <div class="user-main">
     <div class="sonar-page">
       <header class="sonar-header">
-        <h1>Analyse SonarQube</h1>
+        <div class="title-block">
+          <h1>Analyse SonarQube</h1>
+          <p class="subtitle">Vue synthétique de la qualité de code (issues, couverture, hotspots, Quality Gate).</p>
+        </div>
         <button class="refresh-btn" (click)="load()" [disabled]="loading">
           🔄 Actualiser
         </button>
@@ -19,61 +22,193 @@
       </div>
 
       <div *ngIf="!loading && !error" class="sonar-content">
-        <section class="summary-cards">
-          <div class="card">
-            <h3>Quality Gate</h3>
-            <span class="qg-badge" [ngClass]="qualityGateClass()">
-              {{ getQualityGateStatus() }}
-            </span>
-          </div>
-          <div class="card">
-            <h3>Vulnérabilités</h3>
-            <p class="big-number">{{ metrics?.vulnerabilities || 0 }}</p>
-          </div>
-          <div class="card">
-            <h3>Bugs</h3>
-            <p class="big-number">{{ metrics?.bugs || 0 }}</p>
-          </div>
-          <div class="card">
-            <h3>Code Smells</h3>
-            <p class="big-number">{{ metrics?.code_smells || 0 }}</p>
-          </div>
-          <div class="card">
-            <h3>Couverture</h3>
-            <p class="big-number">
-              {{ metrics?.coverage || '0' }}<span class="unit">%</span>
-            </p>
-          </div>
+
+        <!-- Sélecteur de branche -->
+        <div class="branch-bar">
+          <span class="branch-label">Branche :</span>
+          <select class="branch-select"
+                  [ngModel]="currentBranch"
+                  (ngModelChange)="onBranchChange($event)">
+            <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
+          </select>
+        </div>
+
+        <!-- Onglets -->
+        <nav class="tabs">
+          <button class="tab-btn" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">
+            Vue d'ensemble
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'issues'" (click)="setTab('issues')">
+            Issues ({{ totalIssues }})
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'hotspots'" (click)="setTab('hotspots')">
+            Hotspots ({{ totalHotspots }})
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">
+            Duplication
+          </button>
+        </nav>
+
+        <!-- OVERVIEW -->
+        <section *ngIf="activeTab === 'overview'" class="overview-tab">
+          <section class="summary-cards">
+            <div class="card card-clickable" (click)="onOverviewCardClick('quality')">
+              <h3>Quality Gate</h3>
+              <span class="qg-badge" [ngClass]="qualityGateClass()">
+                {{ getQualityGateStatus() }}
+              </span>
+            </div>
+            <div class="card card-clickable" (click)="onOverviewCardClick('vuln')">
+              <h3>Vulnérabilités</h3>
+              <p class="big-number">{{ metrics?.vulnerabilities || 0 }}</p>
+            </div>
+            <div class="card card-clickable" (click)="onOverviewCardClick('bug')">
+              <h3>Bugs</h3>
+              <p class="big-number">{{ metrics?.bugs || 0 }}</p>
+            </div>
+            <div class="card card-clickable" (click)="onOverviewCardClick('smell')">
+              <h3>Code Smells</h3>
+              <p class="big-number">{{ metrics?.code_smells || 0 }}</p>
+            </div>
+            <div class="card">
+              <h3>Couverture</h3>
+              <p class="big-number">
+                {{ metrics?.coverage || '0' }}<span class="unit">%</span>
+              </p>
+            </div>
+            <div class="card">
+              <h3>Lignes de code (ncloc)</h3>
+              <p class="big-number">{{ metrics?.ncloc || 0 }}</p>
+            </div>
+            <div class="card card-clickable" (click)="onOverviewCardClick('dup')">
+              <h3>Duplication</h3>
+              <p class="big-number">
+                {{ metrics?.duplicated_lines_density || '0' }}<span class="unit">%</span>
+              </p>
+            </div>
+            <div class="card">
+              <h3>Hotspots de sécurité</h3>
+              <p class="big-number">{{ metrics?.security_hotspots || 0 }}</p>
+            </div>
+          </section>
+
+          <!-- Détail du Quality Gate avec conditions -->
+          <section class="qg-conditions" *ngIf="qualityGateConditions && qualityGateConditions.length">
+            <h2>Conditions du Quality Gate</h2>
+            <div class="qg-cond-list">
+              <div *ngFor="let cond of qualityGateConditions"
+                   class="qg-cond-item"
+                   [ngClass]="{'cond-failed': cond.status === 'ERROR', 'cond-ok': cond.status === 'OK'}">
+                <div class="qg-cond-header">
+                  <span class="qg-cond-metric">{{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}</span>
+                  <span class="qg-cond-status" [ngClass]="cond.status === 'ERROR' ? 'qg-error' : 'qg-ok'">
+                    {{ cond.status }}
+                  </span>
+                </div>
+                <p class="qg-cond-values">
+                  <span class="current">{{ cond.actualValue || '0' }}</span>
+                  <span class="required">≥ {{ cond.errorThreshold }}</span>
+                </p>
+              </div>
+            </div>
+          </section>
         </section>
 
-        <section class="details-grid">
+        <!-- ISSUES -->
+        <section *ngIf="activeTab === 'issues'" class="issues-tab">
+          <div class="filters-bar">
+            <div class="filters-group">
+              <span class="filters-label">Sévérité :</span>
+              <button class="chip"
+                      [class.active]="severityFilter === 'ALL'"
+                      (click)="applyIssueFilters('ALL', typeFilter)">
+                Toutes ({{ totalIssues }})
+              </button>
+              <button class="chip"
+                      [class.active]="severityFilter === 'BLOCKER'"
+                      (click)="applyIssueFilters('BLOCKER', typeFilter)">
+                Blocker ({{ severityCounts['BLOCKER'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="severityFilter === 'CRITICAL'"
+                      (click)="applyIssueFilters('CRITICAL', typeFilter)">
+                Critical ({{ severityCounts['CRITICAL'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="severityFilter === 'MAJOR'"
+                      (click)="applyIssueFilters('MAJOR', typeFilter)">
+                Major ({{ severityCounts['MAJOR'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="severityFilter === 'MINOR'"
+                      (click)="applyIssueFilters('MINOR', typeFilter)">
+                Minor ({{ severityCounts['MINOR'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="severityFilter === 'INFO'"
+                      (click)="applyIssueFilters('INFO', typeFilter)">
+                Info ({{ severityCounts['INFO'] || 0 }})
+              </button>
+            </div>
+
+            <div class="filters-group">
+              <span class="filters-label">Type :</span>
+              <button class="chip"
+                      [class.active]="typeFilter === 'ALL'"
+                      (click)="applyIssueFilters(severityFilter, 'ALL')">
+                Tous
+              </button>
+              <button class="chip"
+                      [class.active]="typeFilter === 'BUG'"
+                      (click)="applyIssueFilters(severityFilter, 'BUG')">
+                Bug ({{ typeCounts['BUG'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="typeFilter === 'VULNERABILITY'"
+                      (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
+                Vulnerability ({{ typeCounts['VULNERABILITY'] || 0 }})
+              </button>
+              <button class="chip"
+                      [class.active]="typeFilter === 'CODE_SMELL'"
+                      (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
+                Code Smell ({{ typeCounts['CODE_SMELL'] || 0 }})
+              </button>
+            </div>
+          </div>
+
           <div class="panel">
             <h2>Issues</h2>
-            <p class="panel-subtitle">Total : {{ totalIssues }}</p>
-            <div class="list" *ngIf="issues && issues.length">
-              <div *ngFor="let issue of issues | slice:0:20" class="issue-item">
+            <p class="panel-subtitle">
+              {{ filteredIssues.length }} / {{ totalIssues }} issues affichées
+            </p>
+            <div class="list" *ngIf="filteredIssues && filteredIssues.length">
+              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item">
                 <span class="severity" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
                   {{ issue.severity }}
                 </span>
                 <div class="issue-body">
                   <div class="issue-message">{{ issue.message }}</div>
                   <div class="issue-meta">
+                    <span *ngIf="issue.type">📌 {{ issue.type }}</span>
                     <span *ngIf="issue.component">📄 {{ issue.component }}</span>
                     <span *ngIf="issue.line">📍 Ligne {{ issue.line }}</span>
                   </div>
                 </div>
               </div>
             </div>
-            <p *ngIf="!issues || !issues.length" class="empty-text">
-              Aucune issue trouvée.
+            <p *ngIf="!filteredIssues || !filteredIssues.length" class="empty-text">
+              Aucune issue pour les filtres sélectionnés.
             </p>
           </div>
+        </section>
 
+        <!-- HOTSPOTS -->
+        <section *ngIf="activeTab === 'hotspots'" class="hotspots-tab">
           <div class="panel">
             <h2>Hotspots de sécurité</h2>
             <p class="panel-subtitle">Total : {{ totalHotspots }}</p>
             <div class="list" *ngIf="hotspots && hotspots.length">
-              <div *ngFor="let h of hotspots | slice:0:20" class="issue-item">
+              <div *ngFor="let h of hotspots | slice:0:50" class="issue-item">
                 <span class="severity sev-hotspot">
                   {{ h.securityCategory || 'HOTSPOT' }}
                 </span>
@@ -90,6 +225,33 @@
             </div>
             <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
               Aucun hotspot de sécurité détecté.
+            </p>
+          </div>
+        </section>
+
+        <!-- DUPLICATION -->
+        <section *ngIf="activeTab === 'duplication'" class="duplication-tab">
+          <div class="panel">
+            <h2>Duplication par fichier</h2>
+            <p class="panel-subtitle">
+              {{ duplicationFiles.length }} fichiers avec duplication &gt; 0%
+              <span *ngIf="duplicationZeroCount > 0">
+                – {{ duplicationZeroCount }} fichiers supplémentaires ont un score de 0.0%.
+              </span>
+            </p>
+            <div class="list" *ngIf="duplicationFiles && duplicationFiles.length">
+              <div *ngFor="let f of duplicationFiles" class="dup-item">
+                <div class="dup-main">
+                  <div class="dup-path">{{ f.path }}</div>
+                  <div class="dup-name">{{ f.name }}</div>
+                </div>
+                <div class="dup-score">
+                  {{ f.duplication | number:'1.1-1' }}<span class="unit">%</span>
+                </div>
+              </div>
+            </div>
+            <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">
+              Aucune duplication détectée sur les fichiers analysés.
             </p>
           </div>
         </section>
