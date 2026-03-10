@@ -38,6 +38,9 @@
           <button class="tab-btn" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">
             Vue d'ensemble
           </button>
+          <button class="tab-btn" [class.active]="activeTab === 'quality'" (click)="setTab('quality')">
+            Quality Gate
+          </button>
           <button class="tab-btn" [class.active]="activeTab === 'issues'" (click)="setTab('issues')">
             Issues ({{ totalIssues }})
           </button>
@@ -52,7 +55,7 @@
         <!-- OVERVIEW -->
         <section *ngIf="activeTab === 'overview'" class="overview-tab">
           <section class="summary-cards">
-            <div class="card card-clickable" (click)="onOverviewCardClick('quality')">
+            <div class="card card-clickable" (click)="openQualityGateTab()">
               <h3>Quality Gate</h3>
               <span class="qg-badge" [ngClass]="qualityGateClass()">
                 {{ getQualityGateStatus() }}
@@ -112,6 +115,123 @@
               </div>
             </div>
           </section>
+        </section>
+
+        <!-- QUALITY GATE ERRORS -->
+        <section *ngIf="activeTab === 'quality'" class="quality-tab">
+          <div class="panel">
+            <h2>Conditions de Quality Gate en échec</h2>
+            <div class="qg-cond-list">
+              <ng-container *ngFor="let cond of qualityGateConditions">
+                <div *ngIf="cond.status === 'ERROR'"
+                     class="qg-cond-item cond-failed">
+                <div class="qg-cond-header">
+                  <span class="qg-cond-metric">
+                    {{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}
+                  </span>
+                  <span class="qg-cond-status qg-error">
+                    {{ cond.status }}
+                  </span>
+                </div>
+                <p class="qg-cond-values">
+                  <span class="current">{{ cond.actualValue || '0' }}</span>
+                  <span class="required">≥ {{ cond.errorThreshold }}</span>
+                </p>
+
+                <!-- Détail spécifique par metric -->
+                <div class="qg-extra" *ngIf="isCoverageCondition(cond)">
+                  <div class="qg-extra-header">
+                    <h3>Couverture par fichier</h3>
+                    <div class="view-toggle">
+                      <span>Vue :</span>
+                      <button type="button"
+                              class="view-btn"
+                              [class.active]="coverageView === 'list'"
+                              (click)="coverageView = 'list'">
+                        Liste
+                      </button>
+                      <button type="button"
+                              class="view-btn"
+                              [class.active]="coverageView === 'tree'"
+                              (click)="coverageView = 'tree'">
+                        Tree
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- LIST VIEW -->
+                  <div class="coverage-table" *ngIf="coverageView === 'list'">
+                    <div class="coverage-header">
+                      <span class="col-path">Fichier</span>
+                      <span class="col-cov">Coverage</span>
+                      <span class="col-unl">Lignes non couvertes</span>
+                      <span class="col-unc">Conditions non couvertes</span>
+                    </div>
+                    <div class="coverage-row" *ngFor="let f of coverageFiles">
+                      <span class="col-path">{{ f.path }}</span>
+                      <span class="col-cov">{{ f.coverage | number:'1.1-1' }}%</span>
+                      <span class="col-unl">{{ f.uncoveredLines }}</span>
+                      <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                    </div>
+                  </div>
+
+                  <!-- TREE VIEW (compact, style SonarQube) -->
+                  <div class="coverage-table" *ngIf="coverageView === 'tree'">
+                    <div class="coverage-header">
+                      <span class="col-path">Fichier</span>
+                      <span class="col-cov">Coverage</span>
+                      <span class="col-unl">Lignes non couvertes</span>
+                      <span class="col-unc">Conditions non couvertes</span>
+                    </div>
+                    <ng-container *ngFor="let group of coverageTree">
+                      <!-- Ligne dossier -->
+                      <div class="coverage-row coverage-group-row"
+                           (click)="toggleCoverageGroup(group.group)">
+                        <span class="col-path">
+                          <span class="folder-icon" [class.open]="isCoverageGroupExpanded(group.group)"></span>
+                          {{ group.group }}
+                        </span>
+                        <span class="col-cov">-</span>
+                        <span class="col-unl">-</span>
+                        <span class="col-unc">-</span>
+                      </div>
+                      <!-- Fichiers dans le dossier (seulement si ouvert) -->
+                      <ng-container *ngIf="isCoverageGroupExpanded(group.group)">
+                        <div class="coverage-row" *ngFor="let f of group.files">
+                          <span class="col-path">{{ f.path }}</span>
+                          <span class="col-cov">{{ f.coverage | number:'1.1-1' }}%</span>
+                          <span class="col-unl">{{ f.uncoveredLines }}</span>
+                          <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                        </div>
+                      </ng-container>
+                    </ng-container>
+                  </div>
+                </div>
+
+                <div class="qg-extra" *ngIf="isSecurityHotspotsCondition(cond)">
+                  <h3>Security Hotspots à revoir</h3>
+                  <div class="list" *ngIf="hotspots && hotspots.length">
+                    <div *ngFor="let h of hotspots" class="issue-item">
+                      <span class="severity sev-hotspot">
+                        {{ h.securityCategory || 'HOTSPOT' }}
+                      </span>
+                      <div class="issue-body">
+                        <div class="issue-message">{{ h.message }}</div>
+                        <div class="issue-meta">
+                          <span *ngIf="h.component">📄 {{ h.component }}</span>
+                          <span *ngIf="h.vulnerabilityProbability">🔥 {{ h.vulnerabilityProbability }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
+                    Aucun hotspot de sécurité à revoir.
+                  </p>
+                </div>
+              </div>
+              </ng-container>
+            </div>
+          </div>
         </section>
 
         <!-- ISSUES -->
@@ -233,14 +353,33 @@
         <section *ngIf="activeTab === 'duplication'" class="duplication-tab">
           <div class="duplication-layout">
             <div class="panel">
-              <h2>Duplication par fichier</h2>
+              <div class="dup-header-row">
+                <h2>Duplication par fichier</h2>
+                <div class="view-toggle">
+                  <span>Vue :</span>
+                  <button type="button"
+                          class="view-btn"
+                          [class.active]="duplicationView === 'list'"
+                          (click)="duplicationView = 'list'">
+                    Liste
+                  </button>
+                  <button type="button"
+                          class="view-btn"
+                          [class.active]="duplicationView === 'tree'"
+                          (click)="duplicationView = 'tree'">
+                    Tree
+                  </button>
+                </div>
+              </div>
               <p class="panel-subtitle">
                 {{ duplicationFiles.length }} fichiers avec duplication &gt; 0%
                 <span *ngIf="duplicationZeroCount > 0">
                   – {{ duplicationZeroCount }} fichiers supplémentaires ont un score de 0.0%.
                 </span>
               </p>
-              <div class="list" *ngIf="duplicationFiles && duplicationFiles.length">
+
+              <!-- LIST VIEW -->
+              <div class="list" *ngIf="duplicationView === 'list' && duplicationFiles && duplicationFiles.length">
                 <div *ngFor="let f of duplicationFiles" class="dup-item" (click)="loadDuplicationDetails(f)">
                   <div class="dup-main">
                     <div class="dup-path">{{ f.path }}</div>
@@ -249,6 +388,32 @@
                   <div class="dup-score">
                     {{ f.duplication | number:'1.1-1' }}<span class="unit">%</span>
                   </div>
+                </div>
+              </div>
+
+              <!-- TREE VIEW (compact, dossiers fermés par défaut, comme coverage) -->
+              <div class="dup-table-wrap" *ngIf="duplicationView === 'tree' && duplicationTree && duplicationTree.length">
+                <div class="dup-table">
+                  <div class="dup-table-header">
+                    <span class="dup-col-path">Fichier</span>
+                    <span class="dup-col-pct">Duplication</span>
+                  </div>
+                  <ng-container *ngFor="let group of duplicationTree">
+                    <div class="dup-group-row"
+                         (click)="toggleDuplicationGroup(group.group)">
+                      <span class="dup-col-path">
+                        <span class="folder-icon" [class.open]="isDuplicationGroupExpanded(group.group)"></span>
+                        {{ group.group }}
+                      </span>
+                      <span class="dup-col-pct">–</span>
+                    </div>
+                    <ng-container *ngIf="isDuplicationGroupExpanded(group.group)">
+                      <div class="dup-file-row" *ngFor="let f of group.files" (click)="loadDuplicationDetails(f); $event.stopPropagation()">
+                        <span class="dup-col-path">{{ f.path }}</span>
+                        <span class="dup-col-pct">{{ f.duplication | number:'1.1-1' }}%</span>
+                      </div>
+                    </ng-container>
+                  </ng-container>
                 </div>
               </div>
               <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">

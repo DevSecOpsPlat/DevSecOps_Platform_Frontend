@@ -335,6 +335,10 @@
   gap: 0.75rem;
 }
 
+.quality-tab .qg-cond-list {
+  grid-template-columns: 1fr;
+}
+
 .qg-cond-item {
   background: var(--overview-surface);
   border-radius: 10px;
@@ -381,6 +385,228 @@
 
 .qg-cond-values .current {
   font-weight: 600;
+}
+
+.coverage-table {
+  margin-top: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--overview-border);
+  overflow: hidden;
+}
+
+.coverage-header,
+.coverage-row {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.coverage-header {
+  background: var(--overview-surface-elevated);
+  font-weight: 600;
+}
+
+.coverage-row:nth-child(odd) {
+  background: var(--overview-bg);
+}
+
+.coverage-row:nth-child(even) {
+  background: var(--overview-surface);
+}
+
+.col-path {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coverage-group-row {
+  background: var(--overview-surface);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.coverage-group-row:hover {
+  background: rgba(251,146,60,0.08) !important;
+}
+
+.coverage-group-row .col-path {
+  color: var(--overview-text);
+}
+
+.folder-icon {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.7rem;
+  margin-right: 0.4rem;
+  border-radius: 2px 2px 2px 0;
+  border: 1px solid rgba(249,115,22,0.5);
+  background: rgba(251,146,60,0.12);
+  position: relative;
+  top: 1px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.18s ease;
+}
+
+/* Chevron à droite du dossier : fermé = pointe droite, ouvert = pointe bas */
+.folder-icon::after {
+  content: '';
+  position: absolute;
+  right: -0.55rem;
+  top: 50%;
+  transform: translateY(-50%) rotate(0deg);
+  width: 0;
+  height: 0;
+  border-top: 0.25rem solid transparent;
+  border-bottom: 0.25rem solid transparent;
+  border-left: 0.35rem solid var(--overview-text-muted);
+  transition: transform 0.18s ease;
+}
+
+.folder-icon.open {
+  background: rgba(251,146,60,0.25);
+  border-color: rgba(249,115,22,0.75);
+}
+
+.folder-icon.open::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.qg-extra-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--overview-text-muted);
+}
+
+.view-btn {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  background: transparent;
+  color: var(--overview-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.view-btn.active {
+  background: rgba(59,130,246,0.12);
+  color: #1d4ed8;
+  border-color: rgba(59,130,246,0.5);
+}
+
+.view-btn:not(.active):hover {
+  background: rgba(148,163,184,0.1);
+}
+
+.coverage-tree {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.coverage-group-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--overview-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.dup-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dup-group {
+  margin-bottom: 0.75rem;
+}
+
+.dup-group-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--overview-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+/* Duplication Tree : tableau compact (comme coverage) */
+.dup-table-wrap {
+  margin-top: 0.5rem;
+}
+
+.dup-table {
+  border-radius: 8px;
+  border: 1px solid var(--overview-border);
+  overflow: hidden;
+}
+
+.dup-table-header,
+.dup-group-row,
+.dup-file-row {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  align-items: center;
+}
+
+.dup-table-header {
+  background: var(--overview-surface-elevated);
+  font-weight: 600;
+}
+
+.dup-group-row {
+  background: var(--overview-surface);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.dup-group-row:hover {
+  background: rgba(251,146,60,0.08);
+}
+
+.dup-group-row .dup-col-path {
+  color: var(--overview-text);
+}
+
+.dup-file-row {
+  background: var(--overview-bg);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.dup-file-row:nth-child(even) {
+  background: var(--overview-surface);
+}
+
+.dup-file-row:hover {
+  background: #e0f2fe;
+}
+
+.dup-col-path {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dup-col-pct {
+  font-weight: 600;
+  color: #2563eb;
 }
 
 /* Filters */

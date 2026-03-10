@@ -18,7 +18,7 @@ export class SonarqubeComponent implements OnInit {
   qualityGate: any = null;
 
   // Vue & filtres
-  activeTab: 'overview' | 'issues' | 'hotspots' | 'duplication' = 'overview';
+  activeTab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication' = 'overview';
   severityFilter: string = 'ALL';
   typeFilter: string = 'ALL';
   filteredIssues: any[] = [];
@@ -31,6 +31,7 @@ export class SonarqubeComponent implements OnInit {
   qualityGateConditions: any[] = [];
   duplicationFiles: { name: string; path: string; duplication: number; key?: string; url?: string }[] = [];
   duplicationZeroCount = 0;
+  coverageFiles: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] = [];
 
   private sonarHostUrl: string | null = null;
   private sonarProjectKey: string | null = null;
@@ -39,6 +40,14 @@ export class SonarqubeComponent implements OnInit {
   selectedDupFile: any | null = null;
   selectedDupSourceLines: string[] = [];
   selectedDupMeta: any = null;
+
+  // View modes
+  coverageView: 'list' | 'tree' = 'list';
+  duplicationView: 'list' | 'tree' = 'list';
+  coverageTree: { group: string; files: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] }[] = [];
+  duplicationTree: { group: string; files: { name: string; path: string; duplication: number; key?: string; url?: string }[] }[] = [];
+  coverageExpanded: Record<string, boolean> = {};
+  duplicationExpanded: Record<string, boolean> = {};
 
   constructor(private sonarService: SonarQubeService) {}
 
@@ -80,6 +89,25 @@ export class SonarqubeComponent implements OnInit {
         this.duplicationFiles = mapped.filter(f => f.duplication > 0);
         this.duplicationZeroCount = Math.max(0, mapped.length - this.duplicationFiles.length);
 
+        const rawCov = (res.coverage_components || []) as any[];
+        this.coverageFiles = rawCov.map(c => {
+          const measures = c.measures || [];
+          const cov = measures.find((m: any) => m.metric === 'coverage') || {};
+          const unl = measures.find((m: any) => m.metric === 'uncovered_lines') || {};
+          const unc = measures.find((m: any) => m.metric === 'uncovered_conditions') || {};
+          return {
+            path: c.path || c.key,
+            coverage: parseFloat(cov.value || '0'),
+            uncoveredLines: parseInt(unl.value || '0', 10),
+            uncoveredConditions: parseInt(unc.value || '0', 10)
+          };
+        }).sort((a, b) => a.coverage - b.coverage);
+
+        this.coverageTree = this.buildTree(this.coverageFiles);
+        this.coverageExpanded = {};
+        this.duplicationTree = this.buildTree(this.duplicationFiles);
+        this.duplicationExpanded = {};
+
         this.computeIssueFacets();
         this.applyIssueFilters();
         this.loading = false;
@@ -104,9 +132,9 @@ export class SonarqubeComponent implements OnInit {
   }
 
   /**
-   * Quand on clique sur une carte de la vue d'ensemble.
+   * Quand on clique sur une carte de la vue d'ensemble (hors Quality Gate).
    */
-  onOverviewCardClick(kind: 'quality' | 'vuln' | 'bug' | 'smell' | 'hotspot' | 'dup'): void {
+  onOverviewCardClick(kind: 'vuln' | 'bug' | 'smell' | 'hotspot' | 'dup'): void {
     if (kind === 'hotspot') {
       this.setTab('hotspots');
       return;
@@ -129,15 +157,18 @@ export class SonarqubeComponent implements OnInit {
       case 'smell':
         this.applyIssueFilters(undefined, 'CODE_SMELL');
         break;
-      case 'quality':
       default:
         this.applyIssueFilters('ALL', 'ALL');
         break;
     }
   }
 
-  setTab(tab: 'overview' | 'issues' | 'hotspots' | 'duplication'): void {
+  setTab(tab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication'): void {
     this.activeTab = tab;
+  }
+
+  openQualityGateTab(): void {
+    this.setTab('quality');
   }
 
   private computeIssueFacets(): void {
@@ -200,6 +231,52 @@ export class SonarqubeComponent implements OnInit {
     if (key.includes('coverage')) return 'Coverage';
     if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
     return metric;
+  }
+
+  isCoverageCondition(cond: any): boolean {
+    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
+    return key.includes('coverage');
+  }
+
+  isSecurityHotspotsCondition(cond: any): boolean {
+    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
+    return key.includes('security_hotspots_reviewed');
+  }
+
+  isCoverageGroupExpanded(group: string): boolean {
+    return !!this.coverageExpanded[group];
+  }
+
+  toggleCoverageGroup(group: string): void {
+    this.coverageExpanded[group] = !this.coverageExpanded[group];
+  }
+
+  isDuplicationGroupExpanded(group: string): boolean {
+    return !!this.duplicationExpanded[group];
+  }
+
+  toggleDuplicationGroup(group: string): void {
+    this.duplicationExpanded[group] = !this.duplicationExpanded[group];
+  }
+
+  private buildTree<T extends { path: string }>(files: T[]): { group: string; files: T[] }[] {
+    const groups = new Map<string, T[]>();
+    files.forEach(f => {
+      const rawPath = f.path || '';
+      const firstSegment = rawPath.split(/[\\/]/)[0] || '(root)';
+      const groupKey = firstSegment || '(root)';
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
+      groups.get(groupKey)!.push(f);
+    });
+
+    return Array.from(groups.entries())
+      .map(([group, items]) => ({
+        group,
+        files: items.sort((a: any, b: any) => (a.path || '').localeCompare(b.path || ''))
+      }))
+      .sort((a, b) => a.group.localeCompare(b.group));
   }
 
   private buildSonarFileUrl(componentKey: string | undefined | null): string | undefined {
