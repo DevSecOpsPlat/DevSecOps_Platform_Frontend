@@ -45,7 +45,7 @@
             Issues ({{ totalIssues }})
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'hotspots'" (click)="setTab('hotspots')">
-            Hotspots ({{ totalHotspots }})
+            Hotspots ({{ totalHotspots || hotspots?.length || 0 }})
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">
             Duplication
@@ -89,9 +89,9 @@
                 {{ metrics?.duplicated_lines_density || '0' }}<span class="unit">%</span>
               </p>
             </div>
-            <div class="card">
+            <div class="card card-clickable" (click)="onOverviewCardClick('hotspot')">
               <h3>Hotspots de sécurité</h3>
-              <p class="big-number">{{ metrics?.security_hotspots || 0 }}</p>
+              <p class="big-number">{{ totalHotspots || hotspots?.length || 0 }}</p>
             </div>
           </section>
 
@@ -324,28 +324,86 @@
 
         <!-- HOTSPOTS -->
         <section *ngIf="activeTab === 'hotspots'" class="hotspots-tab">
-          <div class="panel">
-            <h2>Hotspots de sécurité</h2>
-            <p class="panel-subtitle">Total : {{ totalHotspots }}</p>
-            <div class="list" *ngIf="hotspots && hotspots.length">
-              <div *ngFor="let h of hotspots | slice:0:50" class="issue-item">
-                <span class="severity sev-hotspot">
-                  {{ h.securityCategory || 'HOTSPOT' }}
-                </span>
-                <div class="issue-body">
-                  <div class="issue-message">{{ h.message }}</div>
-                  <div class="issue-meta">
-                    <span *ngIf="h.component">📄 {{ h.component }}</span>
-                    <span *ngIf="h.vulnerabilityProbability">
-                      🔥 {{ h.vulnerabilityProbability }}
-                    </span>
+          <div class="hotspots-layout">
+            <div class="panel hotspots-list-panel">
+              <h2>Security Hotspots</h2>
+              <p class="panel-subtitle">
+                {{ totalHotspots || hotspots?.length || 0 }} hotspot(s) – {{ filteredHotspots.length }} affiché(s)
+              </p>
+              <div class="hotspot-filters">
+                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'ALL'"
+                        (click)="applyHotspotStatusFilter('ALL')">Tous ({{ hotspotCountByStatus['ALL'] || 0 }})</button>
+                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'TO_REVIEW'"
+                        (click)="applyHotspotStatusFilter('TO_REVIEW')">À revoir ({{ hotspotCountByStatus['TO_REVIEW'] || 0 }})</button>
+                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'FIXED'"
+                        (click)="applyHotspotStatusFilter('FIXED')">Corrigé ({{ hotspotCountByStatus['FIXED'] || 0 }})</button>
+                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'SAFE'"
+                        (click)="applyHotspotStatusFilter('SAFE')">Sûr ({{ hotspotCountByStatus['SAFE'] || 0 }})</button>
+              </div>
+              <div class="list" *ngIf="filteredHotspots.length">
+                <div *ngFor="let h of filteredHotspots" class="issue-item hotspot-item"
+                     [class.selected]="selectedHotspot?.key === h.key"
+                     (click)="loadHotspotDetails(h)">
+                  <span class="severity sev-hotspot">{{ h.securityCategory || 'HOTSPOT' }}</span>
+                  <div class="issue-body">
+                    <div class="issue-message">{{ h.message }}</div>
+                    <div class="issue-meta">
+                      <span *ngIf="h.component">📄 {{ h.component }}</span>
+                      <span *ngIf="h.line">L.{{ h.line }}</span>
+                      <span *ngIf="h.vulnerabilityProbability">🔥 {{ h.vulnerabilityProbability }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+              <p *ngIf="!filteredHotspots.length" class="empty-text">Aucun hotspot pour ce filtre.</p>
             </div>
-            <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
-              Aucun hotspot de sécurité détecté.
-            </p>
+
+            <div class="panel hotspot-detail-panel" *ngIf="selectedHotspot">
+              <div *ngIf="!selectedHotspotDetails" class="hotspot-detail-loading">Chargement...</div>
+              <div *ngIf="selectedHotspotDetails?.error" class="hotspot-detail-error">Impossible de charger le détail.</div>
+
+              <ng-container *ngIf="selectedHotspotDetails && !selectedHotspotDetails.error">
+                <h3 class="hotspot-detail-title">{{ selectedHotspotDetails.hotspot?.message }}</h3>
+                <p class="hotspot-detail-rule" *ngIf="selectedHotspotDetails.hotspot?.ruleKey">
+                  {{ selectedHotspotDetails.hotspot.ruleKey }}
+                </p>
+
+                <div class="hotspot-meta-row">
+                  <span><strong>Statut :</strong> {{ getHotspotStatusLabel(selectedHotspotDetails.hotspot?.status) }}</span>
+                  <span *ngIf="selectedHotspotDetails.hotspot?.securityCategory"><strong>Catégorie :</strong> {{ selectedHotspotDetails.hotspot.securityCategory }}</span>
+                  <span *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability"><strong>Priorité :</strong> {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}</span>
+                </div>
+
+                <nav class="hotspot-detail-tabs">
+                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'where'" (click)="hotspotDetailTab = 'where'">Où est le risque ?</button>
+                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'risk'" (click)="hotspotDetailTab = 'risk'">Quel est le risque ?</button>
+
+                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'access'" (click)="hotspotDetailTab = 'access'">
+  Accès au risque
+</button>
+                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'fix'" (click)="hotspotDetailTab = 'fix'">Comment corriger ?</button>
+                </nav>
+
+                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'where'">
+                  <p class="hotspot-file-path" *ngIf="getHotspotComponentDisplay()">{{ getHotspotComponentDisplay() }}</p>
+                  <pre class="hotspot-code" *ngIf="selectedHotspotDetails.sourceLines?.length"><ng-container *ngFor="let line of selectedHotspotDetails.sourceLines; let i = index"><span [class.highlight-line]="selectedHotspotDetails.sourceLineFrom + i === selectedHotspotDetails.highlightLine">{{ selectedHotspotDetails.sourceLineFrom + i }}</span>  {{ line }}
+</ng-container></pre>
+                  <p *ngIf="!selectedHotspotDetails.sourceLines?.length" class="empty-text">Aucun extrait de code disponible.</p>
+                </div>
+
+                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'risk'">
+                  <div class="rule-content" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
+                </div>
+
+                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'access'">
+  <div class="rule-content" [innerHTML]="getRuleAccessContent() || 'Aucune description du risque.'"></div>
+</div>
+
+                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'fix'">
+                  <div class="rule-content" [innerHTML]="getRuleFixContent() || 'Aucune recommandation de correction.'"></div>
+                </div>
+              </ng-container>
+            </div>
           </div>
         </section>
 

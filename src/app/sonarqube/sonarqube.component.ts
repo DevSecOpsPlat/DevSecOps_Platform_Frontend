@@ -41,6 +41,14 @@ export class SonarqubeComponent implements OnInit {
   selectedDupSourceLines: string[] = [];
   selectedDupMeta: any = null;
 
+  // Security Hotspots : filtre et détail
+  hotspotStatusFilter: string = 'ALL';
+  filteredHotspots: any[] = [];
+  hotspotCountByStatus: Record<string, number> = {};
+  selectedHotspot: any | null = null;
+  selectedHotspotDetails: any | null = null;
+  hotspotDetailTab: 'where' | 'risk' | 'fix' | 'access' | 'activity' = 'where';
+
   // View modes
   coverageView: 'list' | 'tree' = 'list';
   duplicationView: 'list' | 'tree' = 'list';
@@ -63,9 +71,9 @@ export class SonarqubeComponent implements OnInit {
       next: (res) => {
         this.metrics = res.metrics || {};
         this.totalIssues = res.total_issues || 0;
-        this.totalHotspots = res.total_hotspots || 0;
-        this.issues = (res.issues || []) as any[];
-        this.hotspots = (res.hotspots || []) as any[];
+        const rawHotspots = (res.hotspots || []) as any[];
+        this.hotspots = rawHotspots;
+        this.totalHotspots = Math.max(res.total_hotspots || 0, rawHotspots.length);
         this.qualityGate = res.quality_gate || null;
         this.qualityGateConditions = this.qualityGate?.conditions || [];
 
@@ -110,6 +118,7 @@ export class SonarqubeComponent implements OnInit {
 
         this.computeIssueFacets();
         this.applyIssueFilters();
+        this.applyHotspotStatusFilter();
         this.loading = false;
       },
       error: (err) => {
@@ -259,6 +268,189 @@ export class SonarqubeComponent implements OnInit {
     this.duplicationExpanded[group] = !this.duplicationExpanded[group];
   }
 
+  /** Normalise le statut SonarQube (ex: "To Review" → "TO_REVIEW") pour comparaison. */
+  private normalizeHotspotStatus(status: string): string {
+    return (status || '').toUpperCase().replace(/\s+/g, '_');
+  }
+
+  applyHotspotStatusFilter(status?: string): void {
+    if (status) this.hotspotStatusFilter = status;
+    if (!this.hotspots?.length) {
+      this.filteredHotspots = [];
+      this.hotspotCountByStatus = { ALL: 0, TO_REVIEW: 0, FIXED: 0, SAFE: 0 };
+      return;
+    }
+    this.computeHotspotCountByStatus();
+    if (this.hotspotStatusFilter === 'ALL') {
+      this.filteredHotspots = [...this.hotspots];
+      return;
+    }
+    this.filteredHotspots = this.hotspots.filter((h: any) =>
+      this.normalizeHotspotStatus(h.status) === this.hotspotStatusFilter
+    );
+  }
+
+  private computeHotspotCountByStatus(): void {
+    const counts: Record<string, number> = { ALL: this.hotspots?.length || 0, TO_REVIEW: 0, FIXED: 0, SAFE: 0 };
+    (this.hotspots || []).forEach((h: any) => {
+      const s = this.normalizeHotspotStatus(h.status);
+      if (s === 'TO_REVIEW') counts['TO_REVIEW']++;
+      else if (s === 'FIXED') counts['FIXED']++;
+      else if (s === 'SAFE') counts['SAFE']++;
+    });
+    this.hotspotCountByStatus = counts;
+  }
+
+  loadHotspotDetails(h: any): void {
+  const key = h?.key;
+  if (!key) return;
+  
+  this.selectedHotspot = h;
+  this.selectedHotspotDetails = null;
+  
+  this.sonarService.getHotspotDetails(key).subscribe({
+    next: (res) => {
+      // Normalisation : s'assurer que rule est au bon endroit
+      const normalizedRes = { ...res };
+      
+      // Si rule est dans hotspot.rule, on le remonte
+      if (res.hotspot?.rule && !res.rule) {
+        normalizedRes.rule = res.hotspot.rule;
+      }
+      
+      this.selectedHotspotDetails = normalizedRes;
+      
+      // Logs pour debug
+      console.log('[SonarQube] Détails hotspot normalisés:', normalizedRes);
+      console.log('[SonarQube] rule:', normalizedRes.rule);
+      console.log('[SonarQube] riskDescription:', normalizedRes.rule?.riskDescription);
+      console.log('[SonarQube] fixRecommendations:', normalizedRes.rule?.fixRecommendations);
+    },
+    error: () => {
+      this.selectedHotspotDetails = { error: true };
+    }
+  });
+}
+  getHotspotStatusLabel(status: string): string {
+    const s = (status || '').toUpperCase();
+    if (s === 'TO_REVIEW') return 'À revoir';
+    if (s === 'FIXED') return 'Corrigé';
+    if (s === 'SAFE') return 'Sûr';
+    return status || '–';
+  }
+
+ /** Contenu pour l’onglet « Quel est le risque ? » */
+getRuleRiskContent(): string {
+  const rule: any = this.selectedHotspotDetails?.rule;
+  if (!rule) return '';
+
+  // Log pour debug
+  console.log('[SonarQube] Règle complète pour risk:', rule);
+
+  // 1. Essayer riskDescription (présent dans ta console)
+  if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
+    console.log('[SonarQube] Utilisation de riskDescription');
+    return rule.riskDescription;
+  }
+
+  // 2. Essayer vulnerabilityDescription (présent dans ta console)
+  if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
+    console.log('[SonQube] Utilisation de vulnerabilityDescription');
+    return rule.vulnerabilityDescription;
+  }
+
+  // 3. Chercher dans les sections si présentes
+  const sections = rule.descriptionSections as any[] | undefined;
+  if (sections && sections.length) {
+    for (const key of ['risk', 'vulnerability', 'risk_description', 'what_is_the_risk']) {
+      const section = sections.find(s => 
+        (s.key || '').toString().toLowerCase().includes(key)
+      );
+      if (section?.htmlContent) return section.htmlContent;
+      if (section?.content) return section.content;
+    }
+  }
+
+  // 4. Fallback sur la description globale
+  if (rule.htmlDesc) return rule.htmlDesc;
+  if (rule.mdDesc) return rule.mdDesc;
+  
+  return '';
+}
+
+/** Contenu pour l’onglet « Comment corriger ? » */
+getRuleFixContent(): string {
+  const rule: any = this.selectedHotspotDetails?.rule;
+  if (!rule) return '';
+
+  // Log pour debug
+  console.log('[SonarQube] Règle complète pour fix:', rule);
+
+  // 1. Essayer fixRecommendations (présent dans ta console)
+  if (typeof rule.fixRecommendations === 'string' && rule.fixRecommendations.trim()) {
+    console.log('[SonarQube] Utilisation de fixRecommendations');
+    return rule.fixRecommendations;
+  }
+
+  // 2. Chercher dans les sections si présentes
+  const sections = rule.descriptionSections as any[] | undefined;
+  if (sections && sections.length) {
+    for (const key of ['fix', 'how_to_fix', 'remediation', 'fix_recommendation']) {
+      const section = sections.find(s => 
+        (s.key || '').toString().toLowerCase().includes(key)
+      );
+      if (section?.htmlContent) return section.htmlContent;
+      if (section?.content) return section.content;
+    }
+  }
+
+  // 3. Fallback sur la description globale
+  if (rule.htmlDesc) return rule.htmlDesc;
+  if (rule.mdDesc) return rule.mdDesc;
+  
+  return '';
+}
+
+  /** Contenu pour l’onglet « Quel est le risque ? » (plusieurs clés + htmlDesc). */
+ // Dans sonarqube.component.ts, remplace getRuleRiskContent et getRuleFixContent
+
+
+
+  /** Affiche le composant (fichier) du hotspot sans [object Object]. */
+  getHotspotComponentDisplay(): string {
+    const h = this.selectedHotspotDetails?.hotspot;
+    if (!h) return '';
+    const key = h.componentKey;
+    if (typeof key === 'string') return key;
+    const comp = h.component;
+    if (typeof comp === 'string') return comp;
+    if (comp && typeof comp === 'object') return (comp as any).key || (comp as any).path || (comp as any).name || '';
+    return '';
+  }
+
+  /** Contenu pour l’onglet « Accès au risque » - Affiche vulnerabilityDescription */
+getRuleAccessContent(): string {
+  const rule: any = this.selectedHotspotDetails?.rule;
+  if (!rule) return '';
+
+  // Log pour debug
+  console.log('[SonarQube] Règle complète pour access:', rule);
+
+  // Afficher vulnerabilityDescription
+  if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
+    console.log('[SonarQube] Utilisation de vulnerabilityDescription');
+    return rule.vulnerabilityDescription;
+  }
+
+  // Fallback si vulnerabilityDescription n'existe pas
+  if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
+    console.log('[SonarQube] Fallback sur riskDescription');
+    return rule.riskDescription;
+  }
+
+  return 'Aucune description du risque disponible.';
+}
+
   private buildTree<T extends { path: string }>(files: T[]): { group: string; files: T[] }[] {
     const groups = new Map<string, T[]>();
     files.forEach(f => {
@@ -306,5 +498,6 @@ export class SonarqubeComponent implements OnInit {
       }
     });
   }
+  
 }
 

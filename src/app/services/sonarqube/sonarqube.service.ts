@@ -44,5 +44,12 @@ export class SonarQubeService {
       params: { componentKey }
     });
   }
+
+  getHotspotDetails(hotspotKey: string): Observable<any> {
+    return this.http.get(BASE + 'api/sonarqube/hotspots/detail', {
+      headers: this.authHeaders(),
+      params: { hotspotKey }
+    });
+  }
 }
 
