@@ -392,15 +392,15 @@
                 </div>
 
                 <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'risk'">
-                  <div class="rule-content" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
+                  <div class="rule-content rule-content-block" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
                 </div>
 
                 <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'access'">
-  <div class="rule-content" [innerHTML]="getRuleAccessContent() || 'Aucune description du risque.'"></div>
-</div>
+                  <div class="rule-content rule-content-block" [innerHTML]="getRuleAccessContent() || 'Aucune description du risque.'"></div>
+                </div>
 
                 <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'fix'">
-                  <div class="rule-content" [innerHTML]="getRuleFixContent() || 'Aucune recommandation de correction.'"></div>
+                  <div class="rule-content rule-content-block" [innerHTML]="getRuleFixContent() || 'Aucune recommandation de correction.'"></div>
                 </div>
               </ng-container>
             </div>
