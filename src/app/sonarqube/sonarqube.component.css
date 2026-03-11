@@ -813,14 +813,14 @@
 }
 
 .hotspot-detail-title {
-  margin: 0 0 0.25rem 0;
-  font-size: 1rem;
+  margin: 0 0 0.2rem 0;
+  font-size: 0.95rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .hotspot-detail-rule {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.4rem 0;
   font-size: 0.8rem;
   color: var(--overview-text-muted);
 }
@@ -828,8 +828,8 @@
 .hotspot-meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
   font-size: 0.85rem;
 }
 
@@ -840,7 +840,7 @@
 .hotspot-detail-tabs {
   display: flex;
   gap: 0.25rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--overview-border);
 }
 
@@ -867,8 +867,9 @@
 }
 
 .hotspot-tab-content {
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  padding-top: 0.25rem;
 }
 
 .hotspot-file-path {
@@ -899,8 +900,53 @@
   white-space: pre-wrap;
 }
 
+/* Réduire les espaces dans la description (Accès au risque, Quel est le risque, Comment corriger) */
 .rule-content >>> p,
 .rule-content :first-child {
+  margin-top: 0;
+}
+
+:host ::ng-deep .rule-content p,
+:host ::ng-deep .rule-content .rule-content p {
+  margin: 0.1em 0 0.2em 0;
+  line-height: 1.3;
+}
+
+:host ::ng-deep .rule-content p:first-child {
+  margin-top: 0;
+}
+
+:host ::ng-deep .rule-content ul,
+:host ::ng-deep .rule-content ol {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+:host ::ng-deep .rule-content li {
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+}
+
+/* Éviter le double espace si un <p> est à l'intérieur d'un <li> */
+:host ::ng-deep .rule-content li p {
+  margin: 0;
+  padding: 0;
+  line-height: inherit;
+}
+
+:host ::ng-deep .rule-content h2,
+:host ::ng-deep .rule-content h3,
+:host ::ng-deep .rule-content h4,
+:host ::ng-deep .rule-content strong {
+  margin: 0.4em 0 0.2em 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+:host ::ng-deep .rule-content h2:first-child,
+:host ::ng-deep .rule-content h3:first-child,
+:host ::ng-deep .rule-content h4:first-child {
   margin-top: 0;
 }
 

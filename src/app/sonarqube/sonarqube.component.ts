@@ -308,28 +308,22 @@ export class SonarqubeComponent implements OnInit {
   this.selectedHotspot = h;
   this.selectedHotspotDetails = null;
   
-  this.sonarService.getHotspotDetails(key).subscribe({
-    next: (res) => {
-      // Normalisation : s'assurer que rule est au bon endroit
-      const normalizedRes = { ...res };
-      
-      // Si rule est dans hotspot.rule, on le remonte
-      if (res.hotspot?.rule && !res.rule) {
-        normalizedRes.rule = res.hotspot.rule;
+    this.sonarService.getHotspotDetails(key).subscribe({
+      next: (res) => {
+        // Normalisation : s'assurer que rule est au bon endroit
+        const normalizedRes: any = { ...res };
+
+        // Si rule est dans hotspot.rule, on le remonte
+        if (res.hotspot?.rule && !res.rule) {
+          normalizedRes.rule = res.hotspot.rule;
+        }
+
+        this.selectedHotspotDetails = normalizedRes;
+      },
+      error: () => {
+        this.selectedHotspotDetails = { error: true };
       }
-      
-      this.selectedHotspotDetails = normalizedRes;
-      
-      // Logs pour debug
-      console.log('[SonarQube] Détails hotspot normalisés:', normalizedRes);
-      console.log('[SonarQube] rule:', normalizedRes.rule);
-      console.log('[SonarQube] riskDescription:', normalizedRes.rule?.riskDescription);
-      console.log('[SonarQube] fixRecommendations:', normalizedRes.rule?.fixRecommendations);
-    },
-    error: () => {
-      this.selectedHotspotDetails = { error: true };
-    }
-  });
+    });
 }
   getHotspotStatusLabel(status: string): string {
     const s = (status || '').toUpperCase();
@@ -339,23 +333,18 @@ export class SonarqubeComponent implements OnInit {
     return status || '–';
   }
 
- /** Contenu pour l’onglet « Quel est le risque ? » */
+/** Contenu pour l’onglet « Quel est le risque ? » */
 getRuleRiskContent(): string {
   const rule: any = this.selectedHotspotDetails?.rule;
   if (!rule) return '';
 
-  // Log pour debug
-  console.log('[SonarQube] Règle complète pour risk:', rule);
-
-  // 1. Essayer riskDescription (présent dans ta console)
+  // 1. Essayer riskDescription (présent dans la règle)
   if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
-    console.log('[SonarQube] Utilisation de riskDescription');
     return rule.riskDescription;
   }
 
-  // 2. Essayer vulnerabilityDescription (présent dans ta console)
+  // 2. Essayer vulnerabilityDescription
   if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
-    console.log('[SonQube] Utilisation de vulnerabilityDescription');
     return rule.vulnerabilityDescription;
   }
 
@@ -383,12 +372,8 @@ getRuleFixContent(): string {
   const rule: any = this.selectedHotspotDetails?.rule;
   if (!rule) return '';
 
-  // Log pour debug
-  console.log('[SonarQube] Règle complète pour fix:', rule);
-
-  // 1. Essayer fixRecommendations (présent dans ta console)
+  // 1. Essayer fixRecommendations (présent dans la règle)
   if (typeof rule.fixRecommendations === 'string' && rule.fixRecommendations.trim()) {
-    console.log('[SonarQube] Utilisation de fixRecommendations');
     return rule.fixRecommendations;
   }
 
@@ -433,18 +418,13 @@ getRuleAccessContent(): string {
   const rule: any = this.selectedHotspotDetails?.rule;
   if (!rule) return '';
 
-  // Log pour debug
-  console.log('[SonarQube] Règle complète pour access:', rule);
-
-  // Afficher vulnerabilityDescription
+  // Afficher vulnerabilityDescription en priorité
   if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
-    console.log('[SonarQube] Utilisation de vulnerabilityDescription');
     return rule.vulnerabilityDescription;
   }
 
-  // Fallback si vulnerabilityDescription n'existe pas
+  // Fallback sur riskDescription
   if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
-    console.log('[SonarQube] Fallback sur riskDescription');
     return rule.riskDescription;
   }
 

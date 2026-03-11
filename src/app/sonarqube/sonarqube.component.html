@@ -45,7 +45,7 @@
             Issues ({{ totalIssues }})
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'hotspots'" (click)="setTab('hotspots')">
-            Hotspots ({{ totalHotspots || hotspots?.length || 0 }})
+            Hotspots ({{ totalHotspots || hotspots.length || 0 }})
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">
             Duplication
@@ -91,7 +91,7 @@
             </div>
             <div class="card card-clickable" (click)="onOverviewCardClick('hotspot')">
               <h3>Hotspots de sécurité</h3>
-              <p class="big-number">{{ totalHotspots || hotspots?.length || 0 }}</p>
+              <p class="big-number">{{ totalHotspots || hotspots.length || 0 }}</p>
             </div>
           </section>
 
@@ -328,7 +328,7 @@
             <div class="panel hotspots-list-panel">
               <h2>Security Hotspots</h2>
               <p class="panel-subtitle">
-                {{ totalHotspots || hotspots?.length || 0 }} hotspot(s) – {{ filteredHotspots.length }} affiché(s)
+                {{ totalHotspots || hotspots.length || 0 }} hotspot(s) – {{ filteredHotspots.length }} affiché(s)
               </p>
               <div class="hotspot-filters">
                 <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'ALL'"
