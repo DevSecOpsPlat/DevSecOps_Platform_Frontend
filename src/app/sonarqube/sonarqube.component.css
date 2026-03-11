@@ -236,8 +236,7 @@
   gap: 1.5rem;
 }
 
-/* Dans ton fichier sonarqube.component.css */
-
+/* Lien de risque direct */
 .tab-with-link {
   display: flex;
   align-items: center;
@@ -293,9 +292,14 @@
 }
 
 .dup-item:hover {
-  background: #e0f2fe;
-  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(249, 115, 22, 0.08);
+  border-color: rgba(249, 115, 22, 0.3);
   transform: translateY(-1px);
+}
+
+.dup-item.selected {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: var(--accent-orange);
 }
 
 .dup-main {
@@ -318,7 +322,7 @@
 .dup-score {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--accent-orange);
 }
 
 .dup-source-panel {
@@ -544,13 +548,14 @@
 }
 
 .view-btn.active {
-  background: rgba(59,130,246,0.12);
-  color: #1d4ed8;
-  border-color: rgba(59,130,246,0.5);
+  background: rgba(249, 115, 22, 0.12);
+  color: var(--accent-orange);
+  border-color: rgba(249, 115, 22, 0.5);
 }
 
 .view-btn:not(.active):hover {
-  background: rgba(148,163,184,0.1);
+  background: rgba(249, 115, 22, 0.06);
+  color: var(--accent-orange);
 }
 
 .coverage-tree {
@@ -638,7 +643,11 @@
 }
 
 .dup-file-row:hover {
-  background: #e0f2fe;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.dup-file-row.selected {
+  background: rgba(249, 115, 22, 0.1);
 }
 
 .dup-col-path {
@@ -649,7 +658,7 @@
 
 .dup-col-pct {
   font-weight: 600;
-  color: #2563eb;
+  color: var(--accent-orange);
 }
 
 /* Filters */
@@ -866,17 +875,27 @@
   font-weight: 500;
 }
 
+/* HOTSPOT DETAILS - ULTRA COMPACT */
 .hotspot-tab-content {
-  font-size: 0.875rem;
-  line-height: 1.45;
-  padding-top: 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  padding: 0.35rem 0.25rem;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.rule-content-block {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
 }
 
 .hotspot-file-path {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--overview-text-muted);
-  margin: 0 0 0.5rem 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  margin: 0 0 0.25rem 0;
+  font-family: monospace;
 }
 
 .hotspot-code {
@@ -898,73 +917,64 @@
   margin-right: 0.5rem;
 }
 
-/* Bloc de description des règles (risque, accès, correction) */
+/* Bloc de description des règles (risque, accès, correction) - ULTRA COMPACT */
 .rule-content {
   white-space: pre-wrap;
 }
 
-.rule-content-block {
-  background: var(--overview-bg);
-  border: 1px solid var(--overview-border);
-  border-radius: 8px;
-  padding: 0.9rem 1rem;
-  color: var(--overview-text);
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-/* Typographie et espacement du contenu injecté */
-.rule-content >>> p,
-.rule-content :first-child {
-  margin-top: 0;
-}
-
-:host ::ng-deep .rule-content p,
-:host ::ng-deep .rule-content .rule-content p {
+:host ::ng-deep .rule-content p {
   margin: 0.15em 0 0.35em 0;
-  line-height: 1.45;
-  color: var(--overview-text);
+  padding: 0;
+  line-height: 1.2;
 }
 
-:host ::ng-deep .rule-content p:first-child {
-  margin-top: 0;
+:host ::ng-deep .rule-content p + p {
+  margin-top: 0.1rem;
 }
 
 :host ::ng-deep .rule-content ul,
 :host ::ng-deep .rule-content ol {
-  margin: 0.35em 0 0.5em 0;
-  padding-left: 1.35rem;
+  margin: 0.1rem 0 0.1rem 1.2rem;
+  padding-left: 0.25rem;
 }
 
 :host ::ng-deep .rule-content li {
-  margin: 0.2em 0;
+  margin: 0;
   padding: 0;
-  line-height: 1.4;
+  line-height: 1.2;
+}
+
+:host ::ng-deep .rule-content li + li {
+  margin-top: 0.05rem;
 }
 
 :host ::ng-deep .rule-content li::marker {
-  color: var(--overview-text-muted);
+  color: var(--accent-orange);
 }
 
-:host ::ng-deep .rule-content li p {
-  margin: 0;
-  padding: 0;
-  line-height: inherit;
-}
-
-/* Titres et emphases dans la description */
+:host ::ng-deep .rule-content h1,
 :host ::ng-deep .rule-content h2,
 :host ::ng-deep .rule-content h3,
 :host ::ng-deep .rule-content h4 {
-  margin: 0.6em 0 0.35em 0;
+  margin: 0.15rem 0 0.05rem 0;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.1;
   color: var(--overview-text);
 }
 
-:host ::ng-deep .rule-content h2 { font-size: 1rem; }
-:host ::ng-deep .rule-content h3 { font-size: 0.95rem; }
-:host ::ng-deep .rule-content h4 { font-size: 0.9rem; }
+:host ::ng-deep .rule-content h1 { 
+  font-size: 1rem; 
+  margin-top: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+:host ::ng-deep .rule-content h2 { 
+  font-size: 0.95rem;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+:host ::ng-deep .rule-content h3 { font-size: 0.9rem; }
+:host ::ng-deep .rule-content h4 { font-size: 0.85rem; font-weight: 500; }
 
 :host ::ng-deep .rule-content strong {
   margin: 0;
@@ -980,11 +990,11 @@
 
 /* Code et liens dans la description */
 :host ::ng-deep .rule-content code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: monospace;
   font-size: 0.85em;
   background: rgba(15, 23, 42, 0.06);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
+  padding: 0.05rem 0.15rem;
+  border-radius: 2px;
   color: #0f172a;
 }
 
@@ -997,12 +1007,63 @@
   text-decoration: underline;
 }
 
-/* Message vide / fallback */
-.hotspot-tab-content .rule-content-block:empty::before,
-:host ::ng-deep .rule-content-block .empty-description {
+:host ::ng-deep .rule-content pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.15rem 0;
+  font-size: 0.8rem;
+  line-height: 1.1;
+  border: 1px solid #1e293b;
+}
+
+:host ::ng-deep .rule-content pre code {
+  background: none;
+  color: inherit;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+:host ::ng-deep .rule-content blockquote {
+  margin: 0.15rem 0;
+  padding: 0.25rem 0.5rem;
+  border-left: 3px solid var(--accent-orange);
+  background: rgba(249, 115, 22, 0.02);
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+  color: var(--overview-text-muted);
+}
+
+:host ::ng-deep .rule-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+}
+
+:host ::ng-deep .rule-content th {
+  background: rgba(0, 0, 0, 0.02);
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--overview-border);
+}
+
+:host ::ng-deep .rule-content td {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--overview-border);
+}
+
+/* Messages d'absence de contenu */
+.hotspot-tab-content .empty-text,
+.rule-content-block .empty-description {
   color: var(--overview-text-muted);
   font-style: italic;
-  font-size: 0.85rem;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
 }
 
 @media (max-width: 1024px) {
@@ -1029,4 +1090,3 @@
     align-items: flex-start;
   }
 }
-

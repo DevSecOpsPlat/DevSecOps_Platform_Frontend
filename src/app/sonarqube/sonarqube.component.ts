@@ -119,6 +119,8 @@ export class SonarqubeComponent implements OnInit {
         this.computeIssueFacets();
         this.applyIssueFilters();
         this.applyHotspotStatusFilter();
+        this.selectFirstHotspotIfNeeded();
+        this.selectFirstDuplicationIfNeeded();
         this.loading = false;
       },
       error: (err) => {
@@ -146,11 +148,13 @@ export class SonarqubeComponent implements OnInit {
   onOverviewCardClick(kind: 'vuln' | 'bug' | 'smell' | 'hotspot' | 'dup'): void {
     if (kind === 'hotspot') {
       this.setTab('hotspots');
+      this.selectFirstHotspotIfNeeded();
       return;
     }
 
     if (kind === 'dup') {
       this.setTab('duplication');
+      this.selectFirstDuplicationIfNeeded();
       return;
     }
 
@@ -174,6 +178,39 @@ export class SonarqubeComponent implements OnInit {
 
   setTab(tab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication'): void {
     this.activeTab = tab;
+
+    // Quand on arrive sur l'onglet Hotspots, sélectionner automatiquement le premier élément
+    if (tab === 'hotspots') {
+      this.selectFirstHotspotIfNeeded();
+    }
+    if (tab === 'duplication') {
+      this.selectFirstDuplicationIfNeeded();
+    }
+  }
+
+  /**
+   * Sélectionne par défaut le premier fichier en duplication et charge ses détails.
+   */
+  private selectFirstDuplicationIfNeeded(): void {
+    if (this.selectedDupFile || !this.duplicationFiles?.length) return;
+    const first = this.duplicationFiles[0];
+    if (first?.key) this.loadDuplicationDetails(first);
+  }
+
+  /**
+   * Sélectionne par défaut le premier hotspot (et charge ses détails)
+   * afin d'éviter que le panneau de droite soit vide.
+   */
+  private selectFirstHotspotIfNeeded(): void {
+    if (this.selectedHotspot || !this.filteredHotspots?.length) {
+      return;
+    }
+    const first = this.filteredHotspots[0];
+    if (!first) {
+      return;
+    }
+    this.hotspotDetailTab = 'where';
+    this.loadHotspotDetails(first);
   }
 
   openQualityGateTab(): void {
