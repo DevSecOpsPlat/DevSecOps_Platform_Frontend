@@ -58,7 +58,8 @@
             <div class="card card-clickable" (click)="openQualityGateTab()">
               <h3>Quality Gate</h3>
               <span class="qg-badge" [ngClass]="qualityGateClass()">
-                {{ getQualityGateStatus() }}
+                <ng-container *ngIf="getQualityGateStatus() === 'OK'">OK</ng-container>
+                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">{{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec</ng-container>
               </span>
             </div>
             <div class="card card-clickable" (click)="onOverviewCardClick('vuln')">
@@ -94,52 +95,37 @@
               <p class="big-number">{{ totalHotspots || hotspots.length || 0 }}</p>
             </div>
           </section>
-
-          <!-- Détail du Quality Gate avec conditions -->
-          <section class="qg-conditions" *ngIf="qualityGateConditions && qualityGateConditions.length">
-            <h2>Conditions du Quality Gate</h2>
-            <div class="qg-cond-list">
-              <div *ngFor="let cond of qualityGateConditions"
-                   class="qg-cond-item"
-                   [ngClass]="{'cond-failed': cond.status === 'ERROR', 'cond-ok': cond.status === 'OK'}">
-                <div class="qg-cond-header">
-                  <span class="qg-cond-metric">{{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}</span>
-                  <span class="qg-cond-status" [ngClass]="cond.status === 'ERROR' ? 'qg-error' : 'qg-ok'">
-                    {{ cond.status }}
-                  </span>
-                </div>
-                <p class="qg-cond-values">
-                  <span class="current">{{ cond.actualValue || '0' }}</span>
-                  <span class="required">≥ {{ cond.errorThreshold }}</span>
-                </p>
-              </div>
-            </div>
-          </section>
         </section>
 
-        <!-- QUALITY GATE ERRORS -->
+        <!-- QUALITY GATE : toutes les conditions (validées + en échec) avec détails des problèmes -->
         <section *ngIf="activeTab === 'quality'" class="quality-tab">
           <div class="panel">
-            <h2>Conditions de Quality Gate en échec</h2>
-            <div class="qg-cond-list">
+            <h2>Conditions du Quality Gate</h2>
+            <p class="panel-subtitle" *ngIf="qualityGateConditions?.length">
+              {{ getQualityGateFailedCount() }} condition(s) en échec, {{ qualityGateConditions.length - getQualityGateFailedCount() }} validée(s).
+            </p>
+            <p *ngIf="!qualityGateConditions?.length" class="empty-text">Aucune condition Quality Gate disponible.</p>
+            <div class="qg-cond-list" *ngIf="qualityGateConditions?.length">
               <ng-container *ngFor="let cond of qualityGateConditions">
-                <div *ngIf="cond.status === 'ERROR'"
-                     class="qg-cond-item cond-failed">
-                <div class="qg-cond-header">
-                  <span class="qg-cond-metric">
-                    {{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}
-                  </span>
-                  <span class="qg-cond-status qg-error">
-                    {{ cond.status }}
-                  </span>
-                </div>
-                <p class="qg-cond-values">
-                  <span class="current">{{ cond.actualValue || '0' }}</span>
-                  <span class="required">≥ {{ cond.errorThreshold }}</span>
-                </p>
+                <div class="qg-cond-item qg-cond-item-clickable"
+                     [ngClass]="{'cond-failed': cond.status === 'ERROR', 'cond-ok': cond.status === 'OK'}"
+                     (click)="onQualityGateConditionClick(cond)"
+                     [title]="getQualityGateConditionClickHint(cond)">
+                  <div class="qg-cond-header">
+                    <span class="qg-cond-metric">
+                      {{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}
+                    </span>
+                    <span class="qg-cond-status" [ngClass]="cond.status === 'ERROR' ? 'qg-error' : 'qg-ok'">
+                      {{ cond.status }}
+                    </span>
+                  </div>
+                  <p class="qg-cond-values">
+                    <span class="current">{{ cond.actualValue || '0' }}</span>
+                    <span class="required">≥ {{ cond.errorThreshold }}</span>
+                  </p>
 
-                <!-- Détail spécifique par metric -->
-                <div class="qg-extra" *ngIf="isCoverageCondition(cond)">
+                  <!-- Détail des problèmes (uniquement pour les conditions en échec) - clic ne change pas d'onglet -->
+                  <div class="qg-extra" *ngIf="cond.status === 'ERROR' && isCoverageCondition(cond)" (click)="$event.stopPropagation()">
                   <div class="qg-extra-header">
                     <h3>Couverture par fichier</h3>
                     <div class="view-toggle">
@@ -208,7 +194,7 @@
                   </div>
                 </div>
 
-                <div class="qg-extra" *ngIf="isSecurityHotspotsCondition(cond)">
+                <div class="qg-extra" *ngIf="cond.status === 'ERROR' && isSecurityHotspotsCondition(cond)" (click)="$event.stopPropagation()">
                   <h3>Security Hotspots à revoir</h3>
                   <div class="list" *ngIf="hotspots && hotspots.length">
                     <div *ngFor="let h of hotspots" class="issue-item">
@@ -227,6 +213,12 @@
                   <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
                     Aucun hotspot de sécurité à revoir.
                   </p>
+                </div>
+
+                <!-- Détail d'erreur pour les autres conditions (backend envoie errorDescription) -->
+                <div class="qg-extra qg-extra-detail" *ngIf="cond.status === 'ERROR' && cond.errorDescription && !isCoverageCondition(cond) && !isSecurityHotspotsCondition(cond)" (click)="$event.stopPropagation()">
+                  <h3>Détail de l'erreur</h3>
+                  <p class="qg-error-detail">{{ cond.errorDescription }}</p>
                 </div>
               </div>
               </ng-container>
@@ -317,7 +309,7 @@
               </div>
             </div>
             <p *ngIf="!filteredIssues || !filteredIssues.length" class="empty-text">
-              Aucune issue pour les filtres sélectionnés.
+              {{ totalIssues === 0 ? 'Aucun problème détecté pour les issues.' : 'Aucune issue pour les filtres sélectionnés.' }}
             </p>
           </div>
         </section>
@@ -355,7 +347,9 @@
                   </div>
                 </div>
               </div>
-              <p *ngIf="!filteredHotspots.length" class="empty-text">Aucun hotspot pour ce filtre.</p>
+              <p *ngIf="!filteredHotspots.length" class="empty-text">
+                {{ (totalHotspots || hotspots.length || 0) === 0 ? 'Aucun hotspot de sécurité détecté.' : 'Aucun hotspot pour ce filtre.' }}
+              </p>
             </div>
 
             <div class="panel hotspot-detail-panel" *ngIf="selectedHotspot">
@@ -475,7 +469,7 @@
                 </div>
               </div>
               <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">
-                Aucune duplication détectée sur les fichiers analysés.
+                Aucune duplication détectée sur les fichiers analysés. Aucun problème pour cette section.
               </p>
             </div>
 

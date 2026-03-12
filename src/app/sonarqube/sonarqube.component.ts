@@ -49,8 +49,8 @@ export class SonarqubeComponent implements OnInit {
   selectedHotspotDetails: any | null = null;
   hotspotDetailTab: 'where' | 'risk' | 'fix' | 'access' | 'activity' = 'where';
 
-  // View modes
-  coverageView: 'list' | 'tree' = 'list';
+  // View modes (Tree par défaut pour la couverture)
+  coverageView: 'list' | 'tree' = 'tree';
   duplicationView: 'list' | 'tree' = 'list';
   coverageTree: { group: string; files: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] }[] = [];
   duplicationTree: { group: string; files: { name: string; path: string; duplication: number; key?: string; url?: string }[] }[] = [];
@@ -132,6 +132,12 @@ export class SonarqubeComponent implements OnInit {
 
   getQualityGateStatus(): string {
     return this.qualityGate?.status || 'UNKNOWN';
+  }
+
+  /** Nombre de conditions du Quality Gate en échec (pour la vue d'ensemble). */
+  getQualityGateFailedCount(): number {
+    if (!this.qualityGateConditions?.length) return 0;
+    return this.qualityGateConditions.filter((c: any) => (c.status || '').toUpperCase() === 'ERROR').length;
   }
 
   qualityGateClass(): string {
@@ -276,6 +282,10 @@ export class SonarqubeComponent implements OnInit {
     const key = metric.toLowerCase();
     if (key.includes('coverage')) return 'Coverage';
     if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
+    if (key.includes('reliability_rating')) return 'Fiabilité (nouveau code)';
+    if (key.includes('security_rating')) return 'Sécurité (nouveau code)';
+    if (key.includes('maintainability_rating')) return 'Maintenabilité (nouveau code)';
+    if (key.includes('duplicated_lines')) return 'Duplication (nouveau code)';
     return metric;
   }
 
@@ -287,6 +297,42 @@ export class SonarqubeComponent implements OnInit {
   isSecurityHotspotsCondition(cond: any): boolean {
     const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
     return key.includes('security_hotspots_reviewed');
+  }
+
+  isDuplicationCondition(cond: any): boolean {
+    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
+    return key.includes('duplicated_lines');
+  }
+
+  /** Indication au survol : vers quel onglet un clic sur la condition enverra. */
+  getQualityGateConditionClickHint(cond: any): string {
+    if (!cond) return '';
+    if (this.isDuplicationCondition(cond)) return "Aller à l'onglet Duplication";
+    if (this.isSecurityHotspotsCondition(cond)) return "Aller à l'onglet Security Hotspots";
+    if (this.isCoverageCondition(cond)) return "Détails déjà affichés dans Quality Gate";
+    return "Détails dans Quality Gate";
+  }
+
+  /**
+   * Clic sur une condition du Quality Gate : bascule vers l'onglet correspondant (Duplication, Hotspots, ou reste sur Quality Gate).
+   */
+  onQualityGateConditionClick(cond: any): void {
+    if (!cond) return;
+    if (this.isDuplicationCondition(cond)) {
+      this.setTab('duplication');
+      this.selectFirstDuplicationIfNeeded();
+      return;
+    }
+    if (this.isSecurityHotspotsCondition(cond)) {
+      this.setTab('hotspots');
+      this.selectFirstHotspotIfNeeded();
+      return;
+    }
+    if (this.isCoverageCondition(cond)) {
+      this.setTab('quality');
+      return;
+    }
+    this.setTab('quality');
   }
 
   isCoverageGroupExpanded(group: string): boolean {
