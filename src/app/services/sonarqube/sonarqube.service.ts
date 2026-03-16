@@ -51,5 +51,29 @@ export class SonarQubeService {
       params: { hotspotKey }
     });
   }
+
+  /** Change le statut d'une issue (persisté dans SonarCloud). */
+  issueTransition(issueKey: string, transition: string): Observable<any> {
+    return this.http.post(BASE + 'api/sonarqube/issues/transition', null, {
+      headers: this.authHeaders(),
+      params: { issueKey, transition }
+    });
+  }
+
+  /** Assigne une issue au compte SonarCloud par défaut (\"Assign to me\"). */
+  issueAssignToMe(issueKey: string): Observable<any> {
+    return this.http.post(BASE + 'api/sonarqube/issues/assign/me', null, {
+      headers: this.authHeaders(),
+      params: { issueKey }
+    });
+  }
+
+  /** Désassigne complètement une issue (Not assigned). */
+  issueUnassign(issueKey: string): Observable<any> {
+    return this.http.post(BASE + 'api/sonarqube/issues/assign/unassign', null, {
+      headers: this.authHeaders(),
+      params: { issueKey }
+    });
+  }
 }
 

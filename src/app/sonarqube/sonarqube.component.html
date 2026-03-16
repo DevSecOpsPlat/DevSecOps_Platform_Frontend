@@ -294,7 +294,7 @@
               {{ filteredIssues.length }} / {{ totalIssues }} issues affichées
             </p>
             <div class="list" *ngIf="filteredIssues && filteredIssues.length">
-              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item">
+              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item issue-item-with-actions">
                 <span class="severity" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
                   {{ issue.severity }}
                 </span>
@@ -304,6 +304,35 @@
                     <span *ngIf="issue.type">📌 {{ issue.type }}</span>
                     <span *ngIf="issue.component">📄 {{ issue.component }}</span>
                     <span *ngIf="issue.line">📍 Ligne {{ issue.line }}</span>
+                  </div>
+                  <div class="issue-actions">
+                    <div class="issue-action-row">
+                      <span class="issue-action-label">Statut :</span>
+                      <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
+                      <select class="issue-transition-select"
+                              [disabled]="issueUpdatingKey === issue.key"
+                              (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
+                        <option value="">Changer le statut...</option>
+                        <option *ngFor="let t of issueTransitions" [value]="t.value">{{ t.label }}</option>
+                      </select>
+                      <span *ngIf="issueUpdatingKey === issue.key" class="issue-updating">Mise à jour...</span>
+                    </div>
+                    <div class="issue-action-row">
+                      <span class="issue-action-label">Assigné :</span>
+                      <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
+                      <button type="button"
+                              class="issue-action-btn"
+                              (click)="assignIssueToMe(issue)"
+                              [disabled]="issueUpdatingKey === issue.key">
+                        Assign to me
+                      </button>
+                      <button type="button"
+                              class="issue-action-btn issue-action-btn-secondary"
+                              (click)="unassignIssue(issue)"
+                              [disabled]="issueUpdatingKey === issue.key || !issue.assignee">
+                        Not assigned
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

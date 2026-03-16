@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { SonarQubeService } from '../services/sonarqube/sonarqube.service';
+import { UserService } from '../services/user/user.service';
 
 @Component({
   selector: 'app-sonarqube',
@@ -57,7 +58,10 @@ export class SonarqubeComponent implements OnInit {
   coverageExpanded: Record<string, boolean> = {};
   duplicationExpanded: Record<string, boolean> = {};
 
-  constructor(private sonarService: SonarQubeService) {}
+  constructor(
+    private sonarService: SonarQubeService,
+    private userService: UserService
+  ) {}
 
   ngOnInit(): void {
     this.load();
@@ -70,7 +74,12 @@ export class SonarqubeComponent implements OnInit {
     this.sonarService.getSonarQubeResults().subscribe({
       next: (res) => {
         this.metrics = res.metrics || {};
-        this.totalIssues = res.total_issues || 0;
+
+        // Issues : utiliser toujours la liste renvoyée pour éviter les écarts avec SonarQube
+        const rawIssues = (res.issues || []) as any[];
+        this.issues = rawIssues;
+        this.totalIssues = rawIssues.length;
+
         const rawHotspots = (res.hotspots || []) as any[];
         this.hotspots = rawHotspots;
         this.totalHotspots = Math.max(res.total_hotspots || 0, rawHotspots.length);
@@ -248,6 +257,88 @@ export class SonarqubeComponent implements OnInit {
       const sevOk = this.severityFilter === 'ALL' || sev === this.severityFilter;
       const typeOk = this.typeFilter === 'ALL' || t === this.typeFilter;
       return sevOk && typeOk;
+    });
+  }
+
+  /** Indique qu'une issue est en cours de mise à jour (statut ou assignation). */
+  issueUpdatingKey: string | null = null;
+
+  /** Transitions possibles (valeur API → libellé). */
+  readonly issueTransitions = [
+    { value: 'confirm', label: 'Confirmer' },
+    { value: 'unconfirm', label: 'Annuler confirmation' },
+    { value: 'resolve', label: 'Résoudre (Fixed)' },
+    { value: 'reopen', label: 'Rouvrir' },
+    { value: 'falsepositive', label: 'Faux positif' },
+    { value: 'wontfix', label: 'Ne pas corriger (Won\'t fix)' },
+    { value: 'accept', label: 'Accepter (à corriger plus tard)' }
+  ];
+
+  getIssueStatusLabel(status: string): string {
+    const s = (status || '').toUpperCase();
+    if (s === 'OPEN') return 'Ouvert';
+    if (s === 'CONFIRMED') return 'Confirmé';
+    if (s === 'RESOLVED') return 'Résolu';
+    if (s === 'REOPENED') return 'Rouvert';
+    if (s === 'CLOSED') return 'Fermé';
+    return status || '–';
+  }
+
+  /** Affiche le username de l'utilisateur plateforme pour les issues assignées (SonarCloud garde le vrai login). */
+  getIssueAssigneeLabel(assignee: string | undefined | null): string {
+    if (!assignee) return 'Not assigned';
+    const user = this.userService.getUser();
+    if (!user?.username) return 'Assigned';
+    return user.username;
+  }
+
+  changeIssueStatus(issue: any, transition: string): void {
+    const key = issue?.key;
+    if (!key || !transition) return;
+    this.issueUpdatingKey = key;
+    this.sonarService.issueTransition(key, transition).subscribe({
+      next: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      },
+      error: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      }
+    });
+  }
+
+  /** Assigne au compte SonarCloud par défaut (Assign to me). */
+  assignIssueToMe(issue: any): void {
+    const key = issue?.key;
+    if (!key) return;
+    this.issueUpdatingKey = key;
+    this.sonarService.issueAssignToMe(key).subscribe({
+      next: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      },
+      error: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      }
+    });
+  }
+
+  /** Désassigne complètement l'issue (Not assigned). */
+  unassignIssue(issue: any): void {
+    const key = issue?.key;
+    if (!key) return;
+    this.issueUpdatingKey = key;
+    this.sonarService.issueUnassign(key).subscribe({
+      next: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      },
+      error: () => {
+        this.issueUpdatingKey = null;
+        this.load();
+      }
     });
   }
 
