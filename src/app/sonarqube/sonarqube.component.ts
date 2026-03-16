@@ -35,7 +35,8 @@ export class SonarqubeComponent implements OnInit {
   coverageFiles: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] = [];
 
   private sonarHostUrl: string | null = null;
-  private sonarProjectKey: string | null = null;
+  /** Exposé pour la vue d'ensemble (projet, lien Sonar). */
+  sonarProjectKey: string | null = null;
 
   // Détail duplication sélectionné
   selectedDupFile: any | null = null;
@@ -155,6 +156,57 @@ export class SonarqubeComponent implements OnInit {
     if (status === 'ERROR') return 'qg-error';
     if (status === 'WARN') return 'qg-warn';
     return 'qg-unknown';
+  }
+
+  /** Ordre des sévérités pour les graphiques (du plus critique au moins). */
+  readonly overviewSeverityOrder = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
+
+  /** Pourcentage de couverture (0–100) pour la barre de progression. */
+  getCoveragePercent(): number {
+    const v = this.metrics?.coverage;
+    if (v === undefined || v === null) return 0;
+    const n = parseFloat(String(v));
+    return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
+  }
+
+  /** Pourcentage de duplication (0–100) pour la barre de progression. */
+  getDuplicationPercent(): number {
+    const v = this.metrics?.duplicated_lines_density;
+    if (v === undefined || v === null) return 0;
+    const n = parseFloat(String(v));
+    return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
+  }
+
+  /** Nombre d'issues pour une sévérité (pour barre proportionnelle). */
+  getSeverityCount(sev: string): number {
+    return this.severityCounts[sev] ?? 0;
+  }
+
+  /** Largeur en % pour une barre de sévérité (max = totalIssues). */
+  getSeverityBarWidth(sev: string): number {
+    if (!this.totalIssues) return 0;
+    const n = this.getSeverityCount(sev);
+    return (n / this.totalIssues) * 100;
+  }
+
+  /** Rating SonarQube : 1=A, 2=B, 3=C, 4=D, 5=E. */
+  getRatingLabel(value: string | number | undefined): string {
+    if (value === undefined || value === null) return '—';
+    const n = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (isNaN(n) || n < 1 || n > 5) return String(value);
+    return ['A', 'B', 'C', 'D', 'E'][n - 1];
+  }
+
+  /** Classe CSS pour le badge de rating (couleur). */
+  getRatingClass(value: string | number | undefined): string {
+    if (value === undefined || value === null) return 'rating-unknown';
+    const n = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (n === 1) return 'rating-a';
+    if (n === 2) return 'rating-b';
+    if (n === 3) return 'rating-c';
+    if (n === 4) return 'rating-d';
+    if (n === 5) return 'rating-e';
+    return 'rating-unknown';
   }
 
   /**

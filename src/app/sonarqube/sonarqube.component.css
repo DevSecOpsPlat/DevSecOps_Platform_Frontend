@@ -136,6 +136,264 @@
   box-shadow: 0 1px 2px rgba(15,23,42,0.08);
 }
 
+/* ─── Vue d'ensemble enrichie ─── */
+.overview-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.overview-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.overview-hero:hover {
+  border-color: var(--accent-orange);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.08);
+}
+.overview-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.overview-hero-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--overview-text-muted);
+}
+.overview-hero-badge {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.overview-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--overview-text-muted);
+}
+.overview-meta-item {
+  white-space: nowrap;
+}
+
+.overview-section-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--overview-text);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.overview-link {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent-orange);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.overview-link:hover {
+  color: var(--accent-orange-light);
+}
+
+/* Ratings (A–E) */
+.overview-ratings {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.ratings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+}
+.rating-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.rating-label {
+  font-size: 0.85rem;
+  color: var(--overview-text-muted);
+}
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.rating-a { background: rgba(34, 197, 94, 0.2); color: #15803d; }
+.rating-b { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.rating-c { background: rgba(249, 115, 22, 0.15); color: #c2410c; }
+.rating-d { background: rgba(239, 68, 68, 0.15); color: #b91c1c; }
+.rating-e { background: rgba(239, 68, 68, 0.25); color: #991b1b; }
+.rating-unknown { background: var(--overview-border); color: var(--overview-text-muted); }
+
+/* Barres Couverture / Duplication */
+.overview-metrics-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+@media (max-width: 640px) {
+  .overview-metrics-bars { grid-template-columns: 1fr; }
+}
+.metric-bar-card {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.metric-bar-card-clickable {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.metric-bar-card-clickable:hover {
+  border-color: var(--accent-orange);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+}
+.metric-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.metric-bar-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--overview-text);
+}
+.metric-bar-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--overview-text);
+}
+.metric-bar-track {
+  height: 10px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.metric-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.metric-bar-fill-coverage {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+.metric-bar-fill-dup {
+  background: linear-gradient(90deg, #f97316, #fb923c);
+}
+
+/* Répartition des issues (barres par sévérité) */
+.overview-issues-viz {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.severity-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.severity-bar-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 40px;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.severity-bar-row:hover {
+  background: rgba(249, 115, 22, 0.06);
+}
+.severity-bar-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--overview-text-muted);
+}
+.severity-bar-track {
+  height: 8px;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.severity-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+.sev-blocker { background: #7f1d1d; }
+.sev-critical { background: #b91c1c; }
+.sev-major { background: #c2410c; }
+.sev-minor { background: #b45309; }
+.sev-info { background: #64748b; }
+.severity-bar-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--overview-text);
+  text-align: right;
+}
+.overview-type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.type-chip {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface);
+  color: var(--overview-text);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.type-chip:hover {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+.overview-hotspots-summary {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.overview-desc {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--overview-text-muted);
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

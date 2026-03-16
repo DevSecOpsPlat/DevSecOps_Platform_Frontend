@@ -52,14 +52,106 @@
           </button>
         </nav>
 
-        <!-- OVERVIEW -->
+        <!-- OVERVIEW (enrichie) -->
         <section *ngIf="activeTab === 'overview'" class="overview-tab">
+          <!-- Bandeau principal : Quality Gate + projet -->
+          <div class="overview-hero" (click)="openQualityGateTab()">
+            <div class="overview-hero-left">
+              <span class="overview-hero-label">Quality Gate</span>
+              <span class="overview-hero-badge" [ngClass]="qualityGateClass()">
+                <ng-container *ngIf="getQualityGateStatus() === 'OK'">✓ Passed</ng-container>
+                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">
+                  {{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec
+                </ng-container>
+              </span>
+            </div>
+            <div class="overview-hero-meta">
+              <span class="overview-meta-item" *ngIf="sonarProjectKey">Projet : {{ sonarProjectKey }}</span>
+              <span class="overview-meta-item">Branche : {{ currentBranch }}</span>
+              <span class="overview-meta-item">Lignes de code : {{ metrics?.ncloc || 0 | number }}</span>
+            </div>
+          </div>
+
+          <!-- Ratings (sécurité, fiabilité, maintenabilité) -->
+          <div class="overview-ratings" *ngIf="metrics?.security_rating !== undefined || metrics?.reliability_rating !== undefined || metrics?.maintainability_rating !== undefined">
+            <h3 class="overview-section-title">Ratings (nouveau code)</h3>
+            <div class="ratings-row">
+              <div class="rating-item" *ngIf="metrics?.reliability_rating !== undefined">
+                <span class="rating-label">Fiabilité</span>
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics.reliability_rating)">{{ getRatingLabel(metrics.reliability_rating) }}</span>
+              </div>
+              <div class="rating-item" *ngIf="metrics?.security_rating !== undefined">
+                <span class="rating-label">Sécurité</span>
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics.security_rating)">{{ getRatingLabel(metrics.security_rating) }}</span>
+              </div>
+              <div class="rating-item" *ngIf="metrics?.maintainability_rating !== undefined">
+                <span class="rating-label">Maintenabilité</span>
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics.maintainability_rating)">{{ getRatingLabel(metrics.maintainability_rating) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Métriques visuelles : Couverture et Duplication (barres de progression) -->
+          <div class="overview-metrics-bars">
+            <div class="metric-bar-card metric-bar-card-clickable" (click)="setTab('quality')" title="Voir le détail dans Quality Gate">
+              <div class="metric-bar-header">
+                <span class="metric-bar-title">Couverture des tests</span>
+                <span class="metric-bar-value">{{ getCoveragePercent() | number:'1.1-1' }}%</span>
+              </div>
+              <div class="metric-bar-track">
+                <div class="metric-bar-fill metric-bar-fill-coverage" [style.width.%]="getCoveragePercent()"></div>
+              </div>
+            </div>
+            <div class="metric-bar-card metric-bar-card-clickable" (click)="setTab('duplication')" title="Voir le détail dans l'onglet Duplication">
+              <div class="metric-bar-header">
+                <span class="metric-bar-title">Duplication de code</span>
+                <span class="metric-bar-value">{{ getDuplicationPercent() | number:'1.1-1' }}%</span>
+              </div>
+              <div class="metric-bar-track">
+                <div class="metric-bar-fill metric-bar-fill-dup" [style.width.%]="getDuplicationPercent()"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Répartition des issues (sévérité) -->
+          <div class="overview-issues-viz" *ngIf="totalIssues > 0">
+            <h3 class="overview-section-title">
+              Répartition des issues
+              <button type="button" class="overview-link" (click)="setTab('issues')">Voir tout ({{ totalIssues }})</button>
+            </h3>
+            <div class="severity-bars">
+              <div class="severity-bar-row" *ngFor="let sev of overviewSeverityOrder" (click)="setTab('issues'); applyIssueFilters(sev, typeFilter)">
+                <span class="severity-bar-label">{{ sev }}</span>
+                <div class="severity-bar-track">
+                  <div class="severity-bar-fill" [ngClass]="'sev-' + sev.toLowerCase()" [style.width.%]="getSeverityBarWidth(sev)"></div>
+                </div>
+                <span class="severity-bar-count">{{ getSeverityCount(sev) }}</span>
+              </div>
+            </div>
+            <div class="overview-type-chips">
+              <button type="button" class="type-chip" (click)="onOverviewCardClick('bug')">Bugs : {{ metrics?.bugs || 0 }}</button>
+              <button type="button" class="type-chip" (click)="onOverviewCardClick('vuln')">Vulnérabilités : {{ metrics?.vulnerabilities || 0 }}</button>
+              <button type="button" class="type-chip" (click)="onOverviewCardClick('smell')">Code Smells : {{ metrics?.code_smells || 0 }}</button>
+            </div>
+          </div>
+
+          <!-- Hotspots résumé -->
+          <div class="overview-hotspots-summary" *ngIf="(totalHotspots || hotspots.length) > 0">
+            <h3 class="overview-section-title">
+              Security Hotspots
+              <button type="button" class="overview-link" (click)="onOverviewCardClick('hotspot')">{{ totalHotspots || hotspots.length }} à revoir</button>
+            </h3>
+            <p class="overview-desc">Points de sécurité à valider manuellement. Cliquez pour ouvrir l’onglet Hotspots.</p>
+          </div>
+
+          <!-- Cartes synthèse (accès rapide) -->
+          <h3 class="overview-section-title">Métriques clés</h3>
           <section class="summary-cards">
             <div class="card card-clickable" (click)="openQualityGateTab()">
               <h3>Quality Gate</h3>
               <span class="qg-badge" [ngClass]="qualityGateClass()">
                 <ng-container *ngIf="getQualityGateStatus() === 'OK'">OK</ng-container>
-                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">{{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec</ng-container>
+                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">{{ getQualityGateFailedCount() }} en échec</ng-container>
               </span>
             </div>
             <div class="card card-clickable" (click)="onOverviewCardClick('vuln')">
@@ -74,24 +166,16 @@
               <h3>Code Smells</h3>
               <p class="big-number">{{ metrics?.code_smells || 0 }}</p>
             </div>
-            <div class="card">
+            <div class="card card-clickable" (click)="setTab('quality')">
               <h3>Couverture</h3>
-              <p class="big-number">
-                {{ metrics?.coverage || '0' }}<span class="unit">%</span>
-              </p>
-            </div>
-            <div class="card">
-              <h3>Lignes de code (ncloc)</h3>
-              <p class="big-number">{{ metrics?.ncloc || 0 }}</p>
+              <p class="big-number">{{ metrics?.coverage || '0' }}<span class="unit">%</span></p>
             </div>
             <div class="card card-clickable" (click)="onOverviewCardClick('dup')">
               <h3>Duplication</h3>
-              <p class="big-number">
-                {{ metrics?.duplicated_lines_density || '0' }}<span class="unit">%</span>
-              </p>
+              <p class="big-number">{{ metrics?.duplicated_lines_density || '0' }}<span class="unit">%</span></p>
             </div>
             <div class="card card-clickable" (click)="onOverviewCardClick('hotspot')">
-              <h3>Hotspots de sécurité</h3>
+              <h3>Hotspots</h3>
               <p class="big-number">{{ totalHotspots || hotspots.length || 0 }}</p>
             </div>
           </section>
@@ -101,11 +185,11 @@
         <section *ngIf="activeTab === 'quality'" class="quality-tab">
           <div class="panel">
             <h2>Conditions du Quality Gate</h2>
-            <p class="panel-subtitle" *ngIf="qualityGateConditions?.length">
+            <p class="panel-subtitle" *ngIf="qualityGateConditions.length">
               {{ getQualityGateFailedCount() }} condition(s) en échec, {{ qualityGateConditions.length - getQualityGateFailedCount() }} validée(s).
             </p>
-            <p *ngIf="!qualityGateConditions?.length" class="empty-text">Aucune condition Quality Gate disponible.</p>
-            <div class="qg-cond-list" *ngIf="qualityGateConditions?.length">
+            <p *ngIf="!qualityGateConditions.length" class="empty-text">Aucune condition Quality Gate disponible.</p>
+            <div class="qg-cond-list" *ngIf="qualityGateConditions.length">
               <ng-container *ngFor="let cond of qualityGateConditions">
                 <div class="qg-cond-item qg-cond-item-clickable"
                      [ngClass]="{'cond-failed': cond.status === 'ERROR', 'cond-ok': cond.status === 'OK'}"
