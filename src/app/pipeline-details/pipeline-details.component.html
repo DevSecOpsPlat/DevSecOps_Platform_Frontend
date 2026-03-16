@@ -217,6 +217,37 @@
                     <summary>Voir le JSON complet</summary>
                     <pre>{{ selectedJobScanJson | json }}</pre>
                   </details>
+                  <!-- Analyse IA : bouton + résultats -->
+                  <div class="ai-analysis-block">
+                    <button type="button"
+                            class="ai-analyze-btn"
+                            (click)="analyzeWithAi()"
+                            [disabled]="aiAnalysisLoading">
+                      <span *ngIf="!aiAnalysisLoading">🤖 Analyser avec l'IA</span>
+                      <span *ngIf="aiAnalysisLoading">Analyse en cours...</span>
+                    </button>
+                    <p class="ai-hint">L'IA lit l'artifact et indique les vulnérabilités, où les trouver et comment les corriger. Après correction, relancez le pipeline pour obtenir de nouveaux artifacts.</p>
+                    <div *ngIf="aiAnalysisError" class="ai-error">{{ aiAnalysisError }}</div>
+                    <div *ngIf="aiAnalysisResult" class="ai-result">
+                      <h5 class="ai-summary-title">Résumé</h5>
+                      <p class="ai-summary">{{ aiAnalysisResult.summary }}</p>
+                      <div *ngIf="aiAnalysisResult.vulnerabilities?.length" class="ai-vuln-list">
+                        <h5>Vulnérabilités et remédiations</h5>
+                        <div *ngFor="let v of aiAnalysisResult.vulnerabilities" class="ai-vuln-item">
+                          <div class="ai-vuln-header">
+                            <span class="ai-vuln-title">{{ v.title }}</span>
+                            <span class="ai-sev-badge" [ngClass]="severityClass(v.severity)">{{ v.severity }}</span>
+                          </div>
+                          <div *ngIf="v.location" class="ai-vuln-meta"><strong>Où :</strong> {{ v.location }}</div>
+                          <div *ngIf="v.description" class="ai-vuln-desc">{{ v.description }}</div>
+                          <div *ngIf="v.remediation" class="ai-vuln-fix"><strong>Comment corriger :</strong> {{ v.remediation }}</div>
+                        </div>
+                      </div>
+                      <div *ngIf="!aiAnalysisResult.vulnerabilities?.length && aiAnalysisResult.summary" class="ai-no-vuln">
+                        Aucune vulnérabilité détaillée retournée par l'IA (voir le résumé ci-dessus).
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div *ngIf="selectedJob && !selectedJobScanJson && scanError" class="logs-unavailable">

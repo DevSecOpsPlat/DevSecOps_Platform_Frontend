@@ -664,6 +664,127 @@
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 
+/* ── Analyse IA ── */
+.ai-analysis-block {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.ai-analyze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.ai-analyze-btn:hover:not(:disabled) {
+  background: #ea580c;
+  filter: brightness(1.05);
+}
+.ai-analyze-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.ai-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.ai-error {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+}
+.ai-result {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.ai-summary-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-summary {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.ai-vuln-list h5 {
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-vuln-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.84rem;
+}
+.ai-vuln-item:last-child { border-bottom: none; }
+.ai-vuln-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+.ai-vuln-title {
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-sev-badge {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: 4px;
+}
+.ai-sev-critical { background: #7f1d1d; color: #fecaca; }
+.ai-sev-high     { background: #991b1b; color: #fecaca; }
+.ai-sev-medium   { background: #b45309; color: #fef3c7; }
+.ai-sev-low      { background: #1e40af; color: #bfdbfe; }
+.ai-sev-info     { background: var(--border); color: var(--text-muted); }
+.ai-vuln-meta {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+}
+.ai-vuln-desc, .ai-vuln-fix {
+  margin: 0.35rem 0 0;
+  line-height: 1.5;
+  color: var(--text);
+}
+.ai-vuln-fix {
+  padding: 0.4rem 0.5rem;
+  background: var(--success-soft);
+  border-left: 3px solid var(--success);
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+.ai-no-vuln {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ═══════════════════════════════════════
    LOADING / EMPTY FULL PAGE
 ═══════════════════════════════════════ */

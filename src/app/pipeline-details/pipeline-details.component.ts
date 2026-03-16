@@ -3,6 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { PipelineService } from '../services/pipeline/pipeline.service';
 import { PipelineScanResponse, PipelineJobInfo } from '../models/pipeline/pipeline-scan-response';
 import { ToastService } from 'src/app/services/ui/toast.service';
+import { AiAnalysisService } from '../services/ai/ai-analysis.service';
+import { AnalyzeArtifactResponse } from '../models/ai/analyze-artifact.model';
 
 @Component({
   selector: 'app-pipeline-details',
@@ -25,11 +27,17 @@ export class PipelineDetailsComponent implements OnInit {
   scanError: string | null = null;
   loadingJob = false;
 
+  /** Analyse IA de l'artifact courant */
+  aiAnalysisResult: AnalyzeArtifactResponse | null = null;
+  aiAnalysisLoading = false;
+  aiAnalysisError: string | null = null;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private pipelineService: PipelineService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private aiAnalysisService: AiAnalysisService
   ) {}
 
   ngOnInit(): void {
@@ -105,6 +113,8 @@ export class PipelineDetailsComponent implements OnInit {
     this.selectedJobScanJson = undefined;
     this.jobLogsError = null;
     this.scanError = null;
+    this.aiAnalysisResult = null;
+    this.aiAnalysisError = null;
     this.loadingJob = true;
 
     this.pipelineService.getJobLogs(job.id).subscribe({
@@ -214,6 +224,47 @@ export class PipelineDetailsComponent implements OnInit {
         sum + (r.Vulnerabilities?.length || 0), 0);
     }
     return 0;
+  }
+
+  /** Envoie l'artifact du job sélectionné à l'IA pour analyse (vulnérabilités + remédiations). */
+  analyzeWithAi(): void {
+    if (!this.selectedJobScanJson || !this.selectedJob) return;
+    this.aiAnalysisLoading = true;
+    this.aiAnalysisError = null;
+    this.aiAnalysisResult = null;
+    const artifactContent = typeof this.selectedJobScanJson === 'string'
+      ? this.selectedJobScanJson
+      : JSON.stringify(this.selectedJobScanJson, null, 0);
+    const artifactSource = this.guessArtifactSource(this.selectedJob.name);
+    this.aiAnalysisService.analyzeArtifact({ artifactContent, artifactSource }).subscribe({
+      next: res => {
+        this.aiAnalysisResult = res;
+        this.aiAnalysisLoading = false;
+        this.toastService?.push('success', 'Analyse IA', 'Résultats disponibles.', 3000);
+      },
+      error: err => {
+        this.aiAnalysisLoading = false;
+        this.aiAnalysisError = err.error?.message || err.message || 'Erreur lors de l\'analyse IA.';
+        this.toastService?.push('error', 'Analyse IA', this.aiAnalysisError ?? 'Erreur inconnue', 5000);
+      }
+    });
+  }
+
+  private guessArtifactSource(jobName: string): string {
+    const n = (jobName || '').toLowerCase();
+    if (n.includes('sonar')) return 'sonarqube';
+    if (n.includes('trivy') || n.includes('dependency')) return 'trivy';
+    if (n.includes('sast') || n.includes('owasp')) return 'sast';
+    return '';
+  }
+
+  severityClass(severity: string): string {
+    const s = (severity || '').toUpperCase();
+    if (s.includes('CRITICAL')) return 'ai-sev-critical';
+    if (s.includes('HIGH')) return 'ai-sev-high';
+    if (s.includes('MEDIUM')) return 'ai-sev-medium';
+    if (s.includes('LOW')) return 'ai-sev-low';
+    return 'ai-sev-info';
   }
 }
 
