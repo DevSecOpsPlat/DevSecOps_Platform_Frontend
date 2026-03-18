@@ -319,15 +319,15 @@
               <details class="filter-section" open>
                 <summary>Software quality</summary>
                 <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'ALL'" (click)="setSoftwareQualityFilter('ALL')">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'SECURITY'" (click)="setSoftwareQualityFilter('SECURITY')">
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'SECURITY'" [disabled]="(softwareQualityCounts['SECURITY'] || 0) === 0 && softwareQualityFilter !== 'SECURITY'" (click)="setSoftwareQualityFilter('SECURITY')">
                   Security <span class="count">{{ softwareQualityCounts['SECURITY'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'RELIABILITY'" (click)="setSoftwareQualityFilter('RELIABILITY')">
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'RELIABILITY'" [disabled]="(softwareQualityCounts['RELIABILITY'] || 0) === 0 && softwareQualityFilter !== 'RELIABILITY'" (click)="setSoftwareQualityFilter('RELIABILITY')">
                   Reliability <span class="count">{{ softwareQualityCounts['RELIABILITY'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'MAINTAINABILITY'" (click)="setSoftwareQualityFilter('MAINTAINABILITY')">
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'MAINTAINABILITY'" [disabled]="(softwareQualityCounts['MAINTAINABILITY'] || 0) === 0 && softwareQualityFilter !== 'MAINTAINABILITY'" (click)="setSoftwareQualityFilter('MAINTAINABILITY')">
                   Maintainability <span class="count">{{ softwareQualityCounts['MAINTAINABILITY'] || 0 }}</span>
                 </button>
               </details>
@@ -335,21 +335,21 @@
               <details class="filter-section" open>
                 <summary>Severity</summary>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'ALL'" (click)="applyIssueFilters('ALL', typeFilter)">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="severityFilter === 'BLOCKER'" (click)="applyIssueFilters('BLOCKER', typeFilter)">
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'BLOCKER'" [disabled]="(severityCounts['BLOCKER'] || 0) === 0 && severityFilter !== 'BLOCKER'" (click)="applyIssueFilters('BLOCKER', typeFilter)">
                   Blocker <span class="count">{{ severityCounts['BLOCKER'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="severityFilter === 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'CRITICAL'" [disabled]="(severityCounts['CRITICAL'] || 0) === 0 && severityFilter !== 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">
                   High <span class="count">{{ severityCounts['CRITICAL'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="severityFilter === 'MAJOR'" (click)="applyIssueFilters('MAJOR', typeFilter)">
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MAJOR'" [disabled]="(severityCounts['MAJOR'] || 0) === 0 && severityFilter !== 'MAJOR'" (click)="applyIssueFilters('MAJOR', typeFilter)">
                   Medium <span class="count">{{ severityCounts['MAJOR'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="severityFilter === 'MINOR'" (click)="applyIssueFilters('MINOR', typeFilter)">
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MINOR'" [disabled]="(severityCounts['MINOR'] || 0) === 0 && severityFilter !== 'MINOR'" (click)="applyIssueFilters('MINOR', typeFilter)">
                   Low <span class="count">{{ severityCounts['MINOR'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="severityFilter === 'INFO'" (click)="applyIssueFilters('INFO', typeFilter)">
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'INFO'" [disabled]="(severityCounts['INFO'] || 0) === 0 && severityFilter !== 'INFO'" (click)="applyIssueFilters('INFO', typeFilter)">
                   Info <span class="count">{{ severityCounts['INFO'] || 0 }}</span>
                 </button>
               </details>
@@ -357,15 +357,15 @@
               <details class="filter-section" open>
                 <summary>Type</summary>
                 <button type="button" class="filter-item" [class.active]="typeFilter === 'ALL'" (click)="applyIssueFilters(severityFilter, 'ALL')">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="typeFilter === 'BUG'" (click)="applyIssueFilters(severityFilter, 'BUG')">
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'BUG'" [disabled]="(typeCounts['BUG'] || 0) === 0 && typeFilter !== 'BUG'" (click)="applyIssueFilters(severityFilter, 'BUG')">
                   Bug <span class="count">{{ typeCounts['BUG'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="typeFilter === 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'VULNERABILITY'" [disabled]="(typeCounts['VULNERABILITY'] || 0) === 0 && typeFilter !== 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
                   Vulnerability <span class="count">{{ typeCounts['VULNERABILITY'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="typeFilter === 'CODE_SMELL'" (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'CODE_SMELL'" [disabled]="(typeCounts['CODE_SMELL'] || 0) === 0 && typeFilter !== 'CODE_SMELL'" (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
                   Code Smell <span class="count">{{ typeCounts['CODE_SMELL'] || 0 }}</span>
                 </button>
               </details>
@@ -373,21 +373,21 @@
               <details class="filter-section" open>
                 <summary>Status</summary>
                 <button type="button" class="filter-item" [class.active]="statusFilter === 'ALL'" (click)="setStatusFilter('ALL')">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="statusFilter === 'OPEN'" (click)="setStatusFilter('OPEN')">
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'OPEN'" [disabled]="(statusCounts['OPEN'] || 0) === 0 && statusFilter !== 'OPEN'" (click)="setStatusFilter('OPEN')">
                   Open <span class="count">{{ statusCounts['OPEN'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="statusFilter === 'CONFIRMED'" (click)="setStatusFilter('CONFIRMED')">
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'CONFIRMED'" [disabled]="(statusCounts['CONFIRMED'] || 0) === 0 && statusFilter !== 'CONFIRMED'" (click)="setStatusFilter('CONFIRMED')">
                   Confirmed <span class="count">{{ statusCounts['CONFIRMED'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="statusFilter === 'FALSE_POSITIVE'" (click)="setStatusFilter('FALSE_POSITIVE')">
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FALSE_POSITIVE'" [disabled]="(statusResolutionCounts['FALSE_POSITIVE'] || 0) === 0 && statusFilter !== 'FALSE_POSITIVE'" (click)="setStatusFilter('FALSE_POSITIVE')">
                   False Positive <span class="count">{{ statusResolutionCounts['FALSE_POSITIVE'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="statusFilter === 'ACCEPTED'" (click)="setStatusFilter('ACCEPTED')">
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'ACCEPTED'" [disabled]="(statusResolutionCounts['ACCEPTED'] || 0) === 0 && statusFilter !== 'ACCEPTED'" (click)="setStatusFilter('ACCEPTED')">
                   Accepted <span class="count">{{ statusResolutionCounts['ACCEPTED'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="statusFilter === 'FIXED'" (click)="setStatusFilter('FIXED')">
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FIXED'" [disabled]="(statusResolutionCounts['FIXED'] || 0) === 0 && statusFilter !== 'FIXED'" (click)="setStatusFilter('FIXED')">
                   Fixed <span class="count">{{ statusResolutionCounts['FIXED'] || 0 }}</span>
                 </button>
               </details>
@@ -395,18 +395,18 @@
               <details class="filter-section">
                 <summary>Code attribute</summary>
                 <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'ALL'" (click)="setCodeAttributeFilter('ALL')">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Consistency'" (click)="setCodeAttributeFilter('Consistency')">
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Consistency'" [disabled]="(codeAttributeCounts['Consistency'] || 0) === 0 && codeAttributeFilter !== 'Consistency'" (click)="setCodeAttributeFilter('Consistency')">
                   Consistency <span class="count">{{ codeAttributeCounts['Consistency'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Intentionality'" (click)="setCodeAttributeFilter('Intentionality')">
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Intentionality'" [disabled]="(codeAttributeCounts['Intentionality'] || 0) === 0 && codeAttributeFilter !== 'Intentionality'" (click)="setCodeAttributeFilter('Intentionality')">
                   Intentionality <span class="count">{{ codeAttributeCounts['Intentionality'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Adaptability'" (click)="setCodeAttributeFilter('Adaptability')">
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Adaptability'" [disabled]="(codeAttributeCounts['Adaptability'] || 0) === 0 && codeAttributeFilter !== 'Adaptability'" (click)="setCodeAttributeFilter('Adaptability')">
                   Adaptability <span class="count">{{ codeAttributeCounts['Adaptability'] || 0 }}</span>
                 </button>
-                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Responsibility'" (click)="setCodeAttributeFilter('Responsibility')">
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Responsibility'" [disabled]="(codeAttributeCounts['Responsibility'] || 0) === 0 && codeAttributeFilter !== 'Responsibility'" (click)="setCodeAttributeFilter('Responsibility')">
                   Responsibility <span class="count">{{ codeAttributeCounts['Responsibility'] || 0 }}</span>
                 </button>
               </details>
@@ -462,7 +462,7 @@
               <details class="filter-section">
                 <summary>Assignee</summary>
                 <button type="button" class="filter-item" [class.active]="assigneeFilter === 'ALL'" (click)="setAssigneeFilter('ALL')">
-                  All <span class="count">{{ totalIssues }}</span>
+                  All <span class="count">{{ filteredIssuesTotal }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="assigneeFilter === 'UNASSIGNED'" (click)="setAssigneeFilter('UNASSIGNED')">
                   Not assigned <span class="count">{{ assigneeCounts['UNASSIGNED'] || 0 }}</span>

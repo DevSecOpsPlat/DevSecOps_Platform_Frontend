@@ -48,6 +48,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   fileSearch: string = '';
   issueSearch: string = '';
   filteredIssues: any[] = [];
+  filteredIssuesTotal = 0;
+  /** Total de la base courante (All) — doit rester stable quand on clique d'autres facets. */
+  issuesBaseTotal = 0;
   severityCounts: Record<string, number> = {};
   typeCounts: Record<string, number> = {};
   statusCounts: Record<string, number> = {};
@@ -182,7 +185,6 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
         this.processDuplication(res.duplication_components || []);
         this.processCoverage(res.coverage_components || []);
 
-        this.computeIssueFacets();
         this.applyIssueFilters();
 
         if (this.debugIssues) {
@@ -458,211 +460,213 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ─── Issues ──────────────────────────────────────────────────────────────────
 
-  private computeIssueFacets(): void {
-    const sevCounts: Record<string, number> = {};
-    const typeCounts: Record<string, number> = {};
-    const statusCounts: Record<string, number> = {};
-    const qualityCounts: Record<string, number> = { SECURITY: 0, RELIABILITY: 0, MAINTAINABILITY: 0 };
-    const languageCounts: Record<string, number> = {};
-    const ruleCounts: Record<string, number> = {};
-    const tagCounts: Record<string, number> = {};
-    const codeAttrCounts: Record<string, number> = {};
-    const secCatCounts: Record<string, number> = {};
-    const dirCounts: Record<string, number> = {};
-    const fileCounts: Record<string, number> = {};
-    const assigneeCounts: Record<string, number> = { UNASSIGNED: 0, ME: 0, ASSIGNED: 0 };
-    const currentUsername = this.userService.getUser()?.username || '';
-    // Facets : basés sur l’ensemble affiché par défaut (comme SonarCloud),
-    // mais on garde aussi les counts sur `allIssues` pour les statuts "Fixed/Accepted/False Positive".
-    this.issues.forEach(issue => {
-      const sev = (issue.severity || 'UNKNOWN').toUpperCase();
-      const type = (issue.type || 'OTHER').toUpperCase();
-      sevCounts[sev] = (sevCounts[sev] || 0) + 1;
-      typeCounts[type] = (typeCounts[type] || 0) + 1;
-
-      const st = (issue.status || 'OPEN').toUpperCase();
-      statusCounts[st] = (statusCounts[st] || 0) + 1;
-
-      // SonarCloud "Software quality" (approx) from type
-      if (type === 'VULNERABILITY') qualityCounts['SECURITY']++;
-      else if (type === 'BUG') qualityCounts['RELIABILITY']++;
-      else if (type === 'CODE_SMELL') qualityCounts['MAINTAINABILITY']++;
-
-      const comp = (issue.component || '') as string;
-      const lang = this.guessLanguageFromComponent(comp);
-      if (lang) languageCounts[lang] = (languageCounts[lang] || 0) + 1;
-
-      const rule = (issue.rule || issue.ruleKey || issue.rule_key || '') as string;
-      if (rule) ruleCounts[rule] = (ruleCounts[rule] || 0) + 1;
-
-      const tags: any[] = Array.isArray(issue.tags) ? issue.tags : [];
-      tags.forEach(t => {
-        const key = String(t || '').trim();
-        if (!key) return;
-        tagCounts[key] = (tagCounts[key] || 0) + 1;
-      });
-
-      const codeAttr = this.getCodeAttributeKey(issue);
-      if (codeAttr) codeAttrCounts[codeAttr] = (codeAttrCounts[codeAttr] || 0) + 1;
-
-      const secCats = this.getSecurityCategories(issue);
-      secCats.forEach(sc => {
-        secCatCounts[sc] = (secCatCounts[sc] || 0) + 1;
-      });
-
-      const filePath = this.getComponentPath(issue.component);
-      const dir = this.getDirectoryFromPath(filePath);
-      if (dir) dirCounts[dir] = (dirCounts[dir] || 0) + 1;
-      if (filePath) fileCounts[filePath] = (fileCounts[filePath] || 0) + 1;
-
-      const assignee = String(issue.assignee || '').trim();
-      if (!assignee) assigneeCounts['UNASSIGNED']++;
-      else assigneeCounts['ASSIGNED']++;
-      // "Assigned to me" côté UI = assignee présent (puisque c'est un compte sonar technique) + username plateforme pour libellé
-      if (assignee && currentUsername) assigneeCounts['ME']++;
-    });
-
-    // Statuts "résolution" (sur allIssues) : Fixed / False Positive / Accepted
-    const resCounts: Record<string, number> = { FIXED: 0, FALSE_POSITIVE: 0, ACCEPTED: 0 };
-    for (const i of (this.allIssues || [])) {
-      const st = String(i?.status || '').toUpperCase();
-      const resolution = String(i?.resolution || '').toUpperCase();
-      // SonarCloud "Fixed" correspond à RESOLVED/CLOSED avec résolution FIXED (ou parfois résolution vide).
-      if ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'))) {
-        resCounts['FIXED']++;
-      }
-      if (resolution.includes('FALSE')) resCounts['FALSE_POSITIVE']++;
-      if (resolution.includes('ACCEPT')) resCounts['ACCEPTED']++;
+  private countBy<T extends string>(items: any[], keyFn: (i: any) => T | '' | null | undefined): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const it of (items || [])) {
+      const k = keyFn(it);
+      if (!k) continue;
+      out[k] = (out[k] || 0) + 1;
     }
-    this.statusResolutionCounts = resCounts;
-    // Pour affichage "Fixed" on peut aussi exposer RESOLVED
-    if (resCounts['FIXED'] > 0) statusCounts['RESOLVED'] = resCounts['FIXED'];
-    this.severityCounts = sevCounts;
-    this.typeCounts = typeCounts;
-    this.statusCounts = statusCounts;
-    this.softwareQualityCounts = qualityCounts;
-    this.languageCounts = languageCounts;
-    this.ruleCounts = ruleCounts;
-    this.tagCounts = tagCounts;
-    this.codeAttributeCounts = codeAttrCounts;
-    this.securityCategoryCounts = secCatCounts;
-    this.directoryCounts = dirCounts;
-    this.fileCounts = fileCounts;
-    this.assigneeCounts = assigneeCounts;
+    return out;
+  }
 
-    this.topRules = Object.entries(ruleCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([key, count]) => ({ key, count }));
+  private countMany(items: any[], keysFn: (i: any) => string[]): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const it of (items || [])) {
+      const keys = keysFn(it) || [];
+      for (const raw of keys) {
+        const k = String(raw || '').trim();
+        if (!k) continue;
+        out[k] = (out[k] || 0) + 1;
+      }
+    }
+    return out;
+  }
 
-    this.topTags = Object.entries(tagCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([key, count]) => ({ key, count }));
+  /**
+   * Applique les filtres "hors status" (severity/type/quality/lang/rule/tag/codeAttr/secCat/dir/file/assignee/search).
+   * Utilisé pour calculer les facets "comme SonarCloud".
+   */
+  private matchesNonStatusFilters(issue: any, overrides?: Partial<{
+    severityFilter: string;
+    typeFilter: string;
+    softwareQualityFilter: 'ALL' | 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY';
+    languageFilter: string;
+    ruleFilter: string;
+    tagFilter: string;
+    codeAttributeFilter: string;
+    securityCategoryFilter: string;
+    directoryFilter: string;
+    fileFilter: string;
+    assigneeFilter: 'ALL' | 'UNASSIGNED' | 'ME' | 'ASSIGNED';
+    issueSearch: string;
+  }>): boolean {
+    const sev = String(issue?.severity || 'UNKNOWN').toUpperCase();
+    const t = String(issue?.type || 'OTHER').toUpperCase();
+    const comp = String(issue?.component || '');
+    const lang = this.guessLanguageFromComponent(comp);
+    const rule = String(issue?.rule || issue?.ruleKey || issue?.rule_key || '');
+    const tags: string[] = Array.isArray(issue?.tags) ? issue.tags.map((x: any) => String(x)) : [];
+    const codeAttr = this.getCodeAttributeKey(issue);
+    const secCats = this.getSecurityCategories(issue);
+    const filePath = this.getComponentPath(issue?.component);
+    const dir = this.getDirectoryFromPath(filePath);
+    const assignee = String(issue?.assignee || '').trim();
 
-    this.topDirectories = Object.entries(dirCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([key, count]) => ({ key, count }));
+    const sf = overrides?.severityFilter ?? this.severityFilter;
+    const tf = overrides?.typeFilter ?? this.typeFilter;
+    const qf = overrides?.softwareQualityFilter ?? this.softwareQualityFilter;
+    const lf = overrides?.languageFilter ?? this.languageFilter;
+    const rf = overrides?.ruleFilter ?? this.ruleFilter;
+    const tagf = overrides?.tagFilter ?? this.tagFilter;
+    const caf = overrides?.codeAttributeFilter ?? this.codeAttributeFilter;
+    const scf = overrides?.securityCategoryFilter ?? this.securityCategoryFilter;
+    const df = overrides?.directoryFilter ?? this.directoryFilter;
+    const ff = overrides?.fileFilter ?? this.fileFilter;
+    const af = overrides?.assigneeFilter ?? this.assigneeFilter;
+    const q = (overrides?.issueSearch ?? this.issueSearch ?? '').trim().toLowerCase();
 
-    this.topFiles = Object.entries(fileCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([key, count]) => ({ key, count }));
+    const sevOk = sf === 'ALL' || sev === sf;
+    const typeOk = tf === 'ALL' || t === tf;
+    const langOk = lf === 'ALL' || (lang || 'Unknown') === lf;
+    const ruleOk = rf === 'ALL' || rule === rf;
+    const tagOk = tagf === 'ALL' || tags.includes(tagf);
 
-    this.topSecurityCategories = Object.entries(secCatCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 12)
-      .map(([key, count]) => ({ key, count }));
+    const quality = this.getSoftwareQualityKeyFromType(t);
+    const qualityOk = qf === 'ALL' || quality === qf;
 
-    this.topCodeAttributes = Object.entries(codeAttrCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([key, count]) => ({ key, count }));
+    const codeAttrOk = caf === 'ALL' || codeAttr === caf;
+    const secCatOk = scf === 'ALL' || secCats.includes(scf);
+    const dirOk = df === 'ALL' || dir === df;
+    const fileOk = ff === 'ALL' || filePath === ff;
+    const assigneeOk =
+      af === 'ALL'
+        ? true
+        : af === 'UNASSIGNED'
+          ? !assignee
+          : af === 'ASSIGNED'
+            ? !!assignee
+            : !!assignee; // ME : compte technique
+
+    const searchOk = !q
+      || String(issue?.message || '').toLowerCase().includes(q)
+      || comp.toLowerCase().includes(q)
+      || rule.toLowerCase().includes(q);
+
+    return sevOk && typeOk && qualityOk && langOk && ruleOk && tagOk && codeAttrOk && secCatOk && dirOk && fileOk && assigneeOk && searchOk;
+  }
+
+  /** Base = All selon le status (All/Open/Confirmed/Fixed/etc). */
+  private getIssuesBase(): any[] {
+    const s = (this.statusFilter || 'ALL').toUpperCase();
+    const defaultStatuses = new Set(['OPEN', 'CONFIRMED', 'REOPENED']);
+    // OPEN_GROUP et ALL correspondent au "groupe Open" (par défaut comme SonarCloud UI)
+    if (s === 'OPEN_GROUP' || s === 'ALL') {
+      return (this.allIssues || []).filter(i => defaultStatuses.has(String(i?.status || 'OPEN').toUpperCase()));
+    }
+    if (s === 'FIXED') {
+      return (this.allIssues || []).filter(i => {
+        const st = String(i?.status || '').toUpperCase();
+        const resolution = String(i?.resolution || '').toUpperCase();
+        return (st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'));
+      });
+    }
+    if (s === 'FALSE_POSITIVE') {
+      return (this.allIssues || []).filter(i => String(i?.resolution || '').toUpperCase().includes('FALSE'));
+    }
+    if (s === 'ACCEPTED') {
+      return (this.allIssues || []).filter(i => String(i?.resolution || '').toUpperCase().includes('ACCEPT'));
+    }
+    // OPEN / CONFIRMED / REOPENED / RESOLVED / CLOSED
+    return (this.allIssues || []).filter(i => String(i?.status || '').toUpperCase() === s);
   }
 
   applyIssueFilters(severity?: string, type?: string): void {
     if (severity !== undefined) this.severityFilter = severity;
     if (type !== undefined) this.typeFilter = type;
-    const base = this.getIssuesBaseForStatus();
-    this.filteredIssues = base.filter(issue => {
-      const sev = (issue.severity || 'UNKNOWN').toUpperCase();
-      const t = (issue.type || 'OTHER').toUpperCase();
+    const baseStatusOnly = this.getIssuesBase(); // Base basée sur Status uniquement
+    this.issuesBaseTotal = baseStatusOnly.length; // "All" stable (selon status)
 
-      const st = (issue.status || 'OPEN').toUpperCase();
-      const comp = (issue.component || '') as string;
-      const lang = this.guessLanguageFromComponent(comp);
-      const rule = (issue.rule || issue.ruleKey || issue.rule_key || '') as string;
-      const tags: string[] = Array.isArray(issue.tags) ? issue.tags.map((x: any) => String(x)) : [];
-      const codeAttr = this.getCodeAttributeKey(issue);
-      const secCats = this.getSecurityCategories(issue);
-      const filePath = this.getComponentPath(issue.component);
-      const dir = this.getDirectoryFromPath(filePath);
-      const assignee = String(issue.assignee || '').trim();
+    // IMPORTANT: pas d'ajout spécial "closed" dans Type=CODE_SMELL.
+    // Le périmètre de l'affichage dépend uniquement du filtre Status (OPEN/FIXED/etc),
+    // sinon on gonfle les counts (effet doublement).
+    const base = baseStatusOnly;
 
-      const sevOk = this.severityFilter === 'ALL' || sev === this.severityFilter;
-      const typeOk = this.typeFilter === 'ALL' || t === this.typeFilter;
-      const statusOk =
-        this.statusFilter === 'ALL'
-          ? true
-          : (this.statusFilter === 'FIXED' || this.statusFilter === 'FALSE_POSITIVE' || this.statusFilter === 'ACCEPTED')
-            ? true
-            : st === this.statusFilter;
-      const resolution = String(issue.resolution || '').toUpperCase();
-      const statusResolutionOk =
-        this.statusFilter === 'ALL'
-          ? true
-          : this.statusFilter === 'FALSE_POSITIVE'
-            ? resolution.includes('FALSE')
-            : this.statusFilter === 'ACCEPTED'
-              ? resolution.includes('ACCEPT')
-              : this.statusFilter === 'FIXED'
-                ? ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED')))
-                : st === this.statusFilter;
-      const langOk = this.languageFilter === 'ALL' || (lang || 'Unknown') === this.languageFilter;
-      const ruleOk = this.ruleFilter === 'ALL' || rule === this.ruleFilter;
-      const tagOk = this.tagFilter === 'ALL' || tags.includes(this.tagFilter);
+    this.filteredIssues = base.filter(i => this.matchesNonStatusFilters(i));
+    this.filteredIssuesTotal = this.filteredIssues.length;
 
-      const quality = this.getSoftwareQualityKeyFromType(t);
-      const qualityOk = this.softwareQualityFilter === 'ALL' || quality === this.softwareQualityFilter;
+    // Facets: chaque section = base + tous les autres filtres sauf elle
+    const baseNoSeverity = base.filter(i => this.matchesNonStatusFilters(i, { severityFilter: 'ALL' }));
+    this.severityCounts = this.countBy(baseNoSeverity, (i) => String(i?.severity || 'UNKNOWN').toUpperCase());
 
-      const codeAttrOk = this.codeAttributeFilter === 'ALL' || codeAttr === this.codeAttributeFilter;
-      const secCatOk = this.securityCategoryFilter === 'ALL' || secCats.includes(this.securityCategoryFilter);
-      const dirOk = this.directoryFilter === 'ALL' || dir === this.directoryFilter;
-      const fileOk = this.fileFilter === 'ALL' || filePath === this.fileFilter;
-      const assigneeOk =
-        this.assigneeFilter === 'ALL'
-          ? true
-          : this.assigneeFilter === 'UNASSIGNED'
-            ? !assignee
-            : this.assigneeFilter === 'ASSIGNED'
-              ? !!assignee
-              : !!assignee; // ME : on l'assimile au compte technique Sonar "assign to me"
+    const baseNoType = base.filter(i => this.matchesNonStatusFilters(i, { typeFilter: 'ALL' }));
+    this.typeCounts = this.countBy(baseNoType, (i) => String(i?.type || 'OTHER').toUpperCase());
 
-      const q = (this.issueSearch || '').trim().toLowerCase();
-      const searchOk = !q
-        || String(issue.message || '').toLowerCase().includes(q)
-        || String(comp || '').toLowerCase().includes(q)
-        || String(rule || '').toLowerCase().includes(q);
+    const baseNoQuality = base.filter(i => this.matchesNonStatusFilters(i, { softwareQualityFilter: 'ALL' }));
+    this.softwareQualityCounts = {
+      SECURITY: baseNoQuality.filter(i => this.getSoftwareQualityKeyFromType(String(i?.type || '')) === 'SECURITY').length,
+      RELIABILITY: baseNoQuality.filter(i => this.getSoftwareQualityKeyFromType(String(i?.type || '')) === 'RELIABILITY').length,
+      MAINTAINABILITY: baseNoQuality.filter(i => this.getSoftwareQualityKeyFromType(String(i?.type || '')) === 'MAINTAINABILITY').length
+    };
 
-      return sevOk && typeOk && statusOk && statusResolutionOk && langOk && ruleOk && tagOk && qualityOk
-        && codeAttrOk && secCatOk && dirOk && fileOk && assigneeOk
-        && searchOk;
-    });
-  }
+    const baseNoLang = base.filter(i => this.matchesNonStatusFilters(i, { languageFilter: 'ALL' }));
+    this.languageCounts = this.countBy(baseNoLang, (i) => this.guessLanguageFromComponent(String(i?.component || '')) || 'Unknown');
 
-  /** Liste de base selon le status choisi (par défaut, on exclut RESOLVED comme SonarCloud). */
-  private getIssuesBaseForStatus(): any[] {
-    const s = (this.statusFilter || 'ALL').toUpperCase();
-    if (s === 'FIXED' || s === 'RESOLVED' || s === 'FALSE_POSITIVE' || s === 'ACCEPTED') {
-      return this.allIssues;
+    const baseNoRule = base.filter(i => this.matchesNonStatusFilters(i, { ruleFilter: 'ALL' }));
+    this.ruleCounts = this.countBy(baseNoRule, (i) => String(i?.rule || i?.ruleKey || i?.rule_key || '').trim());
+    this.topRules = Object.entries(this.ruleCounts).filter(([k]) => !!k).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([key, count]) => ({ key, count }));
+
+    const baseNoTag = base.filter(i => this.matchesNonStatusFilters(i, { tagFilter: 'ALL' }));
+    this.tagCounts = this.countMany(baseNoTag, (i) => (Array.isArray(i?.tags) ? i.tags.map((x: any) => String(x)) : []));
+    this.topTags = Object.entries(this.tagCounts).filter(([k]) => !!k).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([key, count]) => ({ key, count }));
+
+    const baseNoCodeAttr = base.filter(i => this.matchesNonStatusFilters(i, { codeAttributeFilter: 'ALL' }));
+    this.codeAttributeCounts = this.countBy(baseNoCodeAttr, (i) => this.getCodeAttributeKey(i));
+
+    const baseNoSecCat = base.filter(i => this.matchesNonStatusFilters(i, { securityCategoryFilter: 'ALL' }));
+    this.securityCategoryCounts = this.countMany(baseNoSecCat, (i) => this.getSecurityCategories(i));
+    this.topSecurityCategories = Object.entries(this.securityCategoryCounts).filter(([k]) => !!k).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([key, count]) => ({ key, count }));
+
+    const baseNoDir = base.filter(i => this.matchesNonStatusFilters(i, { directoryFilter: 'ALL' }));
+    this.directoryCounts = this.countBy(baseNoDir, (i) => this.getDirectoryFromPath(this.getComponentPath(i?.component)));
+    // Afficher toutes les directories (pas seulement les "top 10"), comme SonarCloud.
+    this.topDirectories = Object.entries(this.directoryCounts)
+      .filter(([k]) => !!k)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => ({ key, count }));
+
+    const baseNoFile = base.filter(i => this.matchesNonStatusFilters(i, { fileFilter: 'ALL' }));
+    this.fileCounts = this.countBy(baseNoFile, (i) => this.getComponentPath(i?.component));
+    // Afficher tous les fichiers ayant au moins 1 issue (pas de top 10).
+    this.topFiles = Object.entries(this.fileCounts)
+      .filter(([k]) => !!k)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => ({ key, count }));
+
+    const baseNoAssignee = base.filter(i => this.matchesNonStatusFilters(i, { assigneeFilter: 'ALL' }));
+    const currentUsername = this.userService.getUser()?.username || '';
+    const aCounts: Record<string, number> = { UNASSIGNED: 0, ME: 0, ASSIGNED: 0 };
+    for (const i of baseNoAssignee) {
+      const a = String(i?.assignee || '').trim();
+      if (!a) aCounts['UNASSIGNED']++;
+      else aCounts['ASSIGNED']++;
+      if (a && currentUsername) aCounts['ME']++;
     }
-    // Demande UI: quand on filtre "Type = Code Smell", inclure aussi les issues fermées.
-    const t = (this.typeFilter || 'ALL').toUpperCase();
-    if (t === 'CODE_SMELL') {
-      return this.allIssues;
+    this.assigneeCounts = aCounts;
+
+    // Status resolution counts (Fixed/Accepted/False Positive) : calculés sur allIssues + autres filtres (hors status)
+    const allNoStatus = (this.allIssues || []).filter(i => this.matchesNonStatusFilters(i, {}));
+    // Status basic counts (OPEN / CONFIRMED / REOPENED / RESOLVED / CLOSED) pour l'affichage
+    this.statusCounts = this.countBy(allNoStatus, (i) => String(i?.status || 'OPEN').toUpperCase());
+    const resCounts: Record<string, number> = { FIXED: 0, FALSE_POSITIVE: 0, ACCEPTED: 0 };
+    for (const i of allNoStatus) {
+      const st = String(i?.status || '').toUpperCase();
+      const resolution = String(i?.resolution || '').toUpperCase();
+      if ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'))) resCounts['FIXED']++;
+      if (resolution.includes('FALSE')) resCounts['FALSE_POSITIVE']++;
+      if (resolution.includes('ACCEPT')) resCounts['ACCEPTED']++;
     }
-    return this.issues;
+    this.statusResolutionCounts = resCounts;
   }
 
   setStatusFilter(status: string): void {

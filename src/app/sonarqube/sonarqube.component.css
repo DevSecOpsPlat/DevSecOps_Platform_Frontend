@@ -1757,6 +1757,15 @@
 
 .filter-item:hover { background: rgba(249, 115, 22, 0.06); }
 
+.filter-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.filter-item:disabled:hover {
+  background: transparent;
+}
+
 .filter-item.active {
   background: rgba(249, 115, 22, 0.10);
   border-color: rgba(249, 115, 22, 0.35);
