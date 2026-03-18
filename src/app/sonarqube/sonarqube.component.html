@@ -2,119 +2,141 @@
   <app-user-sidebar></app-user-sidebar>
   <div class="user-main">
     <div class="sonar-page">
+
+      <!-- ─── Header ─── -->
       <header class="sonar-header">
         <div class="title-block">
           <h1>Analyse SonarQube</h1>
-          <p class="subtitle">Vue synthétique de la qualité de code (issues, couverture, hotspots, Quality Gate).</p>
+          <p class="subtitle">
+            <ng-container *ngIf="sonarProjectKey">{{ sonarProjectKey }} · </ng-container>
+            Branche : {{ currentBranch }}
+            <ng-container *ngIf="metrics?.ncloc"> · {{ metrics.ncloc | number }} lignes</ng-container>
+          </p>
         </div>
-        <button class="refresh-btn" (click)="load()" [disabled]="loading">
-          🔄 Actualiser
-        </button>
+        <div class="header-actions" (click)="openQualityGateTab()">
+          <span class="qg-hero-badge" [ngClass]="qualityGateClass()" *ngIf="!loading && !error">
+            <span class="qg-hero-dot"></span>
+            <ng-container *ngIf="getQualityGateStatus() === 'OK'">Quality Gate : Passed</ng-container>
+            <ng-container *ngIf="getQualityGateStatus() !== 'OK'">
+              {{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec
+            </ng-container>
+          </span>
+          <button class="refresh-btn" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+        </div>
       </header>
 
+      <!-- ─── Loading ─── -->
       <div *ngIf="loading" class="loading-state">
         <div class="spinner"></div>
         <p>Chargement des métriques SonarQube...</p>
       </div>
 
+      <!-- ─── Error ─── -->
       <div *ngIf="!loading && error" class="error-state">
+        <div class="error-icon">⚠</div>
         <p>{{ error }}</p>
+        <button class="refresh-btn" (click)="load()">Réessayer</button>
       </div>
 
+      <!-- ─── Content ─── -->
       <div *ngIf="!loading && !error" class="sonar-content">
 
-        <!-- Sélecteur de branche -->
+        <!-- Branch selector -->
         <div class="branch-bar">
           <span class="branch-label">Branche :</span>
-          <select class="branch-select"
-                  [ngModel]="currentBranch"
-                  (ngModelChange)="onBranchChange($event)">
+          <select class="branch-select" [ngModel]="currentBranch" (ngModelChange)="onBranchChange($event)">
             <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
           </select>
         </div>
 
-        <!-- Onglets -->
+        <!-- Tabs -->
         <nav class="tabs">
-          <button class="tab-btn" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">
-            Vue d'ensemble
-          </button>
-          <button class="tab-btn" [class.active]="activeTab === 'quality'" (click)="setTab('quality')">
-            Quality Gate
-          </button>
-          <button class="tab-btn" [class.active]="activeTab === 'issues'" (click)="setTab('issues')">
-            Issues ({{ totalIssues }})
-          </button>
-          <button class="tab-btn" [class.active]="activeTab === 'hotspots'" (click)="setTab('hotspots')">
-            Hotspots ({{ totalHotspots || hotspots.length || 0 }})
-          </button>
-          <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">
-            Duplication
-          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'overview'"    (click)="setTab('overview')">Vue d'ensemble</button>
+          <button class="tab-btn" [class.active]="activeTab === 'quality'"     (click)="setTab('quality')">Quality Gate</button>
+          <button class="tab-btn" [class.active]="activeTab === 'issues'"      (click)="setTab('issues')">Issues ({{ totalIssues }})</button>
+          <button class="tab-btn" [class.active]="activeTab === 'hotspots'"    (click)="setTab('hotspots')">Hotspots ({{ totalHotspots || hotspots.length || 0 }})</button>
+          <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">Duplication</button>
+          <button class="tab-btn" [class.active]="activeTab === 'coverage'" (click)="setTab('coverage')">Coverage</button>
         </nav>
 
-        <!-- OVERVIEW (enrichie) -->
+        <!-- ══════════════════════════════════════════
+             OVERVIEW
+        ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'overview'" class="overview-tab">
-          <!-- Bandeau principal : Quality Gate + projet -->
-          <div class="overview-hero" (click)="openQualityGateTab()">
-            <div class="overview-hero-left">
-              <span class="overview-hero-label">Quality Gate</span>
-              <span class="overview-hero-badge" [ngClass]="qualityGateClass()">
-                <ng-container *ngIf="getQualityGateStatus() === 'OK'">✓ Passed</ng-container>
-                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">
-                  {{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec
-                </ng-container>
-              </span>
+
+          <!-- KPI Cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card" (click)="onOverviewCardClick('bug')">
+              <div class="kpi-label">Bugs</div>
+              <div class="kpi-val">{{ metrics?.bugs || 0 }}</div>
+              <div class="kpi-sub" [class.kpi-err]="(metrics?.bugs || 0) > 0">
+                Fiabilité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.reliability_rating)">
+                  {{ getRatingLabel(metrics?.reliability_rating) }}
+                </span>
+              </div>
             </div>
-            <div class="overview-hero-meta">
-              <span class="overview-meta-item" *ngIf="sonarProjectKey">Projet : {{ sonarProjectKey }}</span>
-              <span class="overview-meta-item">Branche : {{ currentBranch }}</span>
-              <span class="overview-meta-item">Lignes de code : {{ metrics?.ncloc || 0 | number }}</span>
+            <div class="kpi-card" (click)="onOverviewCardClick('vuln')">
+              <div class="kpi-label">Vulnérabilités</div>
+              <div class="kpi-val">{{ metrics?.vulnerabilities || 0 }}</div>
+              <div class="kpi-sub">
+                Sécurité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.security_rating)">
+                  {{ getRatingLabel(metrics?.security_rating) }}
+                </span>
+              </div>
+            </div>
+            <div class="kpi-card" (click)="onOverviewCardClick('smell')">
+              <div class="kpi-label">Code Smells</div>
+              <div class="kpi-val">{{ metrics?.code_smells || 0 }}</div>
+              <div class="kpi-sub">
+                Maintenabilité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.maintainability_rating)">
+                  {{ getRatingLabel(metrics?.maintainability_rating) }}
+                </span>
+              </div>
+            </div>
+            <div class="kpi-card" (click)="onOverviewCardClick('hotspot')">
+              <div class="kpi-label">Hotspots</div>
+              <div class="kpi-val">{{ totalHotspots || hotspots.length || 0 }}</div>
+              <div class="kpi-sub kpi-warn" *ngIf="(totalHotspots || hotspots.length) > 0">À revoir</div>
+              <div class="kpi-sub kpi-ok" *ngIf="(totalHotspots || hotspots.length) === 0">Aucun</div>
             </div>
           </div>
 
-          <!-- Ratings (sécurité, fiabilité, maintenabilité) -->
-          <div class="overview-ratings" *ngIf="metrics?.security_rating !== undefined || metrics?.reliability_rating !== undefined || metrics?.maintainability_rating !== undefined">
-            <h3 class="overview-section-title">Ratings (nouveau code)</h3>
-            <div class="ratings-row">
-              <div class="rating-item" *ngIf="metrics?.reliability_rating !== undefined">
-                <span class="rating-label">Fiabilité</span>
-                <span class="rating-badge" [ngClass]="getRatingClass(metrics.reliability_rating)">{{ getRatingLabel(metrics.reliability_rating) }}</span>
+          <!-- Progress Bars: Coverage + Duplication -->
+          <div class="metric-bars-row">
+            <div class="bar-card" (click)="setTab('quality')" title="Voir le détail Coverage">
+              <div class="bar-header">
+                <span class="bar-title-text">Couverture des tests</span>
+                <span class="bar-val" [style.color]="getCoverageColor(getCoveragePercent())">
+                  {{ getCoveragePercent() | number:'1.1-1' }}%
+                </span>
               </div>
-              <div class="rating-item" *ngIf="metrics?.security_rating !== undefined">
-                <span class="rating-label">Sécurité</span>
-                <span class="rating-badge" [ngClass]="getRatingClass(metrics.security_rating)">{{ getRatingLabel(metrics.security_rating) }}</span>
+              <div class="bar-track">
+                <div class="bar-fill fill-cov" [style.width.%]="getCoveragePercent()"></div>
               </div>
-              <div class="rating-item" *ngIf="metrics?.maintainability_rating !== undefined">
-                <span class="rating-label">Maintenabilité</span>
-                <span class="rating-badge" [ngClass]="getRatingClass(metrics.maintainability_rating)">{{ getRatingLabel(metrics.maintainability_rating) }}</span>
+              <div class="bar-hint">seuil ≥ 80%</div>
+            </div>
+            <div class="bar-card" (click)="setTab('duplication')" title="Voir le détail Duplication">
+              <div class="bar-header">
+                <span class="bar-title-text">Duplication de code</span>
+                <span class="bar-val" style="color: var(--c-orange)">
+                  {{ getDuplicationPercent() | number:'1.1-1' }}%
+                </span>
               </div>
+              <div class="bar-track">
+                <div class="bar-fill fill-dup" [style.width.%]="getDuplicationPercent()"></div>
+              </div>
+              <div class="bar-hint">seuil ≤ 3% · {{ duplicationFiles.length }} fichiers affectés</div>
             </div>
           </div>
 
-          <!-- Métriques visuelles : Couverture et Duplication (barres de progression) -->
-          <div class="overview-metrics-bars">
-            <div class="metric-bar-card metric-bar-card-clickable" (click)="setTab('quality')" title="Voir le détail dans Quality Gate">
-              <div class="metric-bar-header">
-                <span class="metric-bar-title">Couverture des tests</span>
-                <span class="metric-bar-value">{{ getCoveragePercent() | number:'1.1-1' }}%</span>
-              </div>
-              <div class="metric-bar-track">
-                <div class="metric-bar-fill metric-bar-fill-coverage" [style.width.%]="getCoveragePercent()"></div>
-              </div>
-            </div>
-            <div class="metric-bar-card metric-bar-card-clickable" (click)="setTab('duplication')" title="Voir le détail dans l'onglet Duplication">
-              <div class="metric-bar-header">
-                <span class="metric-bar-title">Duplication de code</span>
-                <span class="metric-bar-value">{{ getDuplicationPercent() | number:'1.1-1' }}%</span>
-              </div>
-              <div class="metric-bar-track">
-                <div class="metric-bar-fill metric-bar-fill-dup" [style.width.%]="getDuplicationPercent()"></div>
-              </div>
-            </div>
-          </div>
+          <!-- Charts Row -->
+          <div class="charts-row">
 
-          <!-- Répartition des issues (sévérité) -->
-          <div class="overview-issues-viz" *ngIf="totalIssues > 0">
+            <!-- Severity Bar Chart -->
+              <div class="overview-issues-viz" *ngIf="totalIssues > 0">
             <h3 class="overview-section-title">
               Répartition des issues
               <button type="button" class="overview-link" (click)="setTab('issues')">Voir tout ({{ totalIssues }})</button>
@@ -132,254 +154,178 @@
               <button type="button" class="type-chip" (click)="onOverviewCardClick('bug')">Bugs : {{ metrics?.bugs || 0 }}</button>
               <button type="button" class="type-chip" (click)="onOverviewCardClick('vuln')">Vulnérabilités : {{ metrics?.vulnerabilities || 0 }}</button>
               <button type="button" class="type-chip" (click)="onOverviewCardClick('smell')">Code Smells : {{ metrics?.code_smells || 0 }}</button>
+              <button type="button" class="type-chip" (click)="onOverviewCardClick('coverage')">Coverage : {{ getCoveragePercent() | number:'1.1-1' }}%</button>
             </div>
           </div>
 
-          <!-- Hotspots résumé -->
-          <div class="overview-hotspots-summary" *ngIf="(totalHotspots || hotspots.length) > 0">
-            <h3 class="overview-section-title">
-              Security Hotspots
-              <button type="button" class="overview-link" (click)="onOverviewCardClick('hotspot')">{{ totalHotspots || hotspots.length }} à revoir</button>
-            </h3>
-            <p class="overview-desc">Points de sécurité à valider manuellement. Cliquez pour ouvrir l’onglet Hotspots.</p>
+            <!-- Donut Chart -->
+            <div class="panel">
+              <div class="panel-title">Répartition par type</div>
+              <div class="panel-sub">{{ totalIssues }} issues au total</div>
+              <div class="donut-wrap">
+                <div class="donut-canvas-wrap">
+                  <canvas #donutCanvas></canvas>
+                  <div class="donut-center">
+                    <span class="donut-num">{{ totalIssues }}</span>
+                    <span class="donut-label">issues</span>
+                  </div>
+                </div>
+                <div class="donut-legend">
+                  <span class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span>Bug {{ typeCounts['BUG'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot" style="background:#b91c1c"></span>Vuln {{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot" style="background:#6b7280"></span>Smell {{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Cartes synthèse (accès rapide) -->
-          <h3 class="overview-section-title">Métriques clés</h3>
-          <section class="summary-cards">
-            <div class="card card-clickable" (click)="openQualityGateTab()">
-              <h3>Quality Gate</h3>
-              <span class="qg-badge" [ngClass]="qualityGateClass()">
-                <ng-container *ngIf="getQualityGateStatus() === 'OK'">OK</ng-container>
-                <ng-container *ngIf="getQualityGateStatus() !== 'OK'">{{ getQualityGateFailedCount() }} en échec</ng-container>
-              </span>
+          <!-- Hotspot summary -->
+          <div class="panel hotspot-summary" *ngIf="(totalHotspots || hotspots.length) > 0"   class="bar-card"  (click)="onOverviewCardClick('hotspot')">
+            <div class="hs-summary-content" >
+              <div >
+                <div class="panel-title">Security Hotspots</div>
+                <p class="panel-sub" style="margin-bottom:0">Points de sécurité à valider manuellement.</p>
+              </div>
+              <button class="overview-link-btn" (click)="onOverviewCardClick('hotspot')">
+                {{ totalHotspots || hotspots.length }} à revoir →
+              </button>
             </div>
-            <div class="card card-clickable" (click)="onOverviewCardClick('vuln')">
-              <h3>Vulnérabilités</h3>
-              <p class="big-number">{{ metrics?.vulnerabilities || 0 }}</p>
-            </div>
-            <div class="card card-clickable" (click)="onOverviewCardClick('bug')">
-              <h3>Bugs</h3>
-              <p class="big-number">{{ metrics?.bugs || 0 }}</p>
-            </div>
-            <div class="card card-clickable" (click)="onOverviewCardClick('smell')">
-              <h3>Code Smells</h3>
-              <p class="big-number">{{ metrics?.code_smells || 0 }}</p>
-            </div>
-            <div class="card card-clickable" (click)="setTab('quality')">
-              <h3>Couverture</h3>
-              <p class="big-number">{{ metrics?.coverage || '0' }}<span class="unit">%</span></p>
-            </div>
-            <div class="card card-clickable" (click)="onOverviewCardClick('dup')">
-              <h3>Duplication</h3>
-              <p class="big-number">{{ metrics?.duplicated_lines_density || '0' }}<span class="unit">%</span></p>
-            </div>
-            <div class="card card-clickable" (click)="onOverviewCardClick('hotspot')">
-              <h3>Hotspots</h3>
-              <p class="big-number">{{ totalHotspots || hotspots.length || 0 }}</p>
-            </div>
-          </section>
+          </div>
+
         </section>
 
-        <!-- QUALITY GATE : toutes les conditions (validées + en échec) avec détails des problèmes -->
+
+        <!-- ══════════════════════════════════════════
+             QUALITY GATE
+        ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'quality'" class="quality-tab">
           <div class="panel">
-            <h2>Conditions du Quality Gate</h2>
-            <p class="panel-subtitle" *ngIf="qualityGateConditions.length">
-              {{ getQualityGateFailedCount() }} condition(s) en échec, {{ qualityGateConditions.length - getQualityGateFailedCount() }} validée(s).
-            </p>
-            <p *ngIf="!qualityGateConditions.length" class="empty-text">Aucune condition Quality Gate disponible.</p>
+            <div class="qg-summary-row">
+              <div>
+                <div class="panel-title">Conditions du Quality Gate</div>
+                <p class="panel-sub" *ngIf="qualityGateConditions.length">
+                  {{ getQualityGateFailedCount() }} en échec · {{ qualityGateConditions.length - getQualityGateFailedCount() }} validée(s)
+                </p>
+                <p class="panel-sub" *ngIf="!qualityGateConditions.length">Aucune condition disponible.</p>
+              </div>
+              <span class="qg-hero-badge" [ngClass]="qualityGateClass()">
+                <span class="qg-hero-dot"></span>
+                {{ getQualityGateStatus() === 'OK' ? 'Passed' : 'Failed' }}
+              </span>
+            </div>
+
             <div class="qg-cond-list" *ngIf="qualityGateConditions.length">
               <ng-container *ngFor="let cond of qualityGateConditions">
-                <div class="qg-cond-item qg-cond-item-clickable"
-                     [ngClass]="{'cond-failed': cond.status === 'ERROR', 'cond-ok': cond.status === 'OK'}"
-                     (click)="onQualityGateConditionClick(cond)"
-                     [title]="getQualityGateConditionClickHint(cond)">
+                <div class="qg-cond-item"
+                     [class.cond-failed]="cond.status === 'ERROR'"
+                     [class.cond-ok]="cond.status === 'OK'"
+                     (click)="onQualityGateConditionClick(cond)">
                   <div class="qg-cond-header">
-                    <span class="qg-cond-metric">
-                      {{ formatConditionMetric(cond.metric) || formatConditionMetric(cond.metricKey) }}
-                    </span>
-                    <span class="qg-cond-status" [ngClass]="cond.status === 'ERROR' ? 'qg-error' : 'qg-ok'">
+                    <span class="qg-cond-metric">{{ formatConditionMetric(cond.metric || cond.metricKey) }}</span>
+                    <span class="qg-cond-status" [class.status-ok]="cond.status === 'OK'" [class.status-err]="cond.status === 'ERROR'">
                       {{ cond.status }}
                     </span>
                   </div>
                   <p class="qg-cond-values">
-                    <span class="current">{{ cond.actualValue || '0' }}</span>
-                    <span class="required">≥ {{ cond.errorThreshold }}</span>
-                  </p>
-
-                  <!-- Détail des problèmes (uniquement pour les conditions en échec) - clic ne change pas d'onglet -->
-                  <div class="qg-extra" *ngIf="cond.status === 'ERROR' && isCoverageCondition(cond)" (click)="$event.stopPropagation()">
-                  <div class="qg-extra-header">
-                    <h3>Couverture par fichier</h3>
-                    <div class="view-toggle">
-                      <span>Vue :</span>
-                      <button type="button"
-                              class="view-btn"
-                              [class.active]="coverageView === 'list'"
-                              (click)="coverageView = 'list'">
-                        Liste
-                      </button>
-                      <button type="button"
-                              class="view-btn"
-                              [class.active]="coverageView === 'tree'"
-                              (click)="coverageView = 'tree'">
-                        Tree
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- LIST VIEW -->
-                  <div class="coverage-table" *ngIf="coverageView === 'list'">
-                    <div class="coverage-header">
-                      <span class="col-path">Fichier</span>
-                      <span class="col-cov">Coverage</span>
-                      <span class="col-unl">Lignes non couvertes</span>
-                      <span class="col-unc">Conditions non couvertes</span>
-                    </div>
-                    <div class="coverage-row" *ngFor="let f of coverageFiles">
-                      <span class="col-path">{{ f.path }}</span>
-                      <span class="col-cov">{{ f.coverage | number:'1.1-1' }}%</span>
-                      <span class="col-unl">{{ f.uncoveredLines }}</span>
-                      <span class="col-unc">{{ f.uncoveredConditions }}</span>
-                    </div>
-                  </div>
-
-                  <!-- TREE VIEW (compact, style SonarQube) -->
-                  <div class="coverage-table" *ngIf="coverageView === 'tree'">
-                    <div class="coverage-header">
-                      <span class="col-path">Fichier</span>
-                      <span class="col-cov">Coverage</span>
-                      <span class="col-unl">Lignes non couvertes</span>
-                      <span class="col-unc">Conditions non couvertes</span>
-                    </div>
-                    <ng-container *ngFor="let group of coverageTree">
-                      <!-- Ligne dossier -->
-                      <div class="coverage-row coverage-group-row"
-                           (click)="toggleCoverageGroup(group.group)">
-                        <span class="col-path">
-                          <span class="folder-icon" [class.open]="isCoverageGroupExpanded(group.group)"></span>
-                          {{ group.group }}
-                        </span>
-                        <span class="col-cov">-</span>
-                        <span class="col-unl">-</span>
-                        <span class="col-unc">-</span>
-                      </div>
-                      <!-- Fichiers dans le dossier (seulement si ouvert) -->
-                      <ng-container *ngIf="isCoverageGroupExpanded(group.group)">
-                        <div class="coverage-row" *ngFor="let f of group.files">
-                          <span class="col-path">{{ f.path }}</span>
-                          <span class="col-cov">{{ f.coverage | number:'1.1-1' }}%</span>
-                          <span class="col-unl">{{ f.uncoveredLines }}</span>
-                          <span class="col-unc">{{ f.uncoveredConditions }}</span>
-                        </div>
-                      </ng-container>
-                    </ng-container>
-                  </div>
-                </div>
-
-                <div class="qg-extra" *ngIf="cond.status === 'ERROR' && isSecurityHotspotsCondition(cond)" (click)="$event.stopPropagation()">
-                  <h3>Security Hotspots à revoir</h3>
-                  <div class="list" *ngIf="hotspots && hotspots.length">
-                    <div *ngFor="let h of hotspots" class="issue-item">
-                      <span class="severity sev-hotspot">
-                        {{ h.securityCategory || 'HOTSPOT' }}
-                      </span>
-                      <div class="issue-body">
-                        <div class="issue-message">{{ h.message }}</div>
-                        <div class="issue-meta">
-                          <span *ngIf="h.component">📄 {{ h.component }}</span>
-                          <span *ngIf="h.vulnerabilityProbability">🔥 {{ h.vulnerabilityProbability }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <p *ngIf="!hotspots || !hotspots.length" class="empty-text">
-                    Aucun hotspot de sécurité à revoir.
+                    <strong>{{ cond.actualValue || '0' }}</strong>
+                    <span class="qg-threshold">· seuil {{ cond.status === 'ERROR' ? '≥' : '≥' }} {{ cond.errorThreshold }}</span>
                   </p>
                 </div>
-
-                <!-- Détail d'erreur pour les autres conditions (backend envoie errorDescription) -->
-                <div class="qg-extra qg-extra-detail" *ngIf="cond.status === 'ERROR' && cond.errorDescription && !isCoverageCondition(cond) && !isSecurityHotspotsCondition(cond)" (click)="$event.stopPropagation()">
-                  <h3>Détail de l'erreur</h3>
-                  <p class="qg-error-detail">{{ cond.errorDescription }}</p>
-                </div>
-              </div>
               </ng-container>
             </div>
           </div>
         </section>
 
-        <!-- ISSUES -->
+        <!-- COVERAGE TAB -->
+        <section *ngIf="activeTab === 'coverage'" class="coverage-tab">
+          <div class="panel" *ngIf="coverageFiles.length">
+            <div class="qg-extra-header">
+              <div class="panel-title">Couverture par fichier</div>
+              <div class="view-toggle">
+                <button class="view-btn" [class.active]="coverageView === 'list'" (click)="coverageView = 'list'">Liste</button>
+                <button class="view-btn" [class.active]="coverageView === 'tree'" (click)="coverageView = 'tree'">Arbre</button>
+              </div>
+            </div>
+
+
+            <div class="coverage-table">
+              <div class="coverage-header">
+                <span class="col-path">Fichier</span>
+                <span class="col-cov">Coverage</span>
+                <span class="col-unl">Non couvertes</span>
+                <span class="col-unc">Conditions</span>
+              </div>
+
+              <!-- List view -->
+              <ng-container *ngIf="coverageView === 'list'">
+                <div class="coverage-row" *ngFor="let f of coverageFiles">
+                  <span class="col-path">{{ f.path }}</span>
+                  <span class="col-cov" [style.color]="getCoverageColor(f.coverage)">{{ f.coverage | number:'1.1-1' }}%</span>
+                  <span class="col-unl">{{ f.uncoveredLines }}</span>
+                  <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                </div>
+              </ng-container>
+
+              <!-- Tree view -->
+              <ng-container *ngIf="coverageView === 'tree'">
+                <ng-container *ngFor="let group of coverageTree">
+                  <div class="coverage-row coverage-group-row" (click)="toggleCoverageGroup(group.group)">
+                    <span class="col-path">
+                      <span class="folder-icon" [class.open]="isCoverageGroupExpanded(group.group)"></span>
+                      {{ group.group }}
+                    </span>
+                    <span class="col-cov">–</span>
+                    <span class="col-unl">–</span>
+                    <span class="col-unc">–</span>
+                  </div>
+                  <ng-container *ngIf="isCoverageGroupExpanded(group.group)">
+                    <div class="coverage-row coverage-file-row" *ngFor="let f of group.files">
+                      <span class="col-path">{{ f.path }}</span>
+                      <span class="col-cov" [style.color]="getCoverageColor(f.coverage)">{{ f.coverage | number:'1.1-1' }}%</span>
+                      <span class="col-unl">{{ f.uncoveredLines }}</span>
+                      <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                    </div>
+                  </ng-container>
+                </ng-container>
+              </ng-container>
+            </div>
+          </div>
+          <p class="empty-text" *ngIf="!coverageFiles.length">
+            Aucune donnée de couverture disponible.
+          </p>
+        </section>
+
+
+        <!-- ══════════════════════════════════════════
+             ISSUES
+        ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'issues'" class="issues-tab">
+
           <div class="filters-bar">
             <div class="filters-group">
               <span class="filters-label">Sévérité :</span>
-              <button class="chip"
-                      [class.active]="severityFilter === 'ALL'"
-                      (click)="applyIssueFilters('ALL', typeFilter)">
-                Toutes ({{ totalIssues }})
-              </button>
-              <button class="chip"
-                      [class.active]="severityFilter === 'BLOCKER'"
-                      (click)="applyIssueFilters('BLOCKER', typeFilter)">
-                Blocker ({{ severityCounts['BLOCKER'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="severityFilter === 'CRITICAL'"
-                      (click)="applyIssueFilters('CRITICAL', typeFilter)">
-                Critical ({{ severityCounts['CRITICAL'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="severityFilter === 'MAJOR'"
-                      (click)="applyIssueFilters('MAJOR', typeFilter)">
-                Major ({{ severityCounts['MAJOR'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="severityFilter === 'MINOR'"
-                      (click)="applyIssueFilters('MINOR', typeFilter)">
-                Minor ({{ severityCounts['MINOR'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="severityFilter === 'INFO'"
-                      (click)="applyIssueFilters('INFO', typeFilter)">
-                Info ({{ severityCounts['INFO'] || 0 }})
-              </button>
+              <button class="chip" [class.active]="severityFilter === 'ALL'"      (click)="applyIssueFilters('ALL', typeFilter)">Toutes ({{ totalIssues }})</button>
+              <button class="chip" [class.active]="severityFilter === 'BLOCKER'"  (click)="applyIssueFilters('BLOCKER', typeFilter)">Blocker ({{ severityCounts['BLOCKER'] || 0 }})</button>
+              <button class="chip" [class.active]="severityFilter === 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">Critical ({{ severityCounts['CRITICAL'] || 0 }})</button>
+              <button class="chip" [class.active]="severityFilter === 'MAJOR'"    (click)="applyIssueFilters('MAJOR', typeFilter)">Major ({{ severityCounts['MAJOR'] || 0 }})</button>
+              <button class="chip" [class.active]="severityFilter === 'MINOR'"    (click)="applyIssueFilters('MINOR', typeFilter)">Minor ({{ severityCounts['MINOR'] || 0 }})</button>
+              <button class="chip" [class.active]="severityFilter === 'INFO'"     (click)="applyIssueFilters('INFO', typeFilter)">Info ({{ severityCounts['INFO'] || 0 }})</button>
             </div>
-
             <div class="filters-group">
               <span class="filters-label">Type :</span>
-              <button class="chip"
-                      [class.active]="typeFilter === 'ALL'"
-                      (click)="applyIssueFilters(severityFilter, 'ALL')">
-                Tous
-              </button>
-              <button class="chip"
-                      [class.active]="typeFilter === 'BUG'"
-                      (click)="applyIssueFilters(severityFilter, 'BUG')">
-                Bug ({{ typeCounts['BUG'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="typeFilter === 'VULNERABILITY'"
-                      (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
-                Vulnerability ({{ typeCounts['VULNERABILITY'] || 0 }})
-              </button>
-              <button class="chip"
-                      [class.active]="typeFilter === 'CODE_SMELL'"
-                      (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
-                Code Smell ({{ typeCounts['CODE_SMELL'] || 0 }})
-              </button>
+              <button class="chip" [class.active]="typeFilter === 'ALL'"           (click)="applyIssueFilters(severityFilter, 'ALL')">Tous</button>
+              <button class="chip" [class.active]="typeFilter === 'BUG'"           (click)="applyIssueFilters(severityFilter, 'BUG')">Bug ({{ typeCounts['BUG'] || 0 }})</button>
+              <button class="chip" [class.active]="typeFilter === 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">Vulnerability ({{ typeCounts['VULNERABILITY'] || 0 }})</button>
+              <button class="chip" [class.active]="typeFilter === 'CODE_SMELL'"    (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">Code Smell ({{ typeCounts['CODE_SMELL'] || 0 }})</button>
             </div>
           </div>
 
           <div class="panel">
-            <h2>Issues</h2>
-            <p class="panel-subtitle">
-              {{ filteredIssues.length }} / {{ totalIssues }} issues affichées
-            </p>
-            <div class="list" *ngIf="filteredIssues && filteredIssues.length">
-              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item issue-item-with-actions">
-                <span class="severity" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
+            <div class="panel-title">Issues</div>
+            <p class="panel-sub">{{ filteredIssues.length }} / {{ totalIssues }} affichées</p>
+            <div class="issue-list" *ngIf="filteredIssues?.length">
+              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item">
+                <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
                   {{ issue.severity }}
                 </span>
                 <div class="issue-body">
@@ -387,69 +333,60 @@
                   <div class="issue-meta">
                     <span *ngIf="issue.type">📌 {{ issue.type }}</span>
                     <span *ngIf="issue.component">📄 {{ issue.component }}</span>
-                    <span *ngIf="issue.line">📍 Ligne {{ issue.line }}</span>
+                    <span *ngIf="issue.line">L.{{ issue.line }}</span>
                   </div>
                   <div class="issue-actions">
                     <div class="issue-action-row">
-                      <span class="issue-action-label">Statut :</span>
+                      <span class="issue-action-label">Statut</span>
                       <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
                       <select class="issue-transition-select"
                               [disabled]="issueUpdatingKey === issue.key"
                               (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
-                        <option value="">Changer le statut...</option>
+                        <option value="">Changer...</option>
                         <option *ngFor="let t of issueTransitions" [value]="t.value">{{ t.label }}</option>
                       </select>
-                      <span *ngIf="issueUpdatingKey === issue.key" class="issue-updating">Mise à jour...</span>
+                      <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">Mise à jour...</span>
                     </div>
                     <div class="issue-action-row">
-                      <span class="issue-action-label">Assigné :</span>
+                      <span class="issue-action-label">Assigné</span>
                       <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
-                      <button type="button"
-                              class="issue-action-btn"
-                              (click)="assignIssueToMe(issue)"
-                              [disabled]="issueUpdatingKey === issue.key">
-                        Assign to me
-                      </button>
-                      <button type="button"
-                              class="issue-action-btn issue-action-btn-secondary"
-                              (click)="unassignIssue(issue)"
-                              [disabled]="issueUpdatingKey === issue.key || !issue.assignee">
-                        Not assigned
-                      </button>
+                      <button class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Assign to me</button>
+                      <button class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Unassign</button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <p *ngIf="!filteredIssues || !filteredIssues.length" class="empty-text">
-              {{ totalIssues === 0 ? 'Aucun problème détecté pour les issues.' : 'Aucune issue pour les filtres sélectionnés.' }}
+            <p *ngIf="!filteredIssues?.length" class="empty-text">
+              {{ totalIssues === 0 ? 'Aucun problème détecté.' : 'Aucune issue pour les filtres sélectionnés.' }}
             </p>
           </div>
         </section>
 
-        <!-- HOTSPOTS -->
+
+        <!-- ══════════════════════════════════════════
+             HOTSPOTS
+        ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'hotspots'" class="hotspots-tab">
           <div class="hotspots-layout">
+
+            <!-- List -->
             <div class="panel hotspots-list-panel">
-              <h2>Security Hotspots</h2>
-              <p class="panel-subtitle">
-                {{ totalHotspots || hotspots.length || 0 }} hotspot(s) – {{ filteredHotspots.length }} affiché(s)
-              </p>
+              <div class="panel-title">Security Hotspots</div>
+              <p class="panel-sub">{{ totalHotspots || hotspots.length || 0 }} total · {{ filteredHotspots.length }} affiché(s)</p>
+
               <div class="hotspot-filters">
-                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'ALL'"
-                        (click)="applyHotspotStatusFilter('ALL')">Tous ({{ hotspotCountByStatus['ALL'] || 0 }})</button>
-                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'TO_REVIEW'"
-                        (click)="applyHotspotStatusFilter('TO_REVIEW')">À revoir ({{ hotspotCountByStatus['TO_REVIEW'] || 0 }})</button>
-                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'FIXED'"
-                        (click)="applyHotspotStatusFilter('FIXED')">Corrigé ({{ hotspotCountByStatus['FIXED'] || 0 }})</button>
-                <button type="button" class="chip" [class.active]="hotspotStatusFilter === 'SAFE'"
-                        (click)="applyHotspotStatusFilter('SAFE')">Sûr ({{ hotspotCountByStatus['SAFE'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'ALL'"       (click)="applyHotspotStatusFilter('ALL')">Tous ({{ hotspotCountByStatus['ALL'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'TO_REVIEW'" (click)="applyHotspotStatusFilter('TO_REVIEW')">À revoir ({{ hotspotCountByStatus['TO_REVIEW'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'FIXED'"     (click)="applyHotspotStatusFilter('FIXED')">Corrigé ({{ hotspotCountByStatus['FIXED'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'SAFE'"      (click)="applyHotspotStatusFilter('SAFE')">Sûr ({{ hotspotCountByStatus['SAFE'] || 0 }})</button>
               </div>
-              <div class="list" *ngIf="filteredHotspots.length">
-                <div *ngFor="let h of filteredHotspots" class="issue-item hotspot-item"
+
+              <div class="hs-list" *ngIf="filteredHotspots.length">
+                <div *ngFor="let h of filteredHotspots" class="hs-item"
                      [class.selected]="selectedHotspot?.key === h.key"
                      (click)="loadHotspotDetails(h)">
-                  <span class="severity sev-hotspot">{{ h.securityCategory || 'HOTSPOT' }}</span>
+                  <span class="sev-pill sev-hotspot">{{ h.securityCategory || 'HOTSPOT' }}</span>
                   <div class="issue-body">
                     <div class="issue-message">{{ h.message }}</div>
                     <div class="issue-meta">
@@ -461,154 +398,142 @@
                 </div>
               </div>
               <p *ngIf="!filteredHotspots.length" class="empty-text">
-                {{ (totalHotspots || hotspots.length || 0) === 0 ? 'Aucun hotspot de sécurité détecté.' : 'Aucun hotspot pour ce filtre.' }}
+                {{ (totalHotspots || hotspots.length || 0) === 0 ? 'Aucun hotspot détecté.' : 'Aucun hotspot pour ce filtre.' }}
               </p>
             </div>
 
+            <!-- Detail -->
             <div class="panel hotspot-detail-panel" *ngIf="selectedHotspot">
-              <div *ngIf="!selectedHotspotDetails" class="hotspot-detail-loading">Chargement...</div>
-              <div *ngIf="selectedHotspotDetails?.error" class="hotspot-detail-error">Impossible de charger le détail.</div>
+              <div *ngIf="!selectedHotspotDetails" class="detail-loading">Chargement...</div>
+              <div *ngIf="selectedHotspotDetails?.error" class="detail-error">Impossible de charger le détail.</div>
 
               <ng-container *ngIf="selectedHotspotDetails && !selectedHotspotDetails.error">
-                <h3 class="hotspot-detail-title">{{ selectedHotspotDetails.hotspot?.message }}</h3>
-                <p class="hotspot-detail-rule" *ngIf="selectedHotspotDetails.hotspot?.ruleKey">
+                <h3 class="hs-detail-title">{{ selectedHotspotDetails.hotspot?.message }}</h3>
+                <p class="hs-detail-rule" *ngIf="selectedHotspotDetails.hotspot?.ruleKey">
                   {{ selectedHotspotDetails.hotspot.ruleKey }}
                 </p>
 
-                <div class="hotspot-meta-row">
-                  <span><strong>Statut :</strong> {{ getHotspotStatusLabel(selectedHotspotDetails.hotspot?.status) }}</span>
-                  <span *ngIf="selectedHotspotDetails.hotspot?.securityCategory"><strong>Catégorie :</strong> {{ selectedHotspotDetails.hotspot.securityCategory }}</span>
-                  <span *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability"><strong>Priorité :</strong> {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}</span>
+                <div class="hs-meta-row">
+                  <span class="sev-pill sev-hotspot">{{ selectedHotspotDetails.hotspot?.securityCategory }}</span>
+                  <span class="meta-badge">{{ getHotspotStatusLabel(selectedHotspotDetails.hotspot?.status) }}</span>
+                  <span class="meta-badge meta-badge-warn" *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability">
+                    🔥 {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}
+                  </span>
                 </div>
 
-                <nav class="hotspot-detail-tabs">
-                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'where'" (click)="hotspotDetailTab = 'where'">Où est le risque ?</button>
-                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'risk'" (click)="hotspotDetailTab = 'risk'">Quel est le risque ?</button>
-
-                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'access'" (click)="hotspotDetailTab = 'access'">
-  Accès au risque
-</button>
-                  <button type="button" class="hotspot-tab" [class.active]="hotspotDetailTab === 'fix'" (click)="hotspotDetailTab = 'fix'">Comment corriger ?</button>
+                <nav class="detail-tabs">
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'where'"  (click)="hotspotDetailTab = 'where'">Localisation</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'risk'"   (click)="hotspotDetailTab = 'risk'">Risque</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'access'" (click)="hotspotDetailTab = 'access'">Accès</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'fix'"    (click)="hotspotDetailTab = 'fix'">Correction</button>
                 </nav>
 
-                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'where'">
-                  <p class="hotspot-file-path" *ngIf="getHotspotComponentDisplay()">{{ getHotspotComponentDisplay() }}</p>
-                  <pre class="hotspot-code" *ngIf="selectedHotspotDetails.sourceLines?.length"><ng-container *ngFor="let line of selectedHotspotDetails.sourceLines; let i = index"><span [class.highlight-line]="selectedHotspotDetails.sourceLineFrom + i === selectedHotspotDetails.highlightLine">{{ selectedHotspotDetails.sourceLineFrom + i }}</span>  {{ line }}
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'where'">
+                  <p class="hs-file-path" *ngIf="getHotspotComponentDisplay()">{{ getHotspotComponentDisplay() }}</p>
+                  <pre class="hotspot-code" *ngIf="selectedHotspotDetails.sourceLines?.length">
+<ng-container *ngFor="let line of selectedHotspotDetails.sourceLines; let i = index">
+<span [class.highlight-line]="selectedHotspotDetails.sourceLineFrom + i === selectedHotspotDetails.highlightLine">{{ selectedHotspotDetails.sourceLineFrom + i }}</span>  {{ line }}
 </ng-container></pre>
-                  <p *ngIf="!selectedHotspotDetails.sourceLines?.length" class="empty-text">Aucun extrait de code disponible.</p>
+                  <p *ngIf="!selectedHotspotDetails.sourceLines?.length" class="empty-text">Aucun extrait disponible.</p>
                 </div>
-
-                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'risk'">
-                  <div class="rule-content rule-content-block" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'risk'">
+                  <div class="rule-content" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
                 </div>
-
-                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'access'">
-                  <div class="rule-content rule-content-block" [innerHTML]="getRuleAccessContent() || 'Aucune description du risque.'"></div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'access'">
+                  <div class="rule-content" [innerHTML]="getRuleAccessContent()"></div>
                 </div>
-
-                <div class="hotspot-tab-content" *ngIf="hotspotDetailTab === 'fix'">
-                  <div class="rule-content rule-content-block" [innerHTML]="getRuleFixContent() || 'Aucune recommandation de correction.'"></div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'fix'">
+                  <div class="rule-content" [innerHTML]="getRuleFixContent() || 'Aucune recommandation.'"></div>
                 </div>
               </ng-container>
             </div>
           </div>
         </section>
 
-        <!-- DUPLICATION -->
+
+        <!-- ══════════════════════════════════════════
+             DUPLICATION
+        ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'duplication'" class="duplication-tab">
           <div class="duplication-layout">
+
+            <!-- File list -->
             <div class="panel">
               <div class="dup-header-row">
-                <h2>Duplication par fichier</h2>
+                <div class="panel-title">Duplication par fichier</div>
                 <div class="view-toggle">
-                  <span>Vue :</span>
-                  <button type="button"
-                          class="view-btn"
-                          [class.active]="duplicationView === 'list'"
-                          (click)="duplicationView = 'list'">
-                    Liste
-                  </button>
-                  <button type="button"
-                          class="view-btn"
-                          [class.active]="duplicationView === 'tree'"
-                          (click)="duplicationView = 'tree'">
-                    Tree
-                  </button>
+                  <button class="view-btn" [class.active]="duplicationView === 'list'" (click)="duplicationView = 'list'">Liste</button>
+                  <button class="view-btn" [class.active]="duplicationView === 'tree'" (click)="duplicationView = 'tree'">Arbre</button>
                 </div>
               </div>
-              <p class="panel-subtitle">
-                {{ duplicationFiles.length }} fichiers avec duplication &gt; 0%
-                <span *ngIf="duplicationZeroCount > 0">
-                  – {{ duplicationZeroCount }} fichiers supplémentaires ont un score de 0.0%.
-                </span>
+              <p class="panel-sub">
+                {{ duplicationFiles.length }} fichiers &gt; 0%
+                <ng-container *ngIf="duplicationZeroCount > 0"> · {{ duplicationZeroCount }} à 0%</ng-container>
               </p>
 
-              <!-- LIST VIEW -->
-              <div class="list" *ngIf="duplicationView === 'list' && duplicationFiles && duplicationFiles.length">
-                <div *ngFor="let f of duplicationFiles" class="dup-item" [class.selected]="selectedDupFile && selectedDupFile.key === f.key" (click)="loadDuplicationDetails(f)">
+              <!-- List view -->
+              <div *ngIf="duplicationView === 'list' && duplicationFiles.length">
+                <div *ngFor="let f of duplicationFiles" class="dup-item"
+                     [class.selected]="selectedDupFile?.key === f.key"
+                     (click)="loadDuplicationDetails(f)">
                   <div class="dup-main">
                     <div class="dup-path">{{ f.path }}</div>
                     <div class="dup-name">{{ f.name }}</div>
                   </div>
-                  <div class="dup-score">
-                    {{ f.duplication | number:'1.1-1' }}<span class="unit">%</span>
-                  </div>
+                  <span class="dup-score">{{ f.duplication | number:'1.1-1' }}<span class="unit">%</span></span>
                 </div>
               </div>
 
-              <!-- TREE VIEW (compact, dossiers fermés par défaut, comme coverage) -->
-              <div class="dup-table-wrap" *ngIf="duplicationView === 'tree' && duplicationTree && duplicationTree.length">
-                <div class="dup-table">
-                  <div class="dup-table-header">
-                    <span class="dup-col-path">Fichier</span>
-                    <span class="dup-col-pct">Duplication</span>
-                  </div>
-                  <ng-container *ngFor="let group of duplicationTree">
-                    <div class="dup-group-row"
-                         (click)="toggleDuplicationGroup(group.group)">
-                      <span class="dup-col-path">
-                        <span class="folder-icon" [class.open]="isDuplicationGroupExpanded(group.group)"></span>
-                        {{ group.group }}
-                      </span>
-                      <span class="dup-col-pct">–</span>
-                    </div>
-                    <ng-container *ngIf="isDuplicationGroupExpanded(group.group)">
-                      <div class="dup-file-row" *ngFor="let f of group.files" [class.selected]="selectedDupFile && selectedDupFile.key === f.key" (click)="loadDuplicationDetails(f); $event.stopPropagation()">
-                        <span class="dup-col-path">{{ f.path }}</span>
-                        <span class="dup-col-pct">{{ f.duplication | number:'1.1-1' }}%</span>
-                      </div>
-                    </ng-container>
-                  </ng-container>
+              <!-- Tree view -->
+              <div *ngIf="duplicationView === 'tree' && duplicationTree.length" class="dup-table">
+                <div class="dup-table-header">
+                  <span>Fichier</span>
+                  <span>Duplication</span>
                 </div>
+                <ng-container *ngFor="let group of duplicationTree">
+                  <div class="dup-group-row" (click)="toggleDuplicationGroup(group.group)">
+                    <span>
+                      <span class="folder-icon" [class.open]="isDuplicationGroupExpanded(group.group)"></span>
+                      {{ group.group }}
+                    </span>
+                    <span>–</span>
+                  </div>
+                  <ng-container *ngIf="isDuplicationGroupExpanded(group.group)">
+                    <div class="dup-file-row" *ngFor="let f of group.files"
+                         [class.selected]="selectedDupFile?.key === f.key"
+                         (click)="loadDuplicationDetails(f); $event.stopPropagation()">
+                      <span>{{ f.path }}</span>
+                      <span class="dup-score-sm">{{ f.duplication | number:'1.1-1' }}%</span>
+                    </div>
+                  </ng-container>
+                </ng-container>
               </div>
-              <p *ngIf="!duplicationFiles || !duplicationFiles.length" class="empty-text">
-                Aucune duplication détectée sur les fichiers analysés. Aucun problème pour cette section.
-              </p>
+
+              <p *ngIf="!duplicationFiles?.length" class="empty-text">Aucune duplication détectée.</p>
             </div>
 
+            <!-- Source panel -->
             <div class="panel dup-source-panel" *ngIf="selectedDupFile">
               <h3 class="dup-source-title">
                 {{ selectedDupFile.path }}
                 <span *ngIf="selectedDupFile.loading" class="badge-loading">Chargement...</span>
               </h3>
-
-              <div class="dup-source-body" *ngIf="!selectedDupFile.loading">
+              <div *ngIf="!selectedDupFile.loading">
                 <pre class="code-block" *ngIf="selectedDupSourceLines.length">
 <ng-container *ngFor="let line of selectedDupSourceLines; let i = index">
 <span class="line-number">{{ i + 1 }}</span> {{ line }}
-</ng-container>
-                </pre>
-
-                <details *ngIf="selectedDupMeta">
-                  <summary>Métadonnées de duplication (JSON brut SonarQube)</summary>
+</ng-container></pre>
+                <details *ngIf="selectedDupMeta" class="dup-meta-details">
+                  <summary>Métadonnées (JSON brut)</summary>
                   <pre>{{ selectedDupMeta | json }}</pre>
                 </details>
               </div>
             </div>
+
           </div>
         </section>
-      </div>
-    </div>
-  </div>
-</div>
 
+      </div><!-- /sonar-content -->
+    </div><!-- /sonar-page -->
+  </div><!-- /user-main -->
+</div><!-- /user-shell -->

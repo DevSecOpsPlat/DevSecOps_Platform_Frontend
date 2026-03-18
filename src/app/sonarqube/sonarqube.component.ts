@@ -1,13 +1,19 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
 import { SonarQubeService } from '../services/sonarqube/sonarqube.service';
 import { UserService } from '../services/user/user.service';
+import Chart from 'chart.js/auto';
 
 @Component({
   selector: 'app-sonarqube',
   templateUrl: './sonarqube.component.html',
   styleUrls: ['./sonarqube.component.css']
 })
-export class SonarqubeComponent implements OnInit {
+export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
+
+  @ViewChild('donutCanvas') donutCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('coverageBarCanvas') coverageBarCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('severityBarCanvas') severityBarCanvas!: ElementRef<HTMLCanvasElement>;
+
   loading = true;
   error: string | null = null;
 
@@ -18,46 +24,66 @@ export class SonarqubeComponent implements OnInit {
   hotspots: any[] = [];
   qualityGate: any = null;
 
-  // Vue & filtres
-  activeTab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication' = 'overview';
+  // Tabs
+  activeTab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication' | 'coverage' = 'overview';
+
+  // Issues
   severityFilter: string = 'ALL';
   typeFilter: string = 'ALL';
   filteredIssues: any[] = [];
   severityCounts: Record<string, number> = {};
   typeCounts: Record<string, number> = {};
 
-  // Branches / Quality gate détails
+  // Branches
   branches: string[] = ['master'];
   currentBranch: string = 'master';
   qualityGateConditions: any[] = [];
+
+  // Coverage
+  coverageFiles: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] = [];
+  coverageView: 'list' | 'tree' = 'tree';
+  coverageTree: { group: string; files: any[] }[] = [];
+  coverageExpanded: Record<string, boolean> = {};
+
+  // Duplication
   duplicationFiles: { name: string; path: string; duplication: number; key?: string; url?: string }[] = [];
   duplicationZeroCount = 0;
-  coverageFiles: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] = [];
-
-  private sonarHostUrl: string | null = null;
-  /** Exposé pour la vue d'ensemble (projet, lien Sonar). */
-  sonarProjectKey: string | null = null;
-
-  // Détail duplication sélectionné
+  duplicationView: 'list' | 'tree' = 'list';
+  duplicationTree: { group: string; files: any[] }[] = [];
+  duplicationExpanded: Record<string, boolean> = {};
   selectedDupFile: any | null = null;
   selectedDupSourceLines: string[] = [];
   selectedDupMeta: any = null;
 
-  // Security Hotspots : filtre et détail
+  // Hotspots
   hotspotStatusFilter: string = 'ALL';
   filteredHotspots: any[] = [];
   hotspotCountByStatus: Record<string, number> = {};
   selectedHotspot: any | null = null;
   selectedHotspotDetails: any | null = null;
-  hotspotDetailTab: 'where' | 'risk' | 'fix' | 'access' | 'activity' = 'where';
+  hotspotDetailTab: 'where' | 'risk' | 'fix' | 'access' = 'where';
 
-  // View modes (Tree par défaut pour la couverture)
-  coverageView: 'list' | 'tree' = 'tree';
-  duplicationView: 'list' | 'tree' = 'list';
-  coverageTree: { group: string; files: { path: string; coverage: number; uncoveredLines: number; uncoveredConditions: number }[] }[] = [];
-  duplicationTree: { group: string; files: { name: string; path: string; duplication: number; key?: string; url?: string }[] }[] = [];
-  coverageExpanded: Record<string, boolean> = {};
-  duplicationExpanded: Record<string, boolean> = {};
+  // Misc
+  sonarHostUrl: string | null = null;
+  sonarProjectKey: string | null = null;
+  issueUpdatingKey: string | null = null;
+
+  readonly issueTransitions = [
+    { value: 'confirm', label: 'Confirmer' },
+    { value: 'unconfirm', label: 'Annuler confirmation' },
+    { value: 'resolve', label: 'Résoudre (Fixed)' },
+    { value: 'reopen', label: 'Rouvrir' },
+    { value: 'falsepositive', label: 'Faux positif' },
+    { value: 'wontfix', label: "Ne pas corriger (Won't fix)" },
+    { value: 'accept', label: 'Accepter' }
+  ];
+
+  readonly overviewSeverityOrder = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
+
+  // Charts instances
+  private donutChart: Chart | null = null;
+  private coverageBarChart: Chart | null = null;
+  private severityBarChart: Chart | null = null;
 
   constructor(
     private sonarService: SonarQubeService,
@@ -68,6 +94,18 @@ export class SonarqubeComponent implements OnInit {
     this.load();
   }
 
+  ngAfterViewInit(): void {
+    // Charts are initialized after data loads + tab is active
+  }
+
+  ngOnDestroy(): void {
+    this.donutChart?.destroy();
+    this.coverageBarChart?.destroy();
+    this.severityBarChart?.destroy();
+  }
+
+  // ─── Data Loading ───────────────────────────────────────────────────────────
+
   load(): void {
     this.loading = true;
     this.error = null;
@@ -76,7 +114,6 @@ export class SonarqubeComponent implements OnInit {
       next: (res) => {
         this.metrics = res.metrics || {};
 
-        // Issues : utiliser toujours la liste renvoyée pour éviter les écarts avec SonarQube
         const rawIssues = (res.issues || []) as any[];
         this.issues = rawIssues;
         this.totalIssues = rawIssues.length;
@@ -84,54 +121,24 @@ export class SonarqubeComponent implements OnInit {
         const rawHotspots = (res.hotspots || []) as any[];
         this.hotspots = rawHotspots;
         this.totalHotspots = Math.max(res.total_hotspots || 0, rawHotspots.length);
+
         this.qualityGate = res.quality_gate || null;
         this.qualityGateConditions = this.qualityGate?.conditions || [];
 
         this.sonarHostUrl = res.sonar_host_url || null;
         this.sonarProjectKey = res.sonar_project_key || null;
 
-        const rawDup = (res.duplication_components || []) as any[];
-        const mapped = rawDup.map(c => {
-          const measures = c.measures || [];
-          const dupMeasure = measures.find((m: any) => m.metric === 'duplicated_lines_density') || measures[0] || {};
-          const val = parseFloat(dupMeasure.value || '0');
-          const key = c.key || c.path || c.name;
-          return {
-            name: c.name || c.key,
-            path: c.path || c.key,
-            duplication: isNaN(val) ? 0 : val,
-            key,
-            url: this.buildSonarFileUrl(key)
-          };
-        });
-        this.duplicationFiles = mapped.filter(f => f.duplication > 0);
-        this.duplicationZeroCount = Math.max(0, mapped.length - this.duplicationFiles.length);
-
-        const rawCov = (res.coverage_components || []) as any[];
-        this.coverageFiles = rawCov.map(c => {
-          const measures = c.measures || [];
-          const cov = measures.find((m: any) => m.metric === 'coverage') || {};
-          const unl = measures.find((m: any) => m.metric === 'uncovered_lines') || {};
-          const unc = measures.find((m: any) => m.metric === 'uncovered_conditions') || {};
-          return {
-            path: c.path || c.key,
-            coverage: parseFloat(cov.value || '0'),
-            uncoveredLines: parseInt(unl.value || '0', 10),
-            uncoveredConditions: parseInt(unc.value || '0', 10)
-          };
-        }).sort((a, b) => a.coverage - b.coverage);
-
-        this.coverageTree = this.buildTree(this.coverageFiles);
-        this.coverageExpanded = {};
-        this.duplicationTree = this.buildTree(this.duplicationFiles);
-        this.duplicationExpanded = {};
+        this.processDuplication(res.duplication_components || []);
+        this.processCoverage(res.coverage_components || []);
 
         this.computeIssueFacets();
         this.applyIssueFilters();
         this.applyHotspotStatusFilter();
         this.selectFirstHotspotIfNeeded();
         this.selectFirstDuplicationIfNeeded();
+
         this.loading = false;
+        setTimeout(() => this.initChartsForTab(this.activeTab), 80);
       },
       error: (err) => {
         this.loading = false;
@@ -140,11 +147,202 @@ export class SonarqubeComponent implements OnInit {
     });
   }
 
+  private processDuplication(rawDup: any[]): void {
+    const mapped = rawDup.map(c => {
+      const measures = c.measures || [];
+      const dupMeasure = measures.find((m: any) => m.metric === 'duplicated_lines_density') || measures[0] || {};
+      const val = parseFloat(dupMeasure.value || '0');
+      const key = c.key || c.path || c.name;
+      return {
+        name: c.name || c.key,
+        path: c.path || c.key,
+        duplication: isNaN(val) ? 0 : val,
+        key,
+        url: this.buildSonarFileUrl(key)
+      };
+    });
+    this.duplicationFiles = mapped.filter(f => f.duplication > 0);
+    this.duplicationZeroCount = Math.max(0, mapped.length - this.duplicationFiles.length);
+    this.duplicationTree = this.buildTree(this.duplicationFiles);
+    this.duplicationExpanded = {};
+  }
+
+  private processCoverage(rawCov: any[]): void {
+    this.coverageFiles = rawCov.map(c => {
+      const measures = c.measures || [];
+      const cov = measures.find((m: any) => m.metric === 'coverage') || {};
+      const unl = measures.find((m: any) => m.metric === 'uncovered_lines') || {};
+      const unc = measures.find((m: any) => m.metric === 'uncovered_conditions') || {};
+      return {
+        path: c.path || c.key,
+        coverage: parseFloat(cov.value || '0'),
+        uncoveredLines: parseInt(unl.value || '0', 10),
+        uncoveredConditions: parseInt(unc.value || '0', 10)
+      };
+    }).sort((a, b) => a.coverage - b.coverage);
+    this.coverageTree = this.buildTree(this.coverageFiles);
+    this.coverageExpanded = {};
+  }
+
+  // ─── Tab Management ──────────────────────────────────────────────────────────
+
+  setTab(tab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication' | 'coverage'): void {
+    this.activeTab = tab;
+    if (tab === 'hotspots') this.selectFirstHotspotIfNeeded();
+    if (tab === 'duplication') this.selectFirstDuplicationIfNeeded();
+    setTimeout(() => this.initChartsForTab(tab), 80);
+  }
+
+  private initChartsForTab(tab: string): void {
+    if (tab === 'overview') {
+      this.initDonutChart();
+      this.initSeverityBarChart();
+    }
+    if (tab === 'quality') {
+      this.initCoverageBarChart();
+    }
+  }
+
+  // ─── Charts ──────────────────────────────────────────────────────────────────
+
+  private initDonutChart(): void {
+    if (!this.donutCanvas?.nativeElement) return;
+    this.donutChart?.destroy();
+
+    const bugsCount = this.typeCounts['BUG'] || 0;
+    const vulnCount = this.typeCounts['VULNERABILITY'] || 0;
+    const smellCount = this.typeCounts['CODE_SMELL'] || 0;
+
+    this.donutChart = new Chart(this.donutCanvas.nativeElement, {
+      type: 'doughnut',
+      data: {
+        labels: ['Bugs', 'Vulnerabilities', 'Code Smells'],
+        datasets: [{
+          data: [bugsCount, vulnCount, smellCount],
+          backgroundColor: ['#1d4ed8', '#b91c1c', '#6b7280'],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } }
+        }
+      }
+    });
+  }
+
+  private initCoverageBarChart(): void {
+    if (!this.coverageBarCanvas?.nativeElement) return;
+    this.coverageBarChart?.destroy();
+
+    const files = this.coverageFiles.slice(0, 8);
+    const labels = files.map(f => f.path.split('/').pop() || f.path);
+    const covered = files.map(f => Math.round(f.coverage));
+    const uncovered = files.map(f => Math.round(100 - f.coverage));
+
+    this.coverageBarChart = new Chart(this.coverageBarCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Covered',
+            data: covered,
+            backgroundColor: '#16a34a',
+            borderRadius: 4,
+            stack: 'stack'
+          },
+          {
+            label: 'Uncovered',
+            data: uncovered,
+            backgroundColor: 'rgba(185,28,28,0.15)',
+            borderRadius: 4,
+            stack: 'stack'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        scales: {
+          x: {
+            stacked: true,
+            max: 100,
+            ticks: { callback: (v) => v + '%', font: { size: 11 } },
+            grid: { color: 'rgba(100,116,139,0.1)' }
+          },
+          y: { stacked: true, ticks: { font: { size: 11 } } }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { font: { size: 11 }, boxWidth: 10 }
+          },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x}%` } }
+        }
+      }
+    });
+  }
+
+  private initSeverityBarChart(): void {
+    if (!this.severityBarCanvas?.nativeElement) return;
+    this.severityBarChart?.destroy();
+
+    const labels = this.overviewSeverityOrder;
+    const data = labels.map(s => this.severityCounts[s] || 0);
+    const colors = ['#7f1d1d', '#b91c1c', '#c2410c', '#b45309', '#6b7280'];
+
+    this.severityBarChart = new Chart(this.severityBarCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Issues',
+          data,
+          backgroundColor: colors,
+          borderRadius: 4,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} issues` } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1, font: { size: 11 } },
+            grid: { color: 'rgba(100,116,139,0.1)' }
+          }
+        },
+        onClick: (_, elements) => {
+          if (elements.length) {
+            const sev = this.overviewSeverityOrder[elements[0].index];
+            this.setTab('issues');
+            this.applyIssueFilters(sev, 'ALL');
+          }
+        }
+      }
+    });
+  }
+
+  // ─── Metrics Helpers ─────────────────────────────────────────────────────────
+
   getQualityGateStatus(): string {
     return this.qualityGate?.status || 'UNKNOWN';
   }
 
-  /** Nombre de conditions du Quality Gate en échec (pour la vue d'ensemble). */
   getQualityGateFailedCount(): number {
     if (!this.qualityGateConditions?.length) return 0;
     return this.qualityGateConditions.filter((c: any) => (c.status || '').toUpperCase() === 'ERROR').length;
@@ -158,10 +356,6 @@ export class SonarqubeComponent implements OnInit {
     return 'qg-unknown';
   }
 
-  /** Ordre des sévérités pour les graphiques (du plus critique au moins). */
-  readonly overviewSeverityOrder = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
-
-  /** Pourcentage de couverture (0–100) pour la barre de progression. */
   getCoveragePercent(): number {
     const v = this.metrics?.coverage;
     if (v === undefined || v === null) return 0;
@@ -169,7 +363,6 @@ export class SonarqubeComponent implements OnInit {
     return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
   }
 
-  /** Pourcentage de duplication (0–100) pour la barre de progression. */
   getDuplicationPercent(): number {
     const v = this.metrics?.duplicated_lines_density;
     if (v === undefined || v === null) return 0;
@@ -177,19 +370,15 @@ export class SonarqubeComponent implements OnInit {
     return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
   }
 
-  /** Nombre d'issues pour une sévérité (pour barre proportionnelle). */
   getSeverityCount(sev: string): number {
     return this.severityCounts[sev] ?? 0;
   }
 
-  /** Largeur en % pour une barre de sévérité (max = totalIssues). */
   getSeverityBarWidth(sev: string): number {
     if (!this.totalIssues) return 0;
-    const n = this.getSeverityCount(sev);
-    return (n / this.totalIssues) * 100;
+    return (this.getSeverityCount(sev) / this.totalIssues) * 100;
   }
 
-  /** Rating SonarQube : 1=A, 2=B, 3=C, 4=D, 5=E. */
   getRatingLabel(value: string | number | undefined): string {
     if (value === undefined || value === null) return '—';
     const n = typeof value === 'string' ? parseInt(value, 10) : value;
@@ -197,104 +386,29 @@ export class SonarqubeComponent implements OnInit {
     return ['A', 'B', 'C', 'D', 'E'][n - 1];
   }
 
-  /** Classe CSS pour le badge de rating (couleur). */
   getRatingClass(value: string | number | undefined): string {
     if (value === undefined || value === null) return 'rating-unknown';
     const n = typeof value === 'string' ? parseInt(value, 10) : value;
-    if (n === 1) return 'rating-a';
-    if (n === 2) return 'rating-b';
-    if (n === 3) return 'rating-c';
-    if (n === 4) return 'rating-d';
-    if (n === 5) return 'rating-e';
-    return 'rating-unknown';
+    return ['', 'rating-a', 'rating-b', 'rating-c', 'rating-d', 'rating-e'][n] || 'rating-unknown';
   }
 
-  /**
-   * Quand on clique sur une carte de la vue d'ensemble (hors Quality Gate).
-   */
-  onOverviewCardClick(kind: 'vuln' | 'bug' | 'smell' | 'hotspot' | 'dup'): void {
-    if (kind === 'hotspot') {
-      this.setTab('hotspots');
-      this.selectFirstHotspotIfNeeded();
-      return;
-    }
-
-    if (kind === 'dup') {
-      this.setTab('duplication');
-      this.selectFirstDuplicationIfNeeded();
-      return;
-    }
-
-    this.setTab('issues');
-
-    switch (kind) {
-      case 'vuln':
-        this.applyIssueFilters(undefined, 'VULNERABILITY');
-        break;
-      case 'bug':
-        this.applyIssueFilters(undefined, 'BUG');
-        break;
-      case 'smell':
-        this.applyIssueFilters(undefined, 'CODE_SMELL');
-        break;
-      default:
-        this.applyIssueFilters('ALL', 'ALL');
-        break;
-    }
+  getCoverageColor(coverage: number): string {
+    if (coverage >= 80) return 'var(--c-ok)';
+    if (coverage >= 50) return 'var(--c-warn)';
+    return 'var(--c-err)';
   }
 
-  setTab(tab: 'overview' | 'quality' | 'issues' | 'hotspots' | 'duplication'): void {
-    this.activeTab = tab;
-
-    // Quand on arrive sur l'onglet Hotspots, sélectionner automatiquement le premier élément
-    if (tab === 'hotspots') {
-      this.selectFirstHotspotIfNeeded();
-    }
-    if (tab === 'duplication') {
-      this.selectFirstDuplicationIfNeeded();
-    }
-  }
-
-  /**
-   * Sélectionne par défaut le premier fichier en duplication et charge ses détails.
-   */
-  private selectFirstDuplicationIfNeeded(): void {
-    if (this.selectedDupFile || !this.duplicationFiles?.length) return;
-    const first = this.duplicationFiles[0];
-    if (first?.key) this.loadDuplicationDetails(first);
-  }
-
-  /**
-   * Sélectionne par défaut le premier hotspot (et charge ses détails)
-   * afin d'éviter que le panneau de droite soit vide.
-   */
-  private selectFirstHotspotIfNeeded(): void {
-    if (this.selectedHotspot || !this.filteredHotspots?.length) {
-      return;
-    }
-    const first = this.filteredHotspots[0];
-    if (!first) {
-      return;
-    }
-    this.hotspotDetailTab = 'where';
-    this.loadHotspotDetails(first);
-  }
-
-  openQualityGateTab(): void {
-    this.setTab('quality');
-  }
+  // ─── Issues ──────────────────────────────────────────────────────────────────
 
   private computeIssueFacets(): void {
     const sevCounts: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
-
     this.issues.forEach(issue => {
       const sev = (issue.severity || 'UNKNOWN').toUpperCase();
       const type = (issue.type || 'OTHER').toUpperCase();
       sevCounts[sev] = (sevCounts[sev] || 0) + 1;
       typeCounts[type] = (typeCounts[type] || 0) + 1;
     });
-
     this.severityCounts = sevCounts;
     this.typeCounts = typeCounts;
   }
@@ -302,46 +416,26 @@ export class SonarqubeComponent implements OnInit {
   applyIssueFilters(severity?: string, type?: string): void {
     if (severity) this.severityFilter = severity;
     if (type) this.typeFilter = type;
-
     this.filteredIssues = this.issues.filter(issue => {
       const sev = (issue.severity || 'UNKNOWN').toUpperCase();
       const t = (issue.type || 'OTHER').toUpperCase();
-      const sevOk = this.severityFilter === 'ALL' || sev === this.severityFilter;
-      const typeOk = this.typeFilter === 'ALL' || t === this.typeFilter;
-      return sevOk && typeOk;
+      return (this.severityFilter === 'ALL' || sev === this.severityFilter)
+          && (this.typeFilter === 'ALL' || t === this.typeFilter);
     });
   }
 
-  /** Indique qu'une issue est en cours de mise à jour (statut ou assignation). */
-  issueUpdatingKey: string | null = null;
-
-  /** Transitions possibles (valeur API → libellé). */
-  readonly issueTransitions = [
-    { value: 'confirm', label: 'Confirmer' },
-    { value: 'unconfirm', label: 'Annuler confirmation' },
-    { value: 'resolve', label: 'Résoudre (Fixed)' },
-    { value: 'reopen', label: 'Rouvrir' },
-    { value: 'falsepositive', label: 'Faux positif' },
-    { value: 'wontfix', label: 'Ne pas corriger (Won\'t fix)' },
-    { value: 'accept', label: 'Accepter (à corriger plus tard)' }
-  ];
-
   getIssueStatusLabel(status: string): string {
     const s = (status || '').toUpperCase();
-    if (s === 'OPEN') return 'Ouvert';
-    if (s === 'CONFIRMED') return 'Confirmé';
-    if (s === 'RESOLVED') return 'Résolu';
-    if (s === 'REOPENED') return 'Rouvert';
-    if (s === 'CLOSED') return 'Fermé';
-    return status || '–';
+    const map: Record<string, string> = {
+      OPEN: 'Ouvert', CONFIRMED: 'Confirmé', RESOLVED: 'Résolu', REOPENED: 'Rouvert', CLOSED: 'Fermé'
+    };
+    return map[s] || status || '–';
   }
 
-  /** Affiche le username de l'utilisateur plateforme pour les issues assignées (SonarCloud garde le vrai login). */
   getIssueAssigneeLabel(assignee: string | undefined | null): string {
     if (!assignee) return 'Not assigned';
     const user = this.userService.getUser();
-    if (!user?.username) return 'Assigned';
-    return user.username;
+    return user?.username || 'Assigned';
   }
 
   changeIssueStatus(issue: any, transition: string): void {
@@ -349,155 +443,32 @@ export class SonarqubeComponent implements OnInit {
     if (!key || !transition) return;
     this.issueUpdatingKey = key;
     this.sonarService.issueTransition(key, transition).subscribe({
-      next: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      },
-      error: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      }
+      next: () => { this.issueUpdatingKey = null; this.load(); },
+      error: () => { this.issueUpdatingKey = null; this.load(); }
     });
   }
 
-  /** Assigne au compte SonarCloud par défaut (Assign to me). */
   assignIssueToMe(issue: any): void {
     const key = issue?.key;
     if (!key) return;
     this.issueUpdatingKey = key;
     this.sonarService.issueAssignToMe(key).subscribe({
-      next: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      },
-      error: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      }
+      next: () => { this.issueUpdatingKey = null; this.load(); },
+      error: () => { this.issueUpdatingKey = null; this.load(); }
     });
   }
 
-  /** Désassigne complètement l'issue (Not assigned). */
   unassignIssue(issue: any): void {
     const key = issue?.key;
     if (!key) return;
     this.issueUpdatingKey = key;
     this.sonarService.issueUnassign(key).subscribe({
-      next: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      },
-      error: () => {
-        this.issueUpdatingKey = null;
-        this.load();
-      }
+      next: () => { this.issueUpdatingKey = null; this.load(); },
+      error: () => { this.issueUpdatingKey = null; this.load(); }
     });
   }
 
-  /**
-   * Changement de branche (simple sélecteur).
-   */
-  onBranchChange(branch: string): void {
-    if (!branch || branch === this.currentBranch) {
-      return;
-    }
-    this.currentBranch = branch;
-    this.loading = true;
-    this.error = null;
-
-    this.sonarService.getResultsForBranch(branch).subscribe({
-      next: (res) => {
-        this.metrics = res.metrics || this.metrics;
-        this.loading = false;
-      },
-      error: (err) => {
-        this.loading = false;
-        this.error = err?.error?.message || 'Impossible de charger les résultats pour cette branche';
-      }
-    });
-  }
-
-  /**
-   * Label lisible pour une condition de Quality Gate.
-   */
-  formatConditionMetric(metric: string | undefined): string {
-    if (!metric) return '';
-    const key = metric.toLowerCase();
-    if (key.includes('coverage')) return 'Coverage';
-    if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
-    if (key.includes('reliability_rating')) return 'Fiabilité (nouveau code)';
-    if (key.includes('security_rating')) return 'Sécurité (nouveau code)';
-    if (key.includes('maintainability_rating')) return 'Maintenabilité (nouveau code)';
-    if (key.includes('duplicated_lines')) return 'Duplication (nouveau code)';
-    return metric;
-  }
-
-  isCoverageCondition(cond: any): boolean {
-    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
-    return key.includes('coverage');
-  }
-
-  isSecurityHotspotsCondition(cond: any): boolean {
-    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
-    return key.includes('security_hotspots_reviewed');
-  }
-
-  isDuplicationCondition(cond: any): boolean {
-    const key = (cond.metric || cond.metricKey || '').toString().toLowerCase();
-    return key.includes('duplicated_lines');
-  }
-
-  /** Indication au survol : vers quel onglet un clic sur la condition enverra. */
-  getQualityGateConditionClickHint(cond: any): string {
-    if (!cond) return '';
-    if (this.isDuplicationCondition(cond)) return "Aller à l'onglet Duplication";
-    if (this.isSecurityHotspotsCondition(cond)) return "Aller à l'onglet Security Hotspots";
-    if (this.isCoverageCondition(cond)) return "Détails déjà affichés dans Quality Gate";
-    return "Détails dans Quality Gate";
-  }
-
-  /**
-   * Clic sur une condition du Quality Gate : bascule vers l'onglet correspondant (Duplication, Hotspots, ou reste sur Quality Gate).
-   */
-  onQualityGateConditionClick(cond: any): void {
-    if (!cond) return;
-    if (this.isDuplicationCondition(cond)) {
-      this.setTab('duplication');
-      this.selectFirstDuplicationIfNeeded();
-      return;
-    }
-    if (this.isSecurityHotspotsCondition(cond)) {
-      this.setTab('hotspots');
-      this.selectFirstHotspotIfNeeded();
-      return;
-    }
-    if (this.isCoverageCondition(cond)) {
-      this.setTab('quality');
-      return;
-    }
-    this.setTab('quality');
-  }
-
-  isCoverageGroupExpanded(group: string): boolean {
-    return !!this.coverageExpanded[group];
-  }
-
-  toggleCoverageGroup(group: string): void {
-    this.coverageExpanded[group] = !this.coverageExpanded[group];
-  }
-
-  isDuplicationGroupExpanded(group: string): boolean {
-    return !!this.duplicationExpanded[group];
-  }
-
-  toggleDuplicationGroup(group: string): void {
-    this.duplicationExpanded[group] = !this.duplicationExpanded[group];
-  }
-
-  /** Normalise le statut SonarQube (ex: "To Review" → "TO_REVIEW") pour comparaison. */
-  private normalizeHotspotStatus(status: string): string {
-    return (status || '').toUpperCase().replace(/\s+/g, '_');
-  }
+  // ─── Hotspots ────────────────────────────────────────────────────────────────
 
   applyHotspotStatusFilter(status?: string): void {
     if (status) this.hotspotStatusFilter = status;
@@ -507,127 +478,49 @@ export class SonarqubeComponent implements OnInit {
       return;
     }
     this.computeHotspotCountByStatus();
-    if (this.hotspotStatusFilter === 'ALL') {
-      this.filteredHotspots = [...this.hotspots];
-      return;
-    }
-    this.filteredHotspots = this.hotspots.filter((h: any) =>
-      this.normalizeHotspotStatus(h.status) === this.hotspotStatusFilter
-    );
+    this.filteredHotspots = this.hotspotStatusFilter === 'ALL'
+      ? [...this.hotspots]
+      : this.hotspots.filter(h => this.normalizeHotspotStatus(h.status) === this.hotspotStatusFilter);
   }
 
   private computeHotspotCountByStatus(): void {
     const counts: Record<string, number> = { ALL: this.hotspots?.length || 0, TO_REVIEW: 0, FIXED: 0, SAFE: 0 };
-    (this.hotspots || []).forEach((h: any) => {
+    (this.hotspots || []).forEach(h => {
       const s = this.normalizeHotspotStatus(h.status);
-      if (s === 'TO_REVIEW') counts['TO_REVIEW']++;
-      else if (s === 'FIXED') counts['FIXED']++;
-      else if (s === 'SAFE') counts['SAFE']++;
+      if (counts[s] !== undefined) counts[s]++;
     });
     this.hotspotCountByStatus = counts;
   }
 
+  private normalizeHotspotStatus(status: string): string {
+    return (status || '').toUpperCase().replace(/\s+/g, '_');
+  }
+
+  private selectFirstHotspotIfNeeded(): void {
+    if (this.selectedHotspot || !this.filteredHotspots?.length) return;
+    this.hotspotDetailTab = 'where';
+    this.loadHotspotDetails(this.filteredHotspots[0]);
+  }
+
   loadHotspotDetails(h: any): void {
-  const key = h?.key;
-  if (!key) return;
-  
-  this.selectedHotspot = h;
-  this.selectedHotspotDetails = null;
-  
-    this.sonarService.getHotspotDetails(key).subscribe({
+    if (!h?.key) return;
+    this.selectedHotspot = h;
+    this.selectedHotspotDetails = null;
+    this.sonarService.getHotspotDetails(h.key).subscribe({
       next: (res) => {
-        // Normalisation : s'assurer que rule est au bon endroit
         const normalizedRes: any = { ...res };
-
-        // Si rule est dans hotspot.rule, on le remonte
-        if (res.hotspot?.rule && !res.rule) {
-          normalizedRes.rule = res.hotspot.rule;
-        }
-
+        if (res.hotspot?.rule && !res.rule) normalizedRes.rule = res.hotspot.rule;
         this.selectedHotspotDetails = normalizedRes;
       },
-      error: () => {
-        this.selectedHotspotDetails = { error: true };
-      }
+      error: () => { this.selectedHotspotDetails = { error: true }; }
     });
-}
+  }
+
   getHotspotStatusLabel(status: string): string {
     const s = (status || '').toUpperCase();
-    if (s === 'TO_REVIEW') return 'À revoir';
-    if (s === 'FIXED') return 'Corrigé';
-    if (s === 'SAFE') return 'Sûr';
-    return status || '–';
+    return s === 'TO_REVIEW' ? 'À revoir' : s === 'FIXED' ? 'Corrigé' : s === 'SAFE' ? 'Sûr' : status || '–';
   }
 
-/** Contenu pour l’onglet « Quel est le risque ? » */
-getRuleRiskContent(): string {
-  const rule: any = this.selectedHotspotDetails?.rule;
-  if (!rule) return '';
-
-  // 1. Essayer riskDescription (présent dans la règle)
-  if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
-    return rule.riskDescription;
-  }
-
-  // 2. Essayer vulnerabilityDescription
-  if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
-    return rule.vulnerabilityDescription;
-  }
-
-  // 3. Chercher dans les sections si présentes
-  const sections = rule.descriptionSections as any[] | undefined;
-  if (sections && sections.length) {
-    for (const key of ['risk', 'vulnerability', 'risk_description', 'what_is_the_risk']) {
-      const section = sections.find(s => 
-        (s.key || '').toString().toLowerCase().includes(key)
-      );
-      if (section?.htmlContent) return section.htmlContent;
-      if (section?.content) return section.content;
-    }
-  }
-
-  // 4. Fallback sur la description globale
-  if (rule.htmlDesc) return rule.htmlDesc;
-  if (rule.mdDesc) return rule.mdDesc;
-  
-  return '';
-}
-
-/** Contenu pour l’onglet « Comment corriger ? » */
-getRuleFixContent(): string {
-  const rule: any = this.selectedHotspotDetails?.rule;
-  if (!rule) return '';
-
-  // 1. Essayer fixRecommendations (présent dans la règle)
-  if (typeof rule.fixRecommendations === 'string' && rule.fixRecommendations.trim()) {
-    return rule.fixRecommendations;
-  }
-
-  // 2. Chercher dans les sections si présentes
-  const sections = rule.descriptionSections as any[] | undefined;
-  if (sections && sections.length) {
-    for (const key of ['fix', 'how_to_fix', 'remediation', 'fix_recommendation']) {
-      const section = sections.find(s => 
-        (s.key || '').toString().toLowerCase().includes(key)
-      );
-      if (section?.htmlContent) return section.htmlContent;
-      if (section?.content) return section.content;
-    }
-  }
-
-  // 3. Fallback sur la description globale
-  if (rule.htmlDesc) return rule.htmlDesc;
-  if (rule.mdDesc) return rule.mdDesc;
-  
-  return '';
-}
-
-  /** Contenu pour l’onglet « Quel est le risque ? » (plusieurs clés + htmlDesc). */
- // Dans sonarqube.component.ts, remplace getRuleRiskContent et getRuleFixContent
-
-
-
-  /** Affiche le composant (fichier) du hotspot sans [object Object]. */
   getHotspotComponentDisplay(): string {
     const h = this.selectedHotspotDetails?.hotspot;
     if (!h) return '';
@@ -635,40 +528,162 @@ getRuleFixContent(): string {
     if (typeof key === 'string') return key;
     const comp = h.component;
     if (typeof comp === 'string') return comp;
-    if (comp && typeof comp === 'object') return (comp as any).key || (comp as any).path || (comp as any).name || '';
+    if (comp && typeof comp === 'object') return comp.key || comp.path || comp.name || '';
     return '';
   }
 
-  /** Contenu pour l’onglet « Accès au risque » - Affiche vulnerabilityDescription */
-getRuleAccessContent(): string {
-  const rule: any = this.selectedHotspotDetails?.rule;
-  if (!rule) return '';
-
-  // Afficher vulnerabilityDescription en priorité
-  if (typeof rule.vulnerabilityDescription === 'string' && rule.vulnerabilityDescription.trim()) {
-    return rule.vulnerabilityDescription;
+  getRuleRiskContent(): string {
+    const rule: any = this.selectedHotspotDetails?.rule;
+    if (!rule) return '';
+    if (rule.riskDescription?.trim()) return this.sanitizeRuleHtml(rule.riskDescription);
+    if (rule.vulnerabilityDescription?.trim()) return this.sanitizeRuleHtml(rule.vulnerabilityDescription);
+    const sections = rule.descriptionSections as any[] | undefined;
+    if (sections?.length) {
+      for (const key of ['risk', 'vulnerability', 'risk_description', 'what_is_the_risk']) {
+        const s = sections.find(s => (s.key || '').toLowerCase().includes(key));
+        if (s?.htmlContent) return this.sanitizeRuleHtml(s.htmlContent);
+        if (s?.content) return this.sanitizeRuleHtml(s.content);
+      }
+    }
+    return this.sanitizeRuleHtml(rule.htmlDesc || rule.mdDesc || '');
   }
 
-  // Fallback sur riskDescription
-  if (typeof rule.riskDescription === 'string' && rule.riskDescription.trim()) {
-    return rule.riskDescription;
+  getRuleFixContent(): string {
+    const rule: any = this.selectedHotspotDetails?.rule;
+    if (!rule) return '';
+    if (rule.fixRecommendations?.trim()) return this.sanitizeRuleHtml(rule.fixRecommendations);
+    const sections = rule.descriptionSections as any[] | undefined;
+    if (sections?.length) {
+      for (const key of ['fix', 'how_to_fix', 'remediation', 'fix_recommendation']) {
+        const s = sections.find(s => (s.key || '').toLowerCase().includes(key));
+        if (s?.htmlContent) return this.sanitizeRuleHtml(s.htmlContent);
+        if (s?.content) return this.sanitizeRuleHtml(s.content);
+      }
+    }
+    return this.sanitizeRuleHtml(rule.htmlDesc || rule.mdDesc || '');
   }
 
-  return 'Aucune description du risque disponible.';
-}
+  getRuleAccessContent(): string {
+    const rule: any = this.selectedHotspotDetails?.rule;
+    if (!rule) return 'Aucune description du risque disponible.';
+    if (rule.vulnerabilityDescription?.trim()) return this.sanitizeRuleHtml(rule.vulnerabilityDescription);
+    if (rule.riskDescription?.trim()) return this.sanitizeRuleHtml(rule.riskDescription);
+    return 'Aucune description du risque disponible.';
+  }
+
+  /** Empêche l'exécution de <script> dans les contenus de règles tout en les affichant comme texte. */
+  private sanitizeRuleHtml(html: string | undefined | null): string {
+    if (!html) return '';
+    return String(html)
+      .replace(/<script/gi, '&lt;script')
+      .replace(/<\/script>/gi, '&lt;/script&gt;');
+  }
+
+  // ─── Duplication ─────────────────────────────────────────────────────────────
+
+  private selectFirstDuplicationIfNeeded(): void {
+    if (this.selectedDupFile || !this.duplicationFiles?.length) return;
+    const first = this.duplicationFiles[0];
+    if (first?.key) this.loadDuplicationDetails(first);
+  }
+
+  loadDuplicationDetails(file: { key?: string }): void {
+    if (!file.key) return;
+    this.selectedDupFile = { ...file, loading: true };
+    this.selectedDupSourceLines = [];
+    this.selectedDupMeta = null;
+    this.sonarService.getFileDuplications(file.key).subscribe({
+      next: res => {
+        this.selectedDupSourceLines = (res.source || '').split(/\r?\n/);
+        this.selectedDupMeta = res.duplications || null;
+        this.selectedDupFile.loading = false;
+      },
+      error: () => { this.selectedDupFile.loading = false; }
+    });
+  }
+
+  // ─── Quality Gate ────────────────────────────────────────────────────────────
+
+  formatConditionMetric(metric: string | undefined): string {
+    if (!metric) return '';
+    const key = metric.toLowerCase();
+    if (key.includes('coverage')) return 'Coverage';
+    if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
+    if (key.includes('reliability_rating')) return 'Fiabilité';
+    if (key.includes('security_rating')) return 'Sécurité';
+    if (key.includes('maintainability_rating')) return 'Maintenabilité';
+    if (key.includes('duplicated_lines')) return 'Duplication';
+    return metric;
+  }
+
+  isCoverageCondition(cond: any): boolean {
+    return (cond?.metric || cond?.metricKey || '').toLowerCase().includes('coverage');
+  }
+
+  isSecurityHotspotsCondition(cond: any): boolean {
+    return (cond?.metric || cond?.metricKey || '').toLowerCase().includes('security_hotspots_reviewed');
+  }
+
+  isDuplicationCondition(cond: any): boolean {
+    return (cond?.metric || cond?.metricKey || '').toLowerCase().includes('duplicated_lines');
+  }
+
+  onQualityGateConditionClick(cond: any): void {
+    if (!cond) return;
+    if (this.isDuplicationCondition(cond)) { this.setTab('duplication'); return; }
+    if (this.isSecurityHotspotsCondition(cond)) { this.setTab('hotspots'); return; }
+    if (this.isCoverageCondition(cond)) { this.setTab('coverage'); return; }
+    this.setTab('quality');
+  }
+
+  onBranchChange(branch: string): void {
+    if (!branch || branch === this.currentBranch) return;
+    this.currentBranch = branch;
+    this.loading = true;
+    this.sonarService.getResultsForBranch(branch).subscribe({
+      next: (res) => { this.metrics = res.metrics || this.metrics; this.loading = false; },
+      error: (err) => { this.loading = false; this.error = err?.error?.message || 'Erreur'; }
+    });
+  }
+
+  // ─── Overview Cards ──────────────────────────────────────────────────────────
+
+  onOverviewCardClick(kind: 'vuln' | 'bug' | 'smell' | 'hotspot' | 'dup' | 'coverage'): void {
+    if (kind === 'hotspot') {
+      this.setTab('hotspots');
+      return;
+    }
+    if (kind === 'dup') {
+      this.setTab('duplication');
+      return;
+    }
+    if (kind === 'coverage') {
+      this.setTab('quality');
+      return;
+    }
+  
+    this.setTab('issues');
+    const typeMap: Record<string, string> = {
+      vuln: 'VULNERABILITY',
+      bug: 'BUG',
+      smell: 'CODE_SMELL'
+    };
+    this.applyIssueFilters(undefined, typeMap[kind] || 'ALL');
+  }
+
+  openQualityGateTab(): void {
+    this.setTab('quality');
+  }
+
+  // ─── Tree / Group Helpers ────────────────────────────────────────────────────
 
   private buildTree<T extends { path: string }>(files: T[]): { group: string; files: T[] }[] {
     const groups = new Map<string, T[]>();
     files.forEach(f => {
-      const rawPath = f.path || '';
-      const firstSegment = rawPath.split(/[\\/]/)[0] || '(root)';
-      const groupKey = firstSegment || '(root)';
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, []);
-      }
-      groups.get(groupKey)!.push(f);
+      const firstSegment = (f.path || '').split(/[\\/]/)[0] || '(root)';
+      if (!groups.has(firstSegment)) groups.set(firstSegment, []);
+      groups.get(firstSegment)!.push(f);
     });
-
     return Array.from(groups.entries())
       .map(([group, items]) => ({
         group,
@@ -677,33 +692,14 @@ getRuleAccessContent(): string {
       .sort((a, b) => a.group.localeCompare(b.group));
   }
 
+  isCoverageGroupExpanded(group: string): boolean { return !!this.coverageExpanded[group]; }
+  toggleCoverageGroup(group: string): void { this.coverageExpanded[group] = !this.coverageExpanded[group]; }
+  isDuplicationGroupExpanded(group: string): boolean { return !!this.duplicationExpanded[group]; }
+  toggleDuplicationGroup(group: string): void { this.duplicationExpanded[group] = !this.duplicationExpanded[group]; }
+
   private buildSonarFileUrl(componentKey: string | undefined | null): string | undefined {
     if (!componentKey || !this.sonarHostUrl || !this.sonarProjectKey) return undefined;
     const base = this.sonarHostUrl.replace(/\/+$/, '');
     return `${base}/code?id=${encodeURIComponent(this.sonarProjectKey)}&selected=${encodeURIComponent(componentKey)}`;
   }
-
-  /**
-   * Charge les lignes dupliquées pour un fichier et son code source.
-   */
-  loadDuplicationDetails(file: { key?: string }): void {
-    if (!file.key) return;
-    this.selectedDupFile = { ...file, loading: true };
-    this.selectedDupSourceLines = [];
-    this.selectedDupMeta = null;
-
-    this.sonarService.getFileDuplications(file.key).subscribe({
-      next: res => {
-        const src: string = res.source || '';
-        this.selectedDupSourceLines = src.split(/\r?\n/);
-        this.selectedDupMeta = res.duplications || null;
-        this.selectedDupFile.loading = false;
-      },
-      error: () => {
-        this.selectedDupFile.loading = false;
-      }
-    });
-  }
-  
 }
-

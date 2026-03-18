@@ -69,7 +69,7 @@ import { SonarqubeComponent } from './sonarqube/sonarqube.component';
     AppRoutingModule,
     HttpClientModule,
     ReactiveFormsModule,
-    FormsModule
+    FormsModule,
   ],
   providers: [],
   bootstrap: [AppComponent]
