@@ -300,66 +300,254 @@
              ISSUES
         ══════════════════════════════════════════ -->
         <section *ngIf="activeTab === 'issues'" class="issues-tab">
+          <div class="issues-layout">
+            <!-- Sidebar filters (style SonarCloud) -->
+            <aside class="panel issues-filters">
+              <div class="issues-filters-header">
+                <div class="panel-title">Filters</div>
+                <button type="button" class="link-btn" (click)="clearIssueFilters()">Reset</button>
+              </div>
 
-          <div class="filters-bar">
-            <div class="filters-group">
-              <span class="filters-label">Sévérité :</span>
-              <button class="chip" [class.active]="severityFilter === 'ALL'"      (click)="applyIssueFilters('ALL', typeFilter)">Toutes ({{ totalIssues }})</button>
-              <button class="chip" [class.active]="severityFilter === 'BLOCKER'"  (click)="applyIssueFilters('BLOCKER', typeFilter)">Blocker ({{ severityCounts['BLOCKER'] || 0 }})</button>
-              <button class="chip" [class.active]="severityFilter === 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">Critical ({{ severityCounts['CRITICAL'] || 0 }})</button>
-              <button class="chip" [class.active]="severityFilter === 'MAJOR'"    (click)="applyIssueFilters('MAJOR', typeFilter)">Major ({{ severityCounts['MAJOR'] || 0 }})</button>
-              <button class="chip" [class.active]="severityFilter === 'MINOR'"    (click)="applyIssueFilters('MINOR', typeFilter)">Minor ({{ severityCounts['MINOR'] || 0 }})</button>
-              <button class="chip" [class.active]="severityFilter === 'INFO'"     (click)="applyIssueFilters('INFO', typeFilter)">Info ({{ severityCounts['INFO'] || 0 }})</button>
-            </div>
-            <div class="filters-group">
-              <span class="filters-label">Type :</span>
-              <button class="chip" [class.active]="typeFilter === 'ALL'"           (click)="applyIssueFilters(severityFilter, 'ALL')">Tous</button>
-              <button class="chip" [class.active]="typeFilter === 'BUG'"           (click)="applyIssueFilters(severityFilter, 'BUG')">Bug ({{ typeCounts['BUG'] || 0 }})</button>
-              <button class="chip" [class.active]="typeFilter === 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">Vulnerability ({{ typeCounts['VULNERABILITY'] || 0 }})</button>
-              <button class="chip" [class.active]="typeFilter === 'CODE_SMELL'"    (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">Code Smell ({{ typeCounts['CODE_SMELL'] || 0 }})</button>
-            </div>
-          </div>
+              <div class="issues-search">
+                <input class="issues-search-input"
+                       type="text"
+                       placeholder="Search issues / files / rules…"
+                       [(ngModel)]="issueSearch"
+                       (ngModelChange)="applyIssueFilters()" />
+              </div>
 
-          <div class="panel">
-            <div class="panel-title">Issues</div>
-            <p class="panel-sub">{{ filteredIssues.length }} / {{ totalIssues }} affichées</p>
-            <div class="issue-list" *ngIf="filteredIssues?.length">
-              <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item">
-                <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
-                  {{ issue.severity }}
-                </span>
-                <div class="issue-body">
-                  <div class="issue-message">{{ issue.message }}</div>
-                  <div class="issue-meta">
-                    <span *ngIf="issue.type">📌 {{ issue.type }}</span>
-                    <span *ngIf="issue.component">📄 {{ issue.component }}</span>
-                    <span *ngIf="issue.line">L.{{ issue.line }}</span>
-                  </div>
-                  <div class="issue-actions">
-                    <div class="issue-action-row">
-                      <span class="issue-action-label">Statut</span>
-                      <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
-                      <select class="issue-transition-select"
-                              [disabled]="issueUpdatingKey === issue.key"
-                              (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
-                        <option value="">Changer...</option>
-                        <option *ngFor="let t of issueTransitions" [value]="t.value">{{ t.label }}</option>
-                      </select>
-                      <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">Mise à jour...</span>
+              <details class="filter-section" open>
+                <summary>Software quality</summary>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'ALL'" (click)="setSoftwareQualityFilter('ALL')">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'SECURITY'" (click)="setSoftwareQualityFilter('SECURITY')">
+                  Security <span class="count">{{ softwareQualityCounts['SECURITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'RELIABILITY'" (click)="setSoftwareQualityFilter('RELIABILITY')">
+                  Reliability <span class="count">{{ softwareQualityCounts['RELIABILITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'MAINTAINABILITY'" (click)="setSoftwareQualityFilter('MAINTAINABILITY')">
+                  Maintainability <span class="count">{{ softwareQualityCounts['MAINTAINABILITY'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section" open>
+                <summary>Severity</summary>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'ALL'" (click)="applyIssueFilters('ALL', typeFilter)">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'BLOCKER'" (click)="applyIssueFilters('BLOCKER', typeFilter)">
+                  Blocker <span class="count">{{ severityCounts['BLOCKER'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">
+                  High <span class="count">{{ severityCounts['CRITICAL'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MAJOR'" (click)="applyIssueFilters('MAJOR', typeFilter)">
+                  Medium <span class="count">{{ severityCounts['MAJOR'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MINOR'" (click)="applyIssueFilters('MINOR', typeFilter)">
+                  Low <span class="count">{{ severityCounts['MINOR'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'INFO'" (click)="applyIssueFilters('INFO', typeFilter)">
+                  Info <span class="count">{{ severityCounts['INFO'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section" open>
+                <summary>Type</summary>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'ALL'" (click)="applyIssueFilters(severityFilter, 'ALL')">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'BUG'" (click)="applyIssueFilters(severityFilter, 'BUG')">
+                  Bug <span class="count">{{ typeCounts['BUG'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
+                  Vulnerability <span class="count">{{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'CODE_SMELL'" (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
+                  Code Smell <span class="count">{{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section" open>
+                <summary>Status</summary>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'ALL'" (click)="setStatusFilter('ALL')">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'OPEN'" (click)="setStatusFilter('OPEN')">
+                  Open <span class="count">{{ statusCounts['OPEN'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'CONFIRMED'" (click)="setStatusFilter('CONFIRMED')">
+                  Confirmed <span class="count">{{ statusCounts['CONFIRMED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FALSE_POSITIVE'" (click)="setStatusFilter('FALSE_POSITIVE')">
+                  False Positive <span class="count">{{ statusResolutionCounts['FALSE_POSITIVE'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'ACCEPTED'" (click)="setStatusFilter('ACCEPTED')">
+                  Accepted <span class="count">{{ statusResolutionCounts['ACCEPTED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FIXED'" (click)="setStatusFilter('FIXED')">
+                  Fixed <span class="count">{{ statusResolutionCounts['FIXED'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Code attribute</summary>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'ALL'" (click)="setCodeAttributeFilter('ALL')">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Consistency'" (click)="setCodeAttributeFilter('Consistency')">
+                  Consistency <span class="count">{{ codeAttributeCounts['Consistency'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Intentionality'" (click)="setCodeAttributeFilter('Intentionality')">
+                  Intentionality <span class="count">{{ codeAttributeCounts['Intentionality'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Adaptability'" (click)="setCodeAttributeFilter('Adaptability')">
+                  Adaptability <span class="count">{{ codeAttributeCounts['Adaptability'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Responsibility'" (click)="setCodeAttributeFilter('Responsibility')">
+                  Responsibility <span class="count">{{ codeAttributeCounts['Responsibility'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Security Category</summary>
+                <button type="button" class="filter-item" [class.active]="securityCategoryFilter === 'ALL'" (click)="setSecurityCategoryFilter('ALL')">All</button>
+                <button type="button" class="filter-item" *ngFor="let s of topSecurityCategories" [class.active]="securityCategoryFilter === s.key" (click)="setSecurityCategoryFilter(s.key)">
+                  {{ s.key }} <span class="count">{{ s.count }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Directory</summary>
+                <div class="issues-search">
+                  <input class="issues-search-input"
+                         type="text"
+                         placeholder="Search for directories…"
+                         [(ngModel)]="directorySearch" />
+                </div>
+                <button type="button" class="filter-item" [class.active]="directoryFilter === 'ALL'" (click)="setDirectoryFilter('ALL')">All</button>
+                <ng-container *ngFor="let d of topDirectories">
+                  <button type="button"
+                          class="filter-item"
+                          *ngIf="!directorySearch || d.key.toLowerCase().includes(directorySearch.toLowerCase())"
+                          [class.active]="directoryFilter === d.key"
+                          (click)="setDirectoryFilter(d.key)">
+                    {{ d.key }} <span class="count">{{ d.count }}</span>
+                  </button>
+                </ng-container>
+              </details>
+
+              <details class="filter-section">
+                <summary>File</summary>
+                <div class="issues-search">
+                  <input class="issues-search-input"
+                         type="text"
+                         placeholder="Search for files…"
+                         [(ngModel)]="fileSearch" />
+                </div>
+                <button type="button" class="filter-item" [class.active]="fileFilter === 'ALL'" (click)="setFileFilter('ALL')">All</button>
+                <ng-container *ngFor="let f of topFiles">
+                  <button type="button"
+                          class="filter-item"
+                          *ngIf="!fileSearch || f.key.toLowerCase().includes(fileSearch.toLowerCase())"
+                          [class.active]="fileFilter === f.key"
+                          (click)="setFileFilter(f.key)">
+                    {{ f.key }} <span class="count">{{ f.count }}</span>
+                  </button>
+                </ng-container>
+              </details>
+
+              <details class="filter-section">
+                <summary>Assignee</summary>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'ALL'" (click)="setAssigneeFilter('ALL')">
+                  All <span class="count">{{ totalIssues }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'UNASSIGNED'" (click)="setAssigneeFilter('UNASSIGNED')">
+                  Not assigned <span class="count">{{ assigneeCounts['UNASSIGNED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'ME'" (click)="setAssigneeFilter('ME')">
+                  Assigned to me <span class="count">{{ assigneeCounts['ME'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Language</summary>
+                <button type="button" class="filter-item" [class.active]="languageFilter === 'ALL'" (click)="setLanguageFilter('ALL')">
+                  All
+                </button>
+                <button type="button" class="filter-item" *ngFor="let l of (languageCounts | keyvalue)" [class.active]="languageFilter === l.key" (click)="setLanguageFilter(l.key)">
+                  {{ l.key }} <span class="count">{{ l.value }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Rule</summary>
+                <button type="button" class="filter-item" [class.active]="ruleFilter === 'ALL'" (click)="setRuleFilter('ALL')">All</button>
+                <button type="button" class="filter-item" *ngFor="let r of topRules" [class.active]="ruleFilter === r.key" (click)="setRuleFilter(r.key)">
+                  {{ r.key }} <span class="count">{{ r.count }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Tag</summary>
+                <button type="button" class="filter-item" [class.active]="tagFilter === 'ALL'" (click)="setTagFilter('ALL')">All</button>
+                <button type="button" class="filter-item" *ngFor="let t of topTags" [class.active]="tagFilter === t.key" (click)="setTagFilter(t.key)">
+                  {{ t.key }} <span class="count">{{ t.count }}</span>
+                </button>
+              </details>
+            </aside>
+
+            <!-- Main issues list -->
+            <div class="panel issues-main">
+              <div class="issues-main-head">
+                <div class="panel-title">Issues</div>
+                <div class="panel-sub">{{ filteredIssues.length }} / {{ totalIssues }} affichées</div>
+              </div>
+
+              <div class="issue-list" *ngIf="filteredIssues?.length">
+                <div *ngFor="let issue of filteredIssues | slice:0:50" class="issue-item">
+                  <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
+                    {{ issue.severity }}
+                  </span>
+                  <div class="issue-body">
+                    <div class="issue-message">{{ issue.message }}</div>
+                    <div class="issue-meta">
+                      <span *ngIf="issue.type">📌 {{ issue.type }}</span>
+                      <span *ngIf="issue.component">📄 {{ issue.component }}</span>
+                      <span *ngIf="issue.line">L.{{ issue.line }}</span>
+                      <span *ngIf="issue.rule">🧩 {{ issue.rule }}</span>
                     </div>
-                    <div class="issue-action-row">
-                      <span class="issue-action-label">Assigné</span>
-                      <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
-                      <button class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Assign to me</button>
-                      <button class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Unassign</button>
+                    <div class="issue-actions">
+                      <div class="issue-action-row">
+                        <span class="issue-action-label">Statut</span>
+                        <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
+                        <select class="issue-transition-select"
+                              [disabled]="issueUpdatingKey === issue.key || !canChangeIssueStatus(issue)"
+                              [title]="getIssueStatusHint(issue)"
+                                (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
+                          <option value="">Changer...</option>
+                          <option *ngFor="let t of issueTransitions" [value]="t.value">{{ t.label }}</option>
+                        </select>
+                        <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">Mise à jour...</span>
+                      <span *ngIf="issueUpdateError[issue.key]" class="issue-error-badge">{{ issueUpdateError[issue.key] }}</span>
+                      </div>
+                      <div class="issue-action-row">
+                        <span class="issue-action-label">Assigné</span>
+                        <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
+                        <button class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Assign to me</button>
+                        <button class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Unassign</button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              <p *ngIf="!filteredIssues?.length" class="empty-text">
+                {{ totalIssues === 0 ? 'Aucun problème détecté.' : 'Aucune issue pour les filtres sélectionnés.' }}
+              </p>
             </div>
-            <p *ngIf="!filteredIssues?.length" class="empty-text">
-              {{ totalIssues === 0 ? 'Aucun problème détecté.' : 'Aucune issue pour les filtres sélectionnés.' }}
-            </p>
           </div>
         </section>
 

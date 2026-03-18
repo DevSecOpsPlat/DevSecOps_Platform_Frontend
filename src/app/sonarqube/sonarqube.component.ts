@@ -9,6 +9,8 @@ import Chart from 'chart.js/auto';
   styleUrls: ['./sonarqube.component.css']
 })
 export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
+  /** Active des logs console pour diagnostiquer les facets issues. */
+  readonly debugIssues = true;
 
   @ViewChild('donutCanvas') donutCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild('coverageBarCanvas') coverageBarCanvas!: ElementRef<HTMLCanvasElement>;
@@ -21,6 +23,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   totalIssues = 0;
   totalHotspots = 0;
   issues: any[] = [];
+  /** Toutes les issues renvoyées par l’API (inclut RESOLVED pour les filtres Fixed/Accepted/False Positive). */
+  allIssues: any[] = [];
   hotspots: any[] = [];
   qualityGate: any = null;
 
@@ -30,9 +34,39 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   // Issues
   severityFilter: string = 'ALL';
   typeFilter: string = 'ALL';
+  statusFilter: string = 'ALL';
+  softwareQualityFilter: 'ALL' | 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY' = 'ALL';
+  languageFilter: string = 'ALL';
+  ruleFilter: string = 'ALL';
+  tagFilter: string = 'ALL';
+  codeAttributeFilter: string = 'ALL';
+  securityCategoryFilter: string = 'ALL';
+  directoryFilter: string = 'ALL';
+  fileFilter: string = 'ALL';
+  assigneeFilter: 'ALL' | 'UNASSIGNED' | 'ME' | 'ASSIGNED' = 'ALL';
+  directorySearch: string = '';
+  fileSearch: string = '';
+  issueSearch: string = '';
   filteredIssues: any[] = [];
   severityCounts: Record<string, number> = {};
   typeCounts: Record<string, number> = {};
+  statusCounts: Record<string, number> = {};
+  statusResolutionCounts: Record<string, number> = {};
+  softwareQualityCounts: Record<string, number> = {};
+  languageCounts: Record<string, number> = {};
+  ruleCounts: Record<string, number> = {};
+  tagCounts: Record<string, number> = {};
+  codeAttributeCounts: Record<string, number> = {};
+  securityCategoryCounts: Record<string, number> = {};
+  directoryCounts: Record<string, number> = {};
+  fileCounts: Record<string, number> = {};
+  assigneeCounts: Record<string, number> = {};
+  topRules: { key: string; count: number }[] = [];
+  topTags: { key: string; count: number }[] = [];
+  topDirectories: { key: string; count: number }[] = [];
+  topFiles: { key: string; count: number }[] = [];
+  topSecurityCategories: { key: string; count: number }[] = [];
+  topCodeAttributes: { key: string; count: number }[] = [];
 
   // Branches
   branches: string[] = ['master'];
@@ -67,6 +101,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   sonarHostUrl: string | null = null;
   sonarProjectKey: string | null = null;
   issueUpdatingKey: string | null = null;
+  issueUpdateError: Record<string, string> = {};
 
   readonly issueTransitions = [
     { value: 'confirm', label: 'Confirmer' },
@@ -110,13 +145,29 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading = true;
     this.error = null;
 
-    this.sonarService.getSonarQubeResults().subscribe({
+    // Charger selon la branche sélectionnée pour aligner avec SonarCloud (Issues/mesures par branche)
+    this.sonarService.getResultsForBranch(this.currentBranch).subscribe({
       next: (res) => {
         this.metrics = res.metrics || {};
 
         const rawIssues = (res.issues || []) as any[];
-        this.issues = rawIssues;
-        this.totalIssues = rawIssues.length;
+        this.allIssues = rawIssues;
+        // SonarCloud UI “Issues” affiche par défaut OPEN + CONFIRMED + REOPENED (pas RESOLVED).
+        const defaultStatuses = new Set(['OPEN', 'CONFIRMED', 'REOPENED']);
+        this.issues = rawIssues.filter(i => defaultStatuses.has(String(i?.status || 'OPEN').toUpperCase()));
+        this.totalIssues = this.issues.length;
+
+        if (this.debugIssues) {
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] branch=', this.currentBranch, 'allCount=', rawIssues.length, 'defaultCount=', this.issues.length);
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] sample issue keys=', rawIssues.slice(0, 3).map(i => Object.keys(i || {})));
+          const s0 = rawIssues[0] || null;
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] sample0=', s0);
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] sample0.cleanCodeAttribute=', s0?.cleanCodeAttribute, 'cleanCodeAttributeCategory=', s0?.cleanCodeAttributeCategory, 'impacts=', s0?.impacts);
+        }
 
         const rawHotspots = (res.hotspots || []) as any[];
         this.hotspots = rawHotspots;
@@ -133,6 +184,13 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
         this.computeIssueFacets();
         this.applyIssueFilters();
+
+        if (this.debugIssues) {
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] codeAttributeCounts=', this.codeAttributeCounts);
+          // eslint-disable-next-line no-console
+          console.log('[Sonar][Issues] topCodeAttributes=', this.topCodeAttributes);
+        }
         this.applyHotspotStatusFilter();
         this.selectFirstHotspotIfNeeded();
         this.selectFirstDuplicationIfNeeded();
@@ -403,25 +461,389 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   private computeIssueFacets(): void {
     const sevCounts: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
+    const statusCounts: Record<string, number> = {};
+    const qualityCounts: Record<string, number> = { SECURITY: 0, RELIABILITY: 0, MAINTAINABILITY: 0 };
+    const languageCounts: Record<string, number> = {};
+    const ruleCounts: Record<string, number> = {};
+    const tagCounts: Record<string, number> = {};
+    const codeAttrCounts: Record<string, number> = {};
+    const secCatCounts: Record<string, number> = {};
+    const dirCounts: Record<string, number> = {};
+    const fileCounts: Record<string, number> = {};
+    const assigneeCounts: Record<string, number> = { UNASSIGNED: 0, ME: 0, ASSIGNED: 0 };
+    const currentUsername = this.userService.getUser()?.username || '';
+    // Facets : basés sur l’ensemble affiché par défaut (comme SonarCloud),
+    // mais on garde aussi les counts sur `allIssues` pour les statuts "Fixed/Accepted/False Positive".
     this.issues.forEach(issue => {
       const sev = (issue.severity || 'UNKNOWN').toUpperCase();
       const type = (issue.type || 'OTHER').toUpperCase();
       sevCounts[sev] = (sevCounts[sev] || 0) + 1;
       typeCounts[type] = (typeCounts[type] || 0) + 1;
+
+      const st = (issue.status || 'OPEN').toUpperCase();
+      statusCounts[st] = (statusCounts[st] || 0) + 1;
+
+      // SonarCloud "Software quality" (approx) from type
+      if (type === 'VULNERABILITY') qualityCounts['SECURITY']++;
+      else if (type === 'BUG') qualityCounts['RELIABILITY']++;
+      else if (type === 'CODE_SMELL') qualityCounts['MAINTAINABILITY']++;
+
+      const comp = (issue.component || '') as string;
+      const lang = this.guessLanguageFromComponent(comp);
+      if (lang) languageCounts[lang] = (languageCounts[lang] || 0) + 1;
+
+      const rule = (issue.rule || issue.ruleKey || issue.rule_key || '') as string;
+      if (rule) ruleCounts[rule] = (ruleCounts[rule] || 0) + 1;
+
+      const tags: any[] = Array.isArray(issue.tags) ? issue.tags : [];
+      tags.forEach(t => {
+        const key = String(t || '').trim();
+        if (!key) return;
+        tagCounts[key] = (tagCounts[key] || 0) + 1;
+      });
+
+      const codeAttr = this.getCodeAttributeKey(issue);
+      if (codeAttr) codeAttrCounts[codeAttr] = (codeAttrCounts[codeAttr] || 0) + 1;
+
+      const secCats = this.getSecurityCategories(issue);
+      secCats.forEach(sc => {
+        secCatCounts[sc] = (secCatCounts[sc] || 0) + 1;
+      });
+
+      const filePath = this.getComponentPath(issue.component);
+      const dir = this.getDirectoryFromPath(filePath);
+      if (dir) dirCounts[dir] = (dirCounts[dir] || 0) + 1;
+      if (filePath) fileCounts[filePath] = (fileCounts[filePath] || 0) + 1;
+
+      const assignee = String(issue.assignee || '').trim();
+      if (!assignee) assigneeCounts['UNASSIGNED']++;
+      else assigneeCounts['ASSIGNED']++;
+      // "Assigned to me" côté UI = assignee présent (puisque c'est un compte sonar technique) + username plateforme pour libellé
+      if (assignee && currentUsername) assigneeCounts['ME']++;
     });
+
+    // Statuts "résolution" (sur allIssues) : Fixed / False Positive / Accepted
+    const resCounts: Record<string, number> = { FIXED: 0, FALSE_POSITIVE: 0, ACCEPTED: 0 };
+    for (const i of (this.allIssues || [])) {
+      const st = String(i?.status || '').toUpperCase();
+      const resolution = String(i?.resolution || '').toUpperCase();
+      // SonarCloud "Fixed" correspond à RESOLVED/CLOSED avec résolution FIXED (ou parfois résolution vide).
+      if ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'))) {
+        resCounts['FIXED']++;
+      }
+      if (resolution.includes('FALSE')) resCounts['FALSE_POSITIVE']++;
+      if (resolution.includes('ACCEPT')) resCounts['ACCEPTED']++;
+    }
+    this.statusResolutionCounts = resCounts;
+    // Pour affichage "Fixed" on peut aussi exposer RESOLVED
+    if (resCounts['FIXED'] > 0) statusCounts['RESOLVED'] = resCounts['FIXED'];
     this.severityCounts = sevCounts;
     this.typeCounts = typeCounts;
+    this.statusCounts = statusCounts;
+    this.softwareQualityCounts = qualityCounts;
+    this.languageCounts = languageCounts;
+    this.ruleCounts = ruleCounts;
+    this.tagCounts = tagCounts;
+    this.codeAttributeCounts = codeAttrCounts;
+    this.securityCategoryCounts = secCatCounts;
+    this.directoryCounts = dirCounts;
+    this.fileCounts = fileCounts;
+    this.assigneeCounts = assigneeCounts;
+
+    this.topRules = Object.entries(ruleCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([key, count]) => ({ key, count }));
+
+    this.topTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([key, count]) => ({ key, count }));
+
+    this.topDirectories = Object.entries(dirCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([key, count]) => ({ key, count }));
+
+    this.topFiles = Object.entries(fileCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([key, count]) => ({ key, count }));
+
+    this.topSecurityCategories = Object.entries(secCatCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([key, count]) => ({ key, count }));
+
+    this.topCodeAttributes = Object.entries(codeAttrCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([key, count]) => ({ key, count }));
   }
 
   applyIssueFilters(severity?: string, type?: string): void {
-    if (severity) this.severityFilter = severity;
-    if (type) this.typeFilter = type;
-    this.filteredIssues = this.issues.filter(issue => {
+    if (severity !== undefined) this.severityFilter = severity;
+    if (type !== undefined) this.typeFilter = type;
+    const base = this.getIssuesBaseForStatus();
+    this.filteredIssues = base.filter(issue => {
       const sev = (issue.severity || 'UNKNOWN').toUpperCase();
       const t = (issue.type || 'OTHER').toUpperCase();
-      return (this.severityFilter === 'ALL' || sev === this.severityFilter)
-          && (this.typeFilter === 'ALL' || t === this.typeFilter);
+
+      const st = (issue.status || 'OPEN').toUpperCase();
+      const comp = (issue.component || '') as string;
+      const lang = this.guessLanguageFromComponent(comp);
+      const rule = (issue.rule || issue.ruleKey || issue.rule_key || '') as string;
+      const tags: string[] = Array.isArray(issue.tags) ? issue.tags.map((x: any) => String(x)) : [];
+      const codeAttr = this.getCodeAttributeKey(issue);
+      const secCats = this.getSecurityCategories(issue);
+      const filePath = this.getComponentPath(issue.component);
+      const dir = this.getDirectoryFromPath(filePath);
+      const assignee = String(issue.assignee || '').trim();
+
+      const sevOk = this.severityFilter === 'ALL' || sev === this.severityFilter;
+      const typeOk = this.typeFilter === 'ALL' || t === this.typeFilter;
+      const statusOk =
+        this.statusFilter === 'ALL'
+          ? true
+          : (this.statusFilter === 'FIXED' || this.statusFilter === 'FALSE_POSITIVE' || this.statusFilter === 'ACCEPTED')
+            ? true
+            : st === this.statusFilter;
+      const resolution = String(issue.resolution || '').toUpperCase();
+      const statusResolutionOk =
+        this.statusFilter === 'ALL'
+          ? true
+          : this.statusFilter === 'FALSE_POSITIVE'
+            ? resolution.includes('FALSE')
+            : this.statusFilter === 'ACCEPTED'
+              ? resolution.includes('ACCEPT')
+              : this.statusFilter === 'FIXED'
+                ? ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED')))
+                : st === this.statusFilter;
+      const langOk = this.languageFilter === 'ALL' || (lang || 'Unknown') === this.languageFilter;
+      const ruleOk = this.ruleFilter === 'ALL' || rule === this.ruleFilter;
+      const tagOk = this.tagFilter === 'ALL' || tags.includes(this.tagFilter);
+
+      const quality = this.getSoftwareQualityKeyFromType(t);
+      const qualityOk = this.softwareQualityFilter === 'ALL' || quality === this.softwareQualityFilter;
+
+      const codeAttrOk = this.codeAttributeFilter === 'ALL' || codeAttr === this.codeAttributeFilter;
+      const secCatOk = this.securityCategoryFilter === 'ALL' || secCats.includes(this.securityCategoryFilter);
+      const dirOk = this.directoryFilter === 'ALL' || dir === this.directoryFilter;
+      const fileOk = this.fileFilter === 'ALL' || filePath === this.fileFilter;
+      const assigneeOk =
+        this.assigneeFilter === 'ALL'
+          ? true
+          : this.assigneeFilter === 'UNASSIGNED'
+            ? !assignee
+            : this.assigneeFilter === 'ASSIGNED'
+              ? !!assignee
+              : !!assignee; // ME : on l'assimile au compte technique Sonar "assign to me"
+
+      const q = (this.issueSearch || '').trim().toLowerCase();
+      const searchOk = !q
+        || String(issue.message || '').toLowerCase().includes(q)
+        || String(comp || '').toLowerCase().includes(q)
+        || String(rule || '').toLowerCase().includes(q);
+
+      return sevOk && typeOk && statusOk && statusResolutionOk && langOk && ruleOk && tagOk && qualityOk
+        && codeAttrOk && secCatOk && dirOk && fileOk && assigneeOk
+        && searchOk;
     });
+  }
+
+  /** Liste de base selon le status choisi (par défaut, on exclut RESOLVED comme SonarCloud). */
+  private getIssuesBaseForStatus(): any[] {
+    const s = (this.statusFilter || 'ALL').toUpperCase();
+    if (s === 'FIXED' || s === 'RESOLVED' || s === 'FALSE_POSITIVE' || s === 'ACCEPTED') {
+      return this.allIssues;
+    }
+    // Demande UI: quand on filtre "Type = Code Smell", inclure aussi les issues fermées.
+    const t = (this.typeFilter || 'ALL').toUpperCase();
+    if (t === 'CODE_SMELL') {
+      return this.allIssues;
+    }
+    return this.issues;
+  }
+
+  setStatusFilter(status: string): void {
+    this.statusFilter = status || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setCodeAttributeFilter(v: string): void {
+    this.codeAttributeFilter = v || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setSecurityCategoryFilter(v: string): void {
+    this.securityCategoryFilter = v || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setDirectoryFilter(v: string): void {
+    this.directoryFilter = v || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setFileFilter(v: string): void {
+    this.fileFilter = v || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setAssigneeFilter(v: 'ALL' | 'UNASSIGNED' | 'ME' | 'ASSIGNED'): void {
+    this.assigneeFilter = v || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setSoftwareQualityFilter(q: 'ALL' | 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY'): void {
+    this.softwareQualityFilter = q;
+    this.applyIssueFilters();
+  }
+
+  setLanguageFilter(lang: string): void {
+    this.languageFilter = lang || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setRuleFilter(rule: string): void {
+    this.ruleFilter = rule || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  setTagFilter(tag: string): void {
+    this.tagFilter = tag || 'ALL';
+    this.applyIssueFilters();
+  }
+
+  clearIssueFilters(): void {
+    this.severityFilter = 'ALL';
+    this.typeFilter = 'ALL';
+    this.statusFilter = 'ALL';
+    this.softwareQualityFilter = 'ALL';
+    this.languageFilter = 'ALL';
+    this.ruleFilter = 'ALL';
+    this.tagFilter = 'ALL';
+    this.codeAttributeFilter = 'ALL';
+    this.securityCategoryFilter = 'ALL';
+    this.directoryFilter = 'ALL';
+    this.fileFilter = 'ALL';
+    this.assigneeFilter = 'ALL';
+    this.directorySearch = '';
+    this.fileSearch = '';
+    this.issueSearch = '';
+    this.applyIssueFilters();
+  }
+
+  private getComponentPath(component: any): string {
+    const raw = String(component || '');
+    if (!raw) return '';
+    // SonarCloud components can be "projectKey:src/app/x.ts"
+    const idx = raw.indexOf(':');
+    const path = idx >= 0 ? raw.slice(idx + 1) : raw;
+    return path.replace(/^\/+/, '');
+  }
+
+  private getDirectoryFromPath(path: string): string {
+    if (!path) return '';
+    const p = path.replace(/\\/g, '/');
+    const i = p.lastIndexOf('/');
+    return i > 0 ? p.slice(0, i) : '(root)';
+  }
+
+  private getCodeAttributeKey(issue: any): string {
+    // SonarCloud peut renvoyer des structures différentes selon l’édition / API:
+    // - cleanCodeAttribute (string)
+    // - cleanCodeAttributeCategory (string ou objet { key })
+    // - impacts[] (objets contenant parfois cleanCodeAttribute / cleanCodeAttributeCategory)
+    // IMPORTANT: `cleanCodeAttribute` peut être LOGICAL / ... (pas nos 4 valeurs).
+    // Le filtre SonarCloud utilise `cleanCodeAttributeCategory` (ex: INTENTIONAL).
+    const directCategory =
+      issue?.cleanCodeAttributeCategory ??
+      issue?.cleanCodeAttributeCategory?.key ??
+      issue?.clean_code_attribute_category;
+    const fromCategory = this.normalizeCodeAttribute(directCategory);
+    if (fromCategory) return fromCategory;
+
+    const directAttribute =
+      issue?.cleanCodeAttribute ??
+      issue?.codeAttribute ??
+      issue?.code_attribute ??
+      issue?.clean_code_attribute;
+    const fromAttribute = this.normalizeCodeAttribute(directAttribute);
+    if (fromAttribute) return fromAttribute;
+
+    const impacts: any[] = Array.isArray(issue?.impacts) ? issue.impacts : [];
+    for (const imp of impacts) {
+      const v =
+        imp?.cleanCodeAttribute ??
+        imp?.cleanCodeAttributeCategory ??
+        imp?.cleanCodeAttributeCategory?.key ??
+        imp?.clean_code_attribute ??
+        imp?.clean_code_attribute_category;
+      const normalized = this.normalizeCodeAttribute(v);
+      if (normalized) return normalized;
+    }
+
+    return '';
+  }
+
+  private normalizeCodeAttribute(value: any): 'Consistency' | 'Intentionality' | 'Adaptability' | 'Responsibility' | '' {
+    if (!value) return '';
+    const raw = String(value).trim();
+    if (!raw) return '';
+    const up = raw.toUpperCase();
+
+    // Valeurs typiques : CONSISTENCY / INTENTIONALITY / ADAPTABILITY / RESPONSIBILITY
+    if (up === 'CONSISTENCY' || up.includes('CONSIST')) return 'Consistency';
+    if (up === 'INTENTIONALITY' || up.includes('INTENTION')) return 'Intentionality';
+    if (up === 'ADAPTABILITY' || up.includes('ADAPT')) return 'Adaptability';
+    if (up === 'RESPONSIBILITY' || up.includes('RESPONS')) return 'Responsibility';
+    return '';
+  }
+
+  private getSecurityCategories(issue: any): string[] {
+    const standards: any = issue?.securityStandards || issue?.security_standards;
+    const cats: string[] = [];
+    if (Array.isArray(standards)) {
+      standards.forEach((s: any) => {
+        const k = String(s || '').trim();
+        if (k) cats.push(k);
+      });
+    }
+    const secCat = issue?.securityCategory || issue?.security_category;
+    if (secCat) cats.push(String(secCat));
+    return Array.from(new Set(cats));
+  }
+
+  getSoftwareQualityKeyFromType(type: string): 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY' | 'OTHER' {
+    const t = (type || '').toUpperCase();
+    if (t === 'VULNERABILITY') return 'SECURITY';
+    if (t === 'BUG') return 'RELIABILITY';
+    if (t === 'CODE_SMELL') return 'MAINTAINABILITY';
+    return 'OTHER';
+  }
+
+  getSoftwareQualityLabel(key: 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY'): string {
+    if (key === 'SECURITY') return 'Security';
+    if (key === 'RELIABILITY') return 'Reliability';
+    return 'Maintainability';
+  }
+
+  private guessLanguageFromComponent(component: string): string {
+    const c = (component || '').toLowerCase();
+    const m = c.match(/\.([a-z0-9]+)$/i);
+    const ext = m?.[1] || '';
+    if (!ext) return 'Unknown';
+    if (ext === 'ts' || ext === 'tsx') return 'TypeScript';
+    if (ext === 'js' || ext === 'jsx') return 'JavaScript';
+    if (ext === 'java') return 'Java';
+    if (ext === 'py') return 'Python';
+    if (ext === 'cs') return 'C#';
+    if (ext === 'html' || ext === 'htm') return 'HTML';
+    if (ext === 'css' || ext === 'scss' || ext === 'sass') return 'CSS';
+    if (ext === 'xml') return 'XML';
+    if (ext === 'json') return 'JSON';
+    return ext.toUpperCase();
   }
 
   getIssueStatusLabel(status: string): string {
@@ -441,10 +863,19 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   changeIssueStatus(issue: any, transition: string): void {
     const key = issue?.key;
     if (!key || !transition) return;
+    if (!this.canChangeIssueStatus(issue)) {
+      this.issueUpdateError[key] = 'Issue fermée (Fixed) — statut non modifiable.';
+      return;
+    }
     this.issueUpdatingKey = key;
+    delete this.issueUpdateError[key];
     this.sonarService.issueTransition(key, transition).subscribe({
       next: () => { this.issueUpdatingKey = null; this.load(); },
-      error: () => { this.issueUpdatingKey = null; this.load(); }
+      error: (err) => {
+        this.issueUpdatingKey = null;
+        this.issueUpdateError[key] = err?.error?.message || 'Transition refusée par SonarCloud.';
+        this.load();
+      }
     });
   }
 
@@ -452,9 +883,14 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const key = issue?.key;
     if (!key) return;
     this.issueUpdatingKey = key;
+    delete this.issueUpdateError[key];
     this.sonarService.issueAssignToMe(key).subscribe({
       next: () => { this.issueUpdatingKey = null; this.load(); },
-      error: () => { this.issueUpdatingKey = null; this.load(); }
+      error: (err) => {
+        this.issueUpdatingKey = null;
+        this.issueUpdateError[key] = err?.error?.message || 'Assignation refusée par SonarCloud.';
+        this.load();
+      }
     });
   }
 
@@ -462,10 +898,27 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const key = issue?.key;
     if (!key) return;
     this.issueUpdatingKey = key;
+    delete this.issueUpdateError[key];
     this.sonarService.issueUnassign(key).subscribe({
       next: () => { this.issueUpdatingKey = null; this.load(); },
-      error: () => { this.issueUpdatingKey = null; this.load(); }
+      error: (err) => {
+        this.issueUpdatingKey = null;
+        this.issueUpdateError[key] = err?.error?.message || 'Désassignation refusée par SonarCloud.';
+        this.load();
+      }
     });
+  }
+
+  canChangeIssueStatus(issue: any): boolean {
+    const st = String(issue?.status || '').toUpperCase();
+    // SonarCloud: CLOSED (souvent Fixed) n'est généralement pas transitionnable via UI.
+    return st !== 'CLOSED';
+  }
+
+  getIssueStatusHint(issue: any): string {
+    const st = String(issue?.status || '').toUpperCase();
+    if (st === 'CLOSED') return 'Issue fermée (Fixed) : changement de statut désactivé.';
+    return '';
   }
 
   // ─── Hotspots ────────────────────────────────────────────────────────────────
@@ -639,11 +1092,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   onBranchChange(branch: string): void {
     if (!branch || branch === this.currentBranch) return;
     this.currentBranch = branch;
-    this.loading = true;
-    this.sonarService.getResultsForBranch(branch).subscribe({
-      next: (res) => { this.metrics = res.metrics || this.metrics; this.loading = false; },
-      error: (err) => { this.loading = false; this.error = err?.error?.message || 'Erreur'; }
-    });
+    this.load();
   }
 
   // ─── Overview Cards ──────────────────────────────────────────────────────────
