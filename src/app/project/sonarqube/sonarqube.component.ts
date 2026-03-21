@@ -11,7 +11,7 @@ import { UserService } from 'src/app/services/user/user.service';
 })
 export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Active des logs console pour diagnostiquer les facets issues. */
-  readonly debugIssues = true;
+  readonly debugIssues = false;
 
   @ViewChild('donutCanvas') donutCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild('coverageBarCanvas') coverageBarCanvas!: ElementRef<HTMLCanvasElement>;
@@ -49,6 +49,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   fileSearch: string = '';
   issueSearch: string = '';
   filteredIssues: any[] = [];
+  /** Premières issues avec champs UI précalculés (évite le gel de la page). */
+  displayedIssues: any[] = [];
   filteredIssuesTotal = 0;
   /** Total de la base courante (All) — doit rester stable quand on clique d'autres facets. */
   issuesBaseTotal = 0;
@@ -694,6 +696,94 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
       if (resolution.includes('ACCEPT')) resCounts['ACCEPTED']++;
     }
     this.statusResolutionCounts = resCounts;
+
+    this.displayedIssues = this.filteredIssues.slice(0, 50).map((i) => this.toDisplayedIssue(i));
+  }
+
+  /**
+   * Chemin fichier sans préfixe projet / groupe (ex. public/about.html).
+   * Utilisé seulement sur les lignes affichées.
+   */
+  private stripProjectPrefixForDisplay(path: string): string {
+    let p = String(path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!p) return '';
+    const roots = ['public/', 'src/', 'app/', 'lib/', 'www/', 'frontend/', 'backend/', 'main/', 'test/'];
+    for (const r of roots) {
+      const i = p.indexOf(r);
+      if (i >= 0) return p.slice(i);
+    }
+    const parts = p.split('/').filter(Boolean);
+    if (parts.length >= 2) {
+      const first = parts[0];
+      if (/^[a-z0-9][a-z0-9_.-]*_[a-z0-9][a-z0-9_.-]*$/i.test(first)) {
+        return parts.slice(1).join('/');
+      }
+    }
+    return p;
+  }
+
+  private getDisplayPath(component: any): string {
+    return this.stripProjectPrefixForDisplay(this.getComponentPath(component));
+  }
+
+  private formatImpactSeverityForUi(sev: string): string {
+    const u = String(sev || '').toUpperCase();
+    const map: Record<string, string> = {
+      BLOCKER: 'Blocker',
+      CRITICAL: 'High',
+      MAJOR: 'Medium',
+      MINOR: 'Low',
+      INFO: 'Info',
+      HIGH: 'High',
+      MEDIUM: 'Medium',
+      LOW: 'Low'
+    };
+    if (map[u]) return map[u];
+    if (!sev) return '—';
+    return sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
+  }
+
+  private buildIssueImpactsUi(issue: any): { quality: string; impactSev: string }[] {
+    const impacts: any[] = Array.isArray(issue?.impacts) ? issue.impacts : [];
+    const out: { quality: string; impactSev: string }[] = [];
+    const fallbackSev = this.formatImpactSeverityForUi(String(issue?.severity || ''));
+
+    for (const imp of impacts.slice(0, 4)) {
+      const qRaw = String(imp?.softwareQuality || imp?.software_quality || '').toUpperCase();
+      if (qRaw !== 'SECURITY' && qRaw !== 'RELIABILITY' && qRaw !== 'MAINTAINABILITY') continue;
+      const q =
+        qRaw === 'SECURITY'
+          ? 'Security'
+          : qRaw === 'RELIABILITY'
+            ? 'Reliability'
+            : 'Maintainability';
+      const impSev = imp?.severity ?? imp?.impactSeverity ?? issue?.severity;
+      out.push({
+        quality: q,
+        impactSev: this.formatImpactSeverityForUi(String(impSev || fallbackSev))
+      });
+    }
+
+    if (out.length === 0) {
+      const keys = this.getSoftwareQualityKeys(issue, String(issue?.type || ''));
+      for (const k of keys.slice(0, 2)) {
+        out.push({
+          quality: this.getSoftwareQualityLabel(k),
+          impactSev: fallbackSev
+        });
+      }
+    }
+    return out;
+  }
+
+  private toDisplayedIssue(issue: any): any {
+    const row = { ...issue };
+    const tags: string[] = Array.isArray(issue?.tags) ? issue.tags.map((x: any) => String(x)) : [];
+    (row as any)._displayPath = this.getDisplayPath(issue?.component);
+    (row as any)._impactsUi = this.buildIssueImpactsUi(issue);
+    (row as any)._codeAttr = this.getCodeAttributeKey(issue) || '';
+    (row as any)._tags = tags.slice(0, 4);
+    return row;
   }
 
   setStatusFilter(status: string): void {

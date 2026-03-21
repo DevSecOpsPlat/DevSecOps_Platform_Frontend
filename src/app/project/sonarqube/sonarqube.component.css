@@ -1792,3 +1792,127 @@
   flex-wrap: wrap;
   margin-bottom: 0.5rem;
 }
+
+/* ─── Issues list (style SonarCloud, léger) ─── */
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.issue-item-sc {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg);
+  padding: 0.65rem 0.85rem;
+}
+
+.issue-path-above {
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  color: var(--c-muted);
+  margin-bottom: 0.45rem;
+  word-break: break-all;
+}
+
+.issue-item-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.issue-item-sc .sev-pill {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.issue-item-sc .issue-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.issue-message-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-code-attr-pill {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.issue-impacts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.issue-impact-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(234, 179, 8, 0.14);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #854d0e;
+}
+
+.issue-impact-badge .impact-s {
+  font-weight: 600;
+}
+
+.issue-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.issue-tag-chip {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-pill);
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--c-muted);
+  border: 1px solid var(--c-border);
+}
+
+.issue-item-sc .issue-meta {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--c-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.issue-item-sc .issue-actions {
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border);
+}
