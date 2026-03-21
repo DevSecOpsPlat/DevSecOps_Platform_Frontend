@@ -2,7 +2,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
-import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
@@ -12,11 +12,11 @@ import {
   DashboardPipelineItem, 
   DashboardEnvironmentItem,
   DashboardVulnerabilityItem 
-} from 'src/app/models/dashboard.models';
+} from 'src/app/models/dashboard/dashboard.models';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { SecurityService } from 'src/app/security/security.service';
 import { FormatService } from 'src/app/models/environment/format.service';
+import { SecurityService } from 'src/app/services/security/security.service';
 
 export interface ChartSegment {
   label: string;

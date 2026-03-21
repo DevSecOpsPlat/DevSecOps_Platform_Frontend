@@ -4,7 +4,7 @@ import { Observable, of } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { ApplicationResponse } from '../../models/application/application-response';
-import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;

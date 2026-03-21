@@ -2,28 +2,29 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
 import { HomeComponent } from './home/home.component';
-import { EnvironmentCreateComponent } from './environment-create/environment-create.component';
-import { SignInComponent } from './sign-in/sign-in.component';
-import { SignUpComponent } from './sign-up/sign-up.component';
-import { ProfileComponent } from './profile/profile.component';
-import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
-import { MyApplicationsComponent } from './my-applications/my-applications.component';
-import { PipelineDetailsComponent } from './pipeline-details/pipeline-details.component';
-import { PipelinesListComponent } from './pipelines-list/pipelines-list.component';
-import { AdminHomeComponent } from './admin-home/admin-home.component';
-import { ApprovalWaitingMessageComponent } from './shared/approval-waiting-message/approval-waiting-message.component';
+import { SignInComponent } from './User/sign-in/sign-in.component';
+import { ProfileComponent } from './User/profile/profile.component';
+import { AdminDashboardComponent } from './admin/admin-dashboard/admin-dashboard.component';
+import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
+import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
+import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
+import { ApprovalWaitingMessageComponent } from './User/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
-import { ProjectLayoutComponent } from './project/project-layout.component';
+import { ProjectLayoutComponent } from './project/project-layout/project-layout.component';
 import { ProjectOverviewComponent } from './project/overview/project-overview.component';
 import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
 import { ProjectLogsComponent } from './project/logs/project-logs.component';
 import { ProjectSecurityComponent } from './project/security/project-security.component';
-import { ApplicationsActiveComponent } from './applications-active/applications-active.component';
-import { SecurityAiFixesComponent } from './security-ai-fixes/security-ai-fixes.component';
-import { EnvironmentDetailsComponent } from './shared/environment-details/environment-details.component';
-import { RecentActivityComponent } from './recent-activity/recent-activity.component';
-import { SonarqubeComponent } from './sonarqube/sonarqube.component';
+import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
+import { SecurityAiFixesComponent } from './project/security-ai-fixes/security-ai-fixes.component';
+import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
+import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
+
+import { SignUpComponent } from './User/sign-up/sign-up.component';
+import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
+import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
+import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },

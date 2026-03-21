@@ -3,8 +3,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
-import { DeployRequest } from '../../models/environment/deploy-request';
-import { DeployResponse } from '../../models/environment/deploy-response';
+import { DeployRequest } from '../../models/deployment/deploy-request';
+import { DeployResponse } from '../../models/deployment/deploy-response';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 import { map } from 'rxjs/operators';
 

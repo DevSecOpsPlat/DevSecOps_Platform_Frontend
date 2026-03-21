@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
-import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { ENVIRONMENT_STATUS } from 'src/app/models/environment/status-types';
 import { FormatService } from 'src/app/models/environment/format.service';
 
