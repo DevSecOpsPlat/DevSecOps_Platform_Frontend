@@ -49,7 +49,10 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   fileSearch: string = '';
   issueSearch: string = '';
   filteredIssues: any[] = [];
-  /** Premières issues avec champs UI précalculés (évite le gel de la page). */
+  /** Page courante des issues (0-based), reconstruite après filtres. */
+  readonly issuesPageSize = 100;
+  issuesPageIndex = 0;
+  /** Issues de la page courante (champs UI précalculés). */
   displayedIssues: any[] = [];
   filteredIssuesTotal = 0;
   /** Total de la base courante (All) — doit rester stable quand on clique d'autres facets. */
@@ -154,53 +157,59 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     // Charger selon la branche sélectionnée pour aligner avec SonarCloud (Issues/mesures par branche)
     this.sonarService.getResultsForBranch(this.currentBranch).subscribe({
       next: (res) => {
-        this.metrics = res.metrics || {};
+        try {
+          this.metrics = res.metrics || {};
 
-        const rawIssues = (res.issues || []) as any[];
-        this.allIssues = rawIssues;
-        // SonarCloud UI “Issues” affiche par défaut OPEN + CONFIRMED + REOPENED (pas RESOLVED).
-        const defaultStatuses = new Set(['OPEN', 'CONFIRMED', 'REOPENED']);
-        this.issues = rawIssues.filter(i => defaultStatuses.has(String(i?.status || 'OPEN').toUpperCase()));
-        this.totalIssues = this.issues.length;
+          const rawIssues = (res.issues || []) as any[];
+          this.allIssues = rawIssues;
+          // SonarCloud UI “Issues” affiche par défaut OPEN + CONFIRMED + REOPENED (pas RESOLVED).
+          const defaultStatuses = new Set(['OPEN', 'CONFIRMED', 'REOPENED']);
+          this.issues = rawIssues.filter(i => defaultStatuses.has(String(i?.status || 'OPEN').toUpperCase()));
+          this.totalIssues = this.issues.length;
 
-        if (this.debugIssues) {
+          if (this.debugIssues) {
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] branch=', this.currentBranch, 'allCount=', rawIssues.length, 'defaultCount=', this.issues.length);
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] sample issue keys=', rawIssues.slice(0, 3).map(i => Object.keys(i || {})));
+            const s0 = rawIssues[0] || null;
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] sample0=', s0);
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] sample0.cleanCodeAttribute=', s0?.cleanCodeAttribute, 'cleanCodeAttributeCategory=', s0?.cleanCodeAttributeCategory, 'impacts=', s0?.impacts);
+          }
+
+          const rawHotspots = (res.hotspots || []) as any[];
+          this.hotspots = rawHotspots;
+          this.totalHotspots = Math.max(res.total_hotspots || 0, rawHotspots.length);
+
+          this.qualityGate = res.quality_gate || null;
+          this.qualityGateConditions = this.qualityGate?.conditions || [];
+
+          this.sonarHostUrl = res.sonar_host_url || null;
+          this.sonarProjectKey = res.sonar_project_key || null;
+
+          this.processDuplication(res.duplication_components || []);
+          this.processCoverage(res.coverage_components || []);
+
+          this.applyIssueFilters();
+
+          if (this.debugIssues) {
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] codeAttributeCounts=', this.codeAttributeCounts);
+            // eslint-disable-next-line no-console
+            console.log('[Sonar][Issues] topCodeAttributes=', this.topCodeAttributes);
+          }
+          this.applyHotspotStatusFilter();
+          this.selectFirstHotspotIfNeeded();
+          this.selectFirstDuplicationIfNeeded();
+        } catch (e) {
           // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] branch=', this.currentBranch, 'allCount=', rawIssues.length, 'defaultCount=', this.issues.length);
-          // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] sample issue keys=', rawIssues.slice(0, 3).map(i => Object.keys(i || {})));
-          const s0 = rawIssues[0] || null;
-          // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] sample0=', s0);
-          // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] sample0.cleanCodeAttribute=', s0?.cleanCodeAttribute, 'cleanCodeAttributeCategory=', s0?.cleanCodeAttributeCategory, 'impacts=', s0?.impacts);
+          console.error('[Sonar] Erreur traitement réponse', e);
+          this.error = 'Erreur lors du traitement des données SonarQube.';
+        } finally {
+          this.loading = false;
         }
-
-        const rawHotspots = (res.hotspots || []) as any[];
-        this.hotspots = rawHotspots;
-        this.totalHotspots = Math.max(res.total_hotspots || 0, rawHotspots.length);
-
-        this.qualityGate = res.quality_gate || null;
-        this.qualityGateConditions = this.qualityGate?.conditions || [];
-
-        this.sonarHostUrl = res.sonar_host_url || null;
-        this.sonarProjectKey = res.sonar_project_key || null;
-
-        this.processDuplication(res.duplication_components || []);
-        this.processCoverage(res.coverage_components || []);
-
-        this.applyIssueFilters();
-
-        if (this.debugIssues) {
-          // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] codeAttributeCounts=', this.codeAttributeCounts);
-          // eslint-disable-next-line no-console
-          console.log('[Sonar][Issues] topCodeAttributes=', this.topCodeAttributes);
-        }
-        this.applyHotspotStatusFilter();
-        this.selectFirstHotspotIfNeeded();
-        this.selectFirstDuplicationIfNeeded();
-
-        this.loading = false;
         setTimeout(() => this.initChartsForTab(this.activeTab), 80);
       },
       error: (err) => {
@@ -282,7 +291,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
         labels: ['Bugs', 'Vulnerabilities', 'Code Smells'],
         datasets: [{
           data: [bugsCount, vulnCount, smellCount],
-          backgroundColor: ['#1d4ed8', '#b91c1c', '#6b7280'],
+          backgroundColor: ['#f87171', '#c4b5fd', '#1b3661'],
           borderWidth: 0,
           hoverOffset: 4
         }]
@@ -360,7 +369,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const labels = this.overviewSeverityOrder;
     const data = labels.map(s => this.severityCounts[s] || 0);
-    const colors = ['#7f1d1d', '#b91c1c', '#c2410c', '#b45309', '#6b7280'];
+    const colors = ['#fecdd3', '#f87171', '#fb923c', '#fdba74', '#e2e8f0'];
 
     this.severityBarChart = new Chart(this.severityBarCanvas.nativeElement, {
       type: 'bar',
@@ -549,7 +558,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
           ? !assignee
           : af === 'ASSIGNED'
             ? !!assignee
-            : !!assignee; // ME : compte technique
+            : af === 'ME'
+              ? this.issueAssigneeMatchesCurrentUser(assignee)
+              : true;
 
     const searchOk = !q
       || String(issue?.message || '').toLowerCase().includes(q)
@@ -673,13 +684,14 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
       .map(([key, count]) => ({ key, count }));
 
     const baseNoAssignee = base.filter(i => this.matchesNonStatusFilters(i, { assigneeFilter: 'ALL' }));
-    const currentUsername = this.userService.getUser()?.username || '';
     const aCounts: Record<string, number> = { UNASSIGNED: 0, ME: 0, ASSIGNED: 0 };
     for (const i of baseNoAssignee) {
       const a = String(i?.assignee || '').trim();
       if (!a) aCounts['UNASSIGNED']++;
-      else aCounts['ASSIGNED']++;
-      if (a && currentUsername) aCounts['ME']++;
+      else {
+        aCounts['ASSIGNED']++;
+        if (this.issueAssigneeMatchesCurrentUser(a)) aCounts['ME']++;
+      }
     }
     this.assigneeCounts = aCounts;
 
@@ -697,7 +709,51 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     this.statusResolutionCounts = resCounts;
 
-    this.displayedIssues = this.filteredIssues.slice(0, 50).map((i) => this.toDisplayedIssue(i));
+    this.issuesPageIndex = 0;
+    this.refreshIssuesPage();
+  }
+
+  /** Reconstruit `displayedIssues` pour la page courante (max `issuesPageSize` lignes). */
+  private refreshIssuesPage(): void {
+    const start = this.issuesPageIndex * this.issuesPageSize;
+    this.displayedIssues = this.filteredIssues
+      .slice(start, start + this.issuesPageSize)
+      .map((i) => this.toDisplayedIssue(i));
+  }
+
+  goIssuesNextPage(): void {
+    const n = this.filteredIssues.length;
+    if ((this.issuesPageIndex + 1) * this.issuesPageSize >= n) return;
+    this.issuesPageIndex++;
+    this.refreshIssuesPage();
+  }
+
+  goIssuesPrevPage(): void {
+    if (this.issuesPageIndex <= 0) return;
+    this.issuesPageIndex--;
+    this.refreshIssuesPage();
+  }
+
+  issuesHasNextPage(): boolean {
+    return (this.issuesPageIndex + 1) * this.issuesPageSize < this.filteredIssues.length;
+  }
+
+  issuesHasPrevPage(): boolean {
+    return this.issuesPageIndex > 0;
+  }
+
+  /** Libellé du type « 1–100 sur 556 ». */
+  issuesPageRangeLabel(): string {
+    const n = this.filteredIssues.length;
+    if (n === 0) return '';
+    const start = this.issuesPageIndex * this.issuesPageSize + 1;
+    const end = Math.min((this.issuesPageIndex + 1) * this.issuesPageSize, n);
+    return `${start}–${end} sur ${n}`;
+  }
+
+  issuesPageTotalPages(): number {
+    const n = this.filteredIssues.length;
+    return Math.max(1, Math.ceil(n / this.issuesPageSize));
   }
 
   /**
@@ -748,7 +804,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const out: { quality: string; impactSev: string }[] = [];
     const fallbackSev = this.formatImpactSeverityForUi(String(issue?.severity || ''));
 
-    for (const imp of impacts.slice(0, 4)) {
+    for (const imp of impacts.slice(0, 2)) {
       const qRaw = String(imp?.softwareQuality || imp?.software_quality || '').toUpperCase();
       if (qRaw !== 'SECURITY' && qRaw !== 'RELIABILITY' && qRaw !== 'MAINTAINABILITY') continue;
       const q =
@@ -782,7 +838,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     (row as any)._displayPath = this.getDisplayPath(issue?.component);
     (row as any)._impactsUi = this.buildIssueImpactsUi(issue);
     (row as any)._codeAttr = this.getCodeAttributeKey(issue) || '';
-    (row as any)._tags = tags.slice(0, 4);
+    (row as any)._tags = tags.slice(0, 3);
     return row;
   }
 
@@ -999,8 +1055,22 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getIssueAssigneeLabel(assignee: string | undefined | null): string {
     if (!assignee) return 'Not assigned';
+    if (this.issueAssigneeMatchesCurrentUser(assignee)) {
+      const user = this.userService.getUser();
+      return user?.username ? `Moi (${user.username})` : 'Moi';
+    }
+    return String(assignee);
+  }
+
+  /** Compare le login Sonar de l’issue avec l’utilisateur connecté (username ou email). */
+  private issueAssigneeMatchesCurrentUser(assignee: string | undefined | null): boolean {
+    const a = String(assignee || '').trim().toLowerCase();
+    if (!a) return false;
     const user = this.userService.getUser();
-    return user?.username || 'Assigned';
+    if (!user) return false;
+    const u = String(user.username || '').trim().toLowerCase();
+    const e = String(user.email || '').trim().toLowerCase();
+    return a === u || (!!e && a === e);
   }
 
   changeIssueStatus(issue: any, transition: string): void {

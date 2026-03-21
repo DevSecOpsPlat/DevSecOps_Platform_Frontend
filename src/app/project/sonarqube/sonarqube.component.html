@@ -13,15 +13,20 @@
             <ng-container *ngIf="metrics?.ncloc"> · {{ metrics.ncloc | number }} lignes</ng-container>
           </p>
         </div>
-        <div class="header-actions" (click)="openQualityGateTab()">
-          <span class="qg-hero-badge" [ngClass]="qualityGateClass()" *ngIf="!loading && !error">
+        <div class="header-actions">
+          <button type="button"
+                  class="qg-hero-badge qg-hero-badge--click"
+                  [ngClass]="qualityGateClass()"
+                  *ngIf="!loading && !error"
+                  (click)="openQualityGateTab()"
+                  title="Voir le Quality Gate">
             <span class="qg-hero-dot"></span>
             <ng-container *ngIf="getQualityGateStatus() === 'OK'">Quality Gate : Passed</ng-container>
             <ng-container *ngIf="getQualityGateStatus() !== 'OK'">
               {{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec
             </ng-container>
-          </span>
-          <button class="refresh-btn" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+          </button>
+          <button type="button" class="refresh-btn" (click)="load()" [disabled]="loading">↻ Actualiser</button>
         </div>
       </header>
 
@@ -135,15 +140,20 @@
           <!-- Charts Row -->
           <div class="charts-row">
 
-            <!-- Severity Bar Chart -->
+            <!-- Répartition des issues (couleurs alignées sur les filtres) -->
               <div class="overview-issues-viz" *ngIf="totalIssues > 0">
-            <h3 class="overview-section-title">
-              Répartition des issues
-              <button type="button" class="overview-link" (click)="setTab('issues')">Voir tout ({{ totalIssues }})</button>
-            </h3>
+            <div class="overview-issues-viz__head">
+              <h3 class="overview-section-title">Répartition des issues</h3>
+              <button type="button" class="overview-link overview-link--pill" (click)="setTab('issues')">Voir tout ({{ totalIssues }})</button>
+            </div>
             <div class="severity-bars">
-              <div class="severity-bar-row" *ngFor="let sev of overviewSeverityOrder" (click)="setTab('issues'); applyIssueFilters(sev, typeFilter)">
-                <span class="severity-bar-label">{{ sev }}</span>
+              <div class="severity-bar-row"
+                   *ngFor="let sev of overviewSeverityOrder"
+                   (click)="setTab('issues'); applyIssueFilters(sev, typeFilter)">
+                <span class="severity-bar-label-wrap">
+                  <span class="filter-sev-dot overview-sev-dot" [ngClass]="'filter-sev-dot--' + sev.toLowerCase()" aria-hidden="true"></span>
+                  <span class="severity-bar-label">{{ sev }}</span>
+                </span>
                 <div class="severity-bar-track">
                   <div class="severity-bar-fill" [ngClass]="'sev-' + sev.toLowerCase()" [style.width.%]="getSeverityBarWidth(sev)"></div>
                 </div>
@@ -151,10 +161,22 @@
               </div>
             </div>
             <div class="overview-type-chips">
-              <button type="button" class="type-chip" (click)="onOverviewCardClick('bug')">Bugs : {{ metrics?.bugs || 0 }}</button>
-              <button type="button" class="type-chip" (click)="onOverviewCardClick('vuln')">Vulnérabilités : {{ metrics?.vulnerabilities || 0 }}</button>
-              <button type="button" class="type-chip" (click)="onOverviewCardClick('smell')">Code Smells : {{ metrics?.code_smells || 0 }}</button>
-              <button type="button" class="type-chip" (click)="onOverviewCardClick('coverage')">Coverage : {{ getCoveragePercent() | number:'1.1-1' }}%</button>
+              <button type="button" class="type-chip type-chip--bug" (click)="onOverviewCardClick('bug')">
+                <span class="type-chip__mark type-chip__mark--bug" aria-hidden="true"></span>
+                Bugs : {{ metrics?.bugs || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--vuln" (click)="onOverviewCardClick('vuln')">
+                <span class="type-chip__mark type-chip__mark--vuln" aria-hidden="true"></span>
+                Vulnérabilités : {{ metrics?.vulnerabilities || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--smell" (click)="onOverviewCardClick('smell')">
+                <span class="type-chip__mark type-chip__mark--smell" aria-hidden="true"></span>
+                Code Smells : {{ metrics?.code_smells || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--cov" (click)="onOverviewCardClick('coverage')">
+                <span class="type-chip__mark type-chip__mark--cov" aria-hidden="true"></span>
+                Coverage : {{ getCoveragePercent() | number:'1.1-1' }}%
+              </button>
             </div>
           </div>
 
@@ -171,9 +193,9 @@
                   </div>
                 </div>
                 <div class="donut-legend">
-                  <span class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span>Bug {{ typeCounts['BUG'] || 0 }}</span>
-                  <span class="legend-item"><span class="legend-dot" style="background:#b91c1c"></span>Vuln {{ typeCounts['VULNERABILITY'] || 0 }}</span>
-                  <span class="legend-item"><span class="legend-dot" style="background:#6b7280"></span>Smell {{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot legend-dot--bug"></span>Bug {{ typeCounts['BUG'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot legend-dot--vuln"></span>Vuln {{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot legend-dot--smell"></span>Smell {{ typeCounts['CODE_SMELL'] || 0 }}</span>
                 </div>
               </div>
             </div>
@@ -299,74 +321,156 @@
         <!-- ══════════════════════════════════════════
              ISSUES
         ══════════════════════════════════════════ -->
+
+
+        
         <section *ngIf="activeTab === 'issues'" class="issues-tab">
           <div class="issues-layout">
-            <!-- Sidebar filters (style SonarCloud) -->
-            <aside class="panel issues-filters">
+            <!-- Filtres latéraux -->
+            <aside class="panel issues-filters issues-filters-panel">
+              <div class="issues-filters-accent" aria-hidden="true"></div>
               <div class="issues-filters-header">
-                <div class="panel-title">Filters</div>
-                <button type="button" class="link-btn" (click)="clearIssueFilters()">Reset</button>
+                <div class="issues-filters-title-row">
+                  <span class="issues-filters-mark" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                  <div class="panel-title issues-filters-title">Filtres</div>
+                </div>
+                <button type="button" class="link-btn issues-filters-reset" (click)="clearIssueFilters()">Réinitialiser</button>
               </div>
 
               <div class="issues-search">
+                <span class="issues-search-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4.5-4.5"/>
+                  </svg>
+                </span>
                 <input class="issues-search-input"
-                       type="text"
-                       placeholder="Search issues / files / rules…"
+                       type="search"
+                       placeholder="Message, fichier, règle…"
                        [(ngModel)]="issueSearch"
                        (ngModelChange)="applyIssueFilters()" />
               </div>
 
-              <details class="filter-section" open>
+              <details class="filter-section filter-section--enhanced" open>
                 <summary>Software quality</summary>
                 <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'ALL'" (click)="setSoftwareQualityFilter('ALL')">
-                  All <span class="count">{{ issuesBaseTotal }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'SECURITY'" [disabled]="(softwareQualityCounts['SECURITY'] || 0) === 0 && softwareQualityFilter !== 'SECURITY'" (click)="setSoftwareQualityFilter('SECURITY')">
-                  Security <span class="count">{{ softwareQualityCounts['SECURITY'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-security" aria-hidden="true"></span>
+                    <span class="filter-item__text">Security</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['SECURITY'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'RELIABILITY'" [disabled]="(softwareQualityCounts['RELIABILITY'] || 0) === 0 && softwareQualityFilter !== 'RELIABILITY'" (click)="setSoftwareQualityFilter('RELIABILITY')">
-                  Reliability <span class="count">{{ softwareQualityCounts['RELIABILITY'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-reliability" aria-hidden="true"></span>
+                    <span class="filter-item__text">Reliability</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['RELIABILITY'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'MAINTAINABILITY'" [disabled]="(softwareQualityCounts['MAINTAINABILITY'] || 0) === 0 && softwareQualityFilter !== 'MAINTAINABILITY'" (click)="setSoftwareQualityFilter('MAINTAINABILITY')">
-                  Maintainability <span class="count">{{ softwareQualityCounts['MAINTAINABILITY'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-maintainability" aria-hidden="true"></span>
+                    <span class="filter-item__text">Maintainability</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['MAINTAINABILITY'] || 0 }}</span>
                 </button>
               </details>
 
-              <details class="filter-section" open>
+              <details class="filter-section filter-section--enhanced" open>
                 <summary>Severity</summary>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'ALL'" (click)="applyIssueFilters('ALL', typeFilter)">
-                  All <span class="count">{{ issuesBaseTotal }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'BLOCKER'" [disabled]="(severityCounts['BLOCKER'] || 0) === 0 && severityFilter !== 'BLOCKER'" (click)="applyIssueFilters('BLOCKER', typeFilter)">
-                  Blocker <span class="count">{{ severityCounts['BLOCKER'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--blocker" aria-hidden="true"></span>
+                    <span class="filter-item__text">Blocker</span>
+                  </span>
+                  <span class="count">{{ severityCounts['BLOCKER'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'CRITICAL'" [disabled]="(severityCounts['CRITICAL'] || 0) === 0 && severityFilter !== 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">
-                  High <span class="count">{{ severityCounts['CRITICAL'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--critical" aria-hidden="true"></span>
+                    <span class="filter-item__text">Critical</span>
+                  </span>
+                  <span class="count">{{ severityCounts['CRITICAL'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'MAJOR'" [disabled]="(severityCounts['MAJOR'] || 0) === 0 && severityFilter !== 'MAJOR'" (click)="applyIssueFilters('MAJOR', typeFilter)">
-                  Medium <span class="count">{{ severityCounts['MAJOR'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--major" aria-hidden="true"></span>
+                    <span class="filter-item__text">Major</span>
+                  </span>
+                  <span class="count">{{ severityCounts['MAJOR'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'MINOR'" [disabled]="(severityCounts['MINOR'] || 0) === 0 && severityFilter !== 'MINOR'" (click)="applyIssueFilters('MINOR', typeFilter)">
-                  Low <span class="count">{{ severityCounts['MINOR'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--minor" aria-hidden="true"></span>
+                    <span class="filter-item__text">Minor</span>
+                  </span>
+                  <span class="count">{{ severityCounts['MINOR'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="severityFilter === 'INFO'" [disabled]="(severityCounts['INFO'] || 0) === 0 && severityFilter !== 'INFO'" (click)="applyIssueFilters('INFO', typeFilter)">
-                  Info <span class="count">{{ severityCounts['INFO'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--info" aria-hidden="true"></span>
+                    <span class="filter-item__text">Info</span>
+                  </span>
+                  <span class="count">{{ severityCounts['INFO'] || 0 }}</span>
                 </button>
               </details>
 
-              <details class="filter-section" open>
+              <details class="filter-section filter-section--enhanced" open>
                 <summary>Type</summary>
                 <button type="button" class="filter-item" [class.active]="typeFilter === 'ALL'" (click)="applyIssueFilters(severityFilter, 'ALL')">
-                  All <span class="count">{{ issuesBaseTotal }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="typeFilter === 'BUG'" [disabled]="(typeCounts['BUG'] || 0) === 0 && typeFilter !== 'BUG'" (click)="applyIssueFilters(severityFilter, 'BUG')">
-                  Bug <span class="count">{{ typeCounts['BUG'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--bug" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#ef4444"/><path d="M12 7v6M12 16h.01" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+                    </span>
+                    <span class="filter-item__text">Bug</span>
+                  </span>
+                  <span class="count">{{ typeCounts['BUG'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="typeFilter === 'VULNERABILITY'" [disabled]="(typeCounts['VULNERABILITY'] || 0) === 0 && typeFilter !== 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
-                  Vulnerability <span class="count">{{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--vuln" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3L4 19h16L12 3z" fill="#c4b5fd" stroke="#a78bfa" stroke-width="1"/></svg>
+                    </span>
+                    <span class="filter-item__text">Vulnerability</span>
+                  </span>
+                  <span class="count">{{ typeCounts['VULNERABILITY'] || 0 }}</span>
                 </button>
                 <button type="button" class="filter-item" [class.active]="typeFilter === 'CODE_SMELL'" [disabled]="(typeCounts['CODE_SMELL'] || 0) === 0 && typeFilter !== 'CODE_SMELL'" (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
-                  Code Smell <span class="count">{{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--smell" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <rect x="4" y="4" width="16" height="16" rx="3" fill="#60a5fa"/>
+                        <path d="M7 14c1.5-2 2.5-2 4 0s2.5 2 4 0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                      </svg>
+                    </span>
+                    <span class="filter-item__text">Code Smell</span>
+                  </span>
+                  <span class="count">{{ typeCounts['CODE_SMELL'] || 0 }}</span>
                 </button>
               </details>
 
@@ -513,64 +617,119 @@
               </details>
             </aside>
 
-            <!-- Main issues list -->
-            <div class="panel issues-main">
+            <!-- Liste des issues -->
+            <div class="panel issues-main issues-main-panel">
               <div class="issues-main-head">
-                <div class="panel-title">Issues</div>
-                <div class="panel-sub">{{ filteredIssues.length }} / {{ totalIssues }} affichées</div>
-              </div>
-
-              <div class="issue-list" *ngIf="filteredIssues.length">
-                <div *ngFor="let issue of displayedIssues" class="issue-item issue-item-sc">
-                  <div class="issue-path-above" *ngIf="issue._displayPath">{{ issue._displayPath }}</div>
-                  <div class="issue-item-row">
-                  <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">
-                    {{ issue.severity }}
-                  </span>
-                  <div class="issue-body">
-                    <div class="issue-head-row">
-                      <div class="issue-message issue-message-title">{{ issue.message }}</div>
-                      <span class="issue-code-attr-pill" *ngIf="issue._codeAttr">{{ issue._codeAttr }}</span>
-                    </div>
-                    <div class="issue-impacts-row" *ngIf="issue._impactsUi?.length">
-                      <span class="issue-impact-badge" *ngFor="let im of issue._impactsUi">
-                        <span class="impact-q">{{ im.quality }}</span>
-                        <span class="impact-sep">·</span>
-                        <span class="impact-s">{{ im.impactSev }}</span>
-                      </span>
-                    </div>
-                    <div class="issue-tags-row" *ngIf="issue._tags?.length">
-                      <span class="issue-tag-chip" *ngFor="let t of issue._tags">{{ t }}</span>
-                    </div>
-                    <div class="issue-meta">
-                      <span *ngIf="issue.type">📌 {{ issue.type }}</span>
-                      <span *ngIf="issue.line">L.{{ issue.line }}</span>
-                      <span *ngIf="issue.rule">🧩 {{ issue.rule }}</span>
-                    </div>
-                    <div class="issue-actions">
-                      <div class="issue-action-row">
-                        <span class="issue-action-label">Statut</span>
-                        <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
-                        <select class="issue-transition-select"
-                              [disabled]="issueUpdatingKey === issue.key || !canChangeIssueStatus(issue)"
-                              [title]="getIssueStatusHint(issue)"
-                                (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
-                          <option value="">Changer...</option>
-                          <option *ngFor="let t of issueTransitions" [value]="t.value">{{ t.label }}</option>
-                        </select>
-                        <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">Mise à jour...</span>
-                      <span *ngIf="issueUpdateError[issue.key]" class="issue-error-badge">{{ issueUpdateError[issue.key] }}</span>
-                      </div>
-                      <div class="issue-action-row">
-                        <span class="issue-action-label">Assigné</span>
-                        <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
-                        <button class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Assign to me</button>
-                        <button class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Unassign</button>
-                      </div>
-                    </div>
-                  </div>
+                <div>
+                  <div class="panel-title issues-main-title">Issues</div>
+                  <div class="issues-main-subrow">
+                    <span class="panel-sub issues-main-count">{{ filteredIssues.length }} résultat(s) · {{ totalIssues }} au total (branche)</span>
+                    <span class="issues-page-range" *ngIf="filteredIssues.length">
+                      {{ issuesPageRangeLabel() }}
+                      <ng-container *ngIf="filteredIssues.length > issuesPageSize">
+                        · page {{ issuesPageIndex + 1 }} / {{ issuesPageTotalPages() }}
+                      </ng-container>
+                    </span>
                   </div>
                 </div>
+              </div>
+
+              <div class="issue-list issue-list-compact" *ngIf="filteredIssues.length">
+                <article *ngFor="let issue of displayedIssues" class="issue-item-sc issue-card-compact">
+                  <div class="issue-path-above" *ngIf="issue._displayPath">
+                    <svg class="path-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 6h16M4 12h10M4 18h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    {{ issue._displayPath }}
+                  </div>
+                  <div class="issue-item-row">
+                    <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">{{ issue.severity }}</span>
+                    <div class="issue-body">
+                      <div class="issue-head-row">
+                        <h3 class="issue-message-title">{{ issue.message }}</h3>
+                        <span class="issue-code-attr-pill" *ngIf="issue._codeAttr">
+                          <svg class="attr-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M4 8l8-4 8 4v8l-8 4-8-4V8z"/>
+                          </svg>
+                          {{ issue._codeAttr }}
+                        </span>
+                      </div>
+                      <div class="issue-impacts-row" *ngIf="issue._impactsUi?.length">
+                        <span class="issue-impact-badge" *ngFor="let im of issue._impactsUi">
+                          <span class="impact-q">{{ im.quality }}</span><span class="impact-sep">·</span><span class="impact-s">{{ im.impactSev }}</span>
+                        </span>
+                      </div>
+                      <div class="issue-tags-row" *ngIf="issue._tags?.length">
+                        <span class="issue-tag-chip" *ngFor="let t of issue._tags">
+                          <svg class="tag-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                            <path d="M4 6h4v4H4V6zm6 0h10v4H10V6zM4 14h4v4H4v-4zm6 0h10v4H10v-4z"/>
+                          </svg>
+                          {{ t }}
+                        </span>
+                      </div>
+                      <div class="issue-meta issue-meta-icons">
+                        <span class="meta-type" *ngIf="issue.type">
+                          <span class="meta-dot" [ngClass]="'type-' + (issue.type || '').toLowerCase()"></span>
+                          {{ issue.type }}
+                        </span>
+                        <span class="meta-line" *ngIf="issue.line">
+                          <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M4 6h16M4 12h16M4 18h10"/>
+                          </svg>
+                          L{{ issue.line }}
+                        </span>
+                        <span class="meta-rule" *ngIf="issue.rule">
+                          <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <path d="M8 9h8M8 13h5"/>
+                          </svg>
+                          <span class="meta-rule-text">{{ issue.rule }}</span>
+                        </span>
+                      </div>
+                      <div class="issue-actions issue-actions-compact">
+                        <div class="issue-action-row">
+                          <span class="issue-action-label">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                            Statut
+                          </span>
+                          <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
+                          <select class="issue-transition-select"
+                                  [disabled]="issueUpdatingKey === issue.key || !canChangeIssueStatus(issue)"
+                                  [title]="getIssueStatusHint(issue)"
+                                  (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
+                            <option value="">Changer…</option>
+                            <option *ngFor="let tr of issueTransitions" [value]="tr.value">{{ tr.label }}</option>
+                          </select>
+                          <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">…</span>
+                          <span *ngIf="issueUpdateError[issue.key]" class="issue-error-badge">{{ issueUpdateError[issue.key] }}</span>
+                        </div>
+                        <div class="issue-action-row">
+                          <span class="issue-action-label">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                              <circle cx="12" cy="8" r="3"/><path d="M6 20v-1a6 6 0 0 1 12 0v1"/>
+                            </svg>
+                            Assigné
+                          </span>
+                          <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
+                          <button type="button" class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Moi</button>
+                          <button type="button" class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Retirer</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <nav class="issues-pagination issues-pagination--footer" *ngIf="filteredIssues.length > issuesPageSize" aria-label="Pagination des issues">
+                  <button type="button" class="issues-page-btn" (click)="goIssuesPrevPage()" [disabled]="!issuesHasPrevPage()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                    Précédent
+                  </button>
+                  <span class="issues-page-num">{{ issuesPageRangeLabel() }}</span>
+                  <button type="button" class="issues-page-btn issues-page-btn--primary" (click)="goIssuesNextPage()" [disabled]="!issuesHasNextPage()">
+                    Suivant
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                </nav>
               </div>
 
               <p *ngIf="!filteredIssues.length" class="empty-text">
@@ -606,10 +765,25 @@
                   <span class="sev-pill sev-hotspot">{{ h.securityCategory || 'HOTSPOT' }}</span>
                   <div class="issue-body">
                     <div class="issue-message">{{ h.message }}</div>
-                    <div class="issue-meta">
-                      <span *ngIf="h.component">📄 {{ h.component }}</span>
-                      <span *ngIf="h.line">L.{{ h.line }}</span>
-                      <span *ngIf="h.vulnerabilityProbability">🔥 {{ h.vulnerabilityProbability }}</span>
+                    <div class="issue-meta hs-meta-icons">
+                      <span *ngIf="h.component" class="hs-meta-path">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M4 6h16M4 12h10M4 18h8"/>
+                        </svg>
+                        {{ h.component }}
+                      </span>
+                      <span *ngIf="h.line" class="hs-meta-line">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M4 6h16M4 12h16M4 18h10"/>
+                        </svg>
+                        L{{ h.line }}
+                      </span>
+                      <span *ngIf="h.vulnerabilityProbability" class="hs-meta-risk">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M12 3l8 14H4l8-14z"/><path d="M12 9v4M12 16h.01"/>
+                        </svg>
+                        {{ h.vulnerabilityProbability }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -633,8 +807,11 @@
                 <div class="hs-meta-row">
                   <span class="sev-pill sev-hotspot">{{ selectedHotspotDetails.hotspot?.securityCategory }}</span>
                   <span class="meta-badge">{{ getHotspotStatusLabel(selectedHotspotDetails.hotspot?.status) }}</span>
-                  <span class="meta-badge meta-badge-warn" *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability">
-                    🔥 {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}
+                  <span class="meta-badge meta-badge-warn meta-badge-risk" *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path d="M12 3l8 14H4l8-14z"/><path d="M12 9v4M12 16h.01"/>
+                    </svg>
+                    {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}
                   </span>
                 </div>
 
@@ -754,3 +931,6 @@
     </div><!-- /sonar-page -->
   </div><!-- /user-main -->
 </div><!-- /user-shell -->
+
+
+
