@@ -617,8 +617,18 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   applyIssueFilters(severity?: string, type?: string): void {
-    if (severity !== undefined) this.severityFilter = severity;
-    if (type !== undefined) this.typeFilter = type;
+    if (severity !== undefined) {
+      this.severityFilter = severity;
+      if (severity === 'ALL') {
+        this.softwareQualityFilter = 'ALL';
+      }
+    }
+    if (type !== undefined) {
+      this.typeFilter = type;
+      if (type === 'ALL') {
+        this.softwareQualityFilter = 'ALL';
+      }
+    }
     const baseStatusOnly = this.getIssuesBase(); // Base basée sur Status uniquement
     this.issuesBaseTotal = baseStatusOnly.length; // "All" stable (selon status)
 
@@ -637,6 +647,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const baseNoType = base.filter(i => this.matchesNonStatusFilters(i, { typeFilter: 'ALL' }));
     this.typeCounts = this.countBy(baseNoType, (i) => String(i?.type || 'OTHER').toUpperCase());
 
+    // Compteurs Software quality : même logique que les autres facettes (hors filtre SQ),
+    // pour rester alignés avec la liste affichée (Type + Severity inchangés).
     const baseNoQuality = base.filter(i => this.matchesNonStatusFilters(i, { softwareQualityFilter: 'ALL' }));
     this.softwareQualityCounts = {
       SECURITY: baseNoQuality.filter(i => this.getSoftwareQualityKeys(i, String(i?.type || '')).includes('SECURITY')).length,
@@ -1270,16 +1282,106 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ─── Quality Gate ────────────────────────────────────────────────────────────
 
+  /**
+   * Libellés proches de l’UI SonarQube : les métriques *_rating sont des notes 1–5 (1=A … 5=E),
+   * pas un nombre de bugs. « Fiabilité » seule prêtait à confusion avec le nombre d’issues.
+   */
   formatConditionMetric(metric: string | undefined): string {
     if (!metric) return '';
     const key = metric.toLowerCase();
     if (key.includes('coverage')) return 'Coverage';
     if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
-    if (key.includes('reliability_rating')) return 'Fiabilité';
-    if (key.includes('security_rating')) return 'Sécurité';
-    if (key.includes('maintainability_rating')) return 'Maintenabilité';
+    if (key.includes('reliability_rating')) return 'Note de fiabilité';
+    if (key.includes('security_rating')) return 'Note de sécurité';
+    if (key.includes('maintainability_rating')) return 'Note de maintenabilité';
+    if (key.includes('sqale_rating')) return 'Note de maintenabilité';
     if (key.includes('duplicated_lines')) return 'Duplication';
     return metric;
+  }
+
+  /** Métriques Sonar encodées en 1=A, 2=B, 3=C, 4=D, 5=E (API / project_status). */
+  isRatingMetric(metricKey: string | undefined): boolean {
+    const k = (metricKey || '').toLowerCase();
+    return (
+      k.includes('reliability_rating') ||
+      k.includes('security_rating') ||
+      k.includes('maintainability_rating') ||
+      k.includes('sqale_rating')
+    );
+  }
+
+  sonarRatingNumberToLetter(value: string | undefined | null): string {
+    const n = parseInt(String(value ?? '').trim(), 10);
+    if (n >= 1 && n <= 5) {
+      return ['A', 'B', 'C', 'D', 'E'][n - 1];
+    }
+    return String(value ?? '–');
+  }
+
+  /** Valeur affichée (lettre pour les notes, % pour couverture / hotspots / duplication). */
+  formatQgPrimaryValue(cond: any): string {
+    const m = (cond?.metric || cond?.metricKey || '').toLowerCase();
+    if (this.isRatingMetric(m)) {
+      return this.sonarRatingNumberToLetter(cond?.actualValue);
+    }
+    if (this.isCoverageCondition(cond) || m.includes('security_hotspots_reviewed')) {
+      const x = parseFloat(String(cond?.actualValue ?? '0'));
+      return `${isNaN(x) ? cond?.actualValue : x.toFixed(1)}%`;
+    }
+    if (m.includes('duplicated_lines')) {
+      const x = parseFloat(String(cond?.actualValue ?? '0'));
+      return `${isNaN(x) ? cond?.actualValue : x.toFixed(1)}%`;
+    }
+    return String(cond?.actualValue ?? '0');
+  }
+
+  private formatQgThresholdFormatted(cond: any): string {
+    const m = (cond?.metric || cond?.metricKey || '').toLowerCase();
+    if (this.isRatingMetric(m)) {
+      return this.sonarRatingNumberToLetter(cond?.errorThreshold);
+    }
+    if (this.isCoverageCondition(cond) || m.includes('security_hotspots_reviewed')) {
+      const x = parseFloat(String(cond?.errorThreshold ?? '0'));
+      return `${isNaN(x) ? cond?.errorThreshold : x.toFixed(1)}%`;
+    }
+    if (m.includes('duplicated_lines')) {
+      const x = parseFloat(String(cond?.errorThreshold ?? '0'));
+      return `${isNaN(x) ? cond?.errorThreshold : x.toFixed(1)}%`;
+    }
+    return String(cond?.errorThreshold ?? '');
+  }
+
+  /**
+   * Phrase type SonarQube : « Rating required A », « ≥ 80.0% required », etc.
+   */
+  formatQgRequirementHint(cond: any): string {
+    const m = (cond?.metric || cond?.metricKey || '').toLowerCase();
+    const comp = String(cond?.comparator || '').toUpperCase();
+    const t = this.formatQgThresholdFormatted(cond);
+
+    if (m.includes('reliability_rating')) {
+      return `Note requise : ${t} (Reliability Rating côté SonarQube)`;
+    }
+    if (m.includes('security_rating')) {
+      return `Note requise : ${t} (Security Rating)`;
+    }
+    if (m.includes('maintainability_rating') || m.includes('sqale_rating')) {
+      return `Note requise : ${t} (Maintainability Rating)`;
+    }
+    if (this.isCoverageCondition(cond) || m.includes('security_hotspots_reviewed')) {
+      if (comp === 'LT') {
+        return `Minimum ${t} requis`;
+      }
+      return `Seuil ${t}`;
+    }
+    if (m.includes('duplicated_lines')) {
+      if (comp === 'GT') {
+        return `Au plus ${t} autorisé`;
+      }
+      return `Seuil ${t}`;
+    }
+    const sym = comp === 'LT' ? '<' : comp === 'GT' ? '>' : comp === 'EQ' ? '=' : '≥';
+    return `Seuil ${sym} ${t}`;
   }
 
   isCoverageCondition(cond: any): boolean {
@@ -1294,11 +1396,45 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     return (cond?.metric || cond?.metricKey || '').toLowerCase().includes('duplicated_lines');
   }
 
+  /**
+   * Depuis le Quality Gate : même comportement que les boutons « Software quality » du panneau Issues
+   * (pas de Type forcé BUG/VULN/SMELL — sinon Maintainability + BUG = 0 résultat alors que la facette affiche 495).
+   */
+  private openIssuesTabWithSoftwareQualityOnly(q: 'RELIABILITY' | 'SECURITY' | 'MAINTAINABILITY'): void {
+    this.setTab('issues');
+    this.softwareQualityFilter = q;
+    this.typeFilter = 'ALL';
+    this.severityFilter = 'ALL';
+    this.applyIssueFilters();
+  }
+
   onQualityGateConditionClick(cond: any): void {
     if (!cond) return;
-    if (this.isDuplicationCondition(cond)) { this.setTab('duplication'); return; }
-    if (this.isSecurityHotspotsCondition(cond)) { this.setTab('hotspots'); return; }
-    if (this.isCoverageCondition(cond)) { this.setTab('coverage'); return; }
+    const m = (cond?.metric || cond?.metricKey || '').toLowerCase();
+    if (this.isDuplicationCondition(cond)) {
+      this.setTab('duplication');
+      return;
+    }
+    if (this.isSecurityHotspotsCondition(cond)) {
+      this.setTab('hotspots');
+      return;
+    }
+    if (this.isCoverageCondition(cond)) {
+      this.setTab('coverage');
+      return;
+    }
+    if (m.includes('reliability_rating')) {
+      this.openIssuesTabWithSoftwareQualityOnly('RELIABILITY');
+      return;
+    }
+    if (m.includes('security_rating')) {
+      this.openIssuesTabWithSoftwareQualityOnly('SECURITY');
+      return;
+    }
+    if (m.includes('maintainability_rating') || m.includes('sqale_rating')) {
+      this.openIssuesTabWithSoftwareQualityOnly('MAINTAINABILITY');
+      return;
+    }
     this.setTab('quality');
   }
 

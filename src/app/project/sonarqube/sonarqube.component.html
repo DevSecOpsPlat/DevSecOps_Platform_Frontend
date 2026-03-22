@@ -249,8 +249,8 @@
                     </span>
                   </div>
                   <p class="qg-cond-values">
-                    <strong>{{ cond.actualValue || '0' }}</strong>
-                    <span class="qg-threshold">· seuil {{ cond.status === 'ERROR' ? '≥' : '≥' }} {{ cond.errorThreshold }}</span>
+                    <strong>{{ formatQgPrimaryValue(cond) }}</strong>
+                    <span class="qg-threshold"> · {{ formatQgRequirementHint(cond) }}</span>
                   </p>
                 </div>
               </ng-container>
