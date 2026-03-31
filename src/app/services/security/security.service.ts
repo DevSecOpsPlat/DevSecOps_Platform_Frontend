@@ -19,13 +19,7 @@ export class SecurityService {
     private userService: UserService
   ) {}
 
-  private authHeaders(): HttpHeaders {
-    const token = this.userService.getToken();
-    return new HttpHeaders({
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    });
-  }
+  
 
   /**
    * Récupère les vulnérabilités récentes
@@ -48,6 +42,19 @@ export class SecurityService {
       })
     );
   }
+
+
+  // Dans findings.service.ts
+private authHeaders(): HttpHeaders {
+  const token = this.userService.getToken();
+  console.log('Token présent:', !!token);
+  if (token) {
+    console.log('Token (premiers 20 caractères):', token.substring(0, 20) + '...');
+  }
+  return new HttpHeaders({
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  });
+}
 
   /**
    * Récupère toutes les vulnérabilités avec pagination

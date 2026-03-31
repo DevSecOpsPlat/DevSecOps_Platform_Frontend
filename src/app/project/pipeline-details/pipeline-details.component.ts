@@ -159,6 +159,20 @@ export class PipelineDetailsComponent implements OnInit {
     }
   }
 
+  openVulnerabilitiesDashboard(): void {
+    if (!this.envId) return;
+    const appId =
+      this.route.snapshot.queryParamMap.get('appId') ||
+      localStorage.getItem('envirotest-last-project-app-id');
+    if (appId) {
+      this.router.navigate(['/project', appId, 'vulnerabilities'], {
+        queryParams: { envId: this.envId }
+      });
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
   isRunning(): boolean {
     return this.data?.status === 'running' || this.data?.status === 'PENDING';
   }

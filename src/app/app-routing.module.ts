@@ -20,6 +20,8 @@ import { ApplicationsActiveComponent } from './applications/applications-active/
 import { SecurityAiFixesComponent } from './project/security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
+import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
+import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 
 import { SignUpComponent } from './User/sign-up/sign-up.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
@@ -46,7 +48,10 @@ const routes: Routes = [
       { path: 'security', component: ProjectSecurityComponent },
       { path: 'pipelines', component: PipelinesListComponent },
       { path: 'activity', component: RecentActivityComponent },
-      { path: 'sonarqube', component: SonarqubeComponent }
+      { path: 'sonarqube', component: SonarqubeComponent },
+      { path: 'vulnerabilities/:findingId', component: VulnerabilityDetailsComponent },
+      { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent },
+      { path: 'security-fixes', component: SecurityAiFixesComponent }
     ]
   },
 
@@ -66,8 +71,9 @@ const routes: Routes = [
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
-  // Sécurité IA
-  { path: 'security/fixes', component: SecurityAiFixesComponent, canActivate: [AuthGuard] },
+  // Anciennes URLs (sans app dans le chemin) → choisir une application
+  { path: 'security/vulnerabilities', redirectTo: 'my-applications', pathMatch: 'full' },
+  { path: 'security/fixes', redirectTo: 'my-applications', pathMatch: 'full' },
 
   // Administration
   { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [AdminGuard] },

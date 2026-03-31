@@ -42,16 +42,6 @@
   color: #ef4444;
 }
 
-.nav-item.active {
-  background: #eef2ff;
-  border-left: 3px solid #4f46e5;
-  color: #4f46e5;
-}
-
-.nav-item.active .nav-text {
-  font-weight: 500;
-}
-
 .nav-item .nav-icon {
   font-size: 1.1rem;
   margin-right: 0.5rem;
@@ -317,6 +307,10 @@
   color: #f36c21;
   border-left: 2px solid #f36c21;
   border-radius: 0 6px 6px 0;
+}
+
+.nav-item.active .nav-text {
+  font-weight: 600;
 }
 
 .nav-item.ai-suggestion {

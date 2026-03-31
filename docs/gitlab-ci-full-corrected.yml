@@ -1,19 +1,21 @@
+
+
 stages:
   - hello
   - clone
   - sonarqube
-  - sca-trivy          # Parallel
-  - sca-owasp          # Parallel
-  - sca-node           # Parallel
-  - sca-python         # Parallel
-  - sca-java           # Parallel
-  - sast-generic       # Parallel
-  - sast-angular       # Parallel
-  - secrets            # Parallel  
-  - container          # Parallel
-  - iac                # Parallel
-  - license-node       # Parallel
-  - license-python     # Parallel
+  - sca-trivy
+  - sca-node
+  - sca-python
+  - sca-java
+  - sca-owasp
+  - sast-generic
+  - sast-angular
+  - secrets
+  - container
+  - iac
+  - license-node
+  - license-python
   - report
 
 variables:
@@ -35,7 +37,7 @@ hello-world:
     - echo "Branch = $GIT_BRANCH"
 
 # ========================================
-# STAGE 2 : CLONE - Multi-Language Detection
+# STAGE 2 : CLONE + DÉTECTION LANGAGES / FRAMEWORKS / IAC
 # ========================================
 clone-repository:
   stage: clone
@@ -45,8 +47,8 @@ clone-repository:
   script:
     - echo "📦 Cloning repository with multi-language detection"
     - test -n "$GIT_REPO_URL" || exit 1
-    
-    # Clone with auth
+
+    # Clone avec éventuel token GitHub
     - |
       if [ -n "$GITHUB_TOKEN" ]; then
         AUTH_URL=$(echo "$GIT_REPO_URL" | sed "s|https://|https://oauth2:${GITHUB_TOKEN}@|")
@@ -54,93 +56,128 @@ clone-repository:
         AUTH_URL="$GIT_REPO_URL"
       fi
       git clone --depth 1 --branch "$GIT_BRANCH" "$AUTH_URL" user-repo
-    
+
     - chmod -R 777 user-repo
-    
-    # Language Detection Matrix
+
+    # Détection des langages
     - echo "🔍 Detecting project languages..."
-    
+    - touch build.env
+
     # Node.js
-    - test -f "user-repo/package.json" && echo "LANG_NODE=true" >> build.env && echo "  ✅ Node.js detected" || true
-    
+    - if [ -f "user-repo/package.json" ]; then
+        echo "LANG_NODE=true" >> build.env;
+        echo "  ✅ Node.js detected";
+      else
+        echo "LANG_NODE=false" >> build.env;
+      fi
+
     # Python
-    - test -f "user-repo/requirements.txt" && echo "LANG_PYTHON=true" >> build.env && echo "  ✅ Python detected" || true
-    - test -f "user-repo/setup.py" && echo "LANG_PYTHON=true" >> build.env && echo "  ✅ Python detected" || true
-    - test -f "user-repo/Pipfile" && echo "LANG_PYTHON=true" >> build.env && echo "  ✅ Python detected" || true
-    
+    - if [ -f "user-repo/requirements.txt" ] || [ -f "user-repo/setup.py" ] || [ -f "user-repo/Pipfile" ]; then
+        echo "LANG_PYTHON=true" >> build.env;
+        echo "  ✅ Python detected";
+      else
+        echo "LANG_PYTHON=false" >> build.env;
+      fi
+
     # Java
-    - test -f "user-repo/pom.xml" && echo "LANG_JAVA=true" >> build.env && echo "  ✅ Java/Maven detected" || true
-    - test -f "user-repo/build.gradle" && echo "LANG_JAVA=true" >> build.env && echo "  ✅ Java/Gradle detected" || true
-    
+    - if [ -f "user-repo/pom.xml" ] || [ -f "user-repo/build.gradle" ]; then
+        echo "LANG_JAVA=true" >> build.env;
+        echo "  ✅ Java detected";
+      else
+        echo "LANG_JAVA=false" >> build.env;
+      fi
+
     # Go
-    - test -f "user-repo/go.mod" && echo "LANG_GO=true" >> build.env && echo "  ✅ Go detected" || true
-    
+    - if [ -f "user-repo/go.mod" ]; then
+        echo "LANG_GO=true" >> build.env;
+        echo "  ✅ Go detected";
+      else
+        echo "LANG_GO=false" >> build.env;
+      fi
+
     # Ruby
-    - test -f "user-repo/Gemfile" && echo "LANG_RUBY=true" >> build.env && echo "  ✅ Ruby detected" || true
-    
+    - if [ -f "user-repo/Gemfile" ]; then
+        echo "LANG_RUBY=true" >> build.env;
+        echo "  ✅ Ruby detected";
+      else
+        echo "LANG_RUBY=false" >> build.env;
+      fi
+
     # PHP
-    - test -f "user-repo/composer.json" && echo "LANG_PHP=true" >> build.env && echo "  ✅ PHP detected" || true
-    
+    - if [ -f "user-repo/composer.json" ]; then
+        echo "LANG_PHP=true" >> build.env;
+        echo "  ✅ PHP detected";
+      else
+        echo "LANG_PHP=false" >> build.env;
+      fi
+
     # Rust
-    - test -f "user-repo/Cargo.toml" && echo "LANG_RUST=true" >> build.env && echo "  ✅ Rust detected" || true
-    
-    # Framework Detection
+    - if [ -f "user-repo/Cargo.toml" ]; then
+        echo "LANG_RUST=true" >> build.env;
+        echo "  ✅ Rust detected";
+      else
+        echo "LANG_RUST=false" >> build.env;
+      fi
+
+    # Détection framework Frontend
     - |
       if [ -f "user-repo/angular.json" ]; then
         echo "FRAMEWORK=angular" >> build.env
         echo "  ✅ Angular framework detected"
-      elif [ -f "user-repo/react-scripts" ] || grep -q '"react"' user-repo/package.json 2>/dev/null; then
+      elif grep -q '"react"' user-repo/package.json 2>/dev/null; then
         echo "FRAMEWORK=react" >> build.env
         echo "  ✅ React framework detected"
       elif [ -f "user-repo/vue.config.js" ]; then
         echo "FRAMEWORK=vue" >> build.env
         echo "  ✅ Vue framework detected"
+      else
+        echo "FRAMEWORK=unknown" >> build.env
       fi
-    
-    # Infrastructure Detection
-    - test -f "user-repo/Dockerfile" && echo "HAS_DOCKERFILE=true" >> build.env && echo "  ✅ Dockerfile detected" || echo "HAS_DOCKERFILE=false" >> build.env
-    
-    # IaC Detection
+
+    # Détection Dockerfile
+    - if [ -f "user-repo/Dockerfile" ]; then
+        echo "HAS_DOCKERFILE=true" >> build.env;
+        echo "  ✅ Dockerfile detected";
+      else
+        echo "HAS_DOCKERFILE=false" >> build.env;
+      fi
+
+    # Détection IaC
     - |
-      if find user-repo -name "*.tf" -o -name "*.yaml" -o -name "*.yml" -o -name "Dockerfile" | grep -q .; then
+      if find user-repo -name "*.tf" -o -name "*.yaml" -o -name "*.yml" | grep -q .; then
         echo "HAS_IAC=true" >> build.env
         echo "  ✅ IaC files detected"
       else
         echo "HAS_IAC=false" >> build.env
       fi
-    
-    # Summary
+
     - echo "📋 Build environment:"
     - cat build.env
-    
+
   artifacts:
     paths:
       - user-repo/
+      - build.env
     reports:
       dotenv: build.env
     expire_in: 2 hours
 
 # ========================================
-# STAGE 3 : SONARQUBE (Universal SAST) - CORRIGÉ
+# STAGE 3 : SONARQUBE (SAST général) 
 # ========================================
 sonarqube-scan:
-  stage: sonarqube
+  stage: sonarqube                   
   image: sonarsource/sonar-scanner-cli:latest
   needs: ["clone-repository"]
   script:
-    - echo "SonarQube Scan"
-    - sonar-scanner \
-        -Dsonar.projectKey="amanibennaceur-group_EnviroTest" \
-        -Dsonar.organization="amanibennaceur-group" \
-        -Dsonar.sources=user-repo \
-        -Dsonar.host.url="https://sonarcloud.io" \
-        -Dsonar.token="$SONAR_TOKEN" \
-        -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/target/**,**/build/**" \
-        -Dsonar.coverage.exclusions="**/*.test.js,**/*.spec.js,**/test/**" || true
+    - echo "🔍 SonarQube Scan - Universal SAST"
+    - cd user-repo
+    - sonar-scanner -Dsonar.projectKey="amanibennaceur-group_EnviroTest" -Dsonar.organization="amanibennaceur-group" -Dsonar.sources=. -Dsonar.host.url="https://sonarcloud.io" -Dsonar.token="$SONAR_TOKEN" -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/target/**,**/build/**" -Dsonar.coverage.exclusions="**/*.test.js,**/*.spec.js,**/test/**" || true
+    - cd ..
   allow_failure: true
 
 # ========================================
-# STAGE 4a : TRIVY (Universal SCA) - PARALLEL
+# STAGE 4a : TRIVY (Universal SCA)
 # ========================================
 trivy-scan:
   stage: sca-trivy
@@ -160,7 +197,132 @@ trivy-scan:
   allow_failure: true
 
 # ========================================
-# STAGE 4b : OWASP (Universal SCA) - PARALLEL
+# STAGE 4b : NODE SCA - NE S'EXÉCUTE QUE POUR NODE.JS
+# ========================================
+npm-audit:
+  stage: sca-node
+  image: node:18-alpine
+  needs:
+    - job: clone-repository
+      artifacts: true
+  script:
+    - echo "🔍 NPM/Yarn Audit for Node.js"
+    - mkdir -p reports/node
+    
+    - if [ "$LANG_NODE" != "true" ]; then
+        echo "⏭️  Skipping - Not a Node.js project";
+        exit 0;
+      fi
+    
+    - cd user-repo
+    - echo "✅ Node.js project detected"
+    
+    # Nettoyer l'installation précédente
+    - rm -rf node_modules package-lock.json 2>/dev/null || true
+    
+    # Installer les dépendances pour générer un lockfile valide
+    - echo "📦 Installing dependencies..."
+    - npm install --package-lock-only --silent || echo "⚠️ npm install failed"
+    
+    # Essayer d'abord avec npm ci
+    - |
+      if [ -f "package-lock.json" ]; then
+        echo "🔍 Running npm audit with lockfile..."
+        npm audit --json > ../reports/node/npm-audit.json 2>&1 || {
+          echo "⚠️ npm audit failed, checking if vulnerabilities exist..."
+          # Si audit échoue, essayer audit fix --dry-run
+          npm audit --json --dry-run > ../reports/node/npm-audit.json 2>&1 || true
+        }
+      else
+        echo "❌ No package-lock.json generated, skipping audit"
+        echo '{"error":"No lockfile available"}' > ../reports/node/npm-audit.json
+      fi
+    
+    # Récupérer les dépendances obsolètes
+    - npm outdated --json > ../reports/node/npm-outdated.json 2>/dev/null || echo '{}' > ../reports/node/npm-outdated.json
+    
+    # Générer un rapport des vulnérabilités à partir des dépendances obsolètes
+    - |
+      echo "📊 Generating vulnerability summary..."
+      cat > ../reports/node/vulnerability-summary.json << EOF
+      {
+        "outdated_packages": $(cat ../reports/node/npm-outdated.json | wc -l),
+        "angular_version": "$(cat ../reports/node/npm-outdated.json | grep @angular | head -1 | cut -d'"' -f2 || echo 'unknown')",
+        "recommendation": "Update Angular from 16 to 19 to fix known CVEs"
+      }
+      EOF
+    
+    - cd ..
+  artifacts:
+    paths:
+      - reports/node/
+  allow_failure: true
+# ========================================
+# STAGE 4c : PYTHON SCA - NE S'EXÉCUTE QUE POUR PYTHON
+# ========================================
+pip-audit:
+  stage: sca-python
+  image: python:3.11-alpine
+  needs:
+    - job: clone-repository
+      artifacts: true
+  before_script:
+    - pip install pip-audit safety
+  script:
+    - echo "🔍 Python Security Audit"
+    - mkdir -p reports/python
+    
+    # Vérifier si c'est un projet Python
+    - if [ "$LANG_PYTHON" != "true" ]; then
+        echo "⏭️  Skipping - Not a Python project";
+        exit 0;
+      fi
+    
+    - cd user-repo
+    - echo "✅ Python project detected, running security audit"
+    - if [ -f "requirements.txt" ]; then
+        pip-audit --requirement requirements.txt --format json > ../reports/python/pip-audit.json || true;
+        safety check --json --file requirements.txt --output ../reports/python/safety.json || true;
+      fi
+    - cd ..
+  artifacts:
+    paths:
+      - reports/python/
+  allow_failure: true
+
+# ========================================
+# STAGE 4d : JAVA SCA - NE S'EXÉCUTE QUE POUR JAVA
+# ========================================
+maven-dependency-check:
+  stage: sca-java
+  image: maven:3.8-openjdk-17
+  needs:
+    - job: clone-repository
+      artifacts: true
+  script:
+    - echo "🔍 Java/Maven Dependency Check"
+    - mkdir -p reports/java
+    
+    # Vérifier si c'est un projet Java
+    - if [ "$LANG_JAVA" != "true" ]; then
+        echo "⏭️  Skipping - Not a Java project";
+        exit 0;
+      fi
+    
+    - cd user-repo
+    - echo "✅ Java project detected, running dependency check"
+    - if [ -f "pom.xml" ]; then
+        mvn -q dependency:tree -DoutputFile=../reports/java/dependencies.txt || true;
+        mvn -q org.owasp:dependency-check-maven:check -Dformat=JSON -DoutputDirectory=../reports/java/ || true;
+      fi
+    - cd ..
+  artifacts:
+    paths:
+      - reports/java/
+  allow_failure: true
+
+# ========================================
+# STAGE 4e : OWASP (Universal SCA)
 # ========================================
 owasp-dependency-check:
   stage: sca-owasp
@@ -171,7 +333,7 @@ owasp-dependency-check:
     - curl -sSLo dependency-check.zip https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.3/dependency-check-10.0.3-release.zip
     - unzip -q dependency-check.zip
   script:
-    - echo "🔍 OWASP Dependency-Check - Universal SCA"
+    - echo "🔍 OWASP Dependency-Check - Universal SCA (peut être long)"
     - mkdir -p reports/owasp
     - ./dependency-check/bin/dependency-check.sh --project "$ENVIRONMENT_ID" --format JSON --out reports/owasp --scan user-repo --enableExperimental --disableAssembly || true
   artifacts:
@@ -180,136 +342,63 @@ owasp-dependency-check:
   allow_failure: true
 
 # ========================================
-# STAGE 4c : NODE SCA - PARALLEL
-# ========================================
-npm-audit:
-  stage: sca-node
-  image: node:18-alpine
-  needs: ["clone-repository"]
-  
-  script:
-    - echo "🔍 NPM/Yarn Audit for Node.js"
-    - mkdir -p reports/node
-    - cd user-repo
-    - |
-      if [ -f "yarn.lock" ]; then
-        yarn audit --json > ../reports/node/yarn-audit.json || echo '{"error":"yarn audit failed"}' > ../reports/node/yarn-audit.json
-      else
-        npm audit --json > ../reports/node/npm-audit.json || echo '{"error":"npm audit failed"}' > ../reports/node/npm-audit.json
-        npm outdated --json > ../reports/node/npm-outdated.json || true
-      fi
-    - cd ..
-  artifacts:
-    paths:
-      - reports/node/
-  allow_failure: true
-
-# ========================================
-# STAGE 4d : PYTHON SCA - PARALLEL
-# ========================================
-pip-audit:
-  stage: sca-python
-  image: python:3.11-alpine
-  needs: ["clone-repository"]
-  rules:
-    - if: $LANG_PYTHON == "true"
-  before_script:
-    - pip install pip-audit safety
-  script:
-    - echo "🔍 Python Security Audit"
-    - mkdir -p reports/python
-    - cd user-repo
-    - |
-      if [ -f "requirements.txt" ]; then
-        pip-audit --requirement requirements.txt --format json > ../reports/python/pip-audit.json || true
-        safety check --json --file requirements.txt --output ../reports/python/safety.json || true
-      fi
-    - cd ..
-  artifacts:
-    paths:
-      - reports/python/
-  allow_failure: true
-
-# ========================================
-# STAGE 4e : JAVA SCA - PARALLEL
-# ========================================
-maven-dependency-check:
-  stage: sca-java
-  image: maven:3.8-openjdk-17
-  needs: ["clone-repository"]
-  rules:
-    - if: $LANG_JAVA == "true"
-  script:
-    - echo "🔍 Java/Maven Dependency Check"
-    - mkdir -p reports/java
-    - cd user-repo
-    - |
-      if [ -f "pom.xml" ]; then
-        mvn dependency:tree -DoutputFile=../reports/java/dependencies.txt
-        mvn org.owasp:dependency-check-maven:check -Dformat=JSON -DoutputDirectory=../reports/java/ || true
-      elif [ -f "build.gradle" ]; then
-        ./gradlew dependencies > ../reports/java/gradle-dependencies.txt
-      fi
-    - cd ..
-  artifacts:
-    paths:
-      - reports/java/
-  allow_failure: true
-
-# ========================================
-# STAGE 5a : SEMGREP (Universal SAST) - PARALLEL
+# STAGE 5a : SEMGREP (Universal SAST)
 # ========================================
 semgrep-scan:
   stage: sast-generic
   image: returntocorp/semgrep:latest
   needs: ["clone-repository"]
   script:
-    - echo "🔍 Semgrep - Universal SAST"
-    - mkdir -p reports/semgrep
-    - semgrep scan --config auto --json -o reports/semgrep/semgrep.json user-repo || true
-    - semgrep scan --config p/security-audit --json -o reports/semgrep/security-audit.json user-repo || true
-  artifacts:
-    paths:
-      - reports/semgrep/
-  allow_failure: true
-
-# ========================================
-# STAGE 5b : SAFE (Angular/React) - PARALLEL - CORRIGÉ
-
-#npm install -g @safe/cli || echo "⚠️ SAFE installation failed"
-
-
-#npx @safe/cli scan:source --path . --format json > ../reports/sast/safe-report.json || echo '{"error":"SAFE failed"}' > ../reports/sast/safe-report.json
-      
-      #if [ "$FRAMEWORK" = "angular" ] && [ -f "angular.json" ]; then
-        #npx ng lint --format json --output-file ../reports/sast/angular-lint.json || true
-      #fi
-      #cd ..
-# ========================================
-safe-analysis:
-  stage: sast-angular
-  image: node:18-alpine
-  needs: ["clone-repository"]
-  
-  script:
-    - echo "🔍 SAFE - Frontend Security"
+    - echo "🔍 Semgrep - Multi-language SAST"
     - mkdir -p reports/sast
-    - npm install -g @safe-cli/safe || true
-    - |
-      if [ ! -f "user-repo/angular.json" ]; then
-        echo "🌐 Pas de projet Angular (angular.json introuvable), skip SAFE."
-        exit 0
-      fi
-      cd user-repo
-      safe scan:source --path . --format json > ../reports/sast/safe-report.json || true
-      cd ..
+    - semgrep scan --config auto --json -o reports/sast/semgrep.json user-repo || true
   artifacts:
     paths:
       - reports/sast/
   allow_failure: true
 
 # ========================================
-# STAGE 6 : GITLEAKS (Secrets) - PARALLEL
+# STAGE 5b : SAFE - NE S'EXÉCUTE QUE POUR ANGULAR/REACT
+# ========================================
+safe-analysis:
+  stage: sast-angular
+  image: node:18-alpine
+  needs:
+    - job: clone-repository
+      artifacts: true
+  script:
+    - echo "🔍 SAFE Analysis for Angular/React"
+    - mkdir -p reports/sast
+    
+    # Vérifier le framework
+    - |
+      if [ "$FRAMEWORK" != "angular" ] && [ "$FRAMEWORK" != "react" ]; then
+        echo "⏭️  Skipping - Not an Angular/React project (framework: $FRAMEWORK)"
+        exit 0
+      fi
+    
+    - npm install -g @safe/cli || echo "⚠️ SAFE installation failed"
+    - cd user-repo
+    
+    - |
+      if [ "$FRAMEWORK" = "angular" ]; then
+        echo "✅ Angular project detected"
+        npx @safe/cli scan:source --path . --format json > ../reports/sast/safe-report.json || true
+        if [ -f "angular.json" ]; then
+          npx ng lint --format json --output-file ../reports/sast/angular-lint.json || true
+        fi
+      elif [ "$FRAMEWORK" = "react" ]; then
+        echo "✅ React project detected"
+        npx eslint . --ext .jsx,.tsx --format json > ../reports/sast/react-lint.json || true
+      fi
+    - cd ..
+  artifacts:
+    paths:
+      - reports/sast/
+  allow_failure: true
+
+# ========================================
+# STAGE 6 : GITLEAKS (Secrets)
 # ========================================
 gitleaks-secrets:
   stage: secrets
@@ -320,170 +409,164 @@ gitleaks-secrets:
     - curl -sSfL https://github.com/zricethezav/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar xz
     - mv gitleaks /usr/local/bin/
   script:
-    - echo "🔐 Gitleaks - Secrets Detection"
+    - echo "🔍 Gitleaks - Secrets Scan"
     - mkdir -p reports/secrets
-    - gitleaks detect --source user-repo --report-path reports/secrets/gitleaks.json --report-format json --verbose || true
+    - gitleaks detect --source user-repo --report-path reports/secrets/gitleaks.json --report-format json || true
   artifacts:
     paths:
       - reports/secrets/
   allow_failure: true
 
 # ========================================
-# STAGE 7 : GRYPE (Container) - PARALLEL
+# STAGE 7 : GRYPE - NE S'EXÉCUTE QUE SI DOCKERFILE
 # ========================================
 grype-scan:
   stage: container
   image: docker:latest
   services:
     - docker:dind
-  needs: ["clone-repository"]
-  rules:
-    - if: $HAS_DOCKERFILE == "true"
+  needs:
+    - job: clone-repository
+      artifacts: true
   before_script:
     - apk add --no-cache curl
     - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
   script:
-    - echo "🐳 Grype - Container Security"
+    - echo "🔍 Grype - Container Image Scan"
     - mkdir -p reports/container
-    - cd user-repo
-    - docker build -t app-image:$ENVIRONMENT_ID .
-    - grype app-image:$ENVIRONMENT_ID --output json --file ../reports/container/grype.json || true
-    - grype dir:. --output json --file ../reports/container/grype-dockerfile.json || true
-    - cd ..
+    - |
+      if [ "$HAS_DOCKERFILE" != "true" ]; then
+        echo "⏭️  Skipping - No Dockerfile found"
+        echo '{"scanned": false}' > reports/container/grype.json
+        exit 0
+      fi
+    - |
+      cd user-repo
+      echo "✅ Dockerfile found, building and scanning image"
+      docker build -t app-image:$ENVIRONMENT_ID .
+      grype app-image:$ENVIRONMENT_ID --output json --file ../reports/container/grype.json || true
+      cd ..
   artifacts:
     paths:
       - reports/container/
   allow_failure: true
 
 # ========================================
-# STAGE 8 : CHECKOV (IaC) - PARALLEL
+# STAGE 8 : CHECKOV - NE S'EXÉCUTE QUE SI IAC
 # ========================================
 checkov-scan:
   stage: iac
   image: python:3.11-alpine
-  needs: ["clone-repository"]
-  rules:
-    - if: $HAS_IAC == "true"
+  needs:
+    - job: clone-repository
+      artifacts: true
   before_script:
     - pip install checkov
   script:
-    - echo "🏗️ Checkov - IaC Security"
+    - echo "🔍 Checkov - IaC Scan"
     - mkdir -p reports/iac
-    - checkov --directory user-repo --output json --output-file-path reports/iac/checkov.json || true
+    - |
+      if [ "$HAS_IAC" != "true" ]; then
+        echo "⏭️  Skipping - No IaC files found"
+        echo '{"scanned": false}' > reports/iac/checkov.json
+        exit 0
+      fi
+    - |
+      echo "✅ IaC files found, running Checkov"
+      checkov --directory user-repo --output json --output-file-path reports/iac/checkov.json || true
   artifacts:
     paths:
       - reports/iac/
   allow_failure: true
 
 # ========================================
-# STAGE 9a : LICENSE NODE - PARALLEL
+# STAGE 9a : LICENSE NODE
 # ========================================
-license-scan-node:
+license-node:
   stage: license-node
   image: node:18-alpine
-  needs: ["clone-repository"]
-  
+  needs:
+    - job: clone-repository
+      artifacts: true
   script:
-    - echo "📋 License Scan - Node.js"
-    - mkdir -p reports/license
-    - npm install -g license-checker nlf
+    - echo "🔍 License Scan (Node.js)"
+    - mkdir -p reports/license/node
+    
+    # Vérifier si c'est un projet Node
+    - if [ "$LANG_NODE" != "true" ]; then
+        echo "⏭️  Skipping - Not a Node.js project";
+        exit 0;
+      fi
+    
     - cd user-repo
-    - license-checker --json > ../reports/license/node-licenses.json || true
-    - nlf --json > ../reports/license/nlf-licenses.json || true
+    - echo "✅ Node.js project detected, scanning licenses"
+    - npx license-checker --json > ../reports/license/node/license-node.json || echo '{"error":"license-checker failed"}' > ../reports/license/node/license-node.json
     - cd ..
   artifacts:
     paths:
-      - reports/license/node-licenses.json
-      - reports/license/nlf-licenses.json
+      - reports/license/node/
   allow_failure: true
 
 # ========================================
-# STAGE 9b : LICENSE PYTHON - PARALLEL
+# STAGE 9b : LICENSE PYTHON
 # ========================================
-license-scan-python:
+license-python:
   stage: license-python
   image: python:3.11-alpine
-  needs: ["clone-repository"]
-  rules:
-    - if: $LANG_PYTHON == "true"
+  needs:
+    - job: clone-repository
+      artifacts: true
   before_script:
-    - pip install pip-licenses
+    - pip install licensecheck
   script:
-    - echo "📋 License Scan - Python"
-    - mkdir -p reports/license
-    - cd user-repo
-    - |
-      if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt 2>/dev/null || true
-        pip-licenses --format=json --output-file=../reports/license/python-licenses.json || true
+    - echo "🔍 License Scan (Python)"
+    - mkdir -p reports/license/python
+    
+    # Vérifier si c'est un projet Python
+    - if [ "$LANG_PYTHON" != "true" ]; then
+        echo "⏭️  Skipping - Not a Python project";
+        exit 0;
       fi
+    
+    - cd user-repo
+    - echo "✅ Python project detected, scanning licenses"
+    - licensecheck --format json --output ../reports/license/python/license-python.json . || echo '{"error":"licensecheck failed"}' > ../reports/license/python/license-python.json
     - cd ..
   artifacts:
     paths:
-      - reports/license/python-licenses.json
+      - reports/license/python/
   allow_failure: true
 
 # ========================================
-# STAGE 10 : REPORT AGGREGATION
+# STAGE 10 : REPORT / AGGREGATION
 # ========================================
 aggregate-report:
   stage: report
   image: alpine:latest
   needs:
-    - job: clone-repository
-      artifacts: true
-    - job: trivy-scan
-      optional: false  # Toujours présent
-    - job: owasp-dependency-check
-      optional: false  # Toujours présent
-    - job: npm-audit
-      optional: true   # Conditionnel (LANG_NODE)
-    - job: pip-audit
-      optional: true   # Conditionnel (LANG_PYTHON)
-    - job: maven-dependency-check
-      optional: true   # Conditionnel (LANG_JAVA)
-    - job: semgrep-scan
-      optional: false  # Toujours présent
-    - job: safe-analysis
-      optional: true   # Conditionnel (FRAMEWORK)
-    - job: gitleaks-secrets
-      optional: false  # Toujours présent
-    - job: grype-scan
-      optional: true   # Conditionnel (HAS_DOCKERFILE)
-    - job: checkov-scan
-      optional: true   # Conditionnel (HAS_IAC)
-    - job: license-scan-node
-      optional: true   # Conditionnel (LANG_NODE)
-    - job: license-scan-python
-      optional: true   # Conditionnel (LANG_PYTHON)
+    - clone-repository
+    - trivy-scan
+    - npm-audit
+    - pip-audit
+    - maven-dependency-check
+    - owasp-dependency-check
+    - semgrep-scan
+    - safe-analysis
+    - gitleaks-secrets
+    - grype-scan
+    - checkov-scan
+    - license-node
+    - license-python
   before_script:
     - apk add --no-cache curl jq
   script:
     - echo "📊 Aggregating security reports"
     - mkdir -p final-report
-    
-    # Vérifier si build.env existe
-    - if [ -f "build.env" ]; then
-        cat build.env;
-        source build.env;
-        echo "✅ build.env loaded";
-      else
-        echo "⚠️ build.env not found";
-      fi
-    
-    # Définir les valeurs par défaut
-    - LANG_NODE=${LANG_NODE:-false}
-    - LANG_PYTHON=${LANG_PYTHON:-false}
-    - LANG_JAVA=${LANG_JAVA:-false}
-    - LANG_GO=${LANG_GO:-false}
-    - LANG_RUBY=${LANG_RUBY:-false}
-    - LANG_PHP=${LANG_PHP:-false}
-    - LANG_RUST=${LANG_RUST:-false}
-    - FRAMEWORK=${FRAMEWORK:-"unknown"}
-    - HAS_DOCKERFILE=${HAS_DOCKERFILE:-false}
-    - HAS_IAC=${HAS_IAC:-false}
-    
-    # Generate summary
+
+    # Charger les variables depuis build.env
+    - source build.env 2>/dev/null || true
+
+    # Générer le résumé avec valeurs par défaut
     - |
       cat > final-report/summary.json << EOF
       {
@@ -492,32 +575,36 @@ aggregate-report:
         "git_branch": "$GIT_BRANCH",
         "pipeline_id": "$CI_PIPELINE_ID",
         "languages_detected": {
-          "node": $LANG_NODE,
-          "python": $LANG_PYTHON,
-          "java": $LANG_JAVA,
-          "go": $LANG_GO,
-          "ruby": $LANG_RUBY,
-          "php": $LANG_PHP,
-          "rust": $LANG_RUST
+          "node": ${LANG_NODE:-false},
+          "python": ${LANG_PYTHON:-false},
+          "java": ${LANG_JAVA:-false},
+          "go": ${LANG_GO:-false},
+          "ruby": ${LANG_RUBY:-false},
+          "php": ${LANG_PHP:-false},
+          "rust": ${LANG_RUST:-false}
         },
-        "framework": "$FRAMEWORK",
-        "has_dockerfile": $HAS_DOCKERFILE,
-        "has_iac": $HAS_IAC,
+        "framework": "${FRAMEWORK:-unknown}",
+        "has_dockerfile": ${HAS_DOCKERFILE:-false},
+        "has_iac": ${HAS_IAC:-false},
         "status": "completed",
         "reports_url": "$CI_JOB_URL/artifacts"
       }
       EOF
-    
+
+    - echo "📄 Summary:"
     - cat final-report/summary.json
-    
-    # Send notification
+
     - echo "📧 Sending notification to backend"
     - |
-      curl -X POST "${BACKEND_URL}/projet/api/deploy" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${API_TOKEN}" \
-        -d @final-report/summary.json || echo "⚠️ Notification failed"
-    
+      if [ -n "$BACKEND_URL" ]; then
+        curl -X POST "${BACKEND_URL}/projet/api/deploy" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${API_TOKEN}" \
+          -d @final-report/summary.json || echo "⚠️ Notification failed"
+      else
+        echo "⚠️ BACKEND_URL not set, skipping notification"
+      fi
+
     - echo "✅ Pipeline completed successfully"
   artifacts:
     paths:

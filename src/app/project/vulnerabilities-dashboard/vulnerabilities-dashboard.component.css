@@ -1,0 +1,1833 @@
+/* vulnerabilities-dashboard.component.css — thème aligné marque (orange) + neutres chauds */
+:host {
+  --vuln-accent: var(--color-primary, #f36c21);
+  --vuln-accent-dark: var(--color-primary-dark, #d85b16);
+  --vuln-accent-soft: var(--color-primary-soft, #ffe5d3);
+  --vuln-text: var(--color-text-primary, #0f172a);
+  --vuln-text-muted: var(--color-text-muted, #64748b);
+  --vuln-surface: var(--color-bg-card, #ffffff);
+  --vuln-bg-page: var(--color-bg, #f8fafc);
+  --vuln-border: var(--color-border-soft, #e2e8f0);
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
+}
+
+.vuln-container {
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-x: clip;
+  background: var(--vuln-bg-page);
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  color: var(--vuln-text);
+}
+
+/* En-tête = carte (Centre de Sécurité) avec survol animé */
+.vuln-header {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  position: relative;
+  overflow: visible;
+  padding: 1.25rem clamp(1rem, 3vw, 2rem) 0;
+  box-sizing: border-box;
+}
+
+.vuln-header-content {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 3vw, 2rem);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  background: var(--vuln-surface);
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 20%, var(--vuln-border));
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.07));
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.32s ease,
+    border-color 0.32s ease;
+}
+
+.vuln-header-content:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--vuln-accent) 50%, var(--vuln-border));
+  box-shadow:
+    0 14px 40px rgba(15, 23, 42, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--vuln-accent) 24%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vuln-header-content {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .vuln-header-content:hover {
+    transform: none;
+  }
+}
+
+.vuln-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--vuln-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 28%, transparent);
+  padding: 0.35rem 0.9rem;
+  border-radius: 100px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vuln-accent-dark);
+  margin-bottom: 0.75rem;
+  width: fit-content;
+}
+
+.vuln-badge-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-success, #059669);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success, #059669) 30%, transparent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.vuln-title {
+  font-size: clamp(1.65rem, 4vw, 2.25rem);
+  font-weight: 800;
+  color: var(--vuln-text);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.vuln-subtitle {
+  color: var(--vuln-text-muted);
+  margin: 0;
+  font-size: 0.95rem;
+  max-width: 36rem;
+  line-height: 1.5;
+}
+
+.vuln-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.vuln-header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.vuln-header-controls .vuln-env-card {
+  margin-bottom: 0;
+}
+
+.vuln-env-card {
+  background: var(--vuln-bg-page);
+  border: 1px solid var(--vuln-border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.vuln-env-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vuln-text-muted);
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.vuln-env-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--vuln-text);
+  font-size: 0.85rem;
+}
+
+.vuln-env-value code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.vuln-env-missing {
+  color: var(--vuln-text-muted);
+  font-style: italic;
+}
+
+.vuln-env-icon {
+  font-size: 1rem;
+}
+
+.vuln-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* Button Styles */
+.vuln-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.vuln-btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--vuln-accent) 0%, var(--vuln-accent-dark) 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--vuln-accent) 42%, transparent);
+}
+
+.vuln-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--vuln-accent) 48%, transparent);
+}
+
+.vuln-btn-secondary {
+  background: var(--vuln-bg-page);
+  color: var(--vuln-text);
+  border: 1px solid var(--vuln-border);
+}
+
+.vuln-btn-secondary:hover:not(:disabled) {
+  background: var(--vuln-surface);
+  border-color: color-mix(in srgb, var(--vuln-accent) 35%, var(--vuln-border));
+}
+
+.vuln-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Messages */
+.vuln-messages {
+  max-width: 1440px;
+  margin: 1rem auto 0;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  box-sizing: border-box;
+}
+
+.vuln-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.vuln-alert-error {
+  background: #fed7d7;
+  color: #9b2c2c;
+  border-left: 4px solid #e53e3e;
+}
+
+.vuln-alert-success {
+  background: #c6f6d5;
+  color: #22543d;
+  border-left: 4px solid #38a169;
+}
+
+/* Stats — 4 cartes sur une ligne (responsive) */
+.vuln-stats-grid {
+  max-width: 1440px;
+  margin: 2rem auto;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 1200px) {
+  .vuln-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .vuln-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vuln-stat-card {
+  background: var(--vuln-surface);
+  border-radius: 16px;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 22%, var(--vuln-border));
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.07));
+  transition:
+    transform 0.28s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+  min-width: 0;
+  animation: vulnStatCardIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.vuln-stat-card:nth-child(1) { animation-delay: 0.04s; }
+.vuln-stat-card:nth-child(2) { animation-delay: 0.1s; }
+.vuln-stat-card:nth-child(3) { animation-delay: 0.16s; }
+.vuln-stat-card:nth-child(4) { animation-delay: 0.22s; }
+
+@keyframes vulnStatCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vuln-stat-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--vuln-accent) 55%, var(--vuln-border));
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.1),
+    0 0 0 1px color-mix(in srgb, var(--vuln-accent) 25%, transparent);
+}
+
+.vuln-stat-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.vuln-stat-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 1.5rem;
+}
+
+.vuln-stat-icon.critical { background: #fed7d7; color: #e53e3e; }
+.vuln-stat-icon.tools { background: #e9d8fd; color: #805ad5; }
+.vuln-stat-icon.types { background: #feebc8; color: #dd6b20; }
+.vuln-stat-icon.trend { background: #c6f6d5; color: #38a169; }
+
+.vuln-stat-info h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.vuln-stat-total {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #a0aec0;
+}
+
+/* Severity Bars */
+.vuln-severity-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vuln-severity-item {
+  width: 100%;
+}
+
+.vuln-severity-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.vuln-severity-name {
+  font-weight: 600;
+}
+
+.vuln-severity-name.severity-critical { color: #e53e3e; }
+.vuln-severity-name.severity-high { color: #ed8936; }
+.vuln-severity-name.severity-medium { color: #ecc94b; }
+.vuln-severity-name.severity-low { color: #48bb78; }
+.vuln-severity-name.severity-info { color: #a0aec0; }
+
+.vuln-severity-count {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.vuln-severity-bar {
+  height: 6px;
+  background: #edf2f7;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.vuln-severity-progress {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.progress-critical { background: #e53e3e; }
+.progress-high { background: #ed8936; }
+.progress-medium { background: #f3e2a8; }
+.progress-low { background: #48bb78; }
+.progress-info { background: #a0aec0; }
+
+/* Outils de détection : liste verticale (une ligne par outil) */
+.vuln-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.vuln-tool-item {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+
+.vuln-tool-item:hover {
+  border-color: color-mix(in srgb, var(--vuln-accent) 40%, var(--vuln-border));
+  background: color-mix(in srgb, var(--vuln-accent) 6%, #f7fafc);
+}
+
+.vuln-tool-name {
+  font-weight: 600;
+  color: #4a5568;
+  line-height: 1.2;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.vuln-tool-count {
+  font-weight: 700;
+  color: var(--vuln-accent);
+  flex-shrink: 0;
+}
+
+/* Types d'analyse : liste verticale */
+.vuln-types-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vuln-type-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+
+.vuln-type-row:hover {
+  border-color: color-mix(in srgb, var(--vuln-accent) 40%, var(--vuln-border));
+  background: color-mix(in srgb, var(--vuln-accent) 6%, #f7fafc);
+}
+
+.vuln-type-name {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.vuln-type-count {
+  font-weight: 700;
+  color: var(--vuln-accent);
+}
+
+/* Trend Stats */
+.vuln-trend-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.vuln-trend-item {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  background: #f7fafc;
+  border-radius: 10px;
+}
+
+.vuln-trend-label {
+  display: block;
+  font-size: 0.7rem;
+  color: #a0aec0;
+  margin-bottom: 0.25rem;
+}
+
+.vuln-trend-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.vuln-trend-value.new { color: #e53e3e; }
+.vuln-trend-value.fixed { color: #38a169; }
+
+.vuln-trend-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 100px;
+  background: #e53e3e;
+  color: white;
+}
+
+.vuln-trend-badge.success {
+  background: #38a169;
+}
+
+/* Panneau filtres */
+.vuln-filters-panel {
+  max-width: 1440px;
+  margin: 0 auto 1.5rem;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  box-sizing: border-box;
+  animation: vulnFiltersPanelIn 0.5s ease both;
+}
+
+@keyframes vulnFiltersPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vuln-filters-head {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.25rem;
+}
+
+.vuln-filters-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vuln-text);
+}
+
+.vuln-filters-hint {
+  font-size: 0.75rem;
+  color: var(--vuln-text-muted);
+  line-height: 1.4;
+}
+
+.vuln-filters-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 1.15rem 1.35rem;
+  min-width: 0;
+  background: var(--vuln-surface);
+  border: 1px solid var(--vuln-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(15, 23, 42, 0.07));
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.vuln-filters-bar:hover {
+  border-color: color-mix(in srgb, var(--vuln-accent) 22%, var(--vuln-border));
+  box-shadow: var(--shadow-lg, 0 10px 28px rgba(15, 23, 42, 0.1));
+}
+
+.vuln-filters-left {
+  display: flex;
+  gap: 1rem 1.25rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  flex: 1;
+  min-width: 0;
+}
+
+.vuln-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 140px;
+}
+
+.vuln-filter-group.search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.vuln-filter-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vuln-text-muted);
+}
+
+.vuln-input-wrap {
+  position: relative;
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease;
+}
+
+.vuln-input-wrap:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vuln-accent) 18%, transparent);
+}
+
+.vuln-input-wrap-search {
+  display: flex;
+  align-items: center;
+}
+
+.vuln-search-icon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--vuln-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.vuln-select,
+.vuln-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--vuln-border);
+  border-radius: 10px;
+  font-size: 0.875rem;
+  background: var(--color-bg-light, #f8fafc);
+  color: var(--vuln-text);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.vuln-input-wrap-search .vuln-search {
+  padding-left: 2.25rem;
+}
+
+.vuln-select:focus,
+.vuln-search:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--vuln-accent) 55%, var(--vuln-border));
+  background: var(--vuln-surface);
+}
+
+.vuln-btn-clear {
+  padding: 0.55rem 1rem;
+  align-self: flex-end;
+  background: transparent;
+  border: 1px dashed var(--vuln-border);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--vuln-text-muted);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.vuln-btn-clear:hover {
+  color: var(--vuln-accent);
+  border-color: color-mix(in srgb, var(--vuln-accent) 45%, var(--vuln-border));
+  background: color-mix(in srgb, var(--vuln-accent) 6%, var(--vuln-surface));
+}
+
+.vuln-filters-right {
+  flex-shrink: 0;
+}
+
+.vuln-count-pill {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vuln-accent) 8%, var(--vuln-surface));
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 18%, var(--vuln-border));
+  font-size: 0.8rem;
+  color: var(--vuln-text-muted);
+}
+
+.vuln-count-strong {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--vuln-text);
+}
+
+.vuln-count-sep {
+  opacity: 0.45;
+  margin: 0 0.1rem;
+}
+
+.vuln-count-label {
+  width: 100%;
+  flex-basis: 100%;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+/* Table Container */
+.vuln-table-container {
+  max-width: 1440px;
+  margin: 0 auto 2rem;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.vuln-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.vuln-table-title h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.vuln-table-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vuln-page-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vuln-page-btn:hover:not(:disabled) {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.vuln-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vuln-page-current {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+/* Table — scroll horizontal local uniquement, pas toute la page */
+.vuln-table-wrapper {
+  background: white;
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  -webkit-overflow-scrolling: touch;
+}
+
+.vuln-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.vuln-table thead th {
+  text-align: left;
+  padding: 1rem;
+  background: #f7fafc;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #718096;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.vuln-table tbody td {
+  padding: 1rem;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 0.85rem;
+  transition: background 0.2s ease;
+}
+
+.vuln-table tbody tr:hover td {
+  background: #f7fafc;
+}
+
+/* Severity Badge */
+.vuln-severity-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 100px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.vuln-severity-badge.large {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.severity-critical { background: #fed7d7; color: #e53e3e; }
+.severity-high { background: #feebc8; color: #dd6b20; }
+.severity-medium { background: #fefcbf; color: #d69e2e; }
+.severity-low { background: #c6f6d5; color: #38a169; }
+.severity-info { background: #edf2f7; color: #718096; }
+
+/* Tool & Type Badges */
+.vuln-tool-badge, .vuln-type-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: #edf2f7;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.vuln-title-text {
+  font-weight: 500;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.vuln-meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+}
+
+.vuln-cve, .vuln-cwe {
+  font-family: monospace;
+  color: #718096;
+}
+
+.vuln-location {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #4a5568;
+}
+
+.vuln-location-path {
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
+.vuln-line {
+  color: #718096;
+}
+
+.vuln-version {
+  font-size: 0.7rem;
+  color: #718096;
+  margin-top: 0.25rem;
+}
+
+.vuln-detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vuln-detail-btn:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+/* Empty State */
+.vuln-empty-state {
+  text-align: center;
+  padding: 3rem !important;
+}
+
+.vuln-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.vuln-empty-state p {
+  color: #a0aec0;
+  margin-bottom: 1rem;
+}
+
+.vuln-link {
+  background: none;
+  border: none;
+  color: var(--vuln-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+
+/* Modal */
+.vuln-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.vuln-modal-content {
+  width: 600px;
+  max-width: 90vw;
+  height: 100vh;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.vuln-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.vuln-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vuln-modal-title h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.vuln-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #edf2f7;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+}
+
+.vuln-modal-close:hover {
+  background: #e2e8f0;
+}
+
+.vuln-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+/* Detail Sections */
+.vuln-detail-header {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.vuln-detail-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.vuln-detail-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.vuln-meta-item {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.vuln-meta-label {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.vuln-detail-section {
+  margin-bottom: 1.5rem;
+}
+
+.vuln-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vuln-section-title h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.vuln-description {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #4a5568;
+  background: #f7fafc;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.vuln-location-detail {
+  background: #f7fafc;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.vuln-file-path {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #2d3748;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.vuln-version-info {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.vuln-code-snippet {
+  background: #1a202c;
+  color: #e2e8f0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.vuln-modal-remediation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vuln-remediation-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--vuln-accent) 8%, var(--vuln-surface)) 0%, var(--vuln-bg-page) 100%);
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 22%, var(--vuln-border));
+  border-radius: 14px;
+  padding: 1rem 1.1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.vuln-hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+
+.vuln-hero-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vuln-text);
+}
+
+.vuln-hero-sub {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--vuln-text-muted);
+  max-width: 44rem;
+}
+
+.vuln-hero-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.65rem;
+  border-radius: 100px;
+  background: var(--vuln-accent-soft);
+  color: var(--vuln-accent-dark);
+  border: 1px solid color-mix(in srgb, var(--vuln-accent) 28%, transparent);
+  white-space: nowrap;
+}
+
+.vuln-hero-path-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.vuln-file-path--hero {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.vuln-line-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  background: var(--vuln-surface);
+  border: 1px solid var(--vuln-border);
+  color: var(--vuln-text);
+}
+
+.vuln-hero-versions {
+  margin-bottom: 0.65rem;
+}
+
+.vuln-code-block {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  margin: 0;
+  border: 1px solid #334155;
+  max-height: min(55vh, 28rem);
+}
+
+.vuln-hero-empty {
+  font-size: 0.82rem;
+  color: var(--vuln-text-muted);
+  line-height: 1.5;
+  padding: 0.5rem 0;
+}
+
+.vuln-hero-empty-hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.78rem;
+}
+
+.vuln-copy-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--vuln-border);
+  background: var(--vuln-surface);
+  color: var(--vuln-text);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.vuln-copy-chip:hover {
+  border-color: color-mix(in srgb, var(--vuln-accent) 45%, var(--vuln-border));
+  background: color-mix(in srgb, var(--vuln-accent) 6%, var(--vuln-surface));
+}
+
+.vuln-section-title--row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.vuln-section-title-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vuln-ai-auto-hint {
+  font-size: 0.68rem;
+  color: var(--vuln-text-muted);
+  font-weight: 500;
+}
+
+.vuln-ai-loading-panel {
+  padding: 1.25rem;
+  border-radius: 12px;
+  background: var(--vuln-bg-page);
+  border: 1px dashed color-mix(in srgb, var(--vuln-accent) 35%, var(--vuln-border));
+  margin-bottom: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.vuln-ai-loading-panel p {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.82rem;
+  color: var(--vuln-text);
+}
+
+.vuln-ai-loading-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 40%;
+  background: linear-gradient(90deg, var(--vuln-accent), var(--vuln-accent-dark));
+  animation: vulnAiBar 1.1s ease-in-out infinite;
+}
+
+@keyframes vulnAiBar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.vuln-muted {
+  color: var(--vuln-text-muted);
+  font-size: 0.8rem;
+}
+
+.vuln-muted-small {
+  font-size: 0.75rem;
+  color: var(--vuln-text-muted);
+  margin: 0 0 0.4rem 0;
+}
+
+.vuln-ai-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.vuln-ai-panel {
+  background: var(--vuln-surface);
+  border: 1px solid var(--vuln-border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.vuln-ai-panel--problem {
+  border-left: 3px solid #e53e3e;
+}
+
+.vuln-ai-panel--impact {
+  border-left: 3px solid var(--vuln-accent);
+}
+
+.vuln-ai-panel--location {
+  border-left: 3px solid #64748b;
+}
+
+.vuln-ai-panel--steps {
+  grid-column: 1 / -1;
+  border-left: 3px solid #6366f1;
+}
+
+.vuln-ai-panel--verify {
+  grid-column: 1 / -1;
+  border-left: 3px solid #059669;
+}
+
+.vuln-ai-panel--patch {
+  grid-column: 1 / -1;
+  border-left: 3px solid #d97706;
+}
+
+.vuln-ai-panel--full {
+  grid-column: 1 / -1;
+}
+
+.vuln-ai-panel--raw {
+  grid-column: 1 / -1;
+  opacity: 0.95;
+}
+
+.vuln-ai-panel-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--vuln-text);
+}
+
+.vuln-ai-panel-body {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #4a5568;
+}
+
+.vuln-steps-list--detailed li {
+  margin-bottom: 0.65rem;
+  line-height: 1.5;
+}
+
+.vuln-verify-hints {
+  margin: 0 0 0.85rem 0;
+  padding-left: 1.2rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #4a5568;
+}
+
+.vuln-cmd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vuln-cmd-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vuln-cmd-pre {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+.vuln-patch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.vuln-patch-head .vuln-ai-panel-title {
+  margin: 0;
+}
+
+.vuln-code-patch--large {
+  max-height: min(40vh, 22rem);
+  font-size: 0.72rem;
+}
+
+.vuln-code-patch--full {
+  max-height: min(55vh, 32rem);
+  font-size: 0.7rem;
+}
+
+.vuln-expand-file-btn {
+  width: 100%;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--vuln-border);
+  background: var(--vuln-bg-page);
+  color: var(--vuln-text);
+  cursor: pointer;
+}
+
+.vuln-expand-file-btn:hover {
+  border-color: color-mix(in srgb, var(--vuln-accent) 40%, var(--vuln-border));
+}
+
+.vuln-raw-output {
+  margin: 0;
+  padding: 0.65rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  max-height: 12rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vuln-ai-refine {
+  padding-top: 1rem;
+  border-top: 1px solid var(--vuln-border);
+  margin-top: 0.5rem;
+}
+
+.vuln-ai-refine .vuln-btn-secondary {
+  margin-top: 0.25rem;
+}
+
+/* AI Section */
+.ai-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+
+.vuln-ai-input {
+  margin-bottom: 1.5rem;
+}
+
+.vuln-ai-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+}
+
+.vuln-code-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.vuln-code-input:focus {
+  outline: none;
+  border-color: var(--vuln-accent);
+}
+
+.vuln-ai-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.vuln-ai-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.vuln-ai-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #f7fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
+
+.vuln-ai-card-content {
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #4a5568;
+}
+
+.vuln-steps-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.vuln-steps-list li {
+  margin-bottom: 0.5rem;
+}
+
+.vuln-code-patch {
+  background: #1a202c;
+  color: #e2e8f0;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Chat Section */
+.vuln-chat-section {
+  margin-top: 1rem;
+}
+
+.vuln-chat-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.vuln-chat-header h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.vuln-chat-lead {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--vuln-text-muted);
+  max-width: 40rem;
+}
+
+.vuln-chat-messages {
+  max-height: 300px;
+  overflow-y: auto;
+  background: #f7fafc;
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.vuln-chat-message {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vuln-chat-message.user {
+  flex-direction: row-reverse;
+}
+
+.vuln-chat-avatar {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.vuln-chat-bubble {
+  max-width: 70%;
+  padding: 0.5rem 0.75rem;
+  background: white;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.vuln-chat-message.user .vuln-chat-bubble {
+  background: var(--vuln-accent);
+  color: white;
+}
+
+.vuln-chat-bubble.typing {
+  background: white;
+  color: #a0aec0;
+}
+
+.typing-dot {
+  animation: typing 1.4s infinite;
+  display: inline-block;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0s; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+.vuln-chat-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.vuln-chat-input textarea {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.vuln-chat-input textarea:focus {
+  outline: none;
+  border-color: var(--vuln-accent);
+}
+
+.vuln-chat-input button {
+  padding: 0 1rem;
+  background: var(--vuln-accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.vuln-chat-input button:hover:not(:disabled) {
+  background: var(--vuln-accent-dark);
+}
+
+.vuln-chat-input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading State */
+.vuln-modal-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.vuln-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--vuln-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .vuln-header-content {
+    flex-direction: column;
+    padding: 1.5rem;
+  }
+  
+  .vuln-title {
+    font-size: 1.75rem;
+  }
+  
+  .vuln-stats-grid {
+    grid-template-columns: 1fr;
+    padding: 0 1rem;
+  }
+  
+  .vuln-filters-panel {
+    padding: 0 1rem;
+  }
+
+  .vuln-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vuln-filters-right {
+    width: 100%;
+  }
+
+  .vuln-count-pill {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .vuln-filters-left {
+    flex-direction: column;
+  }
+  
+  .vuln-filter-group {
+    width: 100%;
+  }
+  
+  .vuln-table-container {
+    padding: 0 1rem;
+  }
+  
+  .vuln-table thead {
+    display: none;
+  }
+  
+  .vuln-table tbody tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+  
+  .vuln-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid #edf2f7;
+  }
+  
+  .vuln-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.7rem;
+    color: #718096;
+  }
+  
+  .vuln-modal-content {
+    width: 100%;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .vuln-container {
+    background: #1a202c;
+  }
+  
+  .vuln-stat-card,
+  .vuln-table-wrapper,
+  .vuln-modal-content {
+    background: #2d3748;
+  }
+  
+  .vuln-stat-card {
+    border-color: #4a5568;
+  }
+  
+  .vuln-stat-info h3,
+  .vuln-table-title h2 {
+    color: #e2e8f0;
+  }
+  
+  .vuln-tool-item,
+  .vuln-location-detail,
+  .vuln-description,
+  .vuln-ai-card-header {
+    background: #374151;
+  }
+  
+  .vuln-code-snippet,
+  .vuln-code-patch {
+    background: #1a202c;
+  }
+  
+  .vuln-chat-messages {
+    background: #374151;
+  }
+  
+  .vuln-chat-bubble {
+    background: #4a5568;
+    color: #e2e8f0;
+  }
+}

@@ -32,6 +32,8 @@ import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
 import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
+import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
+import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 
 @NgModule({
   declarations: [
@@ -70,6 +72,8 @@ import { ToastContainerComponent } from './toast-container/toast-container.compo
     HttpClientModule,
     ReactiveFormsModule,
     FormsModule,
+    VulnerabilitiesDashboardComponent,
+    VulnerabilityDetailsComponent
   ],
   providers: [],
   bootstrap: [AppComponent]

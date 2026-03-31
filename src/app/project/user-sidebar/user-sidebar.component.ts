@@ -12,6 +12,9 @@ import { EnvironmentService } from 'src/app/services/environment/environment.ser
   styleUrls: ['./user-sidebar.component.css']
 })
 export class UserSidebarComponent implements OnInit {
+  /** Dernier projet ouvert (URL /project/:id/...) — pour garder le contexte hors des routes projet. */
+  private static readonly LAST_PROJECT_APP_ID_KEY = 'envirotest-last-project-app-id';
+
   currentAppId: string | null = null;
   lastEnvId: string | null = null;
   currentApp: ApplicationResponse | null = null;
@@ -185,10 +188,20 @@ export class UserSidebarComponent implements OnInit {
       this.currentAppId = newId;
       this.currentApp = null;
       if (this.currentAppId) {
+        try {
+          localStorage.setItem(UserSidebarComponent.LAST_PROJECT_APP_ID_KEY, this.currentAppId);
+        } catch {
+          /* ignore */
+        }
         this.loadCurrentApp();
         this.loadPipelineCounts();
       }
     }
+  }
+
+  /** App courante (URL) ou dernière mémorisée pour les liens sidebar. */
+  private lastKnownApplicationId(): string | null {
+    return this.currentAppId || localStorage.getItem(UserSidebarComponent.LAST_PROJECT_APP_ID_KEY);
   }
 
   private loadCurrentApp(): void {
@@ -210,11 +223,59 @@ export class UserSidebarComponent implements OnInit {
     this.router.navigate([path]);
   }
 
-  goToProjectOverview(): void {
-    if (this.currentAppId) {
-      this.router.navigate(['/project', this.currentAppId, 'overview']);
+  /**
+   * Environnement à utiliser pour vulnérabilités / correctifs IA.
+   * Priorité : dernier env global (API latest) — cohérent avec les pages qui appellent getLatestEnvironment().
+   * Éviter de mettre en premier lastDeploymentEnvId : l’historique des déploiements peut référencer un env plus ancien
+   * que le « dernier environnement » réel.
+   */
+  private preferredSecurityEnvId(): string | null {
+    return (
+      this.lastEnvironmentId ||
+      this.lastPipelineEnvId ||
+      this.lastDeploymentEnvId
+    );
+  }
+
+  /** Même layout que le projet : /project/:appId/vulnerabilities */
+  navigateSecurityVulnerabilities(): void {
+    const appId = this.lastKnownApplicationId();
+    const envId = this.preferredSecurityEnvId();
+    const qp = envId ? { envId } : {};
+    if (appId) {
+      this.router.navigate(['/project', appId, 'vulnerabilities'], { queryParams: qp });
     } else {
-      this.navigate('/home');
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  navigateSecurityFixes(): void {
+    const appId = this.lastKnownApplicationId();
+    const envId = this.preferredSecurityEnvId();
+    const qp = envId ? { envId } : {};
+    if (appId) {
+      this.router.navigate(['/project', appId, 'security-fixes'], { queryParams: qp });
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isSecurityVulnerabilitiesRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/vulnerabilities(\/[^/]+)?$/.test(path);
+  }
+
+  isSecurityFixesRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/security-fixes$/.test(path);
+  }
+
+  goToProjectOverview(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'overview']);
+    } else {
+      this.router.navigate(['/my-applications']);
     }
   }
 
@@ -353,10 +414,11 @@ export class UserSidebarComponent implements OnInit {
 
   // Dans user-sidebar.component.ts
 goToActivity(): void {
-  if (this.currentAppId) {
-    this.router.navigate(['/project', this.currentAppId, 'activity']);
+  const appId = this.lastKnownApplicationId();
+  if (appId) {
+    this.router.navigate(['/project', appId, 'activity']);
   } else {
-    this.router.navigate(['/activity']);
+    this.router.navigate(['/my-applications']);
   }
 }
 

@@ -1,45 +1,84 @@
-<div class="ai-fixes-page">
-  <header class="ai-header">
-    <h1>Correctifs IA</h1>
-    <p>Suggestions automatiques pour corriger les vulnérabilités détectées.</p>
+<div class="sec-fixes-page">
+  <header class="sec-hero">
+    <div class="sec-hero-glow" aria-hidden="true"></div>
+    <div class="sec-hero-main">
+      <div class="sec-hero-text">
+        <span class="sec-badge">Supply chain</span>
+        <h1 class="sec-title">Correctifs IA</h1>
+        <p class="sec-sub">
+          Vulnérabilités <strong>SCA</strong> encore ouvertes pour l’environnement — suggestions issues du scanner
+          (versions corrigibles). Les actions ci‑dessous t’aident à copier une commande ou à mettre à jour le statut.
+        </p>
+        <p class="sec-links">
+          <button type="button" class="sec-text-link" (click)="goVulnerabilities()">
+            → Dashboard vulnérabilités complet
+          </button>
+        </p>
+      </div>
+      <div class="sec-hero-aside">
+        <span class="sec-chip" *ngIf="envId">
+          <span class="sec-chip-dot"></span>
+          env {{ envId | slice : 0 : 8 }}…
+        </span>
+      </div>
+    </div>
   </header>
 
-  <section class="ai-summary">
-    <div class="ai-card">
-      <h2>Vulnérabilités corrigeables</h2>
-      <p class="ai-card-value">{{ fixes.length }}</p>
-      <p class="ai-card-sub">correctifs proposés par l’IA</p>
-    </div>
-    <div class="ai-card">
-      <h2>Correctifs appliqués</h2>
-      <p class="ai-card-value">5</p>
-      <p class="ai-card-sub">déployés sur les projets récents</p>
-    </div>
-  </section>
+  <div class="sec-alert sec-alert-error" *ngIf="error" role="alert">{{ error }}</div>
+  <div class="sec-alert sec-alert-info" *ngIf="loading">Chargement…</div>
+  <div class="sec-alert sec-alert-success" *ngIf="feedback && !error">{{ feedback }}</div>
 
-  <section class="ai-fix-list">
-    <article class="ai-fix" *ngFor="let fix of fixes">
-      <header class="ai-fix-header">
-        <div>
-          <h3>{{ fix.cve }} – {{ fix.library }} {{ fix.versionRange }}</h3>
-          <p class="ai-fix-meta">
-            Scan #{{ fix.scanId }} · {{ fix.detectedAt }}
-          </p>
-        </div>
-        <span class="severity-badge" [ngClass]="fix.severity">{{ fix.severity }}</span>
-      </header>
-
-      <div class="ai-suggestion">
-        <h4>Suggestion IA</h4>
-        <p>{{ fix.suggestion }}</p>
-      </div>
-
-      <div class="ai-actions">
-        <button type="button" class="btn-primary">🔧 Appliquer le fix</button>
-        <button type="button" class="btn-secondary">Ignorer</button>
-        <button type="button" class="btn-secondary">Marquer traité</button>
-      </div>
+  <section class="sec-summary" *ngIf="!loading && stats">
+    <article class="sec-metric" style="--i: 0">
+      <span class="sec-metric-label">Corrigeables (ouvertes)</span>
+      <span class="sec-metric-value">{{ fixes.length }}</span>
+      <span class="sec-metric-hint">SCA dans la liste</span>
+    </article>
+    <article class="sec-metric" style="--i: 1">
+      <span class="sec-metric-label">Marquées corrigées</span>
+      <span class="sec-metric-value accent">{{ stats.fixedScaCount }}</span>
+      <span class="sec-metric-hint">{{ stats.ignoredScaCount }} ignorées</span>
     </article>
   </section>
-</div>
 
+  <section class="sec-fix-list" *ngIf="!loading && !error">
+    <article class="sec-fix-card" *ngFor="let f of fixes; let idx = index" [style.--i]="idx">
+      <header class="sec-fix-head">
+        <div class="sec-fix-titles">
+          <h2>{{ displayTitle(f) }}</h2>
+          <p class="sec-fix-meta">
+            {{ f.toolName }} · {{ f.scanType }}
+            <span *ngIf="f.updatedAt"> · {{ f.updatedAt | date : 'short' }}</span>
+          </p>
+        </div>
+        <span [ngClass]="severityClass(f.severity)">{{ f.severity }}</span>
+      </header>
+
+      <div class="sec-suggestion">
+        <h3>Suggestion (scanner)</h3>
+        <p>{{ suggestionText(f) }}</p>
+      </div>
+
+      <p class="sec-cmd" *ngIf="installHint(f) as cmd"><code>{{ cmd }}</code></p>
+
+      <footer class="sec-fix-actions">
+        <button type="button" class="sec-btn sec-btn-primary" (click)="applyFix(f)" [disabled]="actionId === f.id">
+          Copier / appliquer
+        </button>
+        <button type="button" class="sec-btn sec-btn-ghost" (click)="markIgnored(f)" [disabled]="actionId === f.id">
+          Ignorer
+        </button>
+        <button type="button" class="sec-btn sec-btn-ghost" (click)="markFixed(f)" [disabled]="actionId === f.id">
+          Marquer traité
+        </button>
+      </footer>
+    </article>
+
+    <div class="sec-empty" *ngIf="fixes.length === 0 && !loading">
+      <p>Aucune vulnérabilité SCA ouverte pour cet environnement.</p>
+      <button type="button" class="sec-btn sec-btn-primary" (click)="goVulnerabilities()">
+        Voir ingestions &amp; liste
+      </button>
+    </div>
+  </section>
+</div>
