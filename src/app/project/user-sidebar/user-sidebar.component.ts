@@ -249,25 +249,9 @@ export class UserSidebarComponent implements OnInit {
     }
   }
 
-  navigateSecurityFixes(): void {
-    const appId = this.lastKnownApplicationId();
-    const envId = this.preferredSecurityEnvId();
-    const qp = envId ? { envId } : {};
-    if (appId) {
-      this.router.navigate(['/project', appId, 'security-fixes'], { queryParams: qp });
-    } else {
-      this.router.navigate(['/my-applications']);
-    }
-  }
-
   isSecurityVulnerabilitiesRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
     return /\/project\/[^/]+\/vulnerabilities(\/[^/]+)?$/.test(path);
-  }
-
-  isSecurityFixesRoute(): boolean {
-    const path = this.router.url.split(/[?#]/)[0];
-    return /\/project\/[^/]+\/security-fixes$/.test(path);
   }
 
   goToProjectOverview(): void {

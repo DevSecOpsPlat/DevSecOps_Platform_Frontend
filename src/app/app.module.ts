@@ -23,7 +23,6 @@ import { ApprovalWaitingMessageComponent } from './User/approval-waiting-message
 import { AdminSidebarComponent } from './admin/admin-sidebar/admin-sidebar.component';
 import { UserSidebarComponent } from './project/user-sidebar/user-sidebar.component';
 import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
-import { SecurityAiFixesComponent } from './project/security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
@@ -60,7 +59,6 @@ import { VulnerabilityDetailsComponent } from './project/vulnerability-details/v
     DeploySuccessModalComponent,
     UserSidebarComponent,
     ApplicationsActiveComponent,
-    SecurityAiFixesComponent,
     EnvironmentDetailsComponent,
     TimeAgoPipe,
     RecentActivityComponent,

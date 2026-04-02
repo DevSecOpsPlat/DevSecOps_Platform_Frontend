@@ -17,7 +17,6 @@ import { ProjectDeploymentsComponent } from './project/deployments/project-deplo
 import { ProjectLogsComponent } from './project/logs/project-logs.component';
 import { ProjectSecurityComponent } from './project/security/project-security.component';
 import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
-import { SecurityAiFixesComponent } from './project/security-ai-fixes/security-ai-fixes.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
@@ -50,8 +49,7 @@ const routes: Routes = [
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
       { path: 'vulnerabilities/:findingId', component: VulnerabilityDetailsComponent },
-      { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent },
-      { path: 'security-fixes', component: SecurityAiFixesComponent }
+      { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent }
     ]
   },
 

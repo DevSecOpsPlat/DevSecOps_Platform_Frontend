@@ -10,7 +10,12 @@
         </div>
         <h1 class="vuln-title">Centre de Sécurité</h1>
         <p class="vuln-subtitle">
-          Analyse centralisée des vulnérabilités, recommandations IA et suivi des correctifs
+          Analyse centralisée des vulnérabilités, recommandations IA et suivi des correctifs.
+         
+        </p>
+        <p class="vuln-subtitle vuln-subtitle--meta" *ngIf="pipelineStatusLabel">
+          Pipeline de cet environnement : <strong>{{ pipelineStatusLabel }}</strong>
+          <span *ngIf="pipelineInProgress || aggregateReportPending"> — scan en cours</span>
         </p>
       </div>
       <div class="vuln-header-right">
@@ -30,7 +35,12 @@
             </svg>
             Actualiser
           </button>
-          <button class="vuln-btn vuln-btn-primary" (click)="ingestNow()" [disabled]="ingesting">
+          <button
+            class="vuln-btn vuln-btn-primary"
+            (click)="ingestNow()"
+            [disabled]="ingesting || ingestBlocked"
+            [attr.title]="ingestBlockedReason || null"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 9l5 5 5-5M12 4v10"/>
             </svg>
@@ -44,6 +54,39 @@
 
   <!-- Messages de statut -->
   <div class="vuln-messages">
+    <div *ngIf="showPipelineWaitBanner" class="vuln-alert vuln-alert-warning">
+      <span class="vuln-alert-icon">⏳</span>
+      <div class="vuln-alert-body">
+        <strong>Scan GitLab en cours </strong>
+        Le tableau et les cartes affichent les vulnérabilités <strong>déjà enregistrées en base</strong> pour ce projet
+        (y compris un run précédent), pour que vous puissiez continuer à les consulter.
+        Les résultats du <em>nouveau</em> pipeline n’apparaîtront ici qu’après fin du job <code>aggregate-report</code>
+        (succès) puis <strong>Importer les données</strong>.
+        Tant que ce n’est pas fait, voyez encore l’ancien import : c’est voulu.
+      </div>
+    </div>
+    <div class="vuln-alert vuln-alert-info" *ngIf="!showPipelineWaitBanner && viewScope === 'project'">
+      <span class="vuln-alert-icon">ℹ️</span>
+      <div class="vuln-alert-body">
+        <strong>Vue « tout le projet » :</strong> ce tableau agrège les findings déjà importés pour l’application (selon les filtres).
+        Vous pouvez encore voir d’anciennes localisations tant que le dernier rapport n’a pas été importé.
+      </div>
+    </div>
+    <div class="vuln-alert vuln-alert-info" *ngIf="!showPipelineWaitBanner && viewScope === 'latest_pipeline' && activeGitlabPipelineId != null">
+      <span class="vuln-alert-icon">ℹ️</span>
+      <div class="vuln-alert-body">
+        <strong>Vue « dernier pipeline » :</strong> la liste correspond au snapshot en base pour le pipeline GitLab
+        <strong>#{{ activeGitlabPipelineId }}</strong>. Après correctif dans le dépôt, relancez le pipeline puis
+        <strong>Importer les données</strong> pour mettre à jour ce snapshot. Les entrées « corrigées » ci-dessous comparent avec le run précédent.
+      </div>
+    </div>
+    <div class="vuln-alert vuln-alert-warning" *ngIf="showLatestPipelineMissingState">
+      <span class="vuln-alert-icon">⚠️</span>
+      <div class="vuln-alert-body">
+        Aucun identifiant de pipeline GitLab n’est associé à cet environnement. Passez à la portée
+        <strong>tout le projet</strong>, ou vérifiez la configuration de l’environnement / du dernier run.
+      </div>
+    </div>
     <div *ngIf="error" class="vuln-alert vuln-alert-error">
       <span class="vuln-alert-icon">⚠️</span>
       <span>{{ error }}</span>
@@ -54,7 +97,7 @@
     </div>
   </div>
 
-  <!-- Cartes statistiques -->
+  <!-- Cartes statistiques (périmètre projet = même base que le tableau, filtres statut uniquement) -->
   <div class="vuln-stats-grid">
     <!-- Carte Sévérités -->
     <div class="vuln-stat-card">
@@ -62,7 +105,7 @@
         <div class="vuln-stat-icon critical">⚠️</div>
         <div class="vuln-stat-info">
           <h3>Répartition par sévérité</h3>
-          <p class="vuln-stat-total">{{ totalElements }} vulnérabilités</p>
+          <p class="vuln-stat-total">{{ chartTotalCount }} vulnérabilité(s) — {{ statsScopeFootnote }}</p>
         </div>
       </div>
       <div class="vuln-stat-content">
@@ -76,7 +119,7 @@
             </div>
             <div class="vuln-severity-bar">
               <div class="vuln-severity-progress" 
-                   [style.width.%]="(item.value / totalElements * 100)" 
+                   [style.width.%]="chartTotalCount ? (item.value / chartTotalCount * 100) : 0" 
                    [class]="'progress-' + item.key.toLowerCase()">
               </div>
             </div>
@@ -129,21 +172,21 @@
         <div class="vuln-stat-icon trend">📈</div>
         <div class="vuln-stat-info">
           <h3>Évolution</h3>
-          <p class="vuln-stat-total">Dernier pipeline vs précédent</p>
+          <p class="vuln-stat-total">Application — dernier pipeline importé vs précédent</p>
         </div>
       </div>
       <div class="vuln-stat-content">
         <div class="vuln-trend-stats">
-          <div class="vuln-trend-item">
+          <button type="button" class="vuln-trend-item" (click)="onTrendClick('NEW')" [disabled]="loading">
             <span class="vuln-trend-label">Nouvelles</span>
             <span class="vuln-trend-value new">{{ trends?.newCount || 0 }}</span>
             <span class="vuln-trend-badge" *ngIf="(trends?.newCount ?? 0) > 0">+{{ trends?.newCount }}</span>
-          </div>
-          <div class="vuln-trend-item">
+          </button>
+          <button type="button" class="vuln-trend-item" (click)="onTrendClick('FIXED')" [disabled]="loading || (trends?.fixedCount ?? 0) === 0">
             <span class="vuln-trend-label">Corrigées</span>
             <span class="vuln-trend-value fixed">{{ trends?.fixedCount || 0 }}</span>
             <span class="vuln-trend-badge success" *ngIf="(trends?.fixedCount ?? 0) > 0">✓{{ trends?.fixedCount }}</span>
-          </div>
+          </button>
         </div>
       </div>
     </div>
@@ -153,10 +196,30 @@
   <div class="vuln-filters-panel">
     <div class="vuln-filters-head">
       <span class="vuln-filters-title">Filtrer la liste</span>
-      <span class="vuln-filters-hint">Les outils listés proviennent des statistiques de l’environnement (tous les scans).</span>
+      <span class="vuln-filters-hint">
+        <ng-container *ngIf="viewScope === 'latest_pipeline' && activeGitlabPipelineId != null">
+          Les cartes ci-dessus suivent le <strong>pipeline #{{ activeGitlabPipelineId }}</strong> (import en base), comme le tableau.
+        </ng-container>
+        <ng-container *ngIf="viewScope === 'project'">
+          Les cartes ci-dessus = agrégats pour <strong>toute l’application</strong> (imports en base), comme le tableau.
+        </ng-container>
+        <ng-container *ngIf="viewScope === 'latest_pipeline' && activeGitlabPipelineId == null">
+          Sélectionnez un environnement avec pipeline connu, ou passez en vue <strong>tout le projet</strong>.
+        </ng-container>
+        Filtres ci-dessous : tableau (+ cartes alignées sur la même portée).
+      </span>
     </div>
     <div class="vuln-filters-bar">
       <div class="vuln-filters-left">
+        <div class="vuln-filter-group">
+          <label class="vuln-filter-label">État (comparaison)</label>
+          <div class="vuln-input-wrap">
+            <select class="vuln-select" [(ngModel)]="filterStatus" (ngModelChange)="onListFiltersChanged()">
+              <option value="">Tout</option>
+              <option value="NEW">Nouvelles</option>
+            </select>
+          </div>
+        </div>
         <div class="vuln-filter-group">
           <label class="vuln-filter-label">Sévérité</label>
           <div class="vuln-input-wrap">
@@ -167,6 +230,15 @@
               <option value="MEDIUM">Moyenne</option>
               <option value="LOW">Faible</option>
               <option value="INFO">Info</option>
+            </select>
+          </div>
+        </div>
+        <div class="vuln-filter-group">
+          <label class="vuln-filter-label">Type</label>
+          <div class="vuln-input-wrap">
+            <select class="vuln-select" [(ngModel)]="filterScanType" (ngModelChange)="onListFiltersChanged()">
+              <option value="">{{ scanTypeFilterOptions.length ? 'Tous (' + scanTypeFilterOptions.length + ')' : 'Tous' }}</option>
+              <option *ngFor="let t of scanTypeFilterOptions" [value]="t">{{ t }}</option>
             </select>
           </div>
         </div>
@@ -200,23 +272,57 @@
         <div class="vuln-count-pill">
           <span class="vuln-count-strong">{{ displayedFindings.length }}</span>
           <span class="vuln-count-sep">/</span>
-          <span>{{ totalElements }}</span>
+      <span>{{ displayedTotalElements }}</span>
           <span class="vuln-count-label">affichées sur la page</span>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Corrigées vs run précédent (même application / tendances env) -->
+  <div id="fixed-panel" class="vuln-fixed-panel" *ngIf="showFixedPanel && viewScope === 'latest_pipeline' && (trends?.fixedCount ?? 0) > 0">
+    <div class="vuln-fixed-panel-head">
+      <h3 class="vuln-fixed-title">Corrigées depuis le pipeline précédent</h3>
+      <div class="vuln-fixed-head-actions">
+        <span class="vuln-fixed-count" *ngIf="trends">{{ trends.fixedCount }} fingerprint(s)</span>
+        <button type="button" class="vuln-fixed-close" (click)="closeFixedPanel()" aria-label="Fermer">✕</button>
+      </div>
+    </div>
+    <p class="vuln-fixed-intro" *ngIf="trends?.previousPipelineId != null">
+      Comparé au pipeline GitLab <strong>#{{ trends?.previousPipelineId }}</strong>
+      <span *ngIf="trends?.lastPipelineId != null">
+        → actuellement affiché : <strong>#{{ trends?.lastPipelineId }}</strong>
+      </span>.
+    </p>
+    <ul class="vuln-fixed-list" *ngIf="fixedFromPreviousRun.length > 0">
+      <li *ngFor="let f of fixedFromPreviousRun" class="vuln-fixed-item">
+        <span class="vuln-fixed-sev" [class]="'severity-' + (f.severity || 'info').toLowerCase()">{{ f.severity }}</span>
+        <span class="vuln-fixed-body">
+          <span class="vuln-fixed-label">{{ f.title || f.ruleId || 'Finding' }}</span>
+          <span class="vuln-fixed-loc" *ngIf="f.filePath || f.lineStart">
+            {{ f.filePath || f.packageName || '—' }}<span *ngIf="f.lineStart"> :{{ f.lineStart }}</span>
+          </span>
+        </span>
+        <span class="vuln-fixed-tool">{{ f.toolName }}</span>
+        <button type="button" class="vuln-detail-btn vuln-detail-btn--compact" (click)="openDetail(f)">Détails</button>
+      </li>
+    </ul>
+    <p class="vuln-fixed-loading" *ngIf="fixedFromPreviousRun.length === 0 && (trends?.fixedFingerprints?.length ?? 0) > 0">
+      Chargement du détail des entrées corrigées…
+    </p>
+  </div>
+
   <!-- Tableau des vulnérabilités -->
-  <div class="vuln-table-container">
+  <div id="vuln-table" class="vuln-table-container">
     <div class="vuln-table-header">
       <div class="vuln-table-title">
         <h2>Liste des vulnérabilités</h2>
+        <span class="vuln-table-scope-chip" *ngIf="filterStatus === 'NEW'">Nouvelles</span>
       </div>
       <div class="vuln-table-pagination">
-        <button class="vuln-page-btn" (click)="prevPage()" [disabled]="page <= 0">←</button>
+        <button class="vuln-page-btn" (click)="prevPage()" [disabled]="disablePagination || page <= 0">←</button>
         <span class="vuln-page-current">{{ page + 1 }}</span>
-        <button class="vuln-page-btn" (click)="nextPage()" [disabled]="(page + 1) * size >= totalElements">→</button>
+        <button class="vuln-page-btn" (click)="nextPage()" [disabled]="disablePagination || (page + 1) * size >= totalElements">→</button>
       </div>
     </div>
 
@@ -275,11 +381,11 @@
               </button>
             </td>
           </tr>
-          <tr *ngIf="!loading && findings.length === 0">
+          <tr *ngIf="showEmptyFindingsTable">
             <td colspan="6" class="vuln-empty-state">
               <div class="vuln-empty-icon">🔍</div>
-              <p>Aucune vulnérabilité trouvée</p>
-              <button class="vuln-btn-primary" (click)="ingestNow()">Importer les données</button>
+              <p>Aucune vulnérabilité trouvée pour cette portée</p>
+              <button class="vuln-btn-primary" (click)="ingestNow()" [disabled]="ingestBlocked">Importer les données</button>
             </td>
           </tr>
           <tr *ngIf="!loading && findings.length > 0 && displayedFindings.length === 0">

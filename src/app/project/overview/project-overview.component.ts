@@ -17,6 +17,7 @@ import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { FormatService } from 'src/app/models/environment/format.service';
 import { SecurityService } from 'src/app/services/security/security.service';
+import { FindingsService } from 'src/app/services/findings/findings.service';
 
 export interface ChartSegment {
   label: string;
@@ -51,6 +52,12 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   recentPipelines: DashboardPipelineItem[] = [];
   activeEnvironments: DashboardEnvironmentItem[] = [];
   recentVulnerabilities: DashboardVulnerabilityItem[] = [];
+  /** Comptages OPEN distincts par sévérité (tous envs de cette application). */
+  vulnerabilityStatsBySeverity: Record<string, number> = {};
+  /** Total findings OPEN distincts (aligné avec le dashboard vulnérabilités). */
+  totalOpenVulnerabilities = 0;
+  /** OPEN crit + high (sous-indicateur). */
+  highCriticalVulnerabilityCount = 0;
 
   loadingPipelineDetails: boolean = false;
   
@@ -58,7 +65,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   totalDeployments: number = 0;
   successfulDeployments: number = 0;
   failedDeployments: number = 0;
-  criticalVulnerabilities: number = 0;
   
   // États
   loading = true;
@@ -80,6 +86,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     private environmentService: EnvironmentService,
     private pipelineService: PipelineService,
     private securityService: SecurityService,
+    private findingsService: FindingsService,
     private format: FormatService
   ) {}
 
@@ -126,10 +133,16 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           return of([]);
         })
       ),
-      vulnerabilities: this.securityService.getRecentVulnerabilities(5).pipe(
+      vulnerabilities: this.securityService.getRecentVulnerabilities(5, this.appId).pipe(
         catchError(err => {
           console.error('Erreur chargement vulnérabilités:', err);
           return of([]);
+        })
+      ),
+      findingStats: this.findingsService.getStatsByApplication(this.appId, 'OPEN').pipe(
+        catchError(err => {
+          console.error('Erreur chargement stats findings:', err);
+          return of(null);
         })
       )
     }).subscribe({
@@ -153,9 +166,15 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           }));
         
         this.recentVulnerabilities = quickData.vulnerabilities || [];
-        this.criticalVulnerabilities = this.recentVulnerabilities.filter(v => 
-          v.severity === 'CRITICAL' || v.severity === 'HIGH'
-        ).length;
+
+        const fs = quickData.findingStats;
+        this.vulnerabilityStatsBySeverity = fs?.bySeverity ? { ...fs.bySeverity } : {};
+        this.totalOpenVulnerabilities =
+          fs?.openDistinctTotal ??
+          Object.values(this.vulnerabilityStatsBySeverity).reduce((s, n) => s + (n || 0), 0);
+        this.highCriticalVulnerabilityCount =
+          (this.vulnerabilityStatsBySeverity['CRITICAL'] ?? 0) +
+          (this.vulnerabilityStatsBySeverity['HIGH'] ?? 0);
         
         // 2. Ensuite charger les données plus lentes
         this.loadDeploymentsAndPipelines();
@@ -384,12 +403,18 @@ getActivityTimeAgo(activity: ActivityItem): string {
    * Données pour le graphique des vulnérabilités par sévérité
    */
   private buildVulnerabilityChartData(): ChartSegment[] {
-    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
-    this.recentVulnerabilities.forEach(v => {
-      const s = (v.severity || 'INFO').toUpperCase();
-      if (counts.hasOwnProperty(s)) (counts as any)[s]++;
-    });
-    const total = this.recentVulnerabilities.length || 1;
+    const counts: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+    const src = this.vulnerabilityStatsBySeverity || {};
+    for (const key of Object.keys(src)) {
+      const k = key.toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(counts, k)) {
+        counts[k] = src[key] ?? 0;
+      }
+    }
+    const total =
+      this.totalOpenVulnerabilities ||
+      Object.values(counts).reduce((s, n) => s + n, 0) ||
+      1;
     const colors: Record<string, string> = {
       CRITICAL: '#dc2626',
       HIGH: '#ea580c',
@@ -655,11 +680,15 @@ get stats() {
       iconBg: 'rgba(239, 68, 68, 0.2)'
     },
     { 
-      label: 'Vulnérabilités', 
-      value: this.criticalVulnerabilities, 
+      label: 'Vulnérabilités (ouvertes)', 
+      value: this.totalOpenVulnerabilities, 
       icon: '🛡️', 
       color: '#8b5cf6',
-      iconBg: 'rgba(139, 92, 246, 0.2)'
+      iconBg: 'rgba(139, 92, 246, 0.2)',
+      trend:
+        this.highCriticalVulnerabilityCount > 0
+          ? `Crit./Élevées: ${this.highCriticalVulnerabilityCount}`
+          : undefined
     }
   ];
 }
@@ -841,9 +870,14 @@ getDeploymentTimeAgo(deployment: DeploymentHistoryItem): string {
     this.router.navigate(['/project', this.appId, 'deployments']);
   }
 
+  /** Centre de sécurité (liste complète) : route projet, pas /security/vulnerabilities (redirect). */
   viewAllVulnerabilities(): void {
-    this.router.navigate(['/security/vulnerabilities'], {
-      queryParams: { appId: this.appId }
+    if (!this.appId) return;
+    const envId =
+      this.latestDeployment?.environmentId ||
+      (this.activeEnvironments.length ? this.activeEnvironments[0].id : undefined);
+    this.router.navigate(['/project', this.appId, 'vulnerabilities'], {
+      queryParams: envId ? { envId } : {}
     });
   }
 
