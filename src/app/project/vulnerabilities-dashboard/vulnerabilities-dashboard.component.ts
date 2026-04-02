@@ -16,6 +16,7 @@ import {
 import { UserService } from 'src/app/services/user/user.service';
 import { PipelineService } from 'src/app/services/pipeline/pipeline.service';
 import { PipelineScanResponse } from 'src/app/models/pipeline/pipeline-scan-response';
+import { VulnerabilityReportsService } from 'src/app/services/reports/vulnerability-reports.service';
 
 @Component({
   selector: 'app-vulnerabilities-dashboard',
@@ -82,13 +83,26 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
   ingestBlocked = false;
   ingestBlockedReason: string | null = null;
 
+  // --- Report export (PDF) ---
+  showReportModal = false;
+  reportIncludeCharts = true;
+  reportIncludeAiSummary = false;
+  reportIncludeFixed = true;
+  reportIncludeDetailsTable = true;
+  reportTools: string[] = [];
+  reportSeverities: string[] = [];
+  reportScanTypes: string[] = [];
+  reportExporting = false;
+  reportError: string | null = null;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private environmentService: EnvironmentService,
     private findingsService: FindingsService,
     private userService: UserService,
-    private pipelineService: PipelineService
+    private pipelineService: PipelineService,
+    private reportsService: VulnerabilityReportsService
   ) {}
 
   ngOnInit(): void {
@@ -463,6 +477,83 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
     this.showFixedPanel = false;
     this.page = 0;
     if (this.envId) this.reload();
+  }
+
+  openReportModal(): void {
+    this.reportError = null;
+    this.showReportModal = true;
+    // Pre-fill with current UI filters for convenience
+    this.reportTools = this.filterTool ? [this.filterTool] : [];
+    this.reportSeverities = this.filterSeverity ? [this.filterSeverity] : [];
+    this.reportScanTypes = this.filterScanType ? [this.filterScanType] : [];
+  }
+
+  closeReportModal(): void {
+    if (this.reportExporting) return;
+    this.showReportModal = false;
+  }
+
+  toggleReportValue(kind: 'tool' | 'severity' | 'scanType', value: string): void {
+    const v = (value || '').trim();
+    if (!v) return;
+    const arr = kind === 'tool' ? this.reportTools : kind === 'severity' ? this.reportSeverities : this.reportScanTypes;
+    const idx = arr.indexOf(v);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(v);
+  }
+
+  isReportSelected(kind: 'tool' | 'severity' | 'scanType', value: string): boolean {
+    const v = (value || '').trim();
+    if (!v) return false;
+    const arr = kind === 'tool' ? this.reportTools : kind === 'severity' ? this.reportSeverities : this.reportScanTypes;
+    return arr.includes(v);
+  }
+
+  exportReportPdf(): void {
+    if (!this.appId) {
+      this.reportError = 'Application introuvable.';
+      return;
+    }
+    const scope = this.viewScope === 'project' ? 'PROJECT' : 'LATEST_PIPELINE';
+    const pipelineId = scope === 'LATEST_PIPELINE' ? this.activeGitlabPipelineId : null;
+    if (scope === 'LATEST_PIPELINE' && pipelineId == null) {
+      this.reportError = "Pipeline id introuvable pour générer le rapport (dernier pipeline).";
+      return;
+    }
+
+    this.reportExporting = true;
+    this.reportError = null;
+
+    this.reportsService
+      .generateAndDownload({
+        applicationId: this.appId,
+        environmentId: this.envId,
+        scope,
+        gitlabPipelineId: pipelineId,
+        tools: this.reportTools.length ? [...this.reportTools] : undefined,
+        severities: this.reportSeverities.length ? [...this.reportSeverities] : undefined,
+        scanTypes: this.reportScanTypes.length ? [...this.reportScanTypes] : undefined,
+        includeCharts: this.reportIncludeCharts,
+        includeFixed: this.reportIncludeFixed,
+        includeDetailsTable: this.reportIncludeDetailsTable,
+        includeAiSummary: this.reportIncludeAiSummary
+      })
+      .pipe(finalize(() => (this.reportExporting = false)))
+      .subscribe({
+        next: ({ fileName, blob }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName || 'vulnerability-report.pdf';
+          a.click();
+          window.URL.revokeObjectURL(url);
+          this.showReportModal = false;
+        },
+        error: err => {
+          const msg = err?.error?.message || err?.message;
+          this.reportError = msg ? String(msg) : 'Erreur export PDF.';
+        }
+      });
   }
 
   hasActiveFilters(): boolean {

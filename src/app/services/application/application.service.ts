@@ -31,11 +31,15 @@ export class ApplicationService {
   }
 
   getMyApplications(): Observable<ApplicationResponse[]> {
-    return this.http.get<ApplicationResponse[]>(BASE + 'api/applications', { headers: this.authHeaders() });
+    return this.http.get<any[]>(BASE + 'api/applications', { headers: this.authHeaders() }).pipe(
+      map(items => (items ?? []).map(x => this.convertApplication(x)))
+    );
   }
 
   getApplicationById(id: string): Observable<ApplicationResponse> {
-    return this.http.get<ApplicationResponse>(BASE + `api/applications/${id}`, { headers: this.authHeaders() });
+    return this.http.get<any>(BASE + `api/applications/${id}`, { headers: this.authHeaders() }).pipe(
+      map(x => this.convertApplication(x))
+    );
   }
 
   /**
@@ -160,5 +164,18 @@ export class ApplicationService {
     return new Date().toISOString();
   }
 
+  private convertApplication(item: any): ApplicationResponse {
+    return {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      gitRepositoryUrl: item.gitRepositoryUrl,
+      dockerfilePath: item.dockerfilePath,
+      createdAt: this.convertDateArray(item.createdAt),
+      createdByUsername: item.createdByUsername,
+      hasGithubToken: !!item.hasGithubToken
+    };
+  }
+  
   
 }

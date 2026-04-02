@@ -15,6 +15,138 @@
   box-sizing: border-box;
 }
 
+.vuln-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 80;
+}
+
+.vuln-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 90;
+  padding: 1rem;
+}
+
+.vuln-modal-card {
+  width: min(980px, 100%);
+  background: var(--vuln-surface);
+  border-radius: 14px;
+  border: 1px solid var(--vuln-border);
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.22);
+  padding: 1rem 1.1rem 1.1rem;
+  animation: vulnFixedIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vuln-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.vuln-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--vuln-text);
+}
+
+.vuln-modal-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--vuln-text-muted);
+}
+
+.vuln-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.vuln-modal-block {
+  background: var(--vuln-bg-page);
+  border: 1px solid var(--vuln-border);
+  border-radius: 12px;
+  padding: 0.85rem;
+}
+
+.vuln-modal-h {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--vuln-text);
+  text-transform: uppercase;
+}
+
+.vuln-check {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--vuln-text);
+  margin: 0.4rem 0;
+}
+
+.vuln-check input {
+  width: 16px;
+  height: 16px;
+}
+
+.vuln-modal-filter + .vuln-modal-filter {
+  margin-top: 0.75rem;
+}
+
+.vuln-modal-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--vuln-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.vuln-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vuln-pill {
+  border: 1px solid var(--vuln-border);
+  background: var(--vuln-surface);
+  color: var(--vuln-text);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.vuln-pill.active {
+  border-color: color-mix(in srgb, var(--vuln-accent) 45%, var(--vuln-border));
+  background: color-mix(in srgb, var(--vuln-accent) 10%, var(--vuln-surface));
+  color: var(--vuln-accent-dark);
+}
+
+.vuln-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+@media (max-width: 860px) {
+  .vuln-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .vuln-container {
   width: 100%;
   max-width: 100%;

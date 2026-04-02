@@ -35,6 +35,15 @@
             </svg>
             Actualiser
           </button>
+          <button class="vuln-btn vuln-btn-secondary" (click)="openReportModal()" [disabled]="loading || !appId">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M8 13h8"/>
+              <path d="M8 17h8"/>
+            </svg>
+            Exporter PDF
+          </button>
           <button
             class="vuln-btn vuln-btn-primary"
             (click)="ingestNow()"
@@ -94,6 +103,100 @@
     <div *ngIf="ingestResult && !error" class="vuln-alert vuln-alert-success">
       <span class="vuln-alert-icon">✅</span>
       <span>Import réussi : {{ ingestResult.createdFindings }} vulnérabilités trouvées</span>
+    </div>
+  </div>
+
+  <!-- Modal export PDF -->
+  <div class="vuln-modal-backdrop" *ngIf="showReportModal" (click)="closeReportModal()"></div>
+  <div class="vuln-modal" *ngIf="showReportModal" role="dialog" aria-modal="true">
+    <div class="vuln-modal-card" (click)="$event.stopPropagation()">
+      <div class="vuln-modal-head">
+        <div>
+          <h3 class="vuln-modal-title">Exporter un rapport PDF</h3>
+          <p class="vuln-modal-sub">
+            Scope : <strong>{{ viewScope === 'project' ? 'Tout le projet' : ('Dernier pipeline #' + (activeGitlabPipelineId ?? '—')) }}</strong>
+          </p>
+        </div>
+        <button type="button" class="vuln-fixed-close" (click)="closeReportModal()" [disabled]="reportExporting" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="vuln-alert vuln-alert-error" *ngIf="reportError">{{ reportError }}</div>
+
+      <div class="vuln-modal-grid">
+        <div class="vuln-modal-block">
+          <h4 class="vuln-modal-h">Options</h4>
+          <label class="vuln-check">
+            <input type="checkbox" [(ngModel)]="reportIncludeCharts" />
+            <span>Inclure charts + score</span>
+          </label>
+          <label class="vuln-check">
+            <input type="checkbox" [(ngModel)]="reportIncludeFixed" />
+            <span>Inclure corrigées (vs pipeline précédent)</span>
+          </label>
+          <label class="vuln-check">
+            <input type="checkbox" [(ngModel)]="reportIncludeDetailsTable" />
+            <span>Inclure tableau détaillé (MVP)</span>
+          </label>
+          <label class="vuln-check">
+            <input type="checkbox" [(ngModel)]="reportIncludeAiSummary" />
+            <span>Inclure résumé IA (Executive summary)</span>
+          </label>
+        </div>
+
+        <div class="vuln-modal-block">
+          <h4 class="vuln-modal-h">Filtres</h4>
+
+          <div class="vuln-modal-filter">
+            <div class="vuln-modal-label">Sévérités</div>
+            <div class="vuln-pill-row">
+              <button type="button" class="vuln-pill" [class.active]="isReportSelected('severity','CRITICAL')" (click)="toggleReportValue('severity','CRITICAL')">CRITICAL</button>
+              <button type="button" class="vuln-pill" [class.active]="isReportSelected('severity','HIGH')" (click)="toggleReportValue('severity','HIGH')">HIGH</button>
+              <button type="button" class="vuln-pill" [class.active]="isReportSelected('severity','MEDIUM')" (click)="toggleReportValue('severity','MEDIUM')">MEDIUM</button>
+              <button type="button" class="vuln-pill" [class.active]="isReportSelected('severity','LOW')" (click)="toggleReportValue('severity','LOW')">LOW</button>
+              <button type="button" class="vuln-pill" [class.active]="isReportSelected('severity','INFO')" (click)="toggleReportValue('severity','INFO')">INFO</button>
+            </div>
+          </div>
+
+          <div class="vuln-modal-filter">
+            <div class="vuln-modal-label">Outils</div>
+            <div class="vuln-pill-row">
+              <button
+                type="button"
+                class="vuln-pill"
+                *ngFor="let t of toolFilterOptions"
+                [class.active]="isReportSelected('tool', t)"
+                (click)="toggleReportValue('tool', t)"
+              >
+                {{ t }}
+              </button>
+              <span *ngIf="toolFilterOptions.length === 0" class="vuln-muted-small">—</span>
+            </div>
+          </div>
+
+          <div class="vuln-modal-filter">
+            <div class="vuln-modal-label">Types</div>
+            <div class="vuln-pill-row">
+              <button
+                type="button"
+                class="vuln-pill"
+                *ngFor="let st of scanTypeFilterOptions"
+                [class.active]="isReportSelected('scanType', st)"
+                (click)="toggleReportValue('scanType', st)"
+              >
+                {{ st }}
+              </button>
+              <span *ngIf="scanTypeFilterOptions.length === 0" class="vuln-muted-small">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vuln-modal-actions">
+        <button type="button" class="vuln-btn vuln-btn-secondary" (click)="closeReportModal()" [disabled]="reportExporting">Annuler</button>
+        <button type="button" class="vuln-btn vuln-btn-primary" (click)="exportReportPdf()" [disabled]="reportExporting">
+          {{ reportExporting ? 'Génération...' : 'Générer & télécharger' }}
+        </button>
+      </div>
     </div>
   </div>
 
