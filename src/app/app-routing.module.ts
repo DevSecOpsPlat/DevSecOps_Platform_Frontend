@@ -5,6 +5,7 @@ import { HomeComponent } from './home/home.component';
 import { SignInComponent } from './User/sign-in/sign-in.component';
 import { ProfileComponent } from './User/profile/profile.component';
 import { AdminDashboardComponent } from './admin/admin-dashboard/admin-dashboard.component';
+import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
@@ -75,6 +76,7 @@ const routes: Routes = [
 
   // Administration
   { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [AdminGuard] },
+  { path: 'admin-users', component: AdminUsersComponent, canActivate: [AdminGuard] },
 
   // Auth
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },

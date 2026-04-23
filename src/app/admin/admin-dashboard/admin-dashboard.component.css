@@ -8,7 +8,7 @@
   flex: 1;
   padding: 3rem 2.5rem;
   max-width: 1400px;
-  margin: 0 auto;
+  margin: 0 auto 0 280px; /* sidebar fixe (280px) */
   width: 100%;
   background: #f8fafc;
 }
@@ -200,6 +200,7 @@
   }
 
   .admin-page {
+    margin: 0;
     padding: 1.5rem 1rem;
   }
 }

@@ -1,0 +1,202 @@
+<div class="admin-layout">
+  <app-admin-sidebar></app-admin-sidebar>
+
+  <main class="admin-main">
+    <header class="page-head">
+      <div>
+        <p class="page-kicker">Administration</p>
+        <h1 class="page-title">Utilisateurs plateforme</h1>
+        <p class="page-lead">
+          Les comptes avec le rôle <strong>ROLE_ADMIN</strong> ne figurent pas dans cette liste.
+          Pour chaque utilisateur : statistiques de pipelines (réussites, échecs, etc.), applications avec dépôt Git,
+          et historique des environnements éphémères.
+        </p>
+      </div>
+    </header>
+
+    <div *ngIf="loading" class="state state-load">
+      <span class="spinner" aria-hidden="true"></span>
+      Chargement…
+    </div>
+
+    <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+    <div *ngIf="!loading && !error" class="workspace">
+      <section class="panel panel-list" aria-label="Liste des utilisateurs">
+        <div class="panel-toolbar">
+          <input
+            type="search"
+            class="search-input"
+            [(ngModel)]="search"
+            placeholder="Rechercher nom ou e-mail…"
+            autocomplete="off"
+          />
+          <select class="filter-select" [(ngModel)]="statusFilter">
+            <option value="">Tous les statuts</option>
+            <option value="PENDING">En attente</option>
+            <option value="APPROVED">Approuvé</option>
+            <option value="REJECTED">Rejeté</option>
+            <option value="SUSPENDED">Suspendu</option>
+          </select>
+        </div>
+
+        <p class="hint" *ngIf="!filteredUsers.length">Aucun utilisateur ne correspond aux filtres.</p>
+
+        <ul class="user-list">
+          <li
+            *ngFor="let u of filteredUsers"
+            class="user-row"
+            [class.user-row-active]="selectedUser?.id === u.id"
+            (click)="select(u)"
+          >
+            <div class="user-row-main">
+              <span class="user-avatar" aria-hidden="true">{{ (u.username || '?')[0] | uppercase }}</span>
+              <div class="user-row-text">
+                <span class="user-name">{{ u.username }}</span>
+                <span class="user-mail">{{ u.email }}</span>
+              </div>
+            </div>
+            <div class="user-row-meta">
+              <span
+                class="acct acct-{{ accountStatusLower(u) }}"
+              >{{ u.accountStatus }}</span>
+              <span class="mini-stat" title="Pipelines">{{ pipelineTotal(u.pipelineCounts) }}</span>
+              <span class="mini-stat" title="Applications">{{ u.applicationsCount }}</span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="panel panel-detail" *ngIf="selectedUser as su">
+        <div class="detail-head">
+          <div class="detail-identity">
+            <h2 class="detail-name">{{ su.username }}</h2>
+            <p class="detail-email">{{ su.email }}</p>
+            <div class="detail-tags">
+              <span class="acct acct-{{ accountStatusLower(su) }}">{{ su.accountStatus }}</span>
+              <span class="tag-muted">{{ rolesText(su) }}</span>
+            </div>
+          </div>
+          <div class="detail-actions" *ngIf="isPending(su)">
+            <button type="button" class="btn primary" (click)="approve(su)">Approuver</button>
+            <button type="button" class="btn danger" (click)="reject(su)">Rejeter</button>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <article class="card">
+            <h3 class="card-title">Compte</h3>
+            <dl class="kv">
+              <dt>Créé le</dt><dd>{{ formatDt(su.createdAt) }}</dd>
+              <dt>Mis à jour</dt><dd>{{ formatDt(su.updatedAt) }}</dd>
+              <dt>Validé le</dt><dd>{{ formatDt(su.validatedAt) }}</dd>
+              <dt>Validé par</dt><dd>{{ su.validatedByUsername || '—' }}</dd>
+              <dt>Raison de rejet</dt><dd>{{ su.rejectionReason || '—' }}</dd>
+            </dl>
+          </article>
+
+          <article class="card">
+            <h3 class="card-title">Pipelines (tous environnements demandés par cet utilisateur)</h3>
+            <p class="card-sub">Total enregistré : {{ su.pipelinesCount }}</p>
+            <div class="stat-bars">
+              <div class="stat-row ok">
+                <span>Réussis</span><strong>{{ su.pipelineCounts?.success ?? 0 }}</strong>
+              </div>
+              <div class="stat-row bad">
+                <span>Échecs</span><strong>{{ su.pipelineCounts?.failed ?? 0 }}</strong>
+              </div>
+              <div class="stat-row run">
+                <span>En cours</span><strong>{{ su.pipelineCounts?.running ?? 0 }}</strong>
+              </div>
+              <div class="stat-row pend">
+                <span>En attente</span><strong>{{ su.pipelineCounts?.pending ?? 0 }}</strong>
+              </div>
+              <div class="stat-row neutral">
+                <span>Annulés / ignorés</span><strong>{{ (su.pipelineCounts?.canceled ?? 0) + (su.pipelineCounts?.skipped ?? 0) }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3 class="card-title">Environnements</h3>
+            <p class="card-sub">
+              {{ envBreakdownTotal(su) }} au total ·
+              <span class="emph">{{ su.activeEnvironmentsCount }}</span> actifs (RUNNING)
+            </p>
+            <div class="chips">
+              <span class="chip">En attente {{ su.environmentStatusBreakdown?.pending ?? 0 }}</span>
+              <span class="chip">Construction {{ su.environmentStatusBreakdown?.building ?? 0 }}</span>
+              <span class="chip chip-ok">Actifs {{ su.environmentStatusBreakdown?.running ?? 0 }}</span>
+              <span class="chip chip-bad">Échec {{ su.environmentStatusBreakdown?.failed ?? 0 }}</span>
+              <span class="chip">Détruits {{ su.environmentStatusBreakdown?.destroyed ?? 0 }}</span>
+              <span class="chip">Expirés {{ su.environmentStatusBreakdown?.expired ?? 0 }}</span>
+            </div>
+          </article>
+        </div>
+
+        <article class="card card-wide">
+          <h3 class="card-title">Applications ({{ su.applications?.length || 0 }})</h3>
+          <p class="card-sub">Nom, dépôt, création, nombre d’environnements liés, résultats des pipelines.</p>
+
+          <div *ngIf="!su.applications?.length" class="empty-block">Aucune application créée.</div>
+
+          <div class="app-cards">
+            <div class="app-card" *ngFor="let app of su.applications">
+              <div class="app-card-head">
+                <h4 class="app-name">{{ app.name }}</h4>
+                <span class="app-badge">{{ app.linkedEnvironmentsCount }} env.</span>
+              </div>
+              <p class="app-desc" *ngIf="app.description">{{ app.description }}</p>
+              <a class="app-repo" [href]="app.gitRepositoryUrl" target="_blank" rel="noopener">{{ app.gitRepositoryUrl }}</a>
+              <p class="app-created">Créée le {{ formatDt(app.createdAt) }}</p>
+              <div class="app-pipeline-grid">
+                <span class="ppc ok">OK {{ app.pipelineCounts?.success ?? 0 }}</span>
+                <span class="ppc bad">KO {{ app.pipelineCounts?.failed ?? 0 }}</span>
+                <span class="ppc run">Run {{ app.pipelineCounts?.running ?? 0 }}</span>
+                <span class="ppc">Wait {{ app.pipelineCounts?.pending ?? 0 }}</span>
+                <span class="ppc">Can. {{ app.pipelineCounts?.canceled ?? 0 }}</span>
+                <span class="ppc">Skip {{ app.pipelineCounts?.skipped ?? 0 }}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-wide">
+          <h3 class="card-title">Environnements éphémères (historique)</h3>
+          <div *ngIf="!su.environments?.length" class="empty-block">Aucun environnement.</div>
+
+          <div class="table-wrap" *ngIf="su.environments?.length">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Environnement</th>
+                  <th>Branche</th>
+                  <th>Statut env.</th>
+                  <th>Pipeline GitLab</th>
+                  <th>Statut pipeline</th>
+                  <th>Expire</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let env of su.environments">
+                  <td>{{ env.applicationName }}</td>
+                  <td>{{ env.environmentName }}</td>
+                  <td><code>{{ env.gitBranch }}</code></td>
+                  <td><span class="env-pill env-{{ env.status }}">{{ statusLabel(env) }}</span></td>
+                  <td>{{ env.gitlabPipelineId ?? '—' }}</td>
+                  <td>{{ pipelineStatusLabel(env.pipelineStatus) }}</td>
+                  <td class="nowrap">{{ formatDt(env.expiresAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section *ngIf="!loading && !error && users.length && !selectedUser" class="panel panel-empty">
+        <p>Sélectionnez un utilisateur dans la liste.</p>
+      </section>
+    </div>
+  </main>
+</div>

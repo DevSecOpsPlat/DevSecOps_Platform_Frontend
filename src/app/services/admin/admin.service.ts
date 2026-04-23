@@ -12,6 +12,73 @@ export interface PendingUser {
   createdAt: string;
 }
 
+export interface AdminPipelineCounts {
+  success: number;
+  failed: number;
+  running: number;
+  pending: number;
+  canceled: number;
+  skipped: number;
+  total?: number;
+}
+
+export interface AdminEnvironmentStatusBreakdown {
+  pending: number;
+  building: number;
+  running: number;
+  failed: number;
+  destroyed: number;
+  expired: number;
+  total?: number;
+}
+
+export interface AdminUserApplicationDetail {
+  id: string;
+  name: string;
+  description?: string | null;
+  gitRepositoryUrl: string;
+  createdAt: string | number[];
+  linkedEnvironmentsCount: number;
+  pipelineCounts: AdminPipelineCounts;
+}
+
+export interface AdminUserEnvironmentDetail {
+  id: string;
+  applicationId: string;
+  applicationName: string;
+  environmentName: string;
+  gitBranch: string;
+  status: string;
+  url?: string | null;
+  ttlHours: number;
+  createdAt: string | number[];
+  expiresAt: string | number[];
+  gitlabPipelineId?: number | null;
+  pipelineStatus?: string | null;
+  pipelineStartedAt?: string | number[] | null;
+  pipelineFinishedAt?: string | number[] | null;
+}
+
+export interface AdminUserMetrics {
+  id: string;
+  username: string;
+  email: string;
+  roles: string[];
+  accountStatus: string;
+  createdAt: string | number[];
+  updatedAt?: string | number[] | null;
+  validatedAt?: string | number[] | null;
+  validatedByUsername?: string | null;
+  rejectionReason?: string | null;
+  activeEnvironmentsCount: number;
+  pipelinesCount: number;
+  applicationsCount: number;
+  pipelineCounts: AdminPipelineCounts;
+  environmentStatusBreakdown: AdminEnvironmentStatusBreakdown;
+  applications: AdminUserApplicationDetail[];
+  environments: AdminUserEnvironmentDetail[];
+}
+
 const BASE = environment.BASE_URL + 'api/admin/';
 
 @Injectable({
@@ -33,6 +100,10 @@ export class AdminService {
     return this.http.get<PendingUser[]>(BASE + 'pending-users', { headers: this.authHeaders() });
   }
 
+  getAllUsersWithMetrics(): Observable<AdminUserMetrics[]> {
+    return this.http.get<AdminUserMetrics[]>(BASE + 'users', { headers: this.authHeaders() });
+  }
+
   approveUser(id: string): Observable<void> {
     return this.http.post<void>(BASE + `${id}/approve`, {}, { headers: this.authHeaders() });
   }
@@ -42,4 +113,3 @@ export class AdminService {
     return this.http.post<void>(BASE + `${id}/reject`, body, { headers: this.authHeaders() });
   }
 }
-

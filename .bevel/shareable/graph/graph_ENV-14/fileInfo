@@ -37,17 +37,17 @@
   }, {
     "path" : "src\\app\\app-routing.module.ts",
     "modificationInfo" : {
-      "contentHash" : -1110704292,
-      "lastModified" : 1773917476987
+      "contentHash" : -2143044473,
+      "lastModified" : 1775214167767
     },
-    "linesOfCode" : 84
+    "linesOfCode" : 91
   }, {
     "path" : "src\\app\\app.module.ts",
     "modificationInfo" : {
-      "contentHash" : -1172539532,
-      "lastModified" : 1773917476987
+      "contentHash" : 1362735011,
+      "lastModified" : 1775214167767
     },
-    "linesOfCode" : 77
+    "linesOfCode" : 81
   }, {
     "path" : "src\\app\\environment-create\\environment-create.component.ts",
     "modificationInfo" : {
@@ -139,6 +139,13 @@
       "lastModified" : 1773917094893
     },
     "linesOfCode" : 107
+  }, {
+    "path" : "src\\app\\services\\admin\\admin.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -1129332723,
+      "lastModified" : 1775214167767
+    },
+    "linesOfCode" : 115
   }, {
     "path" : "src\\app\\services\\ai\\ai-analysis.service.ts",
     "modificationInfo" : {

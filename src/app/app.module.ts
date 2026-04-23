@@ -10,6 +10,7 @@ import { SignInComponent } from './User/sign-in/sign-in.component';
 import { ProfileComponent } from './User/profile/profile.component';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AdminDashboardComponent } from './admin/admin-dashboard/admin-dashboard.component';
+import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
@@ -44,6 +45,7 @@ import { VulnerabilityDetailsComponent } from './project/vulnerability-details/v
     EnvironmentCreateComponent,
     ProfileComponent,
     AdminDashboardComponent,
+    AdminUsersComponent,
     MyApplicationsComponent,
     PipelineDetailsComponent,
     PipelinesListComponent,
