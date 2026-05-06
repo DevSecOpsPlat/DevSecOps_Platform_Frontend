@@ -241,7 +241,7 @@
       <h3 class="section-label">
         <span>📊 Monitoring</span>
       </h3>
-      <button class="nav-item" (click)="openGrafana()">
+      <button class="nav-item" (click)="goToMonitoring()" [class.active]="isMonitoringRoute()">
         <span class="nav-icon">📈</span>
         <span class="nav-text">Tableau de bord</span>
         <span class="nav-badge">live</span>

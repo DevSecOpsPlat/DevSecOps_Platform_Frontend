@@ -34,6 +34,7 @@ import { EnvironmentCreateComponent } from './project/environments/environment-c
 import { ToastContainerComponent } from './toast-container/toast-container.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
+import { MonitoringComponent } from './project/monitoring/monitoring.component';
 
 @NgModule({
   declarations: [
@@ -64,7 +65,8 @@ import { VulnerabilityDetailsComponent } from './project/vulnerability-details/v
     EnvironmentDetailsComponent,
     TimeAgoPipe,
     RecentActivityComponent,
-    SonarqubeComponent
+    SonarqubeComponent,
+    MonitoringComponent
   ],
   imports: [
     BrowserModule,

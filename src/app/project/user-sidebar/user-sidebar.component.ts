@@ -282,8 +282,18 @@ export class UserSidebarComponent implements OnInit {
     this.authService.logout();
   }
 
-  openGrafana(): void {
-    window.open('https://grafana.example.com', '_blank');
+  goToMonitoring(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'monitoring']);
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isMonitoringRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/monitoring$/.test(path);
   }
 
   backToApplications(): void {

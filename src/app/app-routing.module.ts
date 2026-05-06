@@ -22,6 +22,7 @@ import { EnvironmentDetailsComponent } from './project/environments/environment-
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
+import { MonitoringComponent } from './project/monitoring/monitoring.component';
 
 import { SignUpComponent } from './User/sign-up/sign-up.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
@@ -49,6 +50,7 @@ const routes: Routes = [
       { path: 'pipelines', component: PipelinesListComponent },
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
+      { path: 'monitoring', component: MonitoringComponent },
       { path: 'vulnerabilities/:findingId', component: VulnerabilityDetailsComponent },
       { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent }
     ]

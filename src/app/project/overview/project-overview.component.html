@@ -163,6 +163,65 @@
     <section class="dashboard-section deployment-section" *ngIf="latestDeployment">
       <h2 class="section-title">Dernier déploiement</h2>
       <div class="deployment-card">
+        <!-- Aperçu type Vercel : clic = ouvrir l’URL publique -->
+        <div class="deployment-vercel">
+          <ng-container *ngIf="liveDeploymentUrl; else deployUrlMissing">
+            <div class="vercel-grid vercel-grid-live">
+              <div class="vercel-preview-column">
+                <div class="vercel-preview-toolbar">
+                  <span class="vercel-preview-badge">Aperçu</span>
+                  <div class="vercel-preview-toolbar-actions">
+                    <button type="button" class="btn-toolbar" (click)="openLiveDeployment()">Ouvrir dans un nouvel onglet</button>
+                    <button type="button" class="btn-toolbar btn-toolbar-primary" (click)="copyPreviewUrl()">
+                      {{ copied ? 'Copié' : 'Copier le lien' }}
+                    </button>
+                  </div>
+                </div>
+                <div class="vercel-iframe-wrap">
+                  <iframe *ngIf="trustedEmbedUrl" class="vercel-iframe-full" [src]="trustedEmbedUrl" title="Aperçu déploiement"></iframe>
+                </div>
+              </div>
+              <aside class="vercel-meta">
+                <div class="vercel-meta-head">
+                  <h3 class="vercel-title">Déploiement</h3>
+                  <span class="vercel-status-pill" [ngClass]="statusClass(latestDeployment.pipelineStatus || '')">
+                    {{ (latestDeployment.pipelineStatus || '—') | uppercase }}
+                  </span>
+                </div>
+                <dl class="vercel-dl">
+                  <dt>Branche</dt>
+                  <dd>{{ latestDeployment.gitBranch }}</dd>
+                  <dt>Environnement</dt>
+                  <dd>{{ latestDeployment.environmentName }}</dd>
+                </dl>
+                <div class="vercel-actions">
+                  <button type="button" class="btn-visit" (click)="openLiveDeployment()">Visiter</button>
+                  <button type="button" class="btn-ghost" (click)="copyPreviewUrl()">{{ copied ? 'Copié' : 'Copier le lien' }}</button>
+                </div>
+              </aside>
+            </div>
+          </ng-container>
+          <ng-template #deployUrlMissing>
+            <div class="vercel-missing-url">
+              <p><strong>Aucune URL d’aperçu pour cet environnement.</strong></p>
+              <p>
+                <strong>Option A — nip.io (recommandé en local)</strong> : dans
+                <code>application.properties</code> (ou variables d’environnement équivalentes), activez
+                <code>deployment.preview.nip.enabled=true</code>,
+                <code>deployment.preview.nip.master-ip</code> (ex. <code>192.168.130.138</code>),
+                <code>deployment.preview.nip.node-port</code> (ex. <code>30374</code>), puis redémarrez le backend.
+                L’URL affichée sera du type <code>https://app-&lt;uuid-env&gt;.&lt;master-ip&gt;.nip.io:&lt;port&gt;</code> (schéma : <code>deployment.preview.nip.scheme</code>).
+              </p>
+              <p *ngIf="(latestDeployment.pipelineStatus || '').toUpperCase() === 'SUCCESS'">
+                <strong>Option B — callback pipeline</strong> : à la fin du job K8s, appelez
+                <code>POST …/api/webhooks/deployment-published</code> avec l’en-tête <code>X-Deploy-Token</code>
+                (même secret que <code>DEPLOYMENT_CALLBACK_TOKEN</code> côté backend et GitLab CI).
+                Détails : <code>DevSecOpsPlatform_Backend/docs/pipeline.md</code>.
+              </p>
+            </div>
+          </ng-template>
+        </div>
+
         <div class="deployment-main">
           <div class="deployment-info">
             <div class="info-row">
@@ -188,21 +247,20 @@
   <span class="info-value">{{ formatTimeAgo(latestDeployment.createdAt) }}</span>
 </div>
           </div>
-          <div class="deployment-preview" *ngIf="previewUrl">
+          <div class="deployment-preview" *ngIf="liveDeploymentUrl">
             <div class="preview-header">
-              <span class="preview-label">URL de prévisualisation</span>
-              <button class="copy-btn" (click)="copyPreviewUrl()" [attr.aria-label]="'Copier'">
-                {{ copied ? '✓' : '📋' }}
+              <span class="preview-label">Session éphémère</span>
+              <button type="button" class="copy-btn" (click)="copyPreviewUrl()" [attr.aria-label]="'Copier le lien de l’app'">
+                {{ copied ? '✓ Copié' : '📋 Copier le lien' }}
               </button>
             </div>
-            <a [href]="previewUrl" target="_blank" rel="noopener" class="preview-url">{{ previewUrl }}</a>
-            <div class="ttl-container" *ngIf="environmentSummary">
+            <div class="ttl-container" *ngIf="environmentSummary && (totalSeconds != null && totalSeconds > 0)">
               <div class="ttl-header">
                 <span class="ttl-label">Temps restant</span>
                 <span class="ttl-value">{{ formatRemaining() }}</span>
               </div>
               <div class="ttl-progress">
-                <div class="ttl-progress-bar" [style.width.%]="(remainingSeconds || 0) / (totalSeconds || 1) * 100"></div>
+                <div class="ttl-progress-bar" [style.width.%]="ttlProgressPercent()"></div>
               </div>
             </div>
           </div>

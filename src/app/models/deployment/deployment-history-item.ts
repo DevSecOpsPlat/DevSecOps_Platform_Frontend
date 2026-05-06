@@ -6,6 +6,8 @@ export interface DeploymentHistoryItem {
   pipelineId: number | null;
   pipelineStatus: string;
   environmentStatus: string;
+  /** URL publique après déploiement (callback pipeline) */
+  deploymentUrl?: string | null;
   ttlHours: number;      
   expiresAt: string;  
   shortSha?: string | null;

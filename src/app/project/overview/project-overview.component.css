@@ -584,6 +584,219 @@
   border-left: 4px solid var(--accent-orange);
 }
 
+/* ===== Vercel-style deployment preview ===== */
+.deployment-vercel {
+  margin-bottom: 1.25rem;
+}
+
+.vercel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.vercel-grid-live {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .vercel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vercel-grid-live {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vercel-preview-column {
+  display: flex;
+  flex-direction: column;
+  height: min(62vh, 520px);
+  max-height: min(72vh, 640px);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.vercel-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--overview-surface-elevated);
+  border-bottom: 1px solid var(--overview-border);
+}
+
+.vercel-preview-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--overview-text-muted);
+}
+
+.vercel-preview-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.btn-toolbar {
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface);
+  color: var(--overview-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-toolbar:hover {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+.btn-toolbar-primary {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.btn-toolbar-primary:hover {
+  opacity: 0.92;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.vercel-iframe-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: #fff;
+}
+
+.vercel-iframe-full {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  border: none;
+  background: #fff;
+}
+
+.vercel-meta {
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  background: var(--overview-surface);
+}
+
+.vercel-meta-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 0.75rem;
+}
+
+.vercel-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--overview-text);
+}
+
+.vercel-status-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--overview-border);
+}
+
+.vercel-dl {
+  margin: 0 0 1rem 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.85rem;
+}
+
+.vercel-dl dt {
+  margin: 0;
+  color: var(--overview-text-muted);
+  font-weight: 600;
+}
+
+.vercel-dl dd {
+  margin: 0;
+  color: var(--overview-text);
+  word-break: break-all;
+}
+
+.vercel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn-visit {
+  padding: 0.55rem 1.1rem;
+  border-radius: 10px;
+  border: none;
+  background: #0f172a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.btn-visit:hover {
+  opacity: 0.92;
+}
+
+.btn-ghost {
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface);
+  color: var(--overview-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+.vercel-missing-url {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px dashed var(--overview-border);
+  background: var(--overview-surface-elevated);
+  color: var(--overview-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.vercel-missing-url code {
+  font-size: 0.78rem;
+  background: var(--overview-surface);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 .deployment-card {
   border: 1px solid var(--overview-border);
   border-radius: 12px;

@@ -1,5 +1,6 @@
 // project-overview.component.ts
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
@@ -71,7 +72,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   loadingSlow = false;
   error: string | null = null;
   copied = false;
-  
+
   // Timer
   remainingSeconds?: number;
   totalSeconds?: number;
@@ -87,11 +88,36 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     private pipelineService: PipelineService,
     private securityService: SecurityService,
     private findingsService: FindingsService,
-    private format: FormatService
+    private format: FormatService,
+    private sanitizer: DomSanitizer
   ) {}
 
   get previewUrl(): string | null {
     return this.environmentSummary?.previewUrl ?? null;
+  }
+
+  /** URL publique de l’app (résumé env ou dernier déploiement). */
+  get liveDeploymentUrl(): string | null {
+    const fromSummary = (this.environmentSummary?.previewUrl || '').trim();
+    const fromHistory = (this.latestDeployment?.deploymentUrl || '').trim();
+    const u = fromSummary || fromHistory;
+    return u || null;
+  }
+
+  get trustedEmbedUrl(): SafeResourceUrl | null {
+    const u = this.liveDeploymentUrl;
+    if (!u) {
+      return null;
+    }
+    return this.sanitizer.bypassSecurityTrustResourceUrl(u);
+  }
+
+  openLiveDeployment(): void {
+    const u = this.liveDeploymentUrl;
+    if (!u) {
+      return;
+    }
+    window.open(u, '_blank', 'noopener,noreferrer');
   }
 
   ngOnInit(): void {
@@ -564,17 +590,44 @@ getActivityTimeAgo(activity: ActivityItem): string {
     this.environmentService.getEnvironment(envId).subscribe({
       next: env => {
         this.environmentSummary = env;
-        if (env.expiresAt) {
-          const expires = new Date(env.expiresAt).getTime();
-          const created = new Date(env.createdAt).getTime();
+        const expiresMs = this.parseBackendInstantMs(env.expiresAt as unknown);
+        const createdMs = this.parseBackendInstantMs(env.createdAt as unknown);
+        if (expiresMs != null && createdMs != null && expiresMs > createdMs) {
           const now = Date.now();
-          this.totalSeconds = Math.max(1, Math.floor((expires - created) / 1000));
-          this.remainingSeconds = Math.max(0, Math.floor((expires - now) / 1000));
+          this.totalSeconds = Math.max(1, Math.floor((expiresMs - createdMs) / 1000));
+          this.remainingSeconds = Math.max(0, Math.floor((expiresMs - now) / 1000));
           this.startCountdown();
+        } else {
+          if (this.countdownIntervalId) {
+            clearInterval(this.countdownIntervalId);
+            this.countdownIntervalId = undefined;
+          }
+          this.totalSeconds = undefined;
+          this.remainingSeconds = undefined;
         }
       },
       error: () => {}
     });
+  }
+
+  /** Spring / Jackson envoie souvent les dates en tableau [y, mo, d, h, min, s]. */
+  private parseBackendInstantMs(value: unknown): number | null {
+    if (value == null) {
+      return null;
+    }
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      return value < 1e12 ? value * 1000 : value;
+    }
+    if (typeof value === 'string') {
+      const t = new Date(value).getTime();
+      return Number.isNaN(t) ? null : t;
+    }
+    if (Array.isArray(value) && value.length >= 3) {
+      const [y, mo, d, h = 0, mi = 0, s = 0] = value as number[];
+      const t = new Date(y, mo - 1, d, h, mi, s).getTime();
+      return Number.isNaN(t) ? null : t;
+    }
+    return null;
   }
 
   /**
@@ -595,14 +648,14 @@ getActivityTimeAgo(activity: ActivityItem): string {
   /**
    * Calcule le temps restant
    */
-  calculateTimeRemaining(expiresAt: string): string {
-    if (!expiresAt) return '—';
+  calculateTimeRemaining(expiresAt: unknown): string {
+    const expiryMs = this.parseBackendInstantMs(expiresAt);
+    if (expiryMs == null) return '—';
     try {
-      const now = new Date();
-      const expiry = new Date(expiresAt);
-      if (expiry <= now) return 'Expiré';
-      
-      const diffMs = expiry.getTime() - now.getTime();
+      const nowMs = Date.now();
+      if (expiryMs <= nowMs) return 'Expiré';
+
+      const diffMs = expiryMs - nowMs;
       const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
       const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       
@@ -697,7 +750,9 @@ get stats() {
    * Formate le temps restant pour l'affichage
    */
   formatRemaining(): string {
-    if (this.remainingSeconds == null) return '—';
+    if (this.remainingSeconds == null || Number.isNaN(this.remainingSeconds)) {
+      return '—';
+    }
     const sec = this.remainingSeconds;
     if (sec <= 0) return 'Expiré';
     if (sec < 60) return `${sec}s`;
@@ -719,12 +774,23 @@ get stats() {
     return `${dash} 100`;
   }
 
+  /** Pour la barre TTL (évite NaN si totalSeconds absent). */
+  ttlProgressPercent(): number {
+    const total = this.totalSeconds;
+    const rem = this.remainingSeconds;
+    if (total == null || total <= 0 || rem == null || Number.isNaN(rem) || Number.isNaN(total)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, (rem / total) * 100));
+  }
+
   /**
    * Copie l'URL de prévisualisation
    */
   copyPreviewUrl(): void {
-    if (!this.previewUrl) return;
-    navigator.clipboard.writeText(this.previewUrl).then(() => {
+    const u = this.liveDeploymentUrl;
+    if (!u) return;
+    navigator.clipboard.writeText(u).then(() => {
       this.copied = true;
       setTimeout(() => (this.copied = false), 2000);
     });

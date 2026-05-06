@@ -29,15 +29,15 @@ export class EnvironmentService {
   }
 
   getEnvironmentById(envId: string): Observable<EnvironmentSummaryResponse> {
-  return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/by-id/${envId}`, {
+  return this.http.get<any>(BASE + `api/environments/by-id/${envId}`, {
     headers: this.authHeaders()
-  });
+  }).pipe(map((data) => this.convertEnvironment(data)));
 }
 
 getLatestEnvironment(): Observable<any> {
-  return this.http.get(BASE + 'api/environments/latest', {
+  return this.http.get<any>(BASE + 'api/environments/latest', {
     headers: this.authHeaders()
-  });
+  }).pipe(map((data) => this.convertEnvironment(data)));
 }
 
   private convertEnvironment(data: any): EnvironmentSummaryResponse {
@@ -77,15 +77,15 @@ getLatestEnvironment(): Observable<any> {
     });
   }
    getMyEnvironments(): Observable<EnvironmentSummaryResponse[]> {
-    return this.http.get<EnvironmentSummaryResponse[]>(`${BASE}api/environments`, {
+    return this.http.get<any[]>(`${BASE}api/environments`, {
       headers: this.authHeaders()
-    });
+    }).pipe(map((list) => (list || []).map((e) => this.convertEnvironment(e))));
   }
 
   getEnvironment(envId: string): Observable<EnvironmentSummaryResponse> {
-    return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/${envId}`, {
+    return this.http.get<any>(BASE + `api/environments/${envId}`, {
       headers: this.authHeaders()
-    });
+    }).pipe(map((data) => this.convertEnvironment(data)));
   }
 
 }
