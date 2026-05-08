@@ -121,10 +121,10 @@
   }, {
     "path" : "src\\app\\project\\monitoring\\monitoring.component.ts",
     "modificationInfo" : {
-      "contentHash" : -683821380,
-      "lastModified" : 1778149396786
+      "contentHash" : -1401404870,
+      "lastModified" : 1778225230720
     },
-    "linesOfCode" : 19
+    "linesOfCode" : 27
   }, {
     "path" : "src\\app\\project\\overview\\project-overview.component.ts",
     "modificationInfo" : {

@@ -217,6 +217,20 @@
       </div>
     </section>
 
+    <!-- Analyse de code (SonarCloud / SonarQube) -->
+    <section class="sidebar-section" *ngIf="currentAppId">
+      <h3 class="section-label">
+        <span>🧪 Analyse code</span>
+      </h3>
+      <div class="nav-items">
+        <button class="nav-item" (click)="goToSonarqube()" [class.active]="isSonarqubeRoute()">
+          <span class="nav-icon">🔎</span>
+          <span class="nav-text">SonarQube</span>
+          <span class="nav-badge">quality</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Environnements -->
     <section class="sidebar-section">
       <h3 class="section-label">

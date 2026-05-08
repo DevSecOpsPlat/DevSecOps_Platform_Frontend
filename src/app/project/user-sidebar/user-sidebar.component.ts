@@ -296,6 +296,20 @@ export class UserSidebarComponent implements OnInit {
     return /\/project\/[^/]+\/monitoring$/.test(path);
   }
 
+  goToSonarqube(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'sonarqube']);
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isSonarqubeRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/sonarqube$/.test(path);
+  }
+
   backToApplications(): void {
     this.router.navigate(['/my-applications']);
   }
