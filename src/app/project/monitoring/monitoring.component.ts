@@ -12,7 +12,7 @@ export class MonitoringComponent {
   constructor(private sanitizer: DomSanitizer) {
     this.grafanaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(
       // Use ingress DNS to avoid NodePort + easier cookie/same-origin hardening later
-      'http://grafana.local/?orgId=1&from=now-6h&to=now&timezone=browser'
+       'http://grafana.local/grafana/?orgId=1&from=now-6h&to=now&timezone=browser'
     );
   }
 }

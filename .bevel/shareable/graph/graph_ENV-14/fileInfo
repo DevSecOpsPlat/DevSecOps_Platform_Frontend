@@ -119,6 +119,13 @@
     },
     "linesOfCode" : 265
   }, {
+    "path" : "src\\app\\project\\monitoring\\monitoring.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -683821380,
+      "lastModified" : 1778149396786
+    },
+    "linesOfCode" : 19
+  }, {
     "path" : "src\\app\\project\\overview\\project-overview.component.ts",
     "modificationInfo" : {
       "contentHash" : 2084672408,
