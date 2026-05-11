@@ -282,6 +282,25 @@
   border-radius: 4px;
 }
 
+.timeline-app-url {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.app-preview-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-orange);
+  text-decoration: none;
+}
+
+.app-preview-link:hover {
+  text-decoration: underline;
+}
+
 .timeline-footer {
   display: flex;
   justify-content: space-between;

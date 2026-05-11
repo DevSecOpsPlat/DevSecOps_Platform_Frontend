@@ -1,28 +1,89 @@
-<aside class="admin-sidebar">
+<aside class="user-sidebar">
   <div class="sidebar-header">
-    <h2 class="sidebar-title">Administration</h2>
-    <p class="sidebar-subtitle">EnviroTest Platform</p>
+    <div class="brand">
+      <div class="brand-title">EnviroTest</div>
+      <div class="brand-badge">admin</div>
+    </div>
+    <div class="brand-subtitle">Console gouvernance</div>
   </div>
-  <nav class="sidebar-nav">
-    <a routerLink="/admin-users" routerLinkActive="active" class="sidebar-link">
-      <span class="link-icon">👥</span>
-      <span class="link-text">Utilisateurs</span>
-    </a>
-    <a routerLink="/admin-dashboard" routerLinkActive="active" class="sidebar-link">
-      <span class="link-icon">⏳</span>
-      <span class="link-text">En attente</span>
-    </a>
-    <a routerLink="/#" routerLinkActive="active" class="sidebar-link">
-      <span class="link-icon">📦</span>
-      <span class="link-text">Applications</span>
-    </a>
-    <a routerLink="/#" routerLinkActive="active" class="sidebar-link">
-      <span class="link-icon">🚀</span>
-      <span class="link-text">Environnements</span>
-    </a>
-    <a routerLink="/#" routerLinkActive="active" class="sidebar-link">
-      <span class="link-icon">⚙️</span>
-      <span class="link-text">Pipelines</span>
-    </a>
+
+  <div class="sidebar-search">
+    <span class="search-icon">🔍</span>
+    <input type="search" placeholder="Recherche (à venir)" readonly tabindex="-1" />
+    <span class="search-shortcut">⌘K</span>
+  </div>
+
+  <nav class="sidebar-sections" aria-label="Navigation administration">
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>Tableau de bord</span></h3>
+      <div class="nav-items">
+        <a
+          routerLink="/admin/home"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          class="nav-item"
+        >
+          <span class="nav-dot"></span>
+          <span class="nav-text">Accueil</span>
+        </a>
+        <a routerLink="/admin/overview" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Vue d’ensemble</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>Support</span></h3>
+      <div class="nav-items">
+        <a routerLink="/admin/reclamations" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Réclamations</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>Gouvernance accès</span></h3>
+      <div class="nav-items">
+        <a routerLink="/admin/validations" routerLinkActive="active" class="nav-item">
+          <span class="nav-indicator success"></span>
+          <span class="nav-text">Validations</span>
+        </a>
+        <a routerLink="/admin/users" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Utilisateurs &amp; activité</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>Inventaire</span></h3>
+      <div class="nav-items">
+        <a routerLink="/admin/inventory" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Apps &amp; environnements</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>Infra (lecture)</span></h3>
+      <div class="nav-items">
+        <a routerLink="/admin/observability" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Observabilité</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <div class="nav-items">
+        <a routerLink="/home" class="nav-item">
+          <span class="nav-icon">←</span>
+          <span class="nav-text">Portail</span>
+        </a>
+      </div>
+    </section>
   </nav>
 </aside>

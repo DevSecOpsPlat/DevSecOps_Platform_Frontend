@@ -1,0 +1,240 @@
+/* Contenu des pages sous /admin/* — même largeur que les vues projet. */
+.admin-route-page {
+  --admin-accent: #ea580c;
+  --admin-accent-mid: #f97316;
+  --admin-accent-soft: rgba(234, 88, 12, 0.14);
+  --admin-warm: #c2410c;
+  --admin-warm-soft: rgba(194, 65, 12, 0.12);
+  --admin-slate: #0f172a;
+  --admin-border: #e2e8f0;
+  --admin-surface: #f8fafc;
+
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-bottom: 2rem;
+}
+
+.admin-route-page > .page-head {
+  margin-bottom: 1.5rem;
+}
+
+.page-head {
+  display: block;
+}
+
+.page-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 0.35rem;
+}
+
+.page-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin: 0 0 0.5rem;
+}
+
+.page-lead {
+  margin: 0;
+  max-width: 52rem;
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.page-lead code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82em;
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+/* Tableaux admin partagés (overview, inventaire, …) */
+.admin-table-wrap {
+  border-radius: 14px;
+  border: 1px solid var(--admin-border);
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 0.78rem 1rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 0.72rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  color: #0f172a;
+}
+
+.admin-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.admin-table tbody tr:hover {
+  background: linear-gradient(90deg, var(--admin-accent-soft) 0%, transparent 55%);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-cell-strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-cell-title {
+  display: block;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-cell-sub {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.admin-cell-sub.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+}
+
+.admin-cell-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+  max-width: 22rem;
+}
+
+.admin-cell-clip {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-badge-status {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+/* Lien vers l’URL déployée (env) — ouverture externe */
+.admin-external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(100%, 20rem);
+  padding: 0.38rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  text-decoration: none;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+.admin-external-link:hover {
+  background: #ffedd5;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+
+.admin-external-link--compact {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.72rem;
+  max-width: min(100%, 17rem);
+}
+
+.admin-url-muted {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.admin-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.state-load {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.state-err {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  border-top-color: var(--admin-accent);
+  animation: admin-route-spin 0.65s linear infinite;
+}
+
+@keyframes admin-route-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

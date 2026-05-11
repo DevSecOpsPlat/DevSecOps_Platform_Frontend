@@ -2,7 +2,7 @@
   <div class="app-bar-inner">
     <!-- Gauche: Logos + nom + séparateur + menu application -->
     <div class="brand-section">
-      <a [routerLink]="(authService.isLoggedIn$ | async) && isAdmin ? '/admin-home' : '/home'" class="brand">
+      <a [routerLink]="(authService.isLoggedIn$ | async) && isAdmin ? '/admin/home' : '/home'" class="brand">
         <div class="brand-logos">
           <img src="/assets/images/attijari.png" alt="Attijari" class="brand-logo-attijari">
           <img src="/assets/images/enviroTestLogorembg.png" alt="EnviroTest" class="brand-logo-envirotest">
@@ -24,7 +24,12 @@
 
     <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
       <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" class="nav-link">Home</a>
-      <a *ngIf="(authService.isLoggedIn$ | async) && isAdmin" routerLink="/admin-home" routerLinkActive="active" class="nav-link">Admin</a>
+      <a
+        *ngIf="(authService.isLoggedIn$ | async) && isAdmin"
+        routerLink="/admin/home"
+        class="nav-link"
+        [class.active]="adminNavActive"
+      >Admin</a>
 
       <ng-container *ngIf="(authService.isLoggedIn$ | async) && isTester">
         <a routerLink="/my-applications" routerLinkActive="active" class="nav-link">
@@ -55,8 +60,14 @@
         </button>
         <div class="user-dropdown" [class.user-dropdown-open]="userMenuOpen">
           <a routerLink="/profile" class="user-dropdown-item" (click)="userMenuOpen = false">Profil</a>
-          <a *ngIf="isAdmin" routerLink="/admin-home" class="user-dropdown-item" (click)="userMenuOpen = false">Admin Home</a>
-          <a *ngIf="isAdmin" routerLink="/admin-dashboard" class="user-dropdown-item" (click)="userMenuOpen = false">Dashboard</a>
+          <a *ngIf="isAdmin" routerLink="/admin/home" class="user-dropdown-item" (click)="userMenuOpen = false">Console admin</a>
+          <a *ngIf="isAdmin" routerLink="/admin/overview" class="user-dropdown-item" (click)="userMenuOpen = false">Vue d’ensemble</a>
+          <a *ngIf="isAdmin" routerLink="/admin/validations" class="user-dropdown-item" (click)="userMenuOpen = false">Validations</a>
+          <a *ngIf="isAdmin" routerLink="/admin/users" class="user-dropdown-item" (click)="userMenuOpen = false">Utilisateurs</a>
+          <a *ngIf="isAdmin" routerLink="/admin/inventory" class="user-dropdown-item" (click)="userMenuOpen = false">Inventaire</a>
+          <a *ngIf="isAdmin" routerLink="/admin/observability" class="user-dropdown-item" (click)="userMenuOpen = false">Observabilité</a>
+          <a *ngIf="isAdmin" routerLink="/admin/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Réclamations (admin)</a>
+          <a routerLink="/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Mes réclamations</a>
           <a *ngIf="isTester" routerLink="/my-applications" class="user-dropdown-item" (click)="userMenuOpen = false">Applications</a>
           <a *ngIf="isTester" routerLink="/pipelines" class="user-dropdown-item" (click)="userMenuOpen = false">Pipelines</a>
           <button type="button" class="user-dropdown-item user-dropdown-item-logout" (click)="logout()">Déconnexion</button>

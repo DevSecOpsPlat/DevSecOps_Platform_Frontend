@@ -4,7 +4,7 @@ import { AdminService, AdminPipelineCounts, AdminUserApplicationDetail, AdminUse
 @Component({
   selector: 'app-admin-users',
   templateUrl: './admin-users.component.html',
-  styleUrls: ['./admin-users.component.css']
+  styleUrls: ['../admin-route-page.css', './admin-users.component.css']
 })
 export class AdminUsersComponent implements OnInit {
   loading = false;
@@ -104,7 +104,7 @@ export class AdminUsersComponent implements OnInit {
   }
 
   rolesText(u: AdminUserMetrics): string {
-    return u.roles?.length ? u.roles.join(', ') : '—';
+    return u.roles.length ? u.roles.join(', ') : '—';
   }
 
   formatDt(value: string | number[] | null | undefined): string {

@@ -19,7 +19,7 @@
     class="filter-btn" 
     [class.active]="activeFilter === 'all'"
     (click)="applyFilter('all')">
-    Tous ({{ activities.length }})
+    Tous ({{ allActivities.length }})
   </button>
   <button 
     class="filter-btn" 
@@ -32,6 +32,12 @@
     [class.active]="activeFilter === 'pipeline'"
     (click)="applyFilter('pipeline')">
     Pipelines ({{ getCountByType('pipeline') }})
+  </button>
+  <button 
+    class="filter-btn" 
+    [class.active]="activeFilter === 'environment'"
+    (click)="applyFilter('environment')">
+    Environnements ({{ getCountByType('environment') }})
   </button>
 </div>
 
@@ -102,6 +108,17 @@
             <span class="meta-icon">⏱️</span>
             {{ formatDuration(activity.metadata.duration) }}
           </span>
+        </div>
+
+        <div class="timeline-app-url" *ngIf="activity.metadata?.previewUrl as previewUrl">
+          <a
+            class="app-preview-link"
+            [href]="previewUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            [title]="previewUrl"
+            (click)="$event.stopPropagation()"
+          >Visiter l'application</a>
         </div>
 
         <div class="timeline-footer">

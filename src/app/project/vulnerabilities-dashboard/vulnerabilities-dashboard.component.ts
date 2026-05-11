@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin, Subject, of } from 'rxjs';
 import { catchError, distinctUntilChanged, finalize, map, take, takeUntil } from 'rxjs/operators';
 import { EnvironmentService } from '../../services/environment/environment.service';
+import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 import {
   FindingsService,
   FindingItem,
@@ -30,6 +31,7 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
 
   appId: string | null = null;
   envId: string | null = null;
+  environmentsForApp: EnvironmentSummaryResponse[] = [];
   ingesting = false;
   ingestResult: any = null;
 
@@ -82,6 +84,16 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
   /** Désactive « Importer les données » tant que l’import n’est pas possible. */
   ingestBlocked = false;
   ingestBlockedReason: string | null = null;
+  /** Évite l’import en boucle : on auto-ingest une fois par pipelineId. */
+  private lastAutoIngestedPipelineId: number | null = null;
+
+  /**
+   * Jobs / artefacts alignés sur `docs/pipeline.md` et l’ingestion backend (ZIP aggregate-report + Sonar API).
+   */
+  readonly ingestionCoverageText =
+    'JSON sous reports/ ou final-report/ : Trivy FS & image (outils trivy / trivy-image), npm audit, pip-audit, Safety, ' +
+    'OWASP & Maven dependency-check, Semgrep, ESLint / ng lint / SAFE (même format JSON ESLint), Gitleaks, Checkov, licences. ' +
+    'SonarCloud : via API. Stages sans rapport JSON (hello, clone, build image, push, déploiement, …) : pas de lien direct avec ce tableau.';
 
   // --- Report export (PDF) ---
   showReportModal = false;
@@ -122,29 +134,21 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
         if (qpEnvId) {
           if (this.envId !== qpEnvId) {
             this.envId = qpEnvId;
+            if (this.appId) {
+              localStorage.setItem(`selectedEnv:${this.appId}`, this.envId);
+            }
             this.page = 0;
             this.reload();
           }
           return;
         }
-        this.loading = true;
-        this.error = null;
-        this.environmentService
-          .getLatestEnvironment()
-          .pipe(finalize(() => (this.loading = false)))
-          .subscribe({
-            next: (env: any) => {
-              const id = env?.id ?? null;
-              if (this.envId !== id) {
-                this.envId = id;
-                this.page = 0;
-                this.reload();
-              }
-            },
-            error: () => {
-              this.error = "Impossible de récupérer le dernier environnement.";
-            }
-          });
+        // Pas de envId dans l’URL → utiliser la sélection persistée par appId, sinon fallback sur le plus récent RUNNING.
+        const stored = this.appId ? localStorage.getItem(`selectedEnv:${this.appId}`) : null;
+        if (stored && this.envId !== stored) {
+          this.envId = stored;
+          this.page = 0;
+          this.reload();
+        }
       });
 
     // appId vient de la route parent : /project/:appId/...
@@ -155,9 +159,50 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
     ).subscribe(id => {
       this.appId = id;
       this.page = 0;
-      // reload déclenché aussi par envId. Ici on peut recharger si envId est déjà connu.
-      if (this.envId) this.reload();
+      if (!this.appId) return;
+
+      this.environmentService.getMyEnvironments(this.appId).pipe(take(1)).subscribe({
+        next: (envs) => {
+          this.environmentsForApp = envs || [];
+          const ids = new Set(this.environmentsForApp.map(e => e.id));
+          const stored = localStorage.getItem(`selectedEnv:${this.appId}`);
+          const pick =
+            (stored && ids.has(stored) ? stored : null)
+            ?? this.environmentsForApp.find(e => (e.status || '').toUpperCase() === 'RUNNING')?.id
+            ?? this.environmentsForApp[0]?.id
+            ?? null;
+
+          if (pick && this.envId !== pick) {
+            this.envId = pick;
+            localStorage.setItem(`selectedEnv:${this.appId}`, pick);
+            this.router.navigate([], {
+              relativeTo: this.route,
+              queryParams: { envId: pick },
+              queryParamsHandling: 'merge'
+            });
+          }
+
+          if (this.envId) this.reload();
+        },
+        error: () => {
+          // Si la liste env échoue, on garde l’ancien comportement (envId via query param).
+          if (this.envId) this.reload();
+        }
+      });
     });
+  }
+
+  onEnvironmentSelected(envId: string): void {
+    if (!envId || !this.appId) return;
+    this.envId = envId;
+    localStorage.setItem(`selectedEnv:${this.appId}`, envId);
+    this.page = 0;
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { envId },
+      queryParamsHandling: 'merge'
+    });
+    this.reload();
   }
 
   ngOnDestroy(): void {
@@ -328,7 +373,12 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
             this.reload();
           },
           error: (err) => {
-            const msg = err?.error?.error || err?.error?.message || err?.message;
+            // Backend 500: { error: "Ingestion échouée", message: "<détail>" } — privilégier message.
+            const body = err?.error as { message?: string; error?: string } | undefined;
+            const msg =
+              (body?.message && String(body.message).trim()) ||
+              body?.error ||
+              err?.message;
             this.error = msg
               ? `Ingestion échouée: ${msg}`
               : "Ingestion échouée (job aggregate-report manquant ou pipeline non terminé).";
@@ -636,6 +686,21 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
         'Le job aggregate-report n’a pas réussi ; corrigez le pipeline ou lancez-le de nouveau avant d’importer.';
     } else {
       this.ingestBlockedReason = null;
+    }
+
+    // Auto-import: si le pipeline est terminé avec succès et que aggregate-report est en SUCCESS,
+    // lancer l’ingestion automatiquement (une seule fois par pipeline).
+    if (
+      st === 'SUCCESS' &&
+      aggSuccess &&
+      this.activeGitlabPipelineId != null &&
+      !this.ingesting &&
+      !this.ingestBlocked &&
+      this.lastAutoIngestedPipelineId !== this.activeGitlabPipelineId
+    ) {
+      this.lastAutoIngestedPipelineId = this.activeGitlabPipelineId;
+      // microtask -> évite de perturber le flux de reload() en cours
+      setTimeout(() => this.ingestNow(), 0);
     }
   }
 

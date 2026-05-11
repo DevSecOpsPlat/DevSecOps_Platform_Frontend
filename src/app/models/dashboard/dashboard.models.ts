@@ -10,6 +10,8 @@ export interface ActivityItem {
   status: string;
   icon: string;
   link?: string;
+  /** URL publique pour visiter l’app (environnement RUNNING avec preview). */
+  previewUrl?: string | null;
 }
 
 export interface DashboardPipelineItem {

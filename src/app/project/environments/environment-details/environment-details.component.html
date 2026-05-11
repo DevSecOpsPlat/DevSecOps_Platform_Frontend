@@ -14,11 +14,19 @@
   <div class="env-content">
     <div class="info-card">
       <h3>Informations générales</h3>
-      
-      <div class="info-row">
-        <span class="label">ID:</span>
-        <span class="value copyable" (click)="copyToClipboard(environment.id)">
-            {{ environment.id.substring(0, 8) }}...
+
+      <div class="info-row" *ngIf="appPublicUrl() as url">
+        <span class="label">URL application</span>
+        <span class="value url-with-actions">
+          <a class="app-url-link" [href]="url" target="_blank" rel="noopener noreferrer">{{ url }}</a>
+          <button type="button" class="copy-url-btn" (click)="copyAppUrl()">Copier l’URL</button>
+        </span>
+      </div>
+
+      <div class="info-row" *ngIf="!appPublicUrl()">
+        <span class="label">Référence (ID)</span>
+        <span class="value copyable mono" (click)="copyEnvId()" title="Cliquer pour copier l’ID technique">
+          {{ environment.id }}
         </span>
       </div>
       
@@ -50,6 +58,50 @@
         <span class="label">TTL:</span>
         <span class="value">{{ environment.ttlHours || '?' }} heures</span>
       </div>
+    </div>
+
+    <div class="preview-card">
+      <h3>Application déployée</h3>
+
+      <div *ngIf="isExpired()" class="preview-state preview-muted">
+        <p class="preview-title">Aperçu indisponible</p>
+        <p class="preview-text">
+          Cet environnement est expiré, détruit ou terminé. L’URL de l’application n’est plus valide.
+        </p>
+      </div>
+
+      <ng-container *ngIf="!isExpired()">
+        <ng-container *ngIf="isRunning() && appPublicUrl() as appUrl">
+          <p class="preview-hint">Aperçu en direct (même URL que ci-dessus).</p>
+          <div *ngIf="canEmbedPreview(appUrl)" class="preview-iframe-wrap">
+            <iframe [src]="trustedEmbed(appUrl)" class="preview-iframe" title="Aperçu de l'application"></iframe>
+          </div>
+        </ng-container>
+
+        <div *ngIf="isRunning() && !appPublicUrl()" class="preview-state">
+          <p class="preview-text">
+            Statut <strong>RUNNING</strong>, mais l’URL publique n’est pas encore enregistrée
+            (webhook de déploiement ou mise à jour en attente).
+          </p>
+        </div>
+
+        <div *ngIf="!isRunning() && isInProgress()" class="preview-state preview-pending">
+          <p class="preview-text">
+            Déploiement <strong>en cours</strong>. L’URL et l’aperçu apparaîtront lorsque l’environnement sera
+            <strong>RUNNING</strong>.
+          </p>
+        </div>
+
+        <div *ngIf="!isRunning() && isFailed()" class="preview-state preview-warning">
+          <p class="preview-text">
+            Le déploiement a <strong>échoué</strong>. Aucune application n’est exposée sur cet environnement.
+          </p>
+        </div>
+
+        <div *ngIf="!isRunning() && !isInProgress() && !isFailed()" class="preview-state preview-muted">
+          <p class="preview-text">Aperçu non disponible pour cet état.</p>
+        </div>
+      </ng-container>
     </div>
 
     <div class="pipeline-card" *ngIf="environment.latestPipelineId">

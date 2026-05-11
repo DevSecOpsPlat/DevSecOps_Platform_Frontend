@@ -305,6 +305,24 @@
   font-size: 0.8rem;
 }
 
+.vuln-env-select {
+  min-width: 260px;
+  max-width: 340px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--vuln-border);
+  background: var(--vuln-surface);
+  color: var(--vuln-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.vuln-env-select:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--vuln-accent) 55%, var(--vuln-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vuln-accent) 18%, transparent);
+}
+
 .vuln-env-missing {
   color: var(--vuln-text-muted);
   font-style: italic;
@@ -581,6 +599,27 @@
   margin: 1rem auto 0;
   padding: 0 clamp(1rem, 3vw, 2rem);
   box-sizing: border-box;
+}
+
+.vuln-ingestion-coverage {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px dashed var(--vuln-border);
+  background: var(--vuln-bg-page);
+  font-size: 0.82rem;
+  color: var(--vuln-text-muted);
+}
+
+.vuln-ingestion-coverage summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--vuln-text);
+}
+
+.vuln-ingestion-coverage-body {
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
 }
 
 .vuln-alert {

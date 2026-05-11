@@ -163,6 +163,40 @@
   flex-shrink: 0;
 }
 
+.env-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  background: var(--overview-surface);
+}
+
+.env-switch-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--overview-text-muted);
+}
+
+.env-switch-select {
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--overview-surface-elevated);
+  color: var(--overview-text);
+  border: 1px solid var(--overview-border);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.env-switch-select:focus {
+  outline: none;
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}
+
 .btn-cta {
   display: inline-flex;
   align-items: center;
@@ -1244,6 +1278,16 @@
   min-width: 0;
 }
 
+.activity-kind {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--overview-muted, #94a3b8);
+  margin-bottom: 0.2rem;
+}
+
 .activity-title {
   margin: 0 0 0.2rem 0;
   font-size: 0.9rem;
@@ -1258,6 +1302,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.activity-app-url {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.75rem;
+}
+
+.activity-app-url a {
+  color: var(--accent-orange, #f97316);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.activity-app-url a:hover {
+  text-decoration: underline;
 }
 
 .activity-time {
@@ -1521,6 +1580,32 @@
 @keyframes loading {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@keyframes overview-text-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.chart-body-loading {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-loading-text {
+  color: var(--overview-muted, #94a3b8);
+  font-size: 0.95rem;
+  margin: 0;
+  animation: overview-text-pulse 1.2s ease-in-out infinite;
+}
+
+.section-loading-hint p {
+  color: var(--overview-muted, #94a3b8);
+  font-size: 0.9rem;
+  margin: 0;
+  animation: overview-text-pulse 1.2s ease-in-out infinite;
 }
 
 /* ===== ERROR STATE ===== */

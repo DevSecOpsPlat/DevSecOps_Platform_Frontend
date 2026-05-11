@@ -72,14 +72,7 @@
         </div>
       </div>
 
-      <!-- ── INFO BANNER (données depuis la BDD, GitLab indisponible) ── -->
-      <div *ngIf="data.dataSource === 'database'" class="info-banner">
-        <span class="info-banner-icon">ℹ️</span>
-        <div class="info-banner-body">
-          <strong>Affichage depuis la base de données</strong>
-          <p>GitLab est temporairement indisponible. Les stages et jobs affichés proviennent de la dernière synchronisation en BDD. Les <strong>logs</strong> et <strong>rapports de scan</strong> ne sont pas stockés en base et ne sont pas disponibles dans ce mode.</p>
-        </div>
-      </div>
+      <!-- Info banner volontairement masquée (UX user-friendly) -->
 
       <!-- ── CONTENT GRID ── -->
       <div class="content-grid">
@@ -108,26 +101,36 @@
 
                 <h3 class="stage-title">
                   <span class="stage-name-badge">
-                    <span class="stage-dot" [ngClass]="'dot-' + stage.status"></span>
+                    <span class="stage-dot" [ngClass]="'dot-' + (stage.status || '').toLowerCase()"></span>
                     {{ stage.name }}
                   </span>
+                  <div class="stage-actions">
+                    <button
+                      type="button"
+                      class="stage-retry"
+                      (click)="retryStage(stage)"
+                      title="Relancer les jobs échoués de ce stage"
+                    >
+                      ↻
+                    </button>
                   <span class="stage-status-badge" [ngClass]="statusClass(stage.status)">
-                    {{ stage.status }}
+                    {{ (stage.status || '—') | uppercase }}
                   </span>
+                  </div>
                 </h3>
 
                 <ul class="jobs-list">
                   <li *ngFor="let job of stage.jobs"
                       (click)="selectJob(job)"
                       [class.selected]="job.id === selectedJob?.id"
-                      [class.job-success]="job.status === 'success'"
-                      [class.job-failed]="job.status === 'failed' || job.status === 'canceled'"
-                      [class.job-running]="job.status === 'running' || job.status === 'pending'">
+                      [class.job-success]="jobCssStatus(job.status) === 'success'"
+                      [class.job-failed]="jobCssStatus(job.status) === 'failed'"
+                      [class.job-running]="jobCssStatus(job.status) === 'running'">
 
                     <div class="job-main">
                       <span class="job-name">{{ job.name }}</span>
                       <span class="job-status-badge" [ngClass]="statusClass(job.status)">
-                        {{ job.status }}
+                        {{ displayStatus(job.status) }}
                       </span>
                     </div>
 
@@ -143,6 +146,15 @@
                          (click)="$event.stopPropagation()">
                         Voir GitLab ↗
                       </a>
+                      <button
+                        type="button"
+                        class="job-retry"
+                        *ngIf="job.status === 'failed' || job.status === 'canceled'"
+                        (click)="$event.stopPropagation(); retryJob(job.id)"
+                        title="Relancer ce job"
+                      >
+                        Relancer
+                      </button>
                     </div>
                   </li>
                 </ul>

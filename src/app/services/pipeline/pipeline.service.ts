@@ -31,9 +31,18 @@ export class PipelineService {
 }
 
   getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
-    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}`, {
+    // BDD-first côté backend (reports non inclus par défaut)
+    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}?includeReports=false`, {
       headers: this.authHeaders()
     });
+  }
+
+  /** Mode “live”: demande au backend de rafraîchir les jobs en arrière-plan. */
+  getPipelineAndScanLive(envId: string): Observable<PipelineScanResponse> {
+    return this.http.get<PipelineScanResponse>(
+      BASE + `api/pipelines/by-environment/${envId}?includeReports=false&refresh=true`,
+      { headers: this.authHeaders() }
+    );
   }
 
   getSecuritySummary(envId: string): Observable<SecuritySummaryResponse> {
@@ -43,7 +52,7 @@ export class PipelineService {
   }
 
   getPipelineById(pipelineId: number): Observable<PipelineScanResponse> {
-  return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-id/${pipelineId}`, {
+  return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-id/${pipelineId}?includeReports=false`, {
     headers: this.authHeaders()
   });
 }
@@ -64,6 +73,12 @@ getLatestPipeline(): Observable<any> {
     return this.http.get(BASE + `api/pipelines/jobs/${jobId}/logs`, {
       headers: this.authHeaders(),
       responseType: 'text'
+    });
+  }
+
+  retryJob(jobId: number): Observable<void> {
+    return this.http.post<void>(BASE + `api/pipelines/jobs/${jobId}/retry`, null, {
+      headers: this.authHeaders()
     });
   }
 

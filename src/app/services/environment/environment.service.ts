@@ -76,8 +76,9 @@ getLatestEnvironment(): Observable<any> {
       headers: this.authHeaders()
     });
   }
-   getMyEnvironments(): Observable<EnvironmentSummaryResponse[]> {
-    return this.http.get<any[]>(`${BASE}api/environments`, {
+   getMyEnvironments(appId?: string): Observable<EnvironmentSummaryResponse[]> {
+    const url = appId ? `${BASE}api/environments?appId=${encodeURIComponent(appId)}` : `${BASE}api/environments`;
+    return this.http.get<any[]>(url, {
       headers: this.authHeaders()
     }).pipe(map((list) => (list || []).map((e) => this.convertEnvironment(e))));
   }

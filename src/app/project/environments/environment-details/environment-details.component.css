@@ -457,6 +457,113 @@
   color: var(--danger);
 }
 
+/* ===== URL + APERÇU ===== */
+.url-with-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.app-url-link {
+  color: var(--accent-orange);
+  font-weight: 600;
+  word-break: break-all;
+  text-decoration: none;
+}
+
+.app-url-link:hover {
+  text-decoration: underline;
+}
+
+.copy-url-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface);
+  color: var(--overview-text);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.copy-url-btn:hover {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+.value.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.preview-card {
+  background: var(--overview-surface);
+  border: 1px solid var(--overview-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.preview-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: var(--overview-text);
+}
+
+.preview-hint {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--overview-text-muted);
+}
+
+.preview-iframe-wrap {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--overview-border);
+  background: #fff;
+}
+
+.preview-iframe {
+  width: 100%;
+  height: 260px;
+  border: none;
+  display: block;
+}
+
+.preview-state {
+  margin: 0;
+}
+
+.preview-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--overview-text);
+}
+
+.preview-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--overview-text-muted);
+}
+
+.preview-muted .preview-text {
+  color: #94a3b8;
+}
+
+.preview-pending .preview-text {
+  color: #b45309;
+}
+
+.preview-warning .preview-text {
+  color: #b91c1c;
+}
+
 /* ===== COPIE D'ID ===== */
 .copyable {
   cursor: pointer;

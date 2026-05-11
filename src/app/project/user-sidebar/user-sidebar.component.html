@@ -262,6 +262,15 @@
       </button>
     </section>
 
+    <!-- Réclamations (support admin) -->
+    <section class="sidebar-section">
+      <h3 class="section-label"><span>✉️ Support</span></h3>
+      <button type="button" class="nav-item" (click)="navigate('/reclamations')" [class.active]="isReclamationsRoute()">
+        <span class="nav-dot"></span>
+        <span class="nav-text">Réclamations</span>
+      </button>
+    </section>
+
     <!-- Paramètres -->
     <section class="sidebar-section">
       <h3 class="section-label">⚙️ Paramètres</h3>

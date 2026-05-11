@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ApplicationService } from '../../services/application/application.service';
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { ENVIRONMENT_STATUS } from 'src/app/models/environment/status-types';
@@ -34,6 +35,7 @@ export class ProjectDeploymentsComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private applicationService: ApplicationService,
+    private sanitizer: DomSanitizer,
     public format: FormatService
   ) {}
 
@@ -217,8 +219,28 @@ export class ProjectDeploymentsComponent implements OnInit {
               env.gitBranch.toLowerCase().includes(this.branchFilter.toLowerCase()));
   }
 
-  getEnvironmentUrl(envId: string): string {
-    return `https://${envId}.test.com`;
+  /** URL publique renseignée par le backend (webhook / déploiement). */
+  deploymentLink(env: DeploymentHistoryItem): string | null {
+    const u = (env.deploymentUrl || '').trim();
+    return u || null;
+  }
+
+  canEmbedPreview(url: string): boolean {
+    const u = (url || '').trim().toLowerCase();
+    return u.startsWith('http://') || u.startsWith('https://');
+  }
+
+  trustedEmbed(url: string): SafeResourceUrl {
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  isDeploymentInProgress(env: DeploymentHistoryItem): boolean {
+    const s = (env.environmentStatus || '').toUpperCase();
+    return s === 'PENDING' || s === 'BUILDING';
+  }
+
+  isDeploymentFailed(env: DeploymentHistoryItem): boolean {
+    return (env.environmentStatus || '').toUpperCase() === 'FAILED';
   }
 
 

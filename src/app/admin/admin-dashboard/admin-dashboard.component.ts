@@ -1,18 +1,22 @@
-
-
 import { Component, OnInit } from '@angular/core';
 import { AdminService, PendingUser } from '../../services/admin/admin.service';
 
 @Component({
   selector: 'app-admin-dashboard',
   templateUrl: './admin-dashboard.component.html',
-  styleUrls: ['./admin-dashboard.component.css']
+  styleUrls: ['../admin-route-page.css', './admin-dashboard.component.css']
 })
 export class AdminDashboardComponent implements OnInit {
-
   pendingUsers: PendingUser[] = [];
   loading = false;
   error: string | null = null;
+
+  /** Utilisateur pour lequel le panneau de rejet est ouvert. */
+  rejectModalUser: PendingUser | null = null;
+  rejectReason = '';
+
+  /** Désactive les actions pendant l’appel API (par id utilisateur). */
+  actionBusyId: string | null = null;
 
   constructor(private adminService: AdminService) {}
 
@@ -30,26 +34,70 @@ export class AdminDashboardComponent implements OnInit {
       },
       error: err => {
         this.loading = false;
-        this.error = err.error?.message || 'Erreur lors du chargement des utilisateurs en attente';
+        this.error = err.error?.message || err.message || 'Erreur lors du chargement des utilisateurs en attente.';
       }
     });
   }
 
   approve(user: PendingUser): void {
+    if (this.actionBusyId) {
+      return;
+    }
+    this.error = null;
+    this.actionBusyId = user.id;
     this.adminService.approveUser(String(user.id)).subscribe({
       next: () => {
         this.pendingUsers = this.pendingUsers.filter(u => u.id !== user.id);
+        this.actionBusyId = null;
+      },
+      error: err => {
+        this.actionBusyId = null;
+        this.error = err.error?.message || err.message || 'Approbation impossible.';
       }
     });
   }
 
-  reject(user: PendingUser): void {
-    const reason = prompt(`Raison du rejet pour ${user.username} :`) || undefined;
+  openReject(user: PendingUser): void {
+    this.error = null;
+    this.rejectModalUser = user;
+    this.rejectReason = '';
+  }
+
+  cancelReject(): void {
+    this.rejectModalUser = null;
+    this.rejectReason = '';
+  }
+
+  confirmReject(): void {
+    const user = this.rejectModalUser;
+    if (!user || this.actionBusyId) {
+      return;
+    }
+    this.error = null;
+    this.actionBusyId = user.id;
+    const reason = this.rejectReason.trim() || undefined;
     this.adminService.rejectUser(String(user.id), reason).subscribe({
       next: () => {
         this.pendingUsers = this.pendingUsers.filter(u => u.id !== user.id);
+        this.cancelReject();
+        this.actionBusyId = null;
+      },
+      error: err => {
+        this.actionBusyId = null;
+        this.error = err.error?.message || err.message || 'Rejet impossible.';
       }
     });
   }
-}
 
+  isBusy(userId: string): boolean {
+    return this.actionBusyId === userId;
+  }
+
+  userInitials(username: string): string {
+    const u = (username || '?').trim();
+    if (!u) {
+      return '?';
+    }
+    return u.slice(0, 2).toUpperCase();
+  }
+}

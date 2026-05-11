@@ -4,7 +4,9 @@ import { forkJoin, of, Subject } from 'rxjs';
 import { takeUntil, catchError, finalize } from 'rxjs/operators';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { ApplicationService } from '../../services/application/application.service';
+import { EnvironmentService } from '../../services/environment/environment.service';
 import { FormatService } from '../../models/environment/format.service';
+import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 import { ActivityItem } from '../../models/activity/ActivityItem';
 
 @Component({
@@ -19,7 +21,7 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
   filteredActivities: ActivityItem[] = [];
   loading = true;
   error: string | null = null;
-  activeFilter: 'all' | 'deployment' | 'pipeline' = 'all';
+  activeFilter: 'all' | 'deployment' | 'pipeline' | 'environment' = 'all';
   
   // Pagination
   currentPage: number = 0;
@@ -36,6 +38,7 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
     public router: Router,
     private applicationService: ApplicationService,
     private pipelineService: PipelineService,
+    private environmentService: EnvironmentService,
     public format: FormatService
   ) {}
 
@@ -100,6 +103,12 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
           console.error('Erreur chargement pipelines:', err);
           return of([]);
         })
+      ),
+      environments: this.environmentService.getMyEnvironments(appId).pipe(
+        catchError(err => {
+          console.error('Erreur chargement environnements:', err);
+          return of([] as EnvironmentSummaryResponse[]);
+        })
       )
     }).pipe(
       takeUntil(this.destroy$),
@@ -110,7 +119,11 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
           this.appName = data.appInfo.name;
         }
         
-        this.buildActivities(data.deployments || [], data.pipelines || []);
+        this.buildActivities(
+          data.deployments || [],
+          data.pipelines || [],
+          data.environments || []
+        );
         
         // Mettre en cache
         this.cache.set(cacheKey, {
@@ -130,8 +143,19 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
   /**
    * Construit la liste complète des activités
    */
-  private buildActivities(deployments: any[], pipelines: any[]): void {
+  private buildActivities(
+    deployments: any[],
+    pipelines: any[],
+    environments: EnvironmentSummaryResponse[]
+  ): void {
     const activities: ActivityItem[] = [];
+    const envIdsForApp = new Set<string>();
+    environments.forEach(e => envIdsForApp.add(String(e.id)));
+    deployments.forEach(d => {
+      if (d?.environmentId) {
+        envIdsForApp.add(String(d.environmentId));
+      }
+    });
 
     // Ajouter les déploiements
     deployments.forEach(d => {
@@ -152,22 +176,47 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
       });
     });
 
-    // Ajouter les pipelines
-    pipelines.forEach(p => {
+    // Pipelines de cette application uniquement (listPipelines = tous les envs utilisateur)
+    pipelines
+      .filter((p: any) => p?.environmentId && envIdsForApp.has(String(p.environmentId)))
+      .forEach(p => {
+        activities.push({
+          id: String(p.pipelineId || ''),
+          type: 'pipeline',
+          title: 'Pipeline exécuté',
+          description: `Pipeline #${p.pipelineId} pour ${p.environmentName}`,
+          timestamp: p.createdAt,
+          status: p.status || p.pipelineStatus,
+          icon: '⚙️',
+          link: `/pipeline/${p.environmentId}?appId=${this.appId}`,
+          metadata: {
+            branch: p.gitBranch,
+            environment: p.environmentName,
+            triggeredBy: p.createdByUsername,
+            duration: p.duration
+          }
+        });
+      });
+
+    // Environnements (création / cycle de vie)
+    environments.forEach(e => {
+      const { title, description } = this.environmentActivityCopy(e);
+      const st = (e.status || '').toUpperCase();
+      const previewTrim = (e.previewUrl || '').trim();
+      const preview = st === 'RUNNING' && previewTrim ? previewTrim : undefined;
       activities.push({
-        id: String(p.pipelineId || ''),
-        type: 'pipeline',
-        title: 'Pipeline exécuté',
-        description: `Pipeline #${p.pipelineId} pour ${p.environmentName}`,
-        timestamp: p.createdAt,
-        status: p.status || p.pipelineStatus,
-        icon: '⚙️',
-        link: `/pipeline/${p.environmentId}?appId=${this.appId}`,
+        id: e.id,
+        type: 'environment',
+        title,
+        description,
+        timestamp: e.createdAt,
+        status: e.status,
+        icon: this.getEnvironmentActivityIcon(e.status),
+        link: `/pipeline/${e.id}?appId=${this.appId ?? ''}`,
         metadata: {
-          branch: p.gitBranch,
-          environment: p.environmentName,
-          triggeredBy: p.createdByUsername,
-          duration: p.duration
+          branch: e.gitBranch,
+          environment: e.environmentName,
+          previewUrl: preview ?? undefined
         }
       });
     });
@@ -195,7 +244,7 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
   /**
    * Applique le filtre actif
    */
-  applyFilter(filter?: 'all' | 'deployment' | 'pipeline'): void {
+  applyFilter(filter?: 'all' | 'deployment' | 'pipeline' | 'environment'): void {
     if (filter) {
       this.activeFilter = filter;
       this.currentPage = 0; // Reset à la première page quand on change de filtre
@@ -286,6 +335,8 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
     if (s === 'CANCELED') return 'status-canceled';
     if (s === 'RUNNING') return 'status-running';
     if (s === 'PENDING') return 'status-pending';
+    if (s === 'BUILDING') return 'status-running';
+    if (s === 'DESTROYED' || s === 'EXPIRED') return 'status-unknown';
     return 'status-unknown';
   }
 
@@ -406,7 +457,39 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
   /**
    * Retourne le compteur pour chaque type
    */
-  getCountByType(type: 'deployment' | 'pipeline'): number {
+  getCountByType(type: 'deployment' | 'pipeline' | 'environment'): number {
     return this.allActivities.filter(a => a.type === type).length;
+  }
+
+  private environmentActivityCopy(env: EnvironmentSummaryResponse): { title: string; description: string } {
+    const name = env.environmentName || 'Environnement';
+    const branch = env.gitBranch || '—';
+    const st = (env.status || '').toUpperCase();
+    switch (st) {
+      case 'RUNNING':
+        return { title: 'Environnement actif', description: `${name} — branche ${branch}` };
+      case 'PENDING':
+        return { title: 'Environnement en attente', description: `${name} — branche ${branch}` };
+      case 'BUILDING':
+        return { title: 'Environnement en construction', description: `${name} — branche ${branch}` };
+      case 'FAILED':
+        return { title: 'Environnement en échec', description: `${name} — branche ${branch}` };
+      case 'DESTROYED':
+        return { title: 'Environnement détruit', description: `${name} — branche ${branch}` };
+      case 'EXPIRED':
+        return { title: 'Environnement expiré', description: `${name} — branche ${branch}` };
+      default:
+        return { title: 'Environnement', description: `${name} — branche ${branch} (${st || '?'})` };
+    }
+  }
+
+  private getEnvironmentActivityIcon(status: string | undefined): string {
+    const s = (status || '').toUpperCase();
+    if (s === 'RUNNING') return '🌍';
+    if (s === 'BUILDING') return '🔧';
+    if (s === 'PENDING') return '⏳';
+    if (s === 'FAILED') return '⚠️';
+    if (s === 'DESTROYED' || s === 'EXPIRED') return '🗑️';
+    return '🌍';
   }
 }

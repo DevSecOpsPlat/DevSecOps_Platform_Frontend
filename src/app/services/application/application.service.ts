@@ -9,6 +9,17 @@ import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;
 
+/** Totaux pipelines pour une app (GET …/deployments/metrics) — indépendant de la pagination d’historique. */
+export interface DeploymentMetrics {
+  total: number;
+  success: number;
+  failed: number;
+  canceled: number;
+  pending: number;
+  running: number;
+  skipped: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -28,6 +39,20 @@ export class ApplicationService {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     });
+  }
+
+  /** Invalide le cache des déploiements (ex. au refresh du dashboard). */
+  clearDeploymentsCache(appId?: string): void {
+    if (!appId) {
+      this.deploymentsCache.clear();
+      return;
+    }
+    const prefix = `${appId}-`;
+    for (const key of [...this.deploymentsCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        this.deploymentsCache.delete(key);
+      }
+    }
   }
 
   getMyApplications(): Observable<ApplicationResponse[]> {
@@ -126,6 +151,13 @@ export class ApplicationService {
         // Mettre en cache
         this.deploymentsCache.set(cacheKey, {data, timestamp: Date.now()});
       })
+    );
+  }
+
+  getDeploymentMetrics(appId: string): Observable<DeploymentMetrics> {
+    return this.http.get<DeploymentMetrics>(
+      `${BASE}api/applications/${appId}/deployments/metrics`,
+      { headers: this.authHeaders() }
     );
   }
 

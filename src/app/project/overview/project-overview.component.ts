@@ -2,7 +2,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ApplicationService } from '../../services/application/application.service';
+import { ApplicationService, DeploymentMetrics } from '../../services/application/application.service';
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
@@ -26,6 +26,32 @@ export interface ChartSegment {
   color: string;
   percent?: number;
 }
+
+/** Libellés dashboard pour les stages du template (voir `docs/pipeline.md`). */
+const PIPELINE_STAGE_LABELS: Record<string, string> = {
+  hello: 'Accueil',
+  clone: 'Clone / détection',
+  'sonarqube-setup': 'Sonar — setup',
+  'sonarqube-scan': 'Sonar — analyse',
+  'sca-trivy': 'SCA — Trivy',
+  'sca-node': 'SCA — Node',
+  'sca-python': 'SCA — Python',
+  'sca-java': 'SCA — Java / Maven',
+  'sca-owasp': 'SCA — OWASP Dependency-Check',
+  'sast-generic': 'SAST — Semgrep',
+  'sast-angular': 'SAST — Angular / React',
+  secrets: 'Secrets (Gitleaks)',
+  container: 'Conteneur',
+  iac: 'IaC (Checkov)',
+  'license-node': 'Licences — Node',
+  'license-python': 'Licences — Python',
+  'build-image': 'Build image',
+  'container-scan': 'Scan image',
+  'push-image': 'Push image',
+  'deploy-k8s': 'Déploiement K8s',
+  'schedule-delete': 'Planification suppression',
+  report: 'Rapport agrégé'
+};
 
 @Component({
   selector: 'app-project-overview',
@@ -52,6 +78,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   recentActivities: ActivityItem[] = [];
   recentPipelines: DashboardPipelineItem[] = [];
   activeEnvironments: DashboardEnvironmentItem[] = [];
+  environmentsForApp: EnvironmentSummaryResponse[] = [];
+  selectedEnvironmentId: string | null = null;
   recentVulnerabilities: DashboardVulnerabilityItem[] = [];
   /** Comptages OPEN distincts par sévérité (tous envs de cette application). */
   vulnerabilityStatsBySeverity: Record<string, number> = {};
@@ -66,6 +94,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   totalDeployments: number = 0;
   successfulDeployments: number = 0;
   failedDeployments: number = 0;
+  /** Pipelines SKIPPED (comptabilisés dans le donut avec les autres statuts). */
+  skippedDeployments: number = 0;
   
   // États
   loading = true;
@@ -123,6 +153,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.appId = this.route.parent?.snapshot.paramMap.get('appId') || null;
     if (this.appId) {
+      const qpEnv = this.route.snapshot.queryParamMap.get('env');
+      const stored = localStorage.getItem(`selectedEnv:${this.appId}`);
+      this.selectedEnvironmentId = (qpEnv || stored || null);
       this.loadAppData();
     } else {
       this.error = 'ID d\'application invalide';
@@ -136,13 +169,46 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
+  onEnvironmentSelected(envId: string): void {
+    if (!envId || !this.appId) {
+      return;
+    }
+    this.selectedEnvironmentId = envId;
+    localStorage.setItem(`selectedEnv:${this.appId}`, envId);
+    // refléter dans l’URL pour partage / refresh
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { env: envId },
+      queryParamsHandling: 'merge'
+    });
+
+    // Recharge les sections dépendantes de l’environnement sélectionné
+    this.loadEnvironmentSummary(envId);
+
+    // Vulnérabilités récentes: basculer sur cet environnement
+    this.securityService.getRecentVulnerabilities(5, this.appId, envId).subscribe({
+      next: (items) => (this.recentVulnerabilities = items || []),
+      error: () => {}
+    });
+
+    // “Dernier déploiement” = dernier pipeline pour cet env (si l’historique est déjà chargé)
+    const byEnv = (this.deployments || []).filter(d => d.environmentId === envId);
+    this.latestDeployment = byEnv.length > 0 ? byEnv[0] : null;
+    if (this.latestDeployment) {
+      this.loadLatestPipelineDetails();
+    }
+  }
+
   /**
    * Charge les données de l'application de manière progressive
    */
   loadAppData(): void {
     if (!this.appId) return;
-    
+
+    this.applicationService.clearDeploymentsCache(this.appId);
+
     this.loading = true;
+    this.loadingSlow = false;
     this.error = null;
     
     // 1. D'abord charger les données rapides
@@ -153,13 +219,13 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           return of(null);
         })
       ),
-      environments: this.environmentService.getMyEnvironments().pipe(
+      environments: this.environmentService.getMyEnvironments(this.appId).pipe(
         catchError(err => {
           console.error('Erreur chargement environnements:', err);
           return of([]);
         })
       ),
-      vulnerabilities: this.securityService.getRecentVulnerabilities(5, this.appId).pipe(
+      vulnerabilities: this.securityService.getRecentVulnerabilities(5, this.appId, this.selectedEnvironmentId || undefined).pipe(
         catchError(err => {
           console.error('Erreur chargement vulnérabilités:', err);
           return of([]);
@@ -178,7 +244,19 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           this.appName = quickData.appInfo.name;
         }
         
-        this.activeEnvironments = (quickData.environments || [])
+        this.environmentsForApp = (quickData.environments || []);
+
+        // Sélection par défaut: valeur sauvegardée, sinon le plus récent RUNNING, sinon le premier.
+        const ids = new Set(this.environmentsForApp.map(e => e.id));
+        if (!this.selectedEnvironmentId || !ids.has(this.selectedEnvironmentId)) {
+          const running = this.environmentsForApp.find(e => (e.status || '').toUpperCase() === 'RUNNING');
+          this.selectedEnvironmentId = running?.id || this.environmentsForApp[0]?.id || null;
+          if (this.selectedEnvironmentId && this.appId) {
+            localStorage.setItem(`selectedEnv:${this.appId}`, this.selectedEnvironmentId);
+          }
+        }
+
+        this.activeEnvironments = (this.environmentsForApp || [])
           .filter(e => e.status === 'RUNNING')
           .map(e => ({
             id: e.id,
@@ -201,12 +279,19 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.highCriticalVulnerabilityCount =
           (this.vulnerabilityStatsBySeverity['CRITICAL'] ?? 0) +
           (this.vulnerabilityStatsBySeverity['HIGH'] ?? 0);
-        
-        // 2. Ensuite charger les données plus lentes
+        // Graphique vuln : ne pas attendre la phase lente (sinon KPI ≠ graphique).
+        this.vulnerabilityChartData = this.buildVulnerabilityChartData();
+
+        // Afficher le dashboard dès que les données rapides sont là
+        this.loading = false;
+
+        // 2. Ensuite charger les données plus lentes (en arrière-plan)
         this.loadDeploymentsAndPipelines();
       },
       error: (err) => {
         console.error('Erreur chargement données rapides:', err);
+        // On n'empêche pas l'UI de s'afficher : on passe en mode "données lentes" best-effort
+        this.loading = false;
         this.loadDeploymentsAndPipelines(); // Continuer quand même
       }
     });
@@ -261,6 +346,12 @@ refreshData(): void {
         return of([]);
       })
     ),
+    deploymentMetrics: this.applicationService.getDeploymentMetrics(this.appId).pipe(
+      catchError(err => {
+        console.error('Erreur chargement métriques déploiements:', err);
+        return of(null);
+      })
+    ),
     pipelines: this.pipelineService.listPipelines(0, 10).pipe(
       catchError(err => {
         console.error('Erreur chargement pipelines:', err);
@@ -270,13 +361,36 @@ refreshData(): void {
   }).subscribe({
     next: (slowData) => {
       this.deployments = slowData.deployments || [];
-      this.latestDeployment = this.deployments.length > 0 ? this.deployments[0] : null;
+      // Dernier déploiement: par env sélectionné si dispo, sinon global
+      if (this.selectedEnvironmentId) {
+        const byEnv = this.deployments.filter(d => d.environmentId === this.selectedEnvironmentId);
+        this.latestDeployment = byEnv.length > 0 ? byEnv[0] : (this.deployments.length > 0 ? this.deployments[0] : null);
+      } else {
+        this.latestDeployment = this.deployments.length > 0 ? this.deployments[0] : null;
+      }
       
       console.log('📦 Données pipelines brutes:', slowData.pipelines);
-      
-      // Traiter les pipelines récents
-      const rawPipelines = (slowData.pipelines || [])
-        .filter((p: any) => p.environmentId && this.deployments.some((d: any) => d.environmentId === p.environmentId));
+
+      // Corréler aux envs de cette app (BDD), pas seulement à l’historique déploiements :
+      // si l’API deployments est vide ou en erreur, l’ancien filtre masquait tous les pipelines.
+      const envIdsForApp = new Set<string>();
+      (this.environmentsForApp || []).forEach(e => envIdsForApp.add(String(e.id)));
+      (this.deployments || []).forEach((d: any) => {
+        if (d?.environmentId) {
+          envIdsForApp.add(String(d.environmentId));
+        }
+      });
+
+      const rawPipelines = (slowData.pipelines || []).filter((p: any) => {
+        if (!p?.environmentId) {
+          return false;
+        }
+        // listPipelines = tous les envs de l’utilisateur : sans ids d’app on ne filtre pas (risque fuite inter-apps).
+        if (envIdsForApp.size === 0) {
+          return false;
+        }
+        return envIdsForApp.has(String(p.environmentId));
+      });
       
       // Afficher les dates pour debug
       rawPipelines.forEach((p: any) => {
@@ -304,17 +418,29 @@ refreshData(): void {
           triggeredBy: p.createdByUsername
         }));
       
-      // Statistiques
-      this.totalDeployments = this.deployments.length;
-      this.successfulDeployments = this.deployments.filter(d => 
-        d.pipelineStatus?.toUpperCase() === 'SUCCESS'
-      ).length;
-      this.failedDeployments = this.deployments.filter(d => 
-        ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
-      ).length;
-      this.pendingDeployments = this.deployments.filter(d => 
-        ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
-      ).length;
+      // Statistiques : agrégats BDD (toute l’app), pas la longueur de la page d’historique (ex. 10 lignes).
+      const m: DeploymentMetrics | null = slowData.deploymentMetrics;
+      if (m != null && typeof m.total === 'number') {
+        this.totalDeployments = m.total;
+        this.successfulDeployments = m.success ?? 0;
+        this.failedDeployments = (m.failed ?? 0) + (m.canceled ?? 0);
+        this.pendingDeployments = (m.pending ?? 0) + (m.running ?? 0);
+        this.skippedDeployments = m.skipped ?? 0;
+      } else {
+        this.totalDeployments = this.deployments.length;
+        this.successfulDeployments = this.deployments.filter(d =>
+          d.pipelineStatus?.toUpperCase() === 'SUCCESS'
+        ).length;
+        this.failedDeployments = this.deployments.filter(d =>
+          ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
+        ).length;
+        this.pendingDeployments = this.deployments.filter(d =>
+          ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
+        ).length;
+        this.skippedDeployments = this.deployments.filter(d =>
+          d.pipelineStatus?.toUpperCase() === 'SKIPPED'
+        ).length;
+      }
       
       // Chart data: deployment status
       this.deploymentChartData = this.buildDeploymentChartData();
@@ -329,12 +455,10 @@ refreshData(): void {
         this.loadLatestPipelineDetails();
       }
       
-      this.loading = false;
       this.loadingSlow = false;
     },
     error: (err) => {
       console.error('Erreur chargement données lentes:', err);
-      this.loading = false;
       this.loadingSlow = false;
       this.error = 'Erreur lors du chargement des données';
     }
@@ -356,6 +480,19 @@ getPipelineTimeAgo(pipeline: DashboardPipelineItem): string {
 getActivityTimeAgo(activity: ActivityItem): string {
   if (!activity?.timestamp) return '—';
   return this.formatTimeAgo(activity.timestamp);
+}
+
+activityKindLabel(type: ActivityItem['type']): string {
+  switch (type) {
+    case 'deployment':
+      return 'Déploiement';
+    case 'pipeline':
+      return 'Pipeline';
+    case 'environment':
+      return 'Environnement';
+    default:
+      return '';
+  }
 }
 
   /**
@@ -380,10 +517,6 @@ getActivityTimeAgo(activity: ActivityItem): string {
   
   // Ajouter les pipelines récents
   this.recentPipelines.slice(0, 3).forEach(p => {
-    // 🔍 Vérifier que la date existe
-    const dateExists = p.createdAt ? 'oui' : 'non';
-    console.log(`Pipeline ${p.id} - date: ${p.createdAt}, existe: ${dateExists}`);
-    
     activities.push({
       id: String(p.id || ''),
       type: 'pipeline',
@@ -393,6 +526,30 @@ getActivityTimeAgo(activity: ActivityItem): string {
       status: p.status,
       icon: '⚙️',
       link: `/pipeline/${p.environmentId}?appId=${this.appId}`
+    });
+  });
+
+  // Environnements récents (tous statuts), triés par date de création
+  const envByDate = [...(this.environmentsForApp || [])].sort((a, b) => {
+    const ta = this.safeParseDate(a.createdAt)?.getTime() || 0;
+    const tb = this.safeParseDate(b.createdAt)?.getTime() || 0;
+    return tb - ta;
+  });
+  envByDate.slice(0, 4).forEach(e => {
+    const { title, description } = this.environmentActivityCopy(e);
+    const st = (e.status || '').toUpperCase();
+    const preview =
+      st === 'RUNNING' && (e.previewUrl || '').trim() ? (e.previewUrl as string).trim() : undefined;
+    activities.push({
+      id: e.id,
+      type: 'environment',
+      title,
+      description,
+      timestamp: e.createdAt,
+      status: e.status,
+      icon: this.getEnvironmentActivityIcon(e.status),
+      link: `/pipeline/${e.id}?appId=${this.appId ?? ''}`,
+      previewUrl: preview
     });
   });
   
@@ -418,11 +575,20 @@ getActivityTimeAgo(activity: ActivityItem): string {
    */
   private buildDeploymentChartData(): ChartSegment[] {
     const total = this.totalDeployments || 1;
-    return [
+    const rows: ChartSegment[] = [
       { label: 'Réussis', value: this.successfulDeployments, color: '#22c55e', percent: (this.successfulDeployments / total) * 100 },
       { label: 'Échoués', value: this.failedDeployments, color: '#ef4444', percent: (this.failedDeployments / total) * 100 },
       { label: 'En cours', value: this.pendingDeployments, color: '#f97316', percent: (this.pendingDeployments / total) * 100 }
-    ].filter(s => s.value > 0);
+    ];
+    if (this.skippedDeployments > 0) {
+      rows.push({
+        label: 'Ignorés',
+        value: this.skippedDeployments,
+        color: '#64748b',
+        percent: (this.skippedDeployments / total) * 100
+      });
+    }
+    return rows.filter(s => s.value > 0);
   }
 
   /**
@@ -576,6 +742,8 @@ getActivityTimeAgo(activity: ActivityItem): string {
    */
   private formatStageName(stage: string): string {
     if (!stage) return 'Unknown';
+    const mapped = PIPELINE_STAGE_LABELS[stage.trim().toLowerCase()];
+    if (mapped) return mapped;
     let formatted = stage.replace(/[-_]/g, ' ');
     formatted = formatted.split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -701,33 +869,43 @@ private safeParseDate(dateValue: any): Date | null {
 }
 
   // Dans le composant
-get stats() {
+get stats(): Array<{
+  label: string;
+  value: number | string;
+  icon: string;
+  color: string;
+  iconBg: string;
+  trend?: string;
+}> {
+  const depPending = this.loadingSlow;
   return [
     { 
       label: 'Déploiements', 
-      value: this.totalDeployments, 
+      value: depPending ? '…' : this.totalDeployments, 
       icon: '📦', 
       color: '#3b82f6',
       iconBg: 'rgba(59, 130, 246, 0.2)'
     },
     { 
       label: 'Réussis', 
-      value: this.successfulDeployments, 
+      value: depPending ? '…' : this.successfulDeployments, 
       icon: '✅', 
       color: '#22c55e',
       iconBg: 'rgba(34, 197, 94, 0.2)',
-      trend: this.totalDeployments ? `${Math.round(this.successfulDeployments/this.totalDeployments*100)}%` : '0%'
+      trend: depPending
+        ? '…'
+        : (this.totalDeployments ? `${Math.round(this.successfulDeployments / this.totalDeployments * 100)}%` : '0%')
     },
     { 
       label: 'En attente', 
-      value: this.pendingDeployments, 
+      value: depPending ? '…' : this.pendingDeployments, 
       icon: '⏳', 
       color: '#f97316',
       iconBg: 'rgba(249, 115, 22, 0.2)'
     },
     { 
       label: 'Échoués', 
-      value: this.failedDeployments, 
+      value: depPending ? '…' : this.failedDeployments, 
       icon: '❌', 
       color: '#ef4444',
       iconBg: 'rgba(239, 68, 68, 0.2)'
@@ -803,7 +981,8 @@ get stats() {
     const s = (status || '').toUpperCase();
     if (s === 'SUCCESS') return 'status-success';
     if (s === 'FAILED' || s === 'CANCELED') return 'status-danger';
-    if (s === 'RUNNING' || s === 'PENDING') return 'status-warning';
+    if (s === 'RUNNING' || s === 'PENDING' || s === 'BUILDING') return 'status-warning';
+    if (s === 'DESTROYED' || s === 'EXPIRED') return 'status-muted';
     return 'status-muted';
   }
 
@@ -818,6 +997,39 @@ get stats() {
     if (s === 'RUNNING') return '🔄';
     if (s === 'PENDING') return '⏳';
     return '•';
+  }
+
+  /** Libellés activité « environnement » selon le statut de l’env. */
+  private environmentActivityCopy(env: EnvironmentSummaryResponse): { title: string; description: string } {
+    const name = env.environmentName || 'Environnement';
+    const branch = env.gitBranch || '—';
+    const st = (env.status || '').toUpperCase();
+    switch (st) {
+      case 'RUNNING':
+        return { title: 'Environnement actif', description: `${name} — branche ${branch}` };
+      case 'PENDING':
+        return { title: 'Environnement en attente', description: `${name} — branche ${branch}` };
+      case 'BUILDING':
+        return { title: 'Environnement en construction', description: `${name} — branche ${branch}` };
+      case 'FAILED':
+        return { title: 'Environnement en échec', description: `${name} — branche ${branch}` };
+      case 'DESTROYED':
+        return { title: 'Environnement détruit', description: `${name} — branche ${branch}` };
+      case 'EXPIRED':
+        return { title: 'Environnement expiré', description: `${name} — branche ${branch}` };
+      default:
+        return { title: 'Environnement', description: `${name} — branche ${branch} (${st || '?'})` };
+    }
+  }
+
+  private getEnvironmentActivityIcon(status: string | undefined): string {
+    const s = (status || '').toUpperCase();
+    if (s === 'RUNNING') return '🌍';
+    if (s === 'BUILDING') return '🔧';
+    if (s === 'PENDING') return '⏳';
+    if (s === 'FAILED') return '⚠️';
+    if (s === 'DESTROYED' || s === 'EXPIRED') return '🗑️';
+    return '🌍';
   }
 
   /**

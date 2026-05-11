@@ -1,0 +1,135 @@
+<div class="admin-route-page admin-inventory-root">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Inventaire</p>
+      <h1 class="page-title">Applications &amp; environnements</h1>
+      <p class="page-lead">
+        Vue transverse issue des données <strong>admin</strong> uniquement : dépôts, propriétaires, compteurs d’environnements,
+        agrégats de pipelines et <strong>URL déployée</strong> lorsque l’API la fournit. Aucun lien vers les écrans métier
+        (projet, pipeline, Sonar, monitoring).
+      </p>
+    </div>
+    <button type="button" class="btn-refresh" (click)="load()" [disabled]="loading">Actualiser</button>
+  </header>
+
+  <div *ngIf="loading" class="state state-load">
+    <span class="spinner" aria-hidden="true"></span>
+    Chargement…
+  </div>
+  <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <div class="toolbar">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" [class.active]="tab === 'apps'" (click)="setTab('apps')">
+          Applications
+          <span class="tab-count">{{ allAppRows.length }}</span>
+        </button>
+        <button type="button" role="tab" [class.active]="tab === 'envs'" (click)="setTab('envs')">
+          Environnements
+          <span class="tab-count">{{ allEnvRows.length }}</span>
+        </button>
+      </div>
+      <input
+        type="search"
+        class="search"
+        [(ngModel)]="search"
+        placeholder="Filtrer (nom, dépôt, URL, utilisateur, branche, statut…)"
+        aria-label="Filtrer l’inventaire"
+      />
+    </div>
+
+    <section *ngIf="tab === 'apps'" class="panel" aria-label="Applications">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Statut compte</th>
+              <th>Dépôt</th>
+              <th>Envs liés</th>
+              <th>Pipelines (succès / total)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of filteredApps">
+              <td>
+                <span class="admin-cell-title">{{ r.name }}</span>
+                <span class="admin-cell-sub" *ngIf="r.description">{{ r.description }}</span>
+              </td>
+              <td>
+                <span class="admin-cell-title">{{ r.ownerUsername }}</span>
+                <span class="admin-cell-sub">{{ r.ownerEmail }}</span>
+              </td>
+              <td><span class="admin-badge-status">{{ r.accountStatus }}</span></td>
+              <td class="cell-repo">
+                <span class="admin-cell-mono repo-line">{{ r.gitRepositoryUrl || '—' }}</span>
+                <a
+                  *ngIf="r.gitRepositoryUrl"
+                  class="admin-external-link admin-external-link--compact"
+                  [href]="r.gitRepositoryUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Ouvrir le dépôt</a
+                >
+              </td>
+              <td>{{ r.linkedEnvironmentsCount }}</td>
+              <td>
+                {{ (r.pipelineCounts && r.pipelineCounts.success) || 0 }} / {{ pipelineTotal(r.pipelineCounts) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p *ngIf="filteredApps.length === 0" class="empty">Aucune ligne ne correspond au filtre.</p>
+    </section>
+
+    <section *ngIf="tab === 'envs'" class="panel" aria-label="Environnements">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Environnement</th>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Branche</th>
+              <th>Statut env.</th>
+              <th>Statut pipeline</th>
+              <th>URL déployée</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of filteredEnvs">
+              <td>
+                <span class="admin-cell-title">{{ r.environmentName }}</span>
+                <span class="admin-cell-sub mono" *ngIf="r.id">{{ r.id }}</span>
+              </td>
+              <td>{{ r.applicationName }}</td>
+              <td>
+                <span class="admin-cell-title">{{ r.ownerUsername }}</span>
+                <span class="admin-cell-sub">{{ r.ownerEmail }}</span>
+              </td>
+              <td class="admin-cell-mono">{{ r.gitBranch }}</td>
+              <td><span class="admin-badge-status">{{ r.status }}</span></td>
+              <td>{{ r.pipelineStatus || '—' }}</td>
+              <td>
+                <a
+                  *ngIf="r.url"
+                  class="admin-external-link admin-external-link--compact"
+                  [href]="r.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [title]="r.url"
+                  >{{ deploymentUrlLabel(r.url) }}</a
+                >
+                <span *ngIf="!r.url" class="admin-url-muted">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p *ngIf="filteredEnvs.length === 0" class="empty">Aucune ligne ne correspond au filtre.</p>
+    </section>
+  </ng-container>
+</div>

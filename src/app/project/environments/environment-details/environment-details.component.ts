@@ -1,6 +1,7 @@
 // environment-details.component.ts
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { EnvironmentSummaryResponse } from 'src/app/models/environment/environment-summary-response';
 import { FormatService } from 'src/app/models/environment/format.service';
 import { EnvironmentService } from 'src/app/services/environment/environment.service';
@@ -23,6 +24,7 @@ export class EnvironmentDetailsComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private environmentService: EnvironmentService,
+    private sanitizer: DomSanitizer,
     private toastService: ToastService,
     public format: FormatService
   ) {}
@@ -197,10 +199,58 @@ export class EnvironmentDetailsComponent implements OnInit {
     }
   }
 
-  copyToClipboard(text: string): void {
+  /** URL publique de l’app (preview), si renseignée par le backend. */
+  appPublicUrl(): string | null {
+    if (!this.environment) {
+      return null;
+    }
+    const u = (this.environment.previewUrl || '').trim();
+    return u || null;
+  }
+
+  isRunning(): boolean {
+    return (this.environment?.status || '').toUpperCase() === 'RUNNING';
+  }
+
+  isInProgress(): boolean {
+    const s = (this.environment?.status || '').toUpperCase();
+    return s === 'PENDING' || s === 'BUILDING';
+  }
+
+  isFailed(): boolean {
+    return (this.environment?.status || '').toUpperCase() === 'FAILED';
+  }
+
+  canEmbedPreview(url: string): boolean {
+    const u = (url || '').trim().toLowerCase();
+    return u.startsWith('http://') || u.startsWith('https://');
+  }
+
+  trustedEmbed(url: string): SafeResourceUrl {
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  copyToClipboard(text: string, title = 'Presse-papier', detail = 'Copié.'): void {
     navigator.clipboard.writeText(text).then(() => {
-      alert('ID copié dans le presse-papier');
+      if (this.toastService) {
+        this.toastService.push('success', title, detail, 2200);
+      } else {
+        alert(detail);
+      }
     });
+  }
+
+  copyAppUrl(): void {
+    const u = this.appPublicUrl();
+    if (u) {
+      this.copyToClipboard(u, 'URL copiée', 'L’URL de l’application a été copiée.');
+    }
+  }
+
+  copyEnvId(): void {
+    if (this.environment?.id) {
+      this.copyToClipboard(this.environment.id, 'ID copié', 'L’identifiant technique a été copié.');
+    }
   }
 
   /**

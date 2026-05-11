@@ -26,11 +26,14 @@ export class SecurityService {
    * @param limit Nombre maximum de vulnérabilités à retourner
    * @param appId Optionnel - filtre par application
    */
-  getRecentVulnerabilities(limit: number = 5, appId?: string): Observable<DashboardVulnerabilityItem[]> {
+  getRecentVulnerabilities(limit: number = 5, appId?: string, envId?: string): Observable<DashboardVulnerabilityItem[]> {
     // Construction de l'URL avec paramètres optionnels
     let url = `${BASE}api/security/vulnerabilities/recent?limit=${limit}`;
     if (appId) {
       url += `&appId=${appId}`;
+    }
+    if (envId) {
+      url += `&envId=${envId}`;
     }
     
     return this.http.get<any[]>(url, { headers: this.authHeaders() }).pipe(

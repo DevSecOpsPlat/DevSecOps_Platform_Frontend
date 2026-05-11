@@ -13,5 +13,7 @@ export interface ActivityItem {
     environment?: string;
     duration?: number;
     triggeredBy?: string;
+    /** URL publique de l’app (ex. preview nip.io) quand l’environnement est actif. */
+    previewUrl?: string | null;
   };
 }

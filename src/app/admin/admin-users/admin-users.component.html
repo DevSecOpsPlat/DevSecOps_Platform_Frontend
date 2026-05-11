@@ -1,18 +1,15 @@
-<div class="admin-layout">
-  <app-admin-sidebar></app-admin-sidebar>
-
-  <main class="admin-main">
-    <header class="page-head">
-      <div>
-        <p class="page-kicker">Administration</p>
-        <h1 class="page-title">Utilisateurs plateforme</h1>
-        <p class="page-lead">
-          Les comptes avec le rôle <strong>ROLE_ADMIN</strong> ne figurent pas dans cette liste.
-          Pour chaque utilisateur : statistiques de pipelines (réussites, échecs, etc.), applications avec dépôt Git,
-          et historique des environnements éphémères.
-        </p>
-      </div>
-    </header>
+<div class="admin-route-page">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Administration</p>
+      <h1 class="page-title">Utilisateurs plateforme</h1>
+      <p class="page-lead">
+        Les comptes avec le rôle <strong>ROLE_ADMIN</strong> ne figurent pas dans cette liste.
+        Données agrégées issues de l’API administration : statuts de compte, volumes de pipelines, applications,
+        environnements et métadonnées Git — sans renvoi vers les écrans métier (projet / pipeline).
+      </p>
+    </div>
+  </header>
 
     <div *ngIf="loading" class="state state-load">
       <span class="spinner" aria-hidden="true"></span>
@@ -100,19 +97,19 @@
             <p class="card-sub">Total enregistré : {{ su.pipelinesCount }}</p>
             <div class="stat-bars">
               <div class="stat-row ok">
-                <span>Réussis</span><strong>{{ su.pipelineCounts?.success ?? 0 }}</strong>
+                <span>Réussis</span><strong>{{ su.pipelineCounts.success }}</strong>
               </div>
               <div class="stat-row bad">
-                <span>Échecs</span><strong>{{ su.pipelineCounts?.failed ?? 0 }}</strong>
+                <span>Échecs</span><strong>{{ su.pipelineCounts.failed }}</strong>
               </div>
               <div class="stat-row run">
-                <span>En cours</span><strong>{{ su.pipelineCounts?.running ?? 0 }}</strong>
+                <span>En cours</span><strong>{{ su.pipelineCounts.running }}</strong>
               </div>
               <div class="stat-row pend">
-                <span>En attente</span><strong>{{ su.pipelineCounts?.pending ?? 0 }}</strong>
+                <span>En attente</span><strong>{{ su.pipelineCounts.pending }}</strong>
               </div>
               <div class="stat-row neutral">
-                <span>Annulés / ignorés</span><strong>{{ (su.pipelineCounts?.canceled ?? 0) + (su.pipelineCounts?.skipped ?? 0) }}</strong>
+                <span>Annulés / ignorés</span><strong>{{ su.pipelineCounts.canceled + su.pipelineCounts.skipped }}</strong>
               </div>
             </div>
           </article>
@@ -124,21 +121,21 @@
               <span class="emph">{{ su.activeEnvironmentsCount }}</span> actifs (RUNNING)
             </p>
             <div class="chips">
-              <span class="chip">En attente {{ su.environmentStatusBreakdown?.pending ?? 0 }}</span>
-              <span class="chip">Construction {{ su.environmentStatusBreakdown?.building ?? 0 }}</span>
-              <span class="chip chip-ok">Actifs {{ su.environmentStatusBreakdown?.running ?? 0 }}</span>
-              <span class="chip chip-bad">Échec {{ su.environmentStatusBreakdown?.failed ?? 0 }}</span>
-              <span class="chip">Détruits {{ su.environmentStatusBreakdown?.destroyed ?? 0 }}</span>
-              <span class="chip">Expirés {{ su.environmentStatusBreakdown?.expired ?? 0 }}</span>
+              <span class="chip">En attente {{ su.environmentStatusBreakdown.pending }}</span>
+              <span class="chip">Construction {{ su.environmentStatusBreakdown.building }}</span>
+              <span class="chip chip-ok">Actifs {{ su.environmentStatusBreakdown.running }}</span>
+              <span class="chip chip-bad">Échec {{ su.environmentStatusBreakdown.failed }}</span>
+              <span class="chip">Détruits {{ su.environmentStatusBreakdown.destroyed }}</span>
+              <span class="chip">Expirés {{ su.environmentStatusBreakdown.expired }}</span>
             </div>
           </article>
         </div>
 
         <article class="card card-wide">
-          <h3 class="card-title">Applications ({{ su.applications?.length || 0 }})</h3>
+          <h3 class="card-title">Applications ({{ su.applications.length }})</h3>
           <p class="card-sub">Nom, dépôt, création, nombre d’environnements liés, résultats des pipelines.</p>
 
-          <div *ngIf="!su.applications?.length" class="empty-block">Aucune application créée.</div>
+          <div *ngIf="!su.applications.length" class="empty-block">Aucune application créée.</div>
 
           <div class="app-cards">
             <div class="app-card" *ngFor="let app of su.applications">
@@ -150,12 +147,12 @@
               <a class="app-repo" [href]="app.gitRepositoryUrl" target="_blank" rel="noopener">{{ app.gitRepositoryUrl }}</a>
               <p class="app-created">Créée le {{ formatDt(app.createdAt) }}</p>
               <div class="app-pipeline-grid">
-                <span class="ppc ok">OK {{ app.pipelineCounts?.success ?? 0 }}</span>
-                <span class="ppc bad">KO {{ app.pipelineCounts?.failed ?? 0 }}</span>
-                <span class="ppc run">Run {{ app.pipelineCounts?.running ?? 0 }}</span>
-                <span class="ppc">Wait {{ app.pipelineCounts?.pending ?? 0 }}</span>
-                <span class="ppc">Can. {{ app.pipelineCounts?.canceled ?? 0 }}</span>
-                <span class="ppc">Skip {{ app.pipelineCounts?.skipped ?? 0 }}</span>
+                <span class="ppc ok">OK {{ app.pipelineCounts.success }}</span>
+                <span class="ppc bad">KO {{ app.pipelineCounts.failed }}</span>
+                <span class="ppc run">Run {{ app.pipelineCounts.running }}</span>
+                <span class="ppc">Wait {{ app.pipelineCounts.pending }}</span>
+                <span class="ppc">Can. {{ app.pipelineCounts.canceled }}</span>
+                <span class="ppc">Skip {{ app.pipelineCounts.skipped }}</span>
               </div>
             </div>
           </div>
@@ -163,9 +160,9 @@
 
         <article class="card card-wide">
           <h3 class="card-title">Environnements éphémères (historique)</h3>
-          <div *ngIf="!su.environments?.length" class="empty-block">Aucun environnement.</div>
+          <div *ngIf="!su.environments.length" class="empty-block">Aucun environnement.</div>
 
-          <div class="table-wrap" *ngIf="su.environments?.length">
+          <div class="table-wrap" *ngIf="su.environments.length">
             <table class="data-table">
               <thead>
                 <tr>
@@ -198,5 +195,4 @@
         <p>Sélectionnez un utilisateur dans la liste.</p>
       </section>
     </div>
-  </main>
 </div>

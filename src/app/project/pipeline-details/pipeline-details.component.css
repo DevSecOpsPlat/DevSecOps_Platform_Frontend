@@ -407,6 +407,29 @@
   color: var(--text);
 }
 
+.stage-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stage-retry {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.stage-retry:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .stage-name-badge {
   display: inline-flex;
   align-items: center;
@@ -521,6 +544,24 @@
   transition: color 0.15s;
 }
 .job-link:hover { color: var(--accent); text-decoration: underline; }
+
+.job-retry {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.job-retry:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ═══════════════════════════════════════
    DETAILS CARD

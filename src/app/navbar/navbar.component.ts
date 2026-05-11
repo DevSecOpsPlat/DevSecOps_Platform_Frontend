@@ -1,4 +1,5 @@
 import { Component, HostListener, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { AuthService } from '../services/auth/auth.service';
 import { ThemeService } from '../services/ui/theme.service';
 import { ApplicationService } from '../services/application/application.service';
@@ -19,8 +20,14 @@ export class NavbarComponent implements OnInit {
   constructor(
     public authService: AuthService,
     public themeService: ThemeService,
-    private applicationService: ApplicationService
+    private applicationService: ApplicationService,
+    public router: Router
   ) {}
+
+  get adminNavActive(): boolean {
+    const path = this.router.url.split('?')[0];
+    return path.startsWith('/admin');
+  }
 
   ngOnInit(): void {
     this.authService.isLoggedIn$.subscribe(logged => {

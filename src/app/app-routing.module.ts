@@ -9,6 +9,10 @@ import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
+import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.component';
+import { AdminInventoryComponent } from './admin/admin-inventory/admin-inventory.component';
+import { AdminObservabilityComponent } from './admin/admin-observability/admin-observability.component';
+import { AdminLayoutComponent } from './admin/admin-layout/admin-layout.component';
 import { ApprovalWaitingMessageComponent } from './User/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
@@ -28,12 +32,14 @@ import { SignUpComponent } from './User/sign-up/sign-up.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
 import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
+import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
+import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
+import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: 'home', component: HomeComponent },
   { path: 'overview', component: HomeComponent },
-  { path: 'admin-home', component: AdminHomeComponent, canActivate: [AdminGuard] },
   { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
 
   // Projet (style Vercel) : sidebar + Overview, Deployments, Logs, Security
@@ -69,6 +75,12 @@ const routes: Routes = [
     ]
   },
   { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },
+  {
+    path: 'reclamations',
+    component: UserAccountLayoutComponent,
+    canActivate: [AuthGuard],
+    children: [{ path: '', component: UserReclamationsComponent }]
+  },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
@@ -76,9 +88,29 @@ const routes: Routes = [
   { path: 'security/vulnerabilities', redirectTo: 'my-applications', pathMatch: 'full' },
   { path: 'security/fixes', redirectTo: 'my-applications', pathMatch: 'full' },
 
-  // Administration
-  { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [AdminGuard] },
-  { path: 'admin-users', component: AdminUsersComponent, canActivate: [AdminGuard] },
+  // Administration (app isolée : /admin/*, même coque que le layout projet, sans routes métier)
+  {
+    path: 'admin',
+    component: AdminLayoutComponent,
+    canActivate: [AdminGuard],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'home' },
+      { path: 'home', component: AdminHomeComponent },
+      { path: 'overview', component: AdminOverviewComponent },
+      { path: 'validations', component: AdminDashboardComponent },
+      { path: 'users', component: AdminUsersComponent },
+      { path: 'inventory', component: AdminInventoryComponent },
+      { path: 'observability', component: AdminObservabilityComponent },
+      { path: 'reclamations', component: AdminReclamationsComponent }
+    ]
+  },
+  { path: 'admin-home', redirectTo: 'admin/home', pathMatch: 'full' },
+  { path: 'admin-dashboard', redirectTo: 'admin/validations', pathMatch: 'full' },
+  { path: 'admin-users', redirectTo: 'admin/users', pathMatch: 'full' },
+  { path: 'admin-overview', redirectTo: 'admin/overview', pathMatch: 'full' },
+  { path: 'admin-inventory', redirectTo: 'admin/inventory', pathMatch: 'full' },
+  { path: 'admin-observability', redirectTo: 'admin/observability', pathMatch: 'full' },
+  { path: 'admin-reclamations', redirectTo: 'admin/reclamations', pathMatch: 'full' },
 
   // Auth
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },

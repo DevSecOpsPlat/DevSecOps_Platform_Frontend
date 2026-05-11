@@ -24,7 +24,18 @@
           <span class="vuln-env-label">Environnement actif</span>
           <div class="vuln-env-value">
             <span class="vuln-env-icon">🌍</span>
-            <code *ngIf="envId" [attr.title]="envId">{{ envId | slice : 0 : 8 }}…</code>
+            <select
+              *ngIf="environmentsForApp && environmentsForApp.length > 0"
+              class="vuln-env-select"
+              [ngModel]="envId"
+              (ngModelChange)="onEnvironmentSelected($event)"
+              aria-label="Sélectionner un environnement"
+            >
+              <option *ngFor="let e of environmentsForApp" [ngValue]="e.id">
+                {{ e.environmentName }} — {{ (e.status || '—') | uppercase }}
+              </option>
+            </select>
+            <code *ngIf="(!environmentsForApp || environmentsForApp.length === 0) && envId" [attr.title]="envId">{{ envId | slice : 0 : 8 }}…</code>
             <span *ngIf="!envId" class="vuln-env-missing">Non sélectionné</span>
           </div>
         </div>
@@ -63,6 +74,10 @@
 
   <!-- Messages de statut -->
   <div class="vuln-messages">
+    <details class="vuln-ingestion-coverage">
+      <summary>Quels stages / jobs alimentent ce tableau après import ?</summary>
+      <p class="vuln-ingestion-coverage-body">{{ ingestionCoverageText }}</p>
+    </details>
     <div *ngIf="showPipelineWaitBanner" class="vuln-alert vuln-alert-warning">
       <span class="vuln-alert-icon">⏳</span>
       <div class="vuln-alert-body">

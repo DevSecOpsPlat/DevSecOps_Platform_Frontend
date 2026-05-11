@@ -1,110 +1,12 @@
-.admin-sidebar {
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-  color: #e5e7eb;
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  width: 280px;
-  position: fixed;
-  top: 64px;
-  left: 0;
-  height: calc(100vh - 64px);
-  overflow-y: auto;
-}
+/* Réutilise les styles du sidebar utilisateur (même rendu). */
+@import '../../project/user-sidebar/user-sidebar.component.css';
 
-.sidebar-header {
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sidebar-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 0.25rem 0;
-  color: #ffffff;
-  letter-spacing: -0.02em;
-}
-
-.sidebar-subtitle {
-  font-size: 0.85rem;
-  color: #94a3b8;
-  margin: 0;
-  font-weight: 400;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+/* Liens de navigation (le fichier user cible surtout des <button>). */
+a.nav-item {
   text-decoration: none;
-  color: #cbd5e1;
-  font-size: 0.95rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-}
-
-.sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  transform: translateX(2px);
-}
-
-.sidebar-link.active {
-  background: linear-gradient(135deg, rgba(243, 108, 33, 0.15) 0%, rgba(243, 108, 33, 0.08) 100%);
-  color: #f36c21;
-  border-color: rgba(243, 108, 33, 0.2);
-  font-weight: 600;
-}
-
-.link-icon {
-  font-size: 1.25rem;
-  width: 24px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.link-text {
-  flex: 1;
-}
-
-@media (max-width: 1024px) {
-  .admin-sidebar {
-    width: 240px;
-    padding: 1.5rem 1rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .admin-sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-    top: 0;
-    left: 0;
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .sidebar-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 0.5rem;
-  }
-
-  .sidebar-link {
-    white-space: nowrap;
-    min-width: fit-content;
-  }
+  color: inherit;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  box-sizing: border-box;
 }

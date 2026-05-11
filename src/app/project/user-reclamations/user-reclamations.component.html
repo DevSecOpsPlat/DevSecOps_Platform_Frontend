@@ -1,0 +1,99 @@
+<div class="recl-page">
+  <header class="recl-head">
+    <p class="recl-kicker">Support</p>
+    <h1 class="recl-title">Réclamations</h1>
+    <p class="recl-lead">
+      Décrivez un problème ou une demande : l’administration peut répondre et vous pouvez poursuivre la discussion tant que la
+      réclamation reste ouverte. Une fois clôturée, le fil reste visible en lecture seule.
+    </p>
+  </header>
+
+  <div *ngIf="error" class="recl-alert">{{ error }}</div>
+
+  <section class="recl-card" aria-labelledby="new-recl">
+    <h2 id="new-recl" class="recl-card-title">Nouvelle réclamation</h2>
+    <label class="recl-label" for="subj">Sujet</label>
+    <input id="subj" class="recl-input" type="text" [(ngModel)]="subject" maxlength="200" placeholder="Objet court" />
+
+    <label class="recl-label" for="msg">Message</label>
+    <textarea
+      id="msg"
+      class="recl-textarea"
+      rows="5"
+      [(ngModel)]="message"
+      placeholder="Détaillez votre demande…"
+    ></textarea>
+
+    <div class="recl-actions">
+      <button type="button" class="recl-btn recl-btn-primary" (click)="submit()" [disabled]="submitting">
+        {{ submitting ? 'Envoi…' : 'Envoyer' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="recl-card" aria-labelledby="hist-recl">
+    <h2 id="hist-recl" class="recl-card-title">Mes demandes</h2>
+    <div *ngIf="loading" class="recl-muted">Chargement…</div>
+    <p *ngIf="!loading && !list.length" class="recl-muted">Aucune réclamation pour le moment.</p>
+    <ul class="recl-list" *ngIf="!loading && list.length">
+      <li *ngFor="let c of list" class="recl-item">
+        <div class="recl-item-head">
+          <span class="recl-item-subject">{{ c.subject }}</span>
+          <span
+            class="recl-badge"
+            [class.recl-badge--closed]="c.status === 'CLOSED'"
+            [class.recl-badge--open]="c.status === 'OPEN'"
+            >{{ statusLabel(c.status) }}</span
+          >
+        </div>
+        <p class="recl-item-meta">{{ c.createdAt | date: 'short' }}</p>
+
+        <div class="recl-thread" *ngIf="c.messages?.length">
+          <div
+            *ngFor="let m of c.messages"
+            class="recl-bubble"
+            [class.recl-bubble--user]="!m.fromAdmin"
+            [class.recl-bubble--admin]="m.fromAdmin"
+          >
+            <p class="recl-bubble-meta">
+              <strong>{{ m.authorUsername }}</strong>
+              <span *ngIf="m.fromAdmin" class="recl-bubble-tag">Admin</span>
+              <span class="recl-bubble-date">{{ m.createdAt | date: 'short' }}</span>
+            </p>
+            <p class="recl-bubble-body">{{ m.body }}</p>
+          </div>
+        </div>
+        <p *ngIf="!c.messages?.length" class="recl-item-msg recl-muted">Aucun message.</p>
+
+        <div *ngIf="c.status === 'OPEN'" class="recl-followup">
+          <label class="recl-label" [attr.for]="'reply-' + c.id">Votre message</label>
+          <textarea
+            [id]="'reply-' + c.id"
+            class="recl-textarea recl-textarea--compact"
+            rows="3"
+            [(ngModel)]="replyDrafts[c.id]"
+            placeholder="Écrire une réponse…"
+          ></textarea>
+          <div class="recl-followup-actions">
+            <button
+              type="button"
+              class="recl-btn recl-btn-secondary"
+              (click)="closeThread(c)"
+              [disabled]="closingId === c.id || sendingReplyId === c.id"
+            >
+              {{ closingId === c.id ? 'Clôture…' : 'Clôturer' }}
+            </button>
+            <button
+              type="button"
+              class="recl-btn recl-btn-primary"
+              (click)="sendReply(c)"
+              [disabled]="sendingReplyId === c.id || closingId === c.id"
+            >
+              {{ sendingReplyId === c.id ? 'Envoi…' : 'Envoyer' }}
+            </button>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+</div>

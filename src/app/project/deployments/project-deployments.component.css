@@ -591,6 +591,87 @@
   font-weight: 500;
 }
 
+/* ===== URL + APERÇU DÉPLOIEMENT ===== */
+.deploy-preview-block {
+  margin-top: 1rem;
+  padding: 1rem 1rem 0.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--overview-border);
+  background: var(--overview-surface-elevated);
+}
+
+.preview-block-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--overview-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.preview-url-row .url-value a {
+  color: var(--accent-orange);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.preview-url-row .url-value a:hover {
+  text-decoration: underline;
+}
+
+.preview-iframe-wrap {
+  margin: 0.75rem 0 1rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--overview-border);
+  background: #fff;
+  min-height: 200px;
+}
+
+.preview-iframe {
+  width: 100%;
+  height: 220px;
+  border: none;
+  display: block;
+}
+
+.preview-state {
+  padding: 0.35rem 0 0.75rem;
+}
+
+.preview-state-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--overview-text);
+}
+
+.preview-state-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--overview-text-muted);
+}
+
+.preview-state-muted .preview-state-text {
+  color: #94a3b8;
+}
+
+.preview-state-pending .preview-state-text {
+  color: #b45309;
+}
+
+.preview-state-warning .preview-state-text {
+  color: #b91c1c;
+}
+
+.preview-state code {
+  font-size: 0.8rem;
+  background: #e2e8f0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 /* ===== ACTIONS DE LA CARTE ===== */
 .card-actions {
   display: flex;

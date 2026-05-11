@@ -14,6 +14,10 @@ import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
+import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.component';
+import { AdminInventoryComponent } from './admin/admin-inventory/admin-inventory.component';
+import { AdminObservabilityComponent } from './admin/admin-observability/admin-observability.component';
+import { AdminLayoutComponent } from './admin/admin-layout/admin-layout.component';
 import { ProjectLayoutComponent } from './project/project-layout/project-layout.component';
 import { ProjectOverviewComponent } from './project/overview/project-overview.component';
 import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
@@ -35,6 +39,9 @@ import { ToastContainerComponent } from './toast-container/toast-container.compo
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
+import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
+import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
+import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
 
 @NgModule({
   declarations: [
@@ -50,7 +57,11 @@ import { MonitoringComponent } from './project/monitoring/monitoring.component';
     MyApplicationsComponent,
     PipelineDetailsComponent,
     PipelinesListComponent,
+    AdminLayoutComponent,
     AdminHomeComponent,
+    AdminOverviewComponent,
+    AdminInventoryComponent,
+    AdminObservabilityComponent,
     AdminSidebarComponent,
     ApprovalWaitingMessageComponent,
     ToastContainerComponent,
@@ -66,7 +77,10 @@ import { MonitoringComponent } from './project/monitoring/monitoring.component';
     TimeAgoPipe,
     RecentActivityComponent,
     SonarqubeComponent,
-    MonitoringComponent
+    MonitoringComponent,
+    UserAccountLayoutComponent,
+    UserReclamationsComponent,
+    AdminReclamationsComponent
   ],
   imports: [
     BrowserModule,

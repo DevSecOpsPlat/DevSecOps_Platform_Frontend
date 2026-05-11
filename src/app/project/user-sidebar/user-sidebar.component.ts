@@ -471,4 +471,8 @@ goToActivity(): void {
            this.lastDeploymentEnvId !== null && 
            url.includes(this.lastDeploymentEnvId);
   }
+
+  isReclamationsRoute(): boolean {
+    return this.router.url.startsWith('/reclamations');
+  }
 }

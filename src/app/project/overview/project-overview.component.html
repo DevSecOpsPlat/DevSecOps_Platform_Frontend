@@ -31,11 +31,21 @@
       </div>
   </div>
   <div class="hero-actions">
+    <div class="env-switch" *ngIf="environmentsForApp && environmentsForApp.length > 0">
+      <label class="env-switch-label">Environnement</label>
+      <select class="env-switch-select"
+              [ngModel]="selectedEnvironmentId"
+              (ngModelChange)="onEnvironmentSelected($event)">
+        <option *ngFor="let e of environmentsForApp" [ngValue]="e.id">
+          {{ e.environmentName }} — {{ (e.status || '—') | uppercase }}
+        </option>
+      </select>
+    </div>
     <button class="btn-cta" (click)="createNewEnvironment()">
       <span class="btn-icon">+</span>
       Nouvel environnement
     </button>
-    <button class="btn-icon-only" (click)="refreshData()" [disabled]="loading" title="Actualiser">
+    <button class="btn-icon-only" (click)="refreshData()" [disabled]="loading || loadingSlow" title="Actualiser">
       🔄
     </button>
   </div>
@@ -113,7 +123,10 @@
     <div class="charts-row">
       <section class="chart-card">
         <h2 class="chart-title">Statut des déploiements</h2>
-        <div class="chart-body" *ngIf="deploymentChartData.length > 0">
+        <div class="chart-body chart-body-loading" *ngIf="loadingSlow">
+          <p class="chart-loading-text">Chargement des déploiements…</p>
+        </div>
+        <div class="chart-body" *ngIf="!loadingSlow && deploymentChartData.length > 0">
           <div class="donut-chart">
             <svg viewBox="0 0 100 100" class="donut-svg">
               <circle cx="50" cy="50" r="40" fill="none" stroke="var(--overview-card-border)" stroke-width="12"/>
@@ -136,7 +149,7 @@
             </li>
           </ul>
         </div>
-        <div class="chart-empty" *ngIf="deploymentChartData.length === 0">
+        <div class="chart-empty" *ngIf="!loadingSlow && deploymentChartData.length === 0">
           <p>Aucun déploiement pour l’instant</p>
         </div>
       </section>
@@ -329,18 +342,25 @@
           <h2 class="section-title">Activité récente</h2>
           <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
         </div>
-        <div class="activity-list" *ngIf="recentActivities.length > 0">
+        <div class="activity-list" *ngIf="!loadingSlow && recentActivities.length > 0">
           <div *ngFor="let activity of recentActivities" class="activity-item">
             <span class="activity-icon">{{ activity.icon }}</span>
             <div class="activity-content">
+              <span class="activity-kind">{{ activityKindLabel(activity.type) }}</span>
               <p class="activity-title">{{ activity.title }}</p>
               <p class="activity-description">{{ activity.description }}</p>
+              <p class="activity-app-url" *ngIf="activity.previewUrl">
+                <a [href]="activity.previewUrl" target="_blank" rel="noopener noreferrer">Visiter l'application</a>
+              </p>
               <span class="activity-time">{{ getActivityTimeAgo(activity) }}</span>
             </div>
             <span class="activity-status" [ngClass]="statusClass(activity.status)">{{ activity.status }}</span>
           </div>
         </div>
-        <div *ngIf="recentActivities.length === 0" class="empty-list">
+        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
+          <p>Chargement de l’activité…</p>
+        </div>
+        <div *ngIf="!loadingSlow && recentActivities.length === 0" class="empty-list">
           <p>Aucune activité récente</p>
         </div>
       </section>
@@ -349,7 +369,7 @@
           <h2 class="section-title">Pipelines récents</h2>
           <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
         </div>
-        <div class="pipelines-list" *ngIf="recentPipelines.length > 0">
+        <div class="pipelines-list" *ngIf="!loadingSlow && recentPipelines.length > 0">
           <div *ngFor="let pipeline of recentPipelines" class="pipeline-item" (click)="viewPipeline(pipeline.environmentId)">
             <div class="pipeline-header">
               <span class="pipeline-name">{{ pipeline.name }}</span>
@@ -361,7 +381,10 @@
             </div>
           </div>
         </div>
-        <div *ngIf="recentPipelines.length === 0" class="empty-list">
+        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
+          <p>Chargement des pipelines…</p>
+        </div>
+        <div *ngIf="!loadingSlow && recentPipelines.length === 0" class="empty-list">
           <p>Aucun pipeline récent</p>
         </div>
       </section>
