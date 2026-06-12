@@ -50,7 +50,6 @@
 
       <ng-container *ngIf="!(authService.isLoggedIn$ | async)">
         <a routerLink="/sign-in" class="nav-link">Sign In</a>
-        <a routerLink="/sign-up" class="nav-link nav-link-cta">Sign Up</a>
       </ng-container>
 
       <div class="user-menu-wrap" *ngIf="authService.isLoggedIn$ | async">
@@ -62,7 +61,6 @@
           <a routerLink="/profile" class="user-dropdown-item" (click)="userMenuOpen = false">Profil</a>
           <a *ngIf="isAdmin" routerLink="/admin/home" class="user-dropdown-item" (click)="userMenuOpen = false">Console admin</a>
           <a *ngIf="isAdmin" routerLink="/admin/overview" class="user-dropdown-item" (click)="userMenuOpen = false">Vue d’ensemble</a>
-          <a *ngIf="isAdmin" routerLink="/admin/validations" class="user-dropdown-item" (click)="userMenuOpen = false">Validations</a>
           <a *ngIf="isAdmin" routerLink="/admin/users" class="user-dropdown-item" (click)="userMenuOpen = false">Utilisateurs</a>
           <a *ngIf="isAdmin" routerLink="/admin/inventory" class="user-dropdown-item" (click)="userMenuOpen = false">Inventaire</a>
           <a *ngIf="isAdmin" routerLink="/admin/observability" class="user-dropdown-item" (click)="userMenuOpen = false">Observabilité</a>

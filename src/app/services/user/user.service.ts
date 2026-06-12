@@ -5,7 +5,7 @@ import { User } from '../../models/user/user';
 import { environment } from '../../../environments/environment';
 import { SigninResponse } from '../../models/user/signin-response';
 import { SigninPayload } from '../../models/user/signin-payload';
-import { RegisterPayload } from '../../models/user/register-payload';
+import { ChangePasswordPayload, UpdateEmailPayload, UserProfile } from '../../models/user/profile.models';
 
 @Injectable({
   providedIn: 'root'
@@ -20,24 +20,40 @@ export class UserService {
 
   private readonly baseurl: string = `${environment.BASE_URL}`;
 
-  // Authentication methods (match backend: AuthController uses /auth/register and /auth/login)
+  // Authentication (AuthController: POST /auth/login)
   signin(signinPayload: SigninPayload): Observable<SigninResponse> {
     return this.http.post<SigninResponse>(this.baseurl + "auth/login", signinPayload);
-  }
-
-  /** Register: backend expects exactly { username, password, email }. */
-  register(payload: RegisterPayload): Observable<unknown> {
-    return this.http.post(this.baseurl + "auth/register", payload);
   }
 
   getUserByUsername(username: string): Observable<User> {
     return this.http.get<User>(this.baseurl + 'user/username/' + username);
   }
 
-  getUserById(id: number): Observable<User> {
+  private authHeaders(): HttpHeaders {
     const token = this.getToken();
-    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-    return this.http.get<User>(this.baseurl + 'user/' + id, { headers });
+    return new HttpHeaders({
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    });
+  }
+
+  getProfile(): Observable<UserProfile> {
+    return this.http.get<UserProfile>(this.baseurl + 'api/profile/me', { headers: this.authHeaders() });
+  }
+
+  updateEmail(payload: UpdateEmailPayload): Observable<UserProfile> {
+    return this.http.patch<UserProfile>(this.baseurl + 'api/profile/email', payload, { headers: this.authHeaders() });
+  }
+
+  changePassword(payload: ChangePasswordPayload): Observable<{ message: string }> {
+    return this.http.patch<{ message: string }>(this.baseurl + 'api/profile/password', payload, { headers: this.authHeaders() });
+  }
+
+  updateStoredEmail(email: string): void {
+    const user = this.getUser();
+    if (user) {
+      this.saveUser({ ...user, email });
+    }
   }
 
   // Token management

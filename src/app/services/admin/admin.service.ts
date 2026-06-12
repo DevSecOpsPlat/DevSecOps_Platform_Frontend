@@ -4,12 +4,19 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
 
-export interface PendingUser {
+export interface AdminCreateUserPayload {
+  username: string;
+  email: string;
+  password: string;
+  role?: 'ROLE_TESTER';
+}
+
+export interface AdminCreateUserResponse {
   id: string;
   username: string;
   email: string;
+  roles: string[];
   accountStatus: string;
-  createdAt: string;
 }
 
 export interface AdminPipelineCounts {
@@ -96,20 +103,11 @@ export class AdminService {
     });
   }
 
-  getPendingUsers(): Observable<PendingUser[]> {
-    return this.http.get<PendingUser[]>(BASE + 'pending-users', { headers: this.authHeaders() });
+  createUser(payload: AdminCreateUserPayload): Observable<AdminCreateUserResponse> {
+    return this.http.post<AdminCreateUserResponse>(BASE + 'users', payload, { headers: this.authHeaders() });
   }
 
   getAllUsersWithMetrics(): Observable<AdminUserMetrics[]> {
     return this.http.get<AdminUserMetrics[]>(BASE + 'users', { headers: this.authHeaders() });
-  }
-
-  approveUser(id: string): Observable<void> {
-    return this.http.post<void>(BASE + `${id}/approve`, {}, { headers: this.authHeaders() });
-  }
-
-  rejectUser(id: string, reason?: string): Observable<void> {
-    const body = reason ? { reason } : {};
-    return this.http.post<void>(BASE + `${id}/reject`, body, { headers: this.authHeaders() });
   }
 }

@@ -1,0 +1,56 @@
+<div class="modal-backdrop" *ngIf="open" (click)="cancel()" role="presentation"></div>
+
+<div class="modal" *ngIf="open" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+  <header class="modal-head">
+    <div>
+      <p class="modal-kicker">Administration</p>
+      <h2 id="create-user-title" class="modal-title">Nouvel utilisateur</h2>
+      <p class="modal-lead">Le compte est créé et activé immédiatement. L'utilisateur pourra se connecter avec ces identifiants.</p>
+    </div>
+    <button type="button" class="modal-close" (click)="cancel()" aria-label="Fermer">×</button>
+  </header>
+
+  <div *ngIf="error" class="modal-error">{{ error }}</div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form">
+    <div class="field">
+      <label for="create-username">Nom d'utilisateur</label>
+      <input id="create-username" type="text" formControlName="username" autocomplete="off" />
+      <span class="field-error" *ngIf="form.get('username')?.invalid && form.get('username')?.touched">
+        Nom d'utilisateur requis (min. 2 caractères)
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="create-email">E-mail</label>
+      <input id="create-email" type="email" formControlName="email" autocomplete="off" />
+      <span class="field-error" *ngIf="form.get('email')?.invalid && form.get('email')?.touched">
+        E-mail invalide
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="create-password">Mot de passe</label>
+      <input id="create-password" type="password" formControlName="password" autocomplete="new-password" />
+      <span class="field-error" *ngIf="form.get('password')?.invalid && form.get('password')?.touched">
+        Mot de passe requis (min. 6 caractères)
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="create-confirm">Confirmer le mot de passe</label>
+      <input id="create-confirm" type="password" formControlName="confirmPassword" autocomplete="new-password" />
+      <span class="field-error" *ngIf="passwordsMismatch">
+        Les mots de passe ne correspondent pas
+      </span>
+    </div>
+
+    <footer class="modal-actions">
+      <button type="button" class="btn secondary" (click)="cancel()" [disabled]="saving">Annuler</button>
+      <button type="submit" class="btn primary" [disabled]="saving || form.invalid || passwordsMismatch">
+        <span *ngIf="!saving">Créer le compte</span>
+        <span *ngIf="saving">Création…</span>
+      </button>
+    </footer>
+  </form>
+</div>

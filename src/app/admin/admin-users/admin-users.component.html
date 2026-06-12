@@ -5,11 +5,17 @@
       <h1 class="page-title">Utilisateurs plateforme</h1>
       <p class="page-lead">
         Les comptes avec le rôle <strong>ROLE_ADMIN</strong> ne figurent pas dans cette liste.
-        Données agrégées issues de l’API administration : statuts de compte, volumes de pipelines, applications,
-        environnements et métadonnées Git — sans renvoi vers les écrans métier (projet / pipeline).
+        L'administrateur crée les comptes utilisateurs ; données agrégées issues de l'API administration.
       </p>
     </div>
+    <button type="button" class="btn-add-user" (click)="openCreateModal()">+ Ajouter un utilisateur</button>
   </header>
+
+  <app-admin-create-user
+    [open]="showCreateModal"
+    (closed)="closeCreateModal()"
+    (userCreated)="onUserCreated()"
+  ></app-admin-create-user>
 
     <div *ngIf="loading" class="state state-load">
       <span class="spinner" aria-hidden="true"></span>
@@ -73,10 +79,6 @@
               <span class="acct acct-{{ accountStatusLower(su) }}">{{ su.accountStatus }}</span>
               <span class="tag-muted">{{ rolesText(su) }}</span>
             </div>
-          </div>
-          <div class="detail-actions" *ngIf="isPending(su)">
-            <button type="button" class="btn primary" (click)="approve(su)">Approuver</button>
-            <button type="button" class="btn danger" (click)="reject(su)">Rejeter</button>
           </div>
         </div>
 

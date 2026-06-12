@@ -4,7 +4,6 @@ import { RouterModule, Routes } from '@angular/router';
 import { HomeComponent } from './home/home.component';
 import { SignInComponent } from './User/sign-in/sign-in.component';
 import { ProfileComponent } from './User/profile/profile.component';
-import { AdminDashboardComponent } from './admin/admin-dashboard/admin-dashboard.component';
 import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
@@ -13,7 +12,6 @@ import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.co
 import { AdminInventoryComponent } from './admin/admin-inventory/admin-inventory.component';
 import { AdminObservabilityComponent } from './admin/admin-observability/admin-observability.component';
 import { AdminLayoutComponent } from './admin/admin-layout/admin-layout.component';
-import { ApprovalWaitingMessageComponent } from './User/approval-waiting-message/approval-waiting-message.component';
 import { AuthGuard } from './guards/auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { ProjectLayoutComponent } from './project/project-layout/project-layout.component';
@@ -28,7 +26,6 @@ import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-das
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
 
-import { SignUpComponent } from './User/sign-up/sign-up.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
 import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
@@ -40,7 +37,6 @@ const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: 'home', component: HomeComponent },
   { path: 'overview', component: HomeComponent },
-  { path: 'approval-waiting', component: ApprovalWaitingMessageComponent },
 
   // Projet (style Vercel) : sidebar + Overview, Deployments, Logs, Security
   {
@@ -97,7 +93,6 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       { path: 'home', component: AdminHomeComponent },
       { path: 'overview', component: AdminOverviewComponent },
-      { path: 'validations', component: AdminDashboardComponent },
       { path: 'users', component: AdminUsersComponent },
       { path: 'inventory', component: AdminInventoryComponent },
       { path: 'observability', component: AdminObservabilityComponent },
@@ -105,17 +100,19 @@ const routes: Routes = [
     ]
   },
   { path: 'admin-home', redirectTo: 'admin/home', pathMatch: 'full' },
-  { path: 'admin-dashboard', redirectTo: 'admin/validations', pathMatch: 'full' },
+  { path: 'admin-dashboard', redirectTo: 'admin/users', pathMatch: 'full' },
   { path: 'admin-users', redirectTo: 'admin/users', pathMatch: 'full' },
   { path: 'admin-overview', redirectTo: 'admin/overview', pathMatch: 'full' },
   { path: 'admin-inventory', redirectTo: 'admin/inventory', pathMatch: 'full' },
   { path: 'admin-observability', redirectTo: 'admin/observability', pathMatch: 'full' },
   { path: 'admin-reclamations', redirectTo: 'admin/reclamations', pathMatch: 'full' },
+  { path: 'admin/validations', redirectTo: 'admin/users', pathMatch: 'full' },
+  { path: 'sign-up', redirectTo: 'sign-in', pathMatch: 'full' },
+  { path: 'approval-waiting', redirectTo: 'sign-in', pathMatch: 'full' },
 
   // Auth
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
-  { path: 'sign-in', component: SignInComponent },
-  { path: 'sign-up', component: SignUpComponent }
+  { path: 'sign-in', component: SignInComponent }
 ];
 
 @NgModule({

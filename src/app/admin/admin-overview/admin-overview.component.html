@@ -6,7 +6,7 @@
       <p class="page-lead">
         Synthèse <strong>admin</strong> alignée sur les mêmes familles d’information que l’espace projet métier (déploiements,
         pipelines, applications, sécurité / qualité en externe), mais agrégée sur tous les comptes métier — sans ouvrir les
-        écrans <code>/project/…</code>. Données : <strong>GET /api/admin/users</strong> et file de validation.
+        écrans <code>/project/…</code>. Données : <strong>GET /api/admin/users</strong>.
       </p>
     </div>
     <button type="button" class="btn-refresh" (click)="load()" [disabled]="loading">Actualiser</button>
@@ -22,14 +22,14 @@
     <section class="kpi-section" aria-label="Indicateurs clés">
       <div class="kpi-grid">
         <article class="kpi-card kpi-accent">
-          <span class="kpi-label">Comptes en attente</span>
-          <span class="kpi-value">{{ pendingCount }}</span>
-          <a routerLink="/admin/validations" class="kpi-link">Traiter les validations →</a>
-        </article>
-        <article class="kpi-card">
           <span class="kpi-label">Utilisateurs métier</span>
           <span class="kpi-value">{{ totalPlatformUsers }}</span>
-          <span class="kpi-meta">{{ approvedCount }} approuvés · {{ rejectedCount }} rejetés · {{ suspendedCount }} suspendus</span>
+          <a routerLink="/admin/users" class="kpi-link">Gérer les comptes →</a>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Comptes actifs</span>
+          <span class="kpi-value">{{ approvedCount }}</span>
+          <span class="kpi-meta">{{ rejectedCount }} rejetés · {{ suspendedCount }} suspendus</span>
         </article>
         <article class="kpi-card">
           <span class="kpi-label">Avec au moins une app</span>
@@ -153,31 +153,6 @@
     </div>
 
     <div class="detail-columns">
-      <section class="detail-panel" *ngIf="pendingCount > 0" aria-label="Aperçu file de validation">
-        <div class="detail-panel-head">
-          <h2>File de validation</h2>
-          <a routerLink="/admin/validations" class="detail-link">Ouvrir la file complète →</a>
-        </div>
-        <div class="admin-table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Utilisateur</th>
-                <th>Email</th>
-                <th>Créé le</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let p of pendingPreview()">
-                <td class="admin-cell-strong">{{ p.username }}</td>
-                <td>{{ p.email }}</td>
-                <td>{{ formatDt(p.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="detail-foot" *ngIf="pendingCount > 10">… et {{ pendingCount - 10 }} autre(s) en attente.</p>
-      </section>
 
       <section class="detail-panel" aria-label="Comptes les plus sollicités">
         <div class="detail-panel-head">

@@ -12,6 +12,7 @@ export class AdminUsersComponent implements OnInit {
   users: AdminUserMetrics[] = [];
   search = '';
   statusFilter: '' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' = '';
+  showCreateModal = false;
 
   selectedUser: AdminUserMetrics | null = null;
 
@@ -36,6 +37,18 @@ export class AdminUsersComponent implements OnInit {
         (u.email || '').toLowerCase().includes(q)
       );
     });
+  }
+
+  openCreateModal(): void {
+    this.showCreateModal = true;
+  }
+
+  closeCreateModal(): void {
+    this.showCreateModal = false;
+  }
+
+  onUserCreated(): void {
+    this.loadUsers({ silent: true });
   }
 
   loadUsers(opts?: { silent?: boolean }): void {
@@ -70,33 +83,6 @@ export class AdminUsersComponent implements OnInit {
 
   accountStatusLower(u: AdminUserMetrics): string {
     return (u.accountStatus || 'unknown').toLowerCase();
-  }
-
-  isPending(u: AdminUserMetrics): boolean {
-    return this.accountStatusUpper(u) === 'PENDING';
-  }
-
-  approve(u: AdminUserMetrics): void {
-    this.adminService.approveUser(u.id).subscribe({
-      next: () => {
-        this.loadUsers({ silent: true });
-      },
-      error: err => {
-        this.error = err?.error?.message || 'Erreur lors de l’approbation';
-      }
-    });
-  }
-
-  reject(u: AdminUserMetrics): void {
-    const reason = prompt(`Raison du rejet pour ${u.username} :`) || undefined;
-    this.adminService.rejectUser(u.id, reason).subscribe({
-      next: () => {
-        this.loadUsers({ silent: true });
-      },
-      error: err => {
-        this.error = err?.error?.message || 'Erreur lors du rejet';
-      }
-    });
   }
 
   select(u: AdminUserMetrics): void {

@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { forkJoin } from 'rxjs';
-import { AdminService, AdminUserEnvironmentDetail, AdminUserMetrics, PendingUser } from '../../services/admin/admin.service';
+import { AdminService, AdminUserEnvironmentDetail, AdminUserMetrics } from '../../services/admin/admin.service';
 
 /** Ligne « comptes les plus sollicités » (équivalent agrégé des vues pipelines / déploiements côté métier). */
 export interface AdminOverviewTopUser {
@@ -51,10 +50,8 @@ export class AdminOverviewComponent implements OnInit {
   loading = true;
   error: string | null = null;
 
-  pending: PendingUser[] = [];
   users: AdminUserMetrics[] = [];
 
-  pendingCount = 0;
   totalPlatformUsers = 0;
   approvedCount = 0;
   rejectedCount = 0;
@@ -99,14 +96,9 @@ export class AdminOverviewComponent implements OnInit {
   load(): void {
     this.loading = true;
     this.error = null;
-    forkJoin({
-      pending: this.adminService.getPendingUsers(),
-      users: this.adminService.getAllUsersWithMetrics()
-    }).subscribe({
-      next: ({ pending, users }) => {
-        this.pending = pending;
+    this.adminService.getAllUsersWithMetrics().subscribe({
+      next: users => {
         this.users = users;
-        this.pendingCount = pending.length;
         this.totalPlatformUsers = users.length;
         this.aggregate(users);
         this.topUsers = this.buildTopUsers(users);
@@ -148,10 +140,6 @@ export class AdminOverviewComponent implements OnInit {
       return 0;
     }
     return Math.round((100 * part) / this.totalPipelines);
-  }
-
-  pendingPreview(): PendingUser[] {
-    return this.pending.slice(0, 10);
   }
 
   setEnvWatchFilter(f: 'issues' | 'success'): void {

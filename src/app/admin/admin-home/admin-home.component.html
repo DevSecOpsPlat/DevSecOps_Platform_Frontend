@@ -3,7 +3,7 @@
     <p class="home-kicker">Espace réservé · contrôle interne</p>
     <h1 class="welcome-title">Bienvenue, {{ user?.username }}</h1>
     <p class="welcome-subtitle">
-      Application d’administration séparée du portail métier : gouvernance des comptes, inventaire agrégé et liens d’infra
+      Application d'administration séparée du portail métier : création des comptes utilisateurs, inventaire agrégé et liens d'infra
       en lecture seule (sans accès aux écrans projet / pipeline utilisateur).
     </p>
   </div>
@@ -12,18 +12,9 @@
     <a routerLink="/admin/overview" class="stat-card stat-card-link">
       <div class="stat-icon stat-overview">◆</div>
       <div class="stat-content">
-        <h3 class="stat-label">Vue d’ensemble</h3>
+        <h3 class="stat-label">Vue d'ensemble</h3>
         <p class="stat-description">KPI globaux issus des API admin.</p>
         <span class="stat-link">Ouvrir →</span>
-      </div>
-    </a>
-
-    <a routerLink="/admin/validations" class="stat-card stat-card-link">
-      <div class="stat-icon stat-pending">✓</div>
-      <div class="stat-content">
-        <h3 class="stat-label">Validations</h3>
-        <p class="stat-description">Comptes en attente d’approbation.</p>
-        <span class="stat-link">Traiter →</span>
       </div>
     </a>
 
@@ -31,8 +22,8 @@
       <div class="stat-icon stat-users">👥</div>
       <div class="stat-content">
         <h3 class="stat-label">Utilisateurs &amp; activité</h3>
-        <p class="stat-description">Détail par compte (données agrégées API).</p>
-        <span class="stat-link">Consulter →</span>
+        <p class="stat-description">Créer des comptes et consulter l'activité.</p>
+        <span class="stat-link">Gérer →</span>
       </div>
     </a>
 
@@ -66,14 +57,14 @@
 
   <div class="admin-info-section">
     <div class="info-card">
-      <h2>Cadre d’usage</h2>
+      <h2>Cadre d'usage</h2>
       <p>
-        Les données affichées proviennent des API d’administration (<code>GET /api/admin/users</code>,
-        <code>GET /api/admin/pending-users</code>). Aucune redirection vers le tableau de bord projet, les pipelines
+        Les données affichées proviennent des API d'administration (<code>GET /api/admin/users</code>,
+        <code>POST /api/admin/users</code>). Aucune redirection vers le tableau de bord projet, les pipelines
         détaillés ou les vues Sonar « par application » utilisateur.
       </p>
       <ul class="info-list">
-        <li>Traçabilité des validations et des comptes</li>
+        <li>Création des comptes utilisateurs par l'administrateur</li>
         <li>Vue transverse des environnements éphémères</li>
         <li>Infra : liens externes et iframe Grafana globaux uniquement</li>
       </ul>
