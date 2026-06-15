@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../services/auth/auth.service';
 import { UserService } from '../../services/user/user.service';
 import { UserProfile } from '../../models/user/profile.models';
@@ -36,6 +37,7 @@ export class ProfileComponent implements OnInit {
   passwordSaving = false;
   passwordSuccess: string | null = null;
   passwordError: string | null = null;
+  forcePasswordChange = false;
 
   showEmailPassword = false;
   showCurrentPassword = false;
@@ -44,10 +46,17 @@ export class ProfileComponent implements OnInit {
 
   constructor(
     public authService: AuthService,
-    private userService: UserService
+    private userService: UserService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    this.route.queryParamMap.subscribe(params => {
+      this.forcePasswordChange = params.get('forcePassword') === '1';
+      if (this.forcePasswordChange) {
+        this.activePanel = 'password';
+      }
+    });
     this.loadProfile();
   }
 
@@ -69,10 +78,8 @@ export class ProfileComponent implements OnInit {
   get accountStatusLabel(): string {
     const status = (this.profile?.accountStatus || '').toUpperCase();
     const map: Record<string, string> = {
-      APPROVED: 'Actif',
-      PENDING: 'En attente',
-      REJECTED: 'Rejeté',
-      SUSPENDED: 'Suspendu'
+      ACTIVE: 'Actif',
+      DISABLED: 'Désactivé'
     };
     return map[status] || status || 'Actif';
   }
@@ -102,7 +109,7 @@ export class ProfileComponent implements OnInit {
             username: cached.username,
             email: cached.email,
             roles: cached.roles ?? [],
-            accountStatus: 'APPROVED'
+            accountStatus: 'ACTIVE'
           };
           this.emailForm.patchValue({ email: cached.email });
         }

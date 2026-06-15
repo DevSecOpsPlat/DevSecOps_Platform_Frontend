@@ -5,14 +5,28 @@
     <div>
       <p class="modal-kicker">Administration</p>
       <h2 id="create-user-title" class="modal-title">Nouvel utilisateur</h2>
-      <p class="modal-lead">Le compte est créé et activé immédiatement. L'utilisateur pourra se connecter avec ces identifiants.</p>
+      <p class="modal-lead">
+        Le compte est créé sans mot de passe définitif. L'utilisateur reçoit un e-mail avec un lien
+        pour définir son mot de passe (plus sécurisé qu'un mot de passe envoyé en clair).
+      </p>
     </div>
     <button type="button" class="modal-close" (click)="cancel()" aria-label="Fermer">×</button>
   </header>
 
   <div *ngIf="error" class="modal-error">{{ error }}</div>
+  <div *ngIf="successMessage" class="modal-success" [class.modal-warn]="!emailSent">
+    {{ successMessage }}
+    <div *ngIf="activationLink && !emailSent" class="activation-link-box">
+      <label>Lien d'activation (à transmettre manuellement)</label>
+      <code>{{ activationLink }}</code>
+      <button type="button" class="btn secondary" (click)="copyLink()">Copier le lien</button>
+    </div>
+    <div *ngIf="emailSent && activationLink" class="activation-link-hint">
+      Si l'utilisateur ne reçoit rien, vérifiez les spams ou renvoyez depuis sa fiche utilisateur.
+    </div>
+  </div>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form">
+  <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form" *ngIf="!successMessage">
     <div class="field">
       <label for="create-username">Nom d'utilisateur</label>
       <input id="create-username" type="text" formControlName="username" autocomplete="off" />
@@ -29,26 +43,10 @@
       </span>
     </div>
 
-    <div class="field">
-      <label for="create-password">Mot de passe</label>
-      <input id="create-password" type="password" formControlName="password" autocomplete="new-password" />
-      <span class="field-error" *ngIf="form.get('password')?.invalid && form.get('password')?.touched">
-        Mot de passe requis (min. 6 caractères)
-      </span>
-    </div>
-
-    <div class="field">
-      <label for="create-confirm">Confirmer le mot de passe</label>
-      <input id="create-confirm" type="password" formControlName="confirmPassword" autocomplete="new-password" />
-      <span class="field-error" *ngIf="passwordsMismatch">
-        Les mots de passe ne correspondent pas
-      </span>
-    </div>
-
     <footer class="modal-actions">
       <button type="button" class="btn secondary" (click)="cancel()" [disabled]="saving">Annuler</button>
-      <button type="submit" class="btn primary" [disabled]="saving || form.invalid || passwordsMismatch">
-        <span *ngIf="!saving">Créer le compte</span>
+      <button type="submit" class="btn primary" [disabled]="saving || form.invalid">
+        <span *ngIf="!saving">Créer et envoyer l'activation</span>
         <span *ngIf="saving">Création…</span>
       </button>
     </footer>

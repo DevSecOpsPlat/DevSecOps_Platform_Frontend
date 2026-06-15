@@ -53,9 +53,8 @@ export class AdminOverviewComponent implements OnInit {
   users: AdminUserMetrics[] = [];
 
   totalPlatformUsers = 0;
-  approvedCount = 0;
-  rejectedCount = 0;
-  suspendedCount = 0;
+  activeCount = 0;
+  disabledCount = 0;
   usersWithApplications = 0;
 
   totalApplications = 0;
@@ -184,9 +183,8 @@ export class AdminOverviewComponent implements OnInit {
     let ed = 0;
     let ex = 0;
 
-    let appr = 0;
-    let rej = 0;
-    let susp = 0;
+    let act = 0;
+    let dis = 0;
     let withApps = 0;
     let activeEnvSum = 0;
 
@@ -227,12 +225,10 @@ export class AdminOverviewComponent implements OnInit {
         ex += ebk.expired || 0;
       }
       const st = (u.accountStatus || '').toUpperCase();
-      if (st === 'APPROVED') {
-        appr++;
-      } else if (st === 'REJECTED') {
-        rej++;
-      } else if (st === 'SUSPENDED') {
-        susp++;
+      if (st === 'ACTIVE') {
+        act++;
+      } else if (st === 'DISABLED') {
+        dis++;
       }
     }
 
@@ -253,9 +249,8 @@ export class AdminOverviewComponent implements OnInit {
     this.envDestroyed = ed;
     this.envExpired = ex;
 
-    this.approvedCount = appr;
-    this.rejectedCount = rej;
-    this.suspendedCount = susp;
+    this.activeCount = act;
+    this.disabledCount = dis;
     this.usersWithApplications = withApps;
     this.totalActiveEnvironments = activeEnvSum;
   }

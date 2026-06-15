@@ -49,6 +49,10 @@ export class UserService {
     return this.http.patch<{ message: string }>(this.baseurl + 'api/profile/password', payload, { headers: this.authHeaders() });
   }
 
+  activateAccount(token: string, newPassword: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(this.baseurl + 'auth/activate', { token, newPassword });
+  }
+
   updateStoredEmail(email: string): void {
     const user = this.getUser();
     if (user) {

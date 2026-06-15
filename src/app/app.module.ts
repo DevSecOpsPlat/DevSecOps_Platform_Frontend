@@ -11,6 +11,7 @@ import { ProfileComponent } from './User/profile/profile.component';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { AdminCreateUserComponent } from './admin/admin-create-user/admin-create-user.component';
+import { AdminUserDetailComponent } from './admin/admin-user-detail/admin-user-detail.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
@@ -40,6 +41,9 @@ import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
 import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
+import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.component';
+import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
+import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
 
 @NgModule({
   declarations: [
@@ -51,6 +55,7 @@ import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-rec
     ProfileComponent,
     AdminUsersComponent,
     AdminCreateUserComponent,
+    AdminUserDetailComponent,
     MyApplicationsComponent,
     PipelineDetailsComponent,
     PipelinesListComponent,
@@ -76,7 +81,10 @@ import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-rec
     MonitoringComponent,
     UserAccountLayoutComponent,
     UserReclamationsComponent,
-    AdminReclamationsComponent
+    AdminReclamationsComponent,
+    AdminAlertsComponent,
+    AdminAuditComponent,
+    ActivateAccountComponent
   ],
   imports: [
     BrowserModule,

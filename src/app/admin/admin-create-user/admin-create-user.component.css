@@ -75,6 +75,50 @@
   font-size: 0.85rem;
 }
 
+.modal-success {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.modal-success.modal-warn {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.activation-link-box {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.activation-link-box label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.activation-link-box code {
+  display: block;
+  word-break: break-all;
+  padding: 0.45rem;
+  background: #fff;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  font-size: 0.72rem;
+}
+
+.activation-link-hint {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
 .modal-form {
   display: flex;
   flex-direction: column;

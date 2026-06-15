@@ -397,6 +397,12 @@
   color: #b91c1c;
 }
 
+.alert-warning {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
 .form-actions {
   display: flex;
   gap: 0.65rem;

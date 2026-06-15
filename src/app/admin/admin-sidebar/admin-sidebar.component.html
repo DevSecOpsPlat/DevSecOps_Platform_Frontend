@@ -44,6 +44,21 @@
     </section>
 
     <section class="sidebar-section">
+      <h3 class="section-label"><span>Sécurité</span></h3>
+      <div class="nav-items">
+        <a routerLink="/admin/alerts" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Alertes</span>
+          <span class="nav-badge" *ngIf="unreadAlerts > 0">{{ unreadAlerts }}</span>
+        </a>
+        <a routerLink="/admin/audit" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Journal d'audit</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
       <h3 class="section-label"><span>Gouvernance accès</span></h3>
       <div class="nav-items">
         <a routerLink="/admin/users" routerLinkActive="active" class="nav-item">

@@ -46,7 +46,7 @@ export class SignInComponent implements OnInit {
         catchError((error) => {
           this.isLoading = false;
           console.error('Login error:', error);
-          this.errorMessage = error.error?.message || 'Invalid username or password';
+          this.errorMessage = error.error?.message || 'Identifiants invalides.';
           this.showAlert(this.errorMessage);
           return of(null);
         })
@@ -54,6 +54,10 @@ export class SignInComponent implements OnInit {
         if (response) {
           this.isLoading = false;
           const roles = response.roles || [];
+          if (response.mustChangePassword) {
+            this.router.navigate(['/profile'], { queryParams: { forcePassword: '1' } });
+            return;
+          }
           if (roles.includes('ROLE_ADMIN')) {
             this.router.navigate(['/admin-home']);
           } else {

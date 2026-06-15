@@ -138,6 +138,10 @@
             <p>Minimum 8 caractères. Choisissez un mot de passe unique, non utilisé sur d'autres services.</p>
           </header>
 
+          <div *ngIf="forcePasswordChange" class="alert alert-warning">
+            Pour des raisons de sécurité, vous devez définir un nouveau mot de passe avant de continuer.
+          </div>
+
           <div *ngIf="passwordSuccess" class="alert alert-success">{{ passwordSuccess }}</div>
           <div *ngIf="passwordError" class="alert alert-error">{{ passwordError }}</div>
 

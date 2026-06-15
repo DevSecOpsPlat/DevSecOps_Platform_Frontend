@@ -7,7 +7,6 @@ import { UserService } from '../user/user.service';
 export interface AdminCreateUserPayload {
   username: string;
   email: string;
-  password: string;
   role?: 'ROLE_TESTER';
 }
 
@@ -17,6 +16,9 @@ export interface AdminCreateUserResponse {
   email: string;
   roles: string[];
   accountStatus: string;
+  activationEmailSent?: boolean;
+  message?: string;
+  activationLink?: string;
 }
 
 export interface AdminPipelineCounts {
@@ -74,9 +76,9 @@ export interface AdminUserMetrics {
   accountStatus: string;
   createdAt: string | number[];
   updatedAt?: string | number[] | null;
-  validatedAt?: string | number[] | null;
-  validatedByUsername?: string | null;
-  rejectionReason?: string | null;
+  lastLoginAt?: string | number[] | null;
+  lastPasswordChangedAt?: string | number[] | null;
+  recentFailedAttempts?: number;
   activeEnvironmentsCount: number;
   pipelinesCount: number;
   applicationsCount: number;
@@ -84,6 +86,67 @@ export interface AdminUserMetrics {
   environmentStatusBreakdown: AdminEnvironmentStatusBreakdown;
   applications: AdminUserApplicationDetail[];
   environments: AdminUserEnvironmentDetail[];
+}
+
+export interface AdminUserActivityEntry {
+  id: string;
+  action: string;
+  detail?: string | null;
+  performedBy?: string | null;
+  createdAt: string | number[];
+}
+
+export interface AdminComplaintMessage {
+  id: string;
+  authorUsername?: string | null;
+  fromAdmin: boolean;
+  body: string;
+  createdAt?: string | null;
+}
+
+export interface AdminComplaintThread {
+  id: string;
+  authorUsername?: string | null;
+  authorEmail?: string | null;
+  subject: string;
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  messages: AdminComplaintMessage[];
+}
+
+export interface AdminLoginDayStats {
+  date: string;
+  success: number;
+  failed: number;
+}
+
+export interface AdminSecurityAttempt {
+  attemptedAt: string | number[];
+  ipAddress?: string | null;
+}
+
+export interface AdminSecurityAlert {
+  userId: string;
+  username: string;
+  email: string;
+  failedCount: number;
+  attempts: AdminSecurityAttempt[];
+}
+
+export interface AdminUsersDashboardStats {
+  totalFailedAttempts: number;
+  loginStatsLast30Days: AdminLoginDayStats[];
+  securityAlerts: AdminSecurityAlert[];
+  failedAttemptsDetail: AdminFailedLoginEntry[];
+}
+
+export interface AdminFailedLoginEntry {
+  userId: string;
+  username: string;
+  email: string;
+  attemptedAt: string | number[];
+  ipAddress?: string | null;
 }
 
 const BASE = environment.BASE_URL + 'api/admin/';
@@ -110,4 +173,126 @@ export class AdminService {
   getAllUsersWithMetrics(): Observable<AdminUserMetrics[]> {
     return this.http.get<AdminUserMetrics[]>(BASE + 'users', { headers: this.authHeaders() });
   }
+
+  getUsersDashboardStats(): Observable<AdminUsersDashboardStats> {
+    return this.http.get<AdminUsersDashboardStats>(BASE + 'users/dashboard-stats', { headers: this.authHeaders() });
+  }
+
+  getUserById(id: string): Observable<AdminUserMetrics> {
+    return this.http.get<AdminUserMetrics>(BASE + `users/${id}`, { headers: this.authHeaders() });
+  }
+
+  getUserActivity(id: string): Observable<AdminUserActivityEntry[]> {
+    return this.http.get<AdminUserActivityEntry[]>(BASE + `users/${id}/activity`, { headers: this.authHeaders() });
+  }
+
+  getUserComplaints(id: string): Observable<AdminComplaintThread[]> {
+    return this.http.get<AdminComplaintThread[]>(BASE + `users/${id}/complaints`, { headers: this.authHeaders() });
+  }
+
+  resetUserPassword(id: string, newPassword: string): Observable<{ message: string }> {
+    return this.http.patch<{ message: string }>(
+      BASE + `users/${id}/password`,
+      { newPassword },
+      { headers: this.authHeaders() }
+    );
+  }
+
+  updateUserEmail(id: string, email: string): Observable<AdminUserMetrics> {
+    return this.http.patch<AdminUserMetrics>(
+      BASE + `users/${id}/email`,
+      { email },
+      { headers: this.authHeaders() }
+    );
+  }
+
+  setUserStatus(id: string, active: boolean): Observable<AdminUserMetrics> {
+    return this.http.patch<AdminUserMetrics>(
+      BASE + `users/${id}/status`,
+      { active },
+      { headers: this.authHeaders() }
+    );
+  }
+
+  deleteUser(id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(BASE + `users/${id}`, { headers: this.authHeaders() });
+  }
+
+  /* ——— Alertes sécurité ——— */
+
+  getAlerts(status?: string, type?: string): Observable<AdminAlert[]> {
+    const params: string[] = [];
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    if (type) params.push(`type=${encodeURIComponent(type)}`);
+    const q = params.length ? '?' + params.join('&') : '';
+    return this.http.get<AdminAlert[]>(BASE + 'alerts' + q, { headers: this.authHeaders() });
+  }
+
+  getAlertStats(): Observable<AdminAlertStats> {
+    return this.http.get<AdminAlertStats>(BASE + 'alerts/stats', { headers: this.authHeaders() });
+  }
+
+  getUnreadAlertCount(): Observable<{ count: number }> {
+    return this.http.get<{ count: number }>(BASE + 'alerts/unread-count', { headers: this.authHeaders() });
+  }
+
+  markAlertRead(id: string): Observable<AdminAlert> {
+    return this.http.patch<AdminAlert>(BASE + `alerts/${id}/read`, {}, { headers: this.authHeaders() });
+  }
+
+  deleteAlert(id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(BASE + `alerts/${id}`, { headers: this.authHeaders() });
+  }
+
+  getAuditLog(page = 0, size = 50, userId?: string, action?: string): Observable<AdminAuditPage> {
+    const params: string[] = [`page=${page}`, `size=${size}`];
+    if (userId) params.push(`userId=${encodeURIComponent(userId)}`);
+    if (action) params.push(`action=${encodeURIComponent(action)}`);
+    return this.http.get<AdminAuditPage>(BASE + 'audit-log?' + params.join('&'), { headers: this.authHeaders() });
+  }
+
+  getAuditStats(): Observable<AdminAuditStats> {
+    return this.http.get<AdminAuditStats>(BASE + 'audit-log/stats', { headers: this.authHeaders() });
+  }
+}
+
+export interface AdminAlert {
+  id: string;
+  type: string;
+  message: string;
+  status: 'NON_LUE' | 'LUE';
+  relatedUserId?: string | null;
+  relatedUsername?: string | null;
+  ipAddress?: string | null;
+  createdAt: string | number[];
+}
+
+export interface AdminAlertStats {
+  unreadCount: number;
+  totalCount: number;
+  countByType: Record<string, number>;
+}
+
+export interface AdminAuditEntry {
+  id: string;
+  createdAt: string | number[];
+  username?: string | null;
+  userId?: string | null;
+  action: string;
+  details?: string | null;
+  performedBy?: string | null;
+  ipAddress?: string | null;
+}
+
+export interface AdminAuditPage {
+  items: AdminAuditEntry[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
+}
+
+export interface AdminAuditStats {
+  totalCount: number;
+  countByAction: Record<string, number>;
 }

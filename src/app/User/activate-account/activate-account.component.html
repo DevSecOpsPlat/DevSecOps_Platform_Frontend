@@ -1,0 +1,32 @@
+<div class="activate-page">
+  <div class="activate-card">
+    <p class="kicker">EnviroTest</p>
+    <h1>Activation du compte</h1>
+    <p class="lead">Définissez votre mot de passe pour finaliser la création de votre compte.</p>
+
+    <div class="banner success" *ngIf="success">{{ success }}</div>
+    <div class="banner error" *ngIf="error">{{ error }}</div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" *ngIf="token && !success">
+      <div class="field">
+        <label for="new-password">Nouveau mot de passe</label>
+        <input id="new-password" type="password" formControlName="newPassword" autocomplete="new-password" />
+        <span class="hint" *ngIf="form.get('newPassword')?.invalid && form.get('newPassword')?.touched">
+          Minimum 8 caractères
+        </span>
+      </div>
+
+      <div class="field">
+        <label for="confirm-password">Confirmer le mot de passe</label>
+        <input id="confirm-password" type="password" formControlName="confirmPassword" autocomplete="new-password" />
+        <span class="hint error" *ngIf="passwordsMismatch">Les mots de passe ne correspondent pas</span>
+      </div>
+
+      <button type="submit" class="btn-primary" [disabled]="loading || form.invalid || passwordsMismatch">
+        {{ loading ? 'Activation…' : 'Activer mon compte' }}
+      </button>
+    </form>
+
+    <a routerLink="/sign-in" class="back-link">Retour à la connexion</a>
+  </div>
+</div>

@@ -1,0 +1,110 @@
+<div class="admin-route-page alerts-page">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Administration · Sécurité</p>
+      <h1 class="page-title">Alertes</h1>
+      <p class="page-lead">
+        Incidents de sécurité et changements sensibles nécessitant votre attention — à marquer lues ou supprimer.
+      </p>
+    </div>
+  </header>
+
+  <aside class="scope-panel scope-panel--alerts">
+    <h2 class="scope-title">Contenu des alertes (boîte de réception)</h2>
+    <ul class="scope-list">
+      <li><strong>Connexion</strong> — 3 échecs consécutifs, verrouillage 15 min</li>
+      <li><strong>Identifiants</strong> — mot de passe ou e-mail modifié (par l'utilisateur ou l'admin)</li>
+    </ul>
+    <p class="scope-note">
+      Les actions admin courantes (création / suppression / activation de compte) sont enregistrées uniquement dans le
+      <a routerLink="/admin/audit">Journal d'audit</a>, pas ici. Le panneau « Alertes sécurité » sur
+      <a routerLink="/admin/users">Utilisateurs</a> résume les échecs de connexion des 30 derniers jours (masquable avec ×).
+    </p>
+  </aside>
+
+  <div class="kpi-row" *ngIf="stats">
+    <article class="kpi-card">
+      <span class="kpi-label">Non lues</span>
+      <span class="kpi-value accent">{{ stats.unreadCount }}</span>
+    </article>
+    <article class="kpi-card">
+      <span class="kpi-label">Total actives</span>
+      <span class="kpi-value">{{ stats.totalCount }}</span>
+    </article>
+    <article class="kpi-card wide" *ngIf="stats?.countByType">
+      <span class="kpi-label">Par type (actifs)</span>
+      <div class="type-chips">
+        <span class="chip" *ngFor="let t of typeOptions">
+          {{ typeLabel(t) }} · {{ typeCount(t) }}
+        </span>
+      </div>
+    </article>
+  </div>
+
+  <div class="filters">
+    <label>
+      Statut
+      <select [(ngModel)]="filterStatus" (change)="onFilterChange()">
+        <option value="">Tous</option>
+        <option value="NON_LUE">Non lues</option>
+        <option value="LUE">Lues</option>
+      </select>
+    </label>
+    <label>
+      Type
+      <select [(ngModel)]="filterType" (change)="onFilterChange()">
+        <option value="">Tous</option>
+        <option *ngFor="let t of typeOptions" [value]="t">{{ typeLabel(t) }} ({{ typeCount(t) }})</option>
+      </select>
+    </label>
+    <button type="button" class="btn secondary" (click)="load()">Actualiser</button>
+  </div>
+
+  <div *ngIf="loading" class="state">Chargement…</div>
+  <div *ngIf="error" class="state err">{{ error }}</div>
+
+  <div class="table-wrap" *ngIf="!loading && !error">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Message</th>
+          <th>IP</th>
+          <th>Statut</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let alert of alerts"
+          [class.unread]="alert.status === 'NON_LUE'"
+          (click)="openUser(alert)"
+          [class.clickable]="!!alert.relatedUserId"
+        >
+          <td>{{ formatDate(alert.createdAt) }}</td>
+          <td><span class="type-badge">{{ typeLabel(alert.type) }}</span></td>
+          <td class="msg-cell">
+            <span *ngIf="alert.relatedUsername" class="user-ref">{{ alert.relatedUsername }} — </span>
+            {{ alert.message }}
+          </td>
+          <td>{{ alert.ipAddress || '—' }}</td>
+          <td>
+            <span class="status-pill" [class.unread-pill]="alert.status === 'NON_LUE'">
+              {{ alert.status === 'NON_LUE' ? 'Non lue' : 'Lue' }}
+            </span>
+          </td>
+          <td class="actions">
+            <button type="button" class="btn-link" (click)="markRead(alert, $event)" [disabled]="alert.status === 'LUE'">
+              Marquer lue
+            </button>
+            <button type="button" class="btn-link danger" (click)="remove(alert, $event)">Supprimer</button>
+          </td>
+        </tr>
+        <tr *ngIf="!alerts.length">
+          <td colspan="6" class="empty">Aucune alerte pour ces filtres.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

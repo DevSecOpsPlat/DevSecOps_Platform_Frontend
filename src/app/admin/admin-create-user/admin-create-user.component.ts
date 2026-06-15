@@ -14,13 +14,14 @@ export class AdminCreateUserComponent implements OnChanges {
 
   form = new FormGroup({
     username: new FormControl('', [Validators.required, Validators.minLength(2)]),
-    email: new FormControl('', [Validators.required, Validators.email]),
-    password: new FormControl('', [Validators.required, Validators.minLength(6)]),
-    confirmPassword: new FormControl('', [Validators.required])
+    email: new FormControl('', [Validators.required, Validators.email])
   });
 
   saving = false;
   error: string | null = null;
+  successMessage: string | null = null;
+  activationLink: string | null = null;
+  emailSent = false;
 
   constructor(private adminService: AdminService) {}
 
@@ -30,37 +31,39 @@ export class AdminCreateUserComponent implements OnChanges {
     }
   }
 
-  get passwordsMismatch(): boolean {
-    const pwd = this.form.get('password')?.value ?? '';
-    const confirm = this.form.get('confirmPassword')?.value ?? '';
-    return confirm.length > 0 && pwd !== confirm;
-  }
-
   cancel(): void {
     this.closed.emit();
   }
 
   submit(): void {
-    if (this.form.invalid || this.passwordsMismatch) {
+    if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
 
     this.saving = true;
     this.error = null;
+    this.successMessage = null;
 
     const payload: AdminCreateUserPayload = {
       username: (this.form.get('username')?.value ?? '').trim(),
       email: (this.form.get('email')?.value ?? '').trim(),
-      password: this.form.get('password')?.value ?? '',
       role: 'ROLE_TESTER'
     };
 
     this.adminService.createUser(payload).subscribe({
-      next: () => {
+      next: res => {
         this.saving = false;
+        this.emailSent = !!res.activationEmailSent;
+        this.activationLink = res.activationLink ?? null;
+        this.successMessage = res.message
+          || (this.emailSent
+            ? `Compte créé. E-mail d'activation envoyé à ${res.email}.`
+            : `Compte créé pour ${res.email}. E-mail non envoyé — transmettez le lien ci-dessous.`);
         this.userCreated.emit();
-        this.closed.emit();
+        if (this.emailSent) {
+          setTimeout(() => this.closed.emit(), 4000);
+        }
       },
       error: err => {
         this.saving = false;
@@ -72,6 +75,14 @@ export class AdminCreateUserComponent implements OnChanges {
   private resetForm(): void {
     this.form.reset();
     this.error = null;
+    this.successMessage = null;
+    this.activationLink = null;
+    this.emailSent = false;
     this.saving = false;
+  }
+
+  copyLink(): void {
+    if (!this.activationLink) return;
+    navigator.clipboard?.writeText(this.activationLink).catch(() => {});
   }
 }

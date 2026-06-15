@@ -5,6 +5,7 @@ import { HomeComponent } from './home/home.component';
 import { SignInComponent } from './User/sign-in/sign-in.component';
 import { ProfileComponent } from './User/profile/profile.component';
 import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
+import { AdminUserDetailComponent } from './admin/admin-user-detail/admin-user-detail.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
@@ -32,6 +33,9 @@ import { EnvironmentCreateComponent } from './project/environments/environment-c
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
 import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
+import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.component';
+import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
+import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -94,6 +98,9 @@ const routes: Routes = [
       { path: 'home', component: AdminHomeComponent },
       { path: 'overview', component: AdminOverviewComponent },
       { path: 'users', component: AdminUsersComponent },
+      { path: 'users/:id', component: AdminUserDetailComponent },
+      { path: 'alerts', component: AdminAlertsComponent },
+      { path: 'audit', component: AdminAuditComponent },
       { path: 'inventory', component: AdminInventoryComponent },
       { path: 'observability', component: AdminObservabilityComponent },
       { path: 'reclamations', component: AdminReclamationsComponent }
@@ -112,7 +119,8 @@ const routes: Routes = [
 
   // Auth
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
-  { path: 'sign-in', component: SignInComponent }
+  { path: 'sign-in', component: SignInComponent },
+  { path: 'activate', component: ActivateAccountComponent }
 ];
 
 @NgModule({

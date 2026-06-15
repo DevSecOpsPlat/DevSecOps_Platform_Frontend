@@ -1,0 +1,85 @@
+<div class="admin-route-page audit-page">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Administration · Sécurité</p>
+      <h1 class="page-title">Journal d'audit</h1>
+      <p class="page-lead">
+        Historique complet et chronologique de toutes les actions — connexions, créations de compte,
+        activations, modifications admin, etc.
+      </p>
+    </div>
+  </header>
+
+  <aside class="scope-panel scope-panel--audit">
+    <h2 class="scope-title">Contenu du journal d'audit</h2>
+    <ul class="scope-list">
+      <li><strong>Connexions</strong> — chaque connexion réussie ou échouée, verrouillage après 3 échecs</li>
+      <li><strong>Comptes</strong> — création / suppression admin, activation, envoi d'e-mail d'activation</li>
+      <li><strong>Statut</strong> — activation ou désactivation d'un compte par l'admin</li>
+      <li><strong>Identifiants</strong> — changement de mot de passe ou d'e-mail (utilisateur ou admin)</li>
+    </ul>
+    <p class="scope-note">
+      Ce journal est <em>immutable</em> : il conserve tout l'historique. Les filtres affichent le nombre
+      d'entrées par type. Pour les incidents de sécurité à traiter, voir
+      <a routerLink="/admin/alerts">Alertes</a>.
+    </p>
+  </aside>
+
+  <div class="filters">
+    <label>
+      Action
+      <select [(ngModel)]="filterAction" (change)="onFilterChange()">
+        <option value="">Toutes ({{ stats?.totalCount ?? '…' }})</option>
+        <ng-container *ngFor="let group of actionGroups">
+          <optgroup [label]="group.label">
+            <option *ngFor="let a of group.actions" [value]="a">{{ filterLabel(a) }}</option>
+          </optgroup>
+        </ng-container>
+      </select>
+    </label>
+    <button type="button" class="btn secondary" (click)="refresh()">Actualiser</button>
+  </div>
+
+  <div *ngIf="loading" class="state">Chargement…</div>
+  <div *ngIf="error" class="state err">{{ error }}</div>
+
+  <div class="table-wrap" *ngIf="!loading && !error && page">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Utilisateur</th>
+          <th>Action</th>
+          <th>Détails</th>
+          <th>Effectué par</th>
+          <th>Adresse IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let entry of page.items">
+          <td>{{ formatDate(entry.createdAt) }}</td>
+          <td>{{ entry.username || '—' }}</td>
+          <td><span class="action-badge">{{ actionLabel(entry.action) }}</span></td>
+          <td class="details-cell">{{ entry.details || '—' }}</td>
+          <td>{{ entry.performedBy || '—' }}</td>
+          <td>{{ entry.ipAddress || '—' }}</td>
+        </tr>
+        <tr *ngIf="!page.items.length">
+          <td colspan="6" class="empty">
+            <ng-container *ngIf="filterAction; else noData">
+              Aucune entrée pour « {{ actionLabel(filterAction) }} ».
+              Choisissez « Toutes » ou une autre action (voir les compteurs entre parenthèses).
+            </ng-container>
+            <ng-template #noData>Aucune entrée dans le journal.</ng-template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer class="pager" *ngIf="page.totalPages > 1">
+      <button type="button" class="btn secondary" (click)="prevPage()" [disabled]="currentPage === 0">Précédent</button>
+      <span>Page {{ currentPage + 1 }} / {{ page.totalPages }} · {{ page.totalElements }} entrées</span>
+      <button type="button" class="btn secondary" (click)="nextPage()" [disabled]="currentPage >= page.totalPages - 1">Suivant</button>
+    </footer>
+  </div>
+</div>
