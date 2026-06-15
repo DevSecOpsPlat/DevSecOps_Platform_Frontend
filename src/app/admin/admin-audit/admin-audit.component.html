@@ -4,8 +4,7 @@
       <p class="page-kicker">Administration · Sécurité</p>
       <h1 class="page-title">Journal d'audit</h1>
       <p class="page-lead">
-        Historique complet et chronologique de toutes les actions — connexions, créations de compte,
-        activations, modifications admin, etc.
+        Trace d'audit complète — connexions (réussies et échouées), comptes et actions admin.
       </p>
     </div>
   </header>
@@ -13,15 +12,12 @@
   <aside class="scope-panel scope-panel--audit">
     <h2 class="scope-title">Contenu du journal d'audit</h2>
     <ul class="scope-list">
-      <li><strong>Connexions</strong> — chaque connexion réussie ou échouée, verrouillage après 3 échecs</li>
-      <li><strong>Comptes</strong> — création / suppression admin, activation, envoi d'e-mail d'activation</li>
-      <li><strong>Statut</strong> — activation ou désactivation d'un compte par l'admin</li>
-      <li><strong>Identifiants</strong> — changement de mot de passe ou d'e-mail (utilisateur ou admin)</li>
+      <li><strong>Connexions</strong> — chaque tentative réussie ou échouée (avec IP)</li>
+      <li><strong>Comptes</strong> — création, suppression, activation, e-mail d'activation</li>
+      <li><strong>Administration</strong> — activation/désactivation, réinit. mot de passe, changement e-mail par admin</li>
     </ul>
     <p class="scope-note">
-      Ce journal est <em>immutable</em> : il conserve tout l'historique. Les filtres affichent le nombre
-      d'entrées par type. Pour les incidents de sécurité à traiter, voir
-      <a routerLink="/admin/alerts">Alertes</a>.
+      Les <a routerLink="/admin/alerts">Alertes</a> notifient en temps réel les incidents (échecs, verrouillages, changements d'identifiants, accès 403).
     </p>
   </aside>
 
@@ -62,7 +58,7 @@
           <td><span class="action-badge">{{ actionLabel(entry.action) }}</span></td>
           <td class="details-cell">{{ entry.details || '—' }}</td>
           <td>{{ entry.performedBy || '—' }}</td>
-          <td>{{ entry.ipAddress || '—' }}</td>
+          <td><code class="ip-cell">{{ formatIp(entry.ipAddress) }}</code></td>
         </tr>
         <tr *ngIf="!page.items.length">
           <td colspan="6" class="empty">

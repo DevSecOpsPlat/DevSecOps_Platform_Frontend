@@ -104,8 +104,12 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get visibleAlerts(): AdminSecurityAlert[] {
     return (this.dashboard?.securityAlerts ?? []).filter(
-      alert => !this.dismissedAlerts.has(alert.userId)
+      alert => !this.dismissedAlerts.has(this.alertUserId(alert))
     );
+  }
+
+  trackAlert(_index: number, alert: AdminSecurityAlert): string {
+    return this.alertUserId(alert);
   }
 
   /** Échecs groupés par utilisateur (pour la modale détail). */
@@ -175,7 +179,8 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
 
   dismissAlert(alert: AdminSecurityAlert, event: Event): void {
     event.stopPropagation();
-    this.dismissedAlerts.add(alert.userId);
+    const id = this.alertUserId(alert);
+    this.dismissedAlerts = new Set([...this.dismissedAlerts, id]);
     this.persistDismissedAlerts();
   }
 
@@ -256,11 +261,19 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       const ids: unknown = JSON.parse(raw);
       if (Array.isArray(ids)) {
-        ids.filter((id): id is string => typeof id === 'string').forEach(id => this.dismissedAlerts.add(id));
+        const normalized = ids
+          .filter((id): id is string => typeof id === 'string')
+          .map(id => id.trim())
+          .filter(Boolean);
+        this.dismissedAlerts = new Set(normalized);
       }
     } catch {
       /* ignore corrupted storage */
     }
+  }
+
+  private alertUserId(alert: AdminSecurityAlert): string {
+    return String(alert.userId ?? '').trim();
   }
 
   private persistDismissedAlerts(): void {

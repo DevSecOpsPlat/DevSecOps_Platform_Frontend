@@ -151,13 +151,44 @@
 }
 
 .error-message {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
   background-color: #fee2e2;
-  color: #dc2626;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+  color: #991b1b;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
   margin-bottom: 1rem;
   font-size: 0.9rem;
   border: 1px solid #fecaca;
+}
+
+.error-message p {
+  margin: 0.25rem 0 0;
+  line-height: 1.45;
+}
+
+.error-message strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.error-message--lock {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.error-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.lock-hint {
+  font-size: 0.85rem;
+  opacity: 0.9;
 }
 
 .field-error {

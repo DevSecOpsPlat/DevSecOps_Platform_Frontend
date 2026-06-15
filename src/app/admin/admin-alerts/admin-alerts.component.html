@@ -1,29 +1,28 @@
 <div class="admin-route-page alerts-page">
   <header class="page-head">
     <div>
-      <p class="page-kicker">Administration · Sécurité</p>
+      <p class="page-kicker">Administration · Attijari Bank · Sécurité</p>
       <h1 class="page-title">Alertes</h1>
-      <p class="page-lead">
-        Incidents de sécurité et changements sensibles nécessitant votre attention — à marquer lues ou supprimer.
-      </p>
+      <p class="page-lead">Incidents hors norme — attaques, verrouillages, changements d'identifiants, accès refusés.</p>
     </div>
   </header>
 
   <aside class="scope-panel scope-panel--alerts">
-    <h2 class="scope-title">Contenu des alertes (boîte de réception)</h2>
+    <h2 class="scope-title">Uniquement dans les alertes</h2>
     <ul class="scope-list">
-      <li><strong>Connexion</strong> — 3 échecs consécutifs, verrouillage 15 min</li>
-      <li><strong>Identifiants</strong> — mot de passe ou e-mail modifié (par l'utilisateur ou l'admin)</li>
+      <li><strong>Connexion échouée</strong> — chaque tentative incorrecte (avec IP et compteur)</li>
+      <li><strong>Force brute</strong> — 3 échecs consécutifs → verrouillage 15 min</li>
+      <li><strong>Takeover</strong> — mot de passe ou e-mail modifié par l'utilisateur</li>
+      <li><strong>Accès refusé</strong> — tentative d'accès à l'API admin (HTTP 403)</li>
     </ul>
     <p class="scope-note">
-      Les actions admin courantes (création / suppression / activation de compte) sont enregistrées uniquement dans le
-      <a routerLink="/admin/audit">Journal d'audit</a>, pas ici. Le panneau « Alertes sécurité » sur
-      <a routerLink="/admin/users">Utilisateurs</a> résume les échecs de connexion des 30 derniers jours (masquable avec ×).
+      Les connexions <strong>réussies</strong>, créations de compte, e-mails d'activation et actions admin courantes sont dans le
+      <a routerLink="/admin/audit">Journal d'audit</a>.
     </p>
   </aside>
 
   <div class="kpi-row" *ngIf="stats">
-    <article class="kpi-card">
+    <article class="kpi-card kpi-card--critical">
       <span class="kpi-label">Non lues</span>
       <span class="kpi-value accent">{{ stats.unreadCount }}</span>
     </article>
@@ -32,9 +31,9 @@
       <span class="kpi-value">{{ stats.totalCount }}</span>
     </article>
     <article class="kpi-card wide" *ngIf="stats?.countByType">
-      <span class="kpi-label">Par type (actifs)</span>
+      <span class="kpi-label">Par type</span>
       <div class="type-chips">
-        <span class="chip" *ngFor="let t of typeOptions">
+        <span class="chip" *ngFor="let t of typeOptions" [class.chip--empty]="typeCount(t) === 0">
           {{ typeLabel(t) }} · {{ typeCount(t) }}
         </span>
       </div>
@@ -53,7 +52,7 @@
     <label>
       Type
       <select [(ngModel)]="filterType" (change)="onFilterChange()">
-        <option value="">Tous</option>
+        <option value="">Tous les types actifs</option>
         <option *ngFor="let t of typeOptions" [value]="t">{{ typeLabel(t) }} ({{ typeCount(t) }})</option>
       </select>
     </label>
@@ -79,16 +78,21 @@
         <tr
           *ngFor="let alert of alerts"
           [class.unread]="alert.status === 'NON_LUE'"
+          [class.row-critical]="typeSeverity(alert.type) === 'critical'"
           (click)="openUser(alert)"
           [class.clickable]="!!alert.relatedUserId"
         >
-          <td>{{ formatDate(alert.createdAt) }}</td>
-          <td><span class="type-badge">{{ typeLabel(alert.type) }}</span></td>
-          <td class="msg-cell">
-            <span *ngIf="alert.relatedUsername" class="user-ref">{{ alert.relatedUsername }} — </span>
-            {{ alert.message }}
+          <td class="nowrap">{{ formatDate(alert.createdAt) }}</td>
+          <td>
+            <span class="type-badge" [class]="'type-badge--' + typeSeverity(alert.type)">
+              {{ typeLabel(alert.type) }}
+            </span>
           </td>
-          <td>{{ alert.ipAddress || '—' }}</td>
+          <td class="msg-cell">
+            <span *ngIf="alert.relatedUsername" class="user-ref">{{ alert.relatedUsername }}</span>
+            {{ formatMessage(alert.message) }}
+          </td>
+          <td><code class="ip-cell">{{ formatIp(alert.ipAddress) }}</code></td>
           <td>
             <span class="status-pill" [class.unread-pill]="alert.status === 'NON_LUE'">
               {{ alert.status === 'NON_LUE' ? 'Non lue' : 'Lue' }}
@@ -102,7 +106,7 @@
           </td>
         </tr>
         <tr *ngIf="!alerts.length">
-          <td colspan="6" class="empty">Aucune alerte pour ces filtres.</td>
+          <td colspan="6" class="empty">Aucune alerte pour ces filtres — c'est une bonne nouvelle.</td>
         </tr>
       </tbody>
     </table>

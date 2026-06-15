@@ -1,44 +1,51 @@
 <div class="sign-in-page">
   <div class="sign-in-container">
     <div class="sign-in-form-panel">
-      <h1>Sign in</h1>
-      <p class="form-subtitle">Welcome back. Sign in to your account.</p>
-      
-      <div *ngIf="errorMessage" class="error-message">
-        {{ errorMessage }}
+      <h1>Connexion</h1>
+      <p class="form-subtitle">Accédez à votre espace EnviroTest en toute sécurité.</p>
+
+      <div *ngIf="errorMessage && (isLockedForCurrentUser || !lockedIdentifier)" class="error-message" [class.error-message--lock]="isLockedForCurrentUser">
+        <svg *ngIf="isLockedForCurrentUser" class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <div>
+          <strong *ngIf="isLockedForCurrentUser">Compte verrouillé</strong>
+          <p>{{ errorMessage }}</p>
+          <p *ngIf="isLockedForCurrentUser && minutesRemaining" class="lock-hint">
+            Temps restant estimé : environ {{ minutesRemaining }} minute(s).
+          </p>
+        </div>
       </div>
 
       <form [formGroup]="formSignin" class="auth-form" (ngSubmit)="signin()">
         <div class="form-group">
-          <label for="signin-username">Username</label>
-          <input 
-            id="signin-username" 
-            type="text" 
-            placeholder="Username" 
+          <label for="signin-username">Identifiant ou e-mail</label>
+          <input
+            id="signin-username"
+            type="text"
+            placeholder="nom.utilisateur ou email@domaine.com"
             formControlName="username"
             [class.error]="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" />
           <div *ngIf="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" class="field-error">
-            Username is required
+            Ce champ est obligatoire
           </div>
         </div>
         <div class="form-group">
-          <label for="signin-password">Password</label>
-          <input 
-            id="signin-password" 
-            type="password" 
-            placeholder="Password" 
+          <label for="signin-password">Mot de passe</label>
+          <input
+            id="signin-password"
+            type="password"
+            placeholder="Mot de passe"
             formControlName="password"
             [class.error]="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" />
           <div *ngIf="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" class="field-error">
-            Password is required
+            Ce champ est obligatoire
           </div>
         </div>
-        <button 
-          type="submit" 
-          class="btn btn-primary btn-block"
-          [disabled]="isLoading || formSignin.invalid">
-          <span *ngIf="!isLoading">Sign in</span>
-          <span *ngIf="isLoading">Signing in...</span>
+        <button type="submit" class="btn btn-primary btn-block" [disabled]="submitDisabled">
+          <span *ngIf="!isLoading">{{ isLockedForCurrentUser ? 'Compte verrouillé' : 'Se connecter' }}</span>
+          <span *ngIf="isLoading">Connexion…</span>
         </button>
       </form>
       <p class="form-footer">
@@ -47,9 +54,9 @@
     </div>
     <div class="sign-in-visual">
       <div class="visual-content">
-        <span class="visual-icon"><img src="/assets/images/Logormbg.png" alt="Logo " /></span>
-        <h2>Secure access</h2>
-        <p>Your credentials are protected. Sign in to manage your APIs and keys.</p>
+        <span class="visual-icon"><img src="/assets/images/Logormbg.png" alt="Logo" /></span>
+        <h2>Accès sécurisé</h2>
+        <p>Vos identifiants sont protégés. Après 3 tentatives incorrectes, le compte est verrouillé 15 minutes.</p>
       </div>
     </div>
   </div>

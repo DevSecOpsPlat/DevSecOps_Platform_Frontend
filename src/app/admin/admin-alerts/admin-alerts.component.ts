@@ -2,28 +2,36 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminAlert, AdminAlertStats, AdminService } from '../../services/admin/admin.service';
 
-/** Types d'alertes actifs — incidents de sécurité nécessitant l'attention admin. */
+/** Types d'alertes actifs — incidents de sécurité uniquement. */
 const ACTIVE_ALERT_TYPES = [
-  'FAILED_LOGIN_REPEATED',
+  'LOGIN_FAILED',
   'ACCOUNT_LOCKED',
   'PASSWORD_CHANGED',
   'EMAIL_CHANGED',
-  'ADMIN_PASSWORD_RESET',
-  'ADMIN_EMAIL_CHANGED'
+  'UNAUTHORIZED_ACCESS'
 ] as const;
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
-  FAILED_LOGIN_REPEATED: 'Connexion échouée répétée (≥3)',
-  ACCOUNT_LOCKED: 'Compte verrouillé (15 min)',
+  LOGIN_FAILED: 'Connexion échouée',
+  ACCOUNT_LOCKED: 'Compte verrouillé (force brute)',
   PASSWORD_CHANGED: 'Mot de passe modifié (utilisateur)',
   EMAIL_CHANGED: 'E-mail modifié (utilisateur)',
-  ADMIN_PASSWORD_RESET: 'Réinit. mot de passe (admin)',
-  ADMIN_EMAIL_CHANGED: 'E-mail modifié (admin)',
-  /* Anciennes alertes (avant séparation audit / alertes) */
+  UNAUTHORIZED_ACCESS: 'Accès admin refusé (403)',
+  FAILED_LOGIN_REPEATED: 'Échecs répétés (archivé)',
   ACCOUNT_CREATED: 'Compte créé (archivé)',
   ACCOUNT_DELETED: 'Compte supprimé (archivé)',
   ACCOUNT_ENABLED: 'Compte activé (archivé)',
-  ACCOUNT_DISABLED: 'Compte désactivé (archivé)'
+  ACCOUNT_DISABLED: 'Compte désactivé (archivé)',
+  ADMIN_PASSWORD_RESET: 'Réinit. mot de passe (archivé)',
+  ADMIN_EMAIL_CHANGED: 'E-mail modifié admin (archivé)'
+};
+
+const ALERT_SEVERITY: Record<string, 'critical' | 'warning' | 'legacy'> = {
+  LOGIN_FAILED: 'warning',
+  ACCOUNT_LOCKED: 'critical',
+  UNAUTHORIZED_ACCESS: 'critical',
+  PASSWORD_CHANGED: 'warning',
+  EMAIL_CHANGED: 'warning'
 };
 
 @Component({
@@ -75,13 +83,26 @@ export class AdminAlertsComponent implements OnInit {
     return ALERT_TYPE_LABELS[type] ?? type;
   }
 
+  typeSeverity(type: string): string {
+    return ALERT_SEVERITY[type] ?? 'legacy';
+  }
+
   typeCount(type: string): number {
     return this.stats?.countByType?.[type] ?? 0;
+  }
+
+  formatIp(ip: string | null | undefined): string {
+    if (!ip || ip === '—') return '—';
+    return ip;
   }
 
   formatDate(value: string | number[] | null | undefined): string {
     const d = this.parseDate(value);
     return d ? d.toLocaleString('fr-FR') : '—';
+  }
+
+  formatMessage(message: string): string {
+    return message?.replace(/\n/g, ' · ') ?? '';
   }
 
   private parseDate(value: string | number[] | null | undefined): Date | null {

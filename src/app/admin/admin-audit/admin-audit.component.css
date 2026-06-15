@@ -166,6 +166,14 @@
   color: #334155;
 }
 
+.ip-cell {
+  font-size: 0.78rem;
+  color: #475569;
+  background: #f8fafc;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 .empty {
   text-align: center;
   color: #94a3b8;

@@ -4,36 +4,32 @@ import { AdminAuditEntry, AdminAuditPage, AdminAuditStats, AdminService } from '
 const ACTION_LABELS: Record<string, string> = {
   LOGIN_SUCCESS: 'Connexion réussie',
   LOGIN_FAILED: 'Connexion échouée',
-  ACCOUNT_LOCKED: 'Compte verrouillé (15 min)',
   ACCOUNT_CREATED: 'Compte créé (admin)',
   ACCOUNT_DELETED: 'Compte supprimé (admin)',
   ACCOUNT_ACTIVATED: 'Compte activé (1ère connexion)',
   ACTIVATION_EMAIL_SENT: 'E-mail d\'activation envoyé',
   ACCOUNT_ENABLED: 'Compte réactivé (admin)',
   ACCOUNT_DISABLED: 'Compte désactivé (admin)',
-  PASSWORD_CHANGED: 'Mot de passe modifié (utilisateur)',
   ADMIN_PASSWORD_RESET: 'Mot de passe réinitialisé (admin)',
-  EMAIL_CHANGED: 'E-mail modifié (utilisateur)',
-  ADMIN_EMAIL_CHANGED: 'E-mail modifié (admin)'
+  ADMIN_EMAIL_CHANGED: 'E-mail modifié (admin)',
+  /* Archivé */
+  ACCOUNT_LOCKED: 'Verrouillage (archivé)',
+  PASSWORD_CHANGED: 'Mot de passe modifié (archivé)',
+  EMAIL_CHANGED: 'E-mail modifié (archivé)'
 };
 
-/** Filtres groupés — correspond aux actions réellement tracées dans le journal. */
 const ACTION_GROUPS: { label: string; actions: string[] }[] = [
   {
     label: 'Connexions',
-    actions: ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'ACCOUNT_LOCKED']
+    actions: ['LOGIN_SUCCESS', 'LOGIN_FAILED']
   },
   {
     label: 'Cycle de vie du compte',
     actions: ['ACCOUNT_CREATED', 'ACCOUNT_DELETED', 'ACCOUNT_ACTIVATED', 'ACTIVATION_EMAIL_SENT']
   },
   {
-    label: 'Statut (admin)',
-    actions: ['ACCOUNT_ENABLED', 'ACCOUNT_DISABLED']
-  },
-  {
-    label: 'Identifiants & e-mail',
-    actions: ['PASSWORD_CHANGED', 'ADMIN_PASSWORD_RESET', 'EMAIL_CHANGED', 'ADMIN_EMAIL_CHANGED']
+    label: 'Administration compte',
+    actions: ['ACCOUNT_ENABLED', 'ACCOUNT_DISABLED', 'ADMIN_PASSWORD_RESET', 'ADMIN_EMAIL_CHANGED']
   }
 ];
 
@@ -96,6 +92,11 @@ export class AdminAuditComponent implements OnInit {
   filterLabel(action: string): string {
     const count = this.actionCount(action);
     return `${this.actionLabel(action)} (${count})`;
+  }
+
+  formatIp(ip: string | null | undefined): string {
+    if (!ip || ip === '—') return '—';
+    return ip;
   }
 
   formatDate(value: string | number[] | null | undefined): string {

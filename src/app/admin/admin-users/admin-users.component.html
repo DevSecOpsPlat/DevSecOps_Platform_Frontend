@@ -36,21 +36,22 @@
         </svg>
         <div>
           <h2 class="alert-panel-title">Alertes sécurité</h2>
-          <p class="alert-panel-sub">{{ visibleAlerts.length }} utilisateur(s) avec 3 tentatives échouées ou plus</p>
+          <p class="alert-panel-sub">{{ visibleAlerts.length }} utilisateur(s) avec 3 échecs consécutifs ou compte verrouillé</p>
           <a routerLink="/admin/alerts" class="alert-all-link">Voir le centre d'alertes →</a>
         </div>
       </div>
 
       <div class="alert-list">
-        <article class="alert-item" *ngFor="let alert of visibleAlerts" (click)="openUserById(alert.userId)">
+        <article class="alert-item" *ngFor="let alert of visibleAlerts; trackBy: trackAlert" (click)="openUserById(alert.userId)">
           <div class="alert-item-main">
             <span class="alert-user">{{ alert.username }}</span>
             <span class="alert-email">{{ alert.email }}</span>
-            <span class="alert-count">{{ alert.failedCount }} tentatives échouées (30 derniers jours)</span>
+            <span class="alert-count">{{ alert.failedCount }} échec(s) consécutif(s) sans connexion réussie</span>
             <ul class="alert-times">
-              <li *ngFor="let att of alert.attempts">
+              <li *ngFor="let att of alert.attempts; let i = index">
                 <span class="time-dot"></span>
                 {{ formatAttemptTime(att.attemptedAt) }}
+                <span class="failures-ip" *ngIf="att.ipAddress"> · {{ att.ipAddress }}</span>
               </li>
             </ul>
           </div>
