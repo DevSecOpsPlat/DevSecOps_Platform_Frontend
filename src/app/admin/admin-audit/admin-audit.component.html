@@ -1,8 +1,14 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
 <div class="admin-route-page audit-page">
   <header class="page-head">
     <div>
-      <p class="page-kicker">Administration · Sécurité</p>
-      <h1 class="page-title">Journal d'audit</h1>
+      <p class="page-kicker">
+        <i class="fas fa-shield-alt"></i> Administration · Attijari Bank · Sécurité
+      </p>
+      <h1 class="page-title">
+        <i class="fas fa-history"></i> Journal d'audit
+      </h1>
       <p class="page-lead">
         Trace d'audit complète — connexions (réussies et échouées), comptes et actions admin.
       </p>
@@ -10,61 +16,176 @@
   </header>
 
   <aside class="scope-panel scope-panel--audit">
-    <h2 class="scope-title">Contenu du journal d'audit</h2>
+    <h2 class="scope-title"><i class="fas fa-info-circle"></i> Contenu du journal d'audit</h2>
     <ul class="scope-list">
       <li><strong>Connexions</strong> — chaque tentative réussie ou échouée (avec IP)</li>
       <li><strong>Comptes</strong> — création, suppression, activation, e-mail d'activation</li>
       <li><strong>Administration</strong> — activation/désactivation, réinit. mot de passe, changement e-mail par admin</li>
     </ul>
     <p class="scope-note">
-      Les <a routerLink="/admin/alerts">Alertes</a> notifient en temps réel les incidents (échecs, verrouillages, changements d'identifiants, accès 403).
+      <i class="fas fa-bell"></i> Les <a routerLink="/admin/alerts">Alertes</a> notifient en temps réel les incidents (échecs, verrouillages, changements d'identifiants, accès 403).
     </p>
   </aside>
 
-  <div class="filters">
-    <label>
-      Action
-      <select [(ngModel)]="filterAction" (change)="onFilterChange()">
-        <option value="">Toutes ({{ stats?.totalCount ?? '…' }})</option>
+  <!-- Statistiques & Graphiques -->
+  <div class="audit-analytics" *ngIf="stats || analytics">
+    <article class="analytics-card analytics-card--featured">
+      <header class="analytics-card__head">
+        <div class="analytics-card__title-block">
+          <div class="analytics-card__icon"><i class="fas fa-chart-line"></i></div>
+          <div>
+            <h3 class="analytics-card__title">Activité globale</h3>
+            <p class="analytics-card__subtitle">{{ trendPeriodLabel() }}</p>
+          </div>
+        </div>
+        <span class="analytics-kpi accent">{{ trendTotal() }}</span>
+      </header>
+
+      <div class="period-toggle" role="tablist" aria-label="Période du graphique">
+        <button
+          type="button"
+          *ngFor="let p of trendPeriods"
+          class="period-btn"
+          [class.period-btn--active]="trendPeriod === p.value"
+          (click)="setTrendPeriod(p.value)"
+          [attr.aria-selected]="trendPeriod === p.value"
+        >
+          {{ p.label }}
+        </button>
+      </div>
+
+      <div class="chart-box chart-box--line">
+        <canvas #trendCanvas aria-label="Tendance de l'activité d'audit"></canvas>
+      </div>
+    </article>
+
+    <article class="analytics-card">
+      <header class="analytics-card__head">
+        <div class="analytics-card__title-block">
+          <div class="analytics-card__icon"><i class="fas fa-chart-pie"></i></div>
+          <div>
+            <h3 class="analytics-card__title">Répartition des actions</h3>
+            <p class="analytics-card__subtitle">{{ donutTotal() }} entrées</p>
+          </div>
+        </div>
+      </header>
+      <div class="chart-box chart-box--donut">
+        <canvas #donutCanvas aria-label="Répartition par type d'action"></canvas>
+      </div>
+      <div class="type-chips" *ngIf="stats?.countByAction">
         <ng-container *ngFor="let group of actionGroups">
-          <optgroup [label]="group.label">
-            <option *ngFor="let a of group.actions" [value]="a">{{ filterLabel(a) }}</option>
-          </optgroup>
+          <span
+            class="chip"
+            *ngFor="let a of group.actions"
+            [class.chip--empty]="actionCount(a) === 0"
+            [hidden]="actionCount(a) === 0"
+          >
+            {{ actionLabel(a) }} · {{ actionCount(a) }}
+          </span>
         </ng-container>
-      </select>
-    </label>
-    <button type="button" class="btn secondary" (click)="refresh()">Actualiser</button>
+      </div>
+    </article>
   </div>
 
-  <div *ngIf="loading" class="state">Chargement…</div>
-  <div *ngIf="error" class="state err">{{ error }}</div>
+  <!-- Filtres enrichis -->
+  <div class="filters">
+    <div class="filters__grid">
+      <label class="filter-field filter-field--search">
+        <span class="filter-label"><i class="fas fa-search"></i> Recherche</span>
+        <div class="search-wrap">
+          <i class="fas fa-search search-icon-fa"></i>
+          <input
+            type="text"
+            [(ngModel)]="filterSearch"
+            (keyup.enter)="onSearchSubmit()"
+            placeholder="Utilisateur, détails ou IP…"
+          />
+        </div>
+      </label>
 
-  <div class="table-wrap" *ngIf="!loading && !error && page">
+      <label class="filter-field">
+        <span class="filter-label"><i class="fas fa-calendar"></i> Du</span>
+        <input type="date" [(ngModel)]="filterDateFrom" (change)="onFilterChange()" />
+      </label>
+
+      <label class="filter-field">
+        <span class="filter-label"><i class="fas fa-calendar"></i> Au</span>
+        <input type="date" [(ngModel)]="filterDateTo" (change)="onFilterChange()" />
+      </label>
+
+      <label class="filter-field filter-field--action">
+        <span class="filter-label"><i class="fas fa-filter"></i> Action</span>
+        <select [(ngModel)]="filterAction" (change)="onFilterChange()">
+          <option value="">Toutes ({{ stats?.totalCount ?? '…' }})</option>
+          <ng-container *ngFor="let group of actionGroups">
+            <optgroup [label]="group.label">
+              <option *ngFor="let a of group.actions" [value]="a">{{ filterLabel(a) }}</option>
+            </optgroup>
+          </ng-container>
+        </select>
+      </label>
+    </div>
+
+    <div class="filters__actions">
+      <button type="button" class="btn btn-primary" (click)="onSearchSubmit()">
+        <i class="fas fa-search"></i> Rechercher
+      </button>
+      <button type="button" class="btn secondary" (click)="clearFilters()">
+        <i class="fas fa-undo"></i> Réinitialiser
+      </button>
+      <button type="button" class="btn secondary" (click)="refresh()">
+        <i class="fas fa-sync-alt"></i> Actualiser
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="state"><i class="fas fa-spinner fa-pulse"></i> Chargement…</div>
+  <div *ngIf="error" class="state err"><i class="fas fa-times-circle"></i> {{ error }}</div>
+
+  <section class="table-section" *ngIf="!loading && !error && page">
+    <button
+      type="button"
+      class="table-section__toggle"
+      (click)="toggleTable()"
+      [attr.aria-expanded]="tableOpen"
+    >
+      <span class="table-section__title">
+        <i class="fas fa-list-alt"></i> Entrées du journal
+        <span class="table-section__count">{{ page.totalElements }} entrée(s)</span>
+      </span>
+      <i class="fas table-section__caret" [class.fa-chevron-up]="tableOpen" [class.fa-chevron-down]="!tableOpen"></i>
+    </button>
+
+    <div class="table-wrap" *ngIf="tableOpen">
     <table class="data-table">
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Utilisateur</th>
-          <th>Action</th>
-          <th>Détails</th>
-          <th>Effectué par</th>
-          <th>Adresse IP</th>
+          <th><i class="fas fa-calendar-alt"></i> Date</th>
+          <th><i class="fas fa-user"></i> Utilisateur</th>
+          <th><i class="fas fa-tag"></i> Action</th>
+          <th><i class="fas fa-info-circle"></i> Détails</th>
+          <th><i class="fas fa-user-shield"></i> Effectué par</th>
+          <th><i class="fas fa-network-wired"></i> Adresse IP</th>
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let entry of page.items">
-          <td>{{ formatDate(entry.createdAt) }}</td>
+        <tr *ngFor="let entry of page.items" class="data-row">
+          <td class="nowrap">{{ formatDate(entry.createdAt) }}</td>
           <td>{{ entry.username || '—' }}</td>
-          <td><span class="action-badge">{{ actionLabel(entry.action) }}</span></td>
+          <td>
+            <span class="action-badge" [ngClass]="actionBadgeClass(entry.action)">
+              {{ actionLabel(entry.action) }}
+            </span>
+          </td>
           <td class="details-cell">{{ entry.details || '—' }}</td>
           <td>{{ entry.performedBy || '—' }}</td>
           <td><code class="ip-cell">{{ formatIp(entry.ipAddress) }}</code></td>
         </tr>
         <tr *ngIf="!page.items.length">
           <td colspan="6" class="empty">
-            <ng-container *ngIf="filterAction; else noData">
-              Aucune entrée pour « {{ actionLabel(filterAction) }} ».
-              Choisissez « Toutes » ou une autre action (voir les compteurs entre parenthèses).
+            <i class="fas fa-database"></i>
+            <ng-container *ngIf="filterAction || filterSearch || filterDateFrom || filterDateTo; else noData">
+              Aucune entrée ne correspond aux filtres sélectionnés.
             </ng-container>
             <ng-template #noData>Aucune entrée dans le journal.</ng-template>
           </td>
@@ -73,9 +194,14 @@
     </table>
 
     <footer class="pager" *ngIf="page.totalPages > 1">
-      <button type="button" class="btn secondary" (click)="prevPage()" [disabled]="currentPage === 0">Précédent</button>
-      <span>Page {{ currentPage + 1 }} / {{ page.totalPages }} · {{ page.totalElements }} entrées</span>
-      <button type="button" class="btn secondary" (click)="nextPage()" [disabled]="currentPage >= page.totalPages - 1">Suivant</button>
+      <button type="button" class="btn secondary" (click)="prevPage()" [disabled]="currentPage === 0">
+        <i class="fas fa-chevron-left"></i> Précédent
+      </button>
+      <span><i class="fas fa-list"></i> Page {{ currentPage + 1 }} / {{ page.totalPages }} · {{ page.totalElements }} entrées</span>
+      <button type="button" class="btn secondary" (click)="nextPage()" [disabled]="currentPage >= page.totalPages - 1">
+        Suivant <i class="fas fa-chevron-right"></i>
+      </button>
     </footer>
-  </div>
+    </div>
+  </section>
 </div>

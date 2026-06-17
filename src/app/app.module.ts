@@ -44,6 +44,7 @@ import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-rec
 import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.component';
 import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
 import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
+import { PasswordRequirementsComponent } from './shared/password/password-requirements.component';
 
 @NgModule({
   declarations: [
@@ -84,7 +85,8 @@ import { ActivateAccountComponent } from './User/activate-account/activate-accou
     AdminReclamationsComponent,
     AdminAlertsComponent,
     AdminAuditComponent,
-    ActivateAccountComponent
+    ActivateAccountComponent,
+    PasswordRequirementsComponent
   ],
   imports: [
     BrowserModule,

@@ -1,11 +1,18 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { AdminAlert, AdminAlertStats, AdminService } from '../../services/admin/admin.service';
+import { AdminAlert, AdminAlertStats, AdminService, BlockedIpEntry } from '../../services/admin/admin.service';
 
 /** Types d'alertes actifs — incidents de sécurité uniquement. */
 const ACTIVE_ALERT_TYPES = [
   'LOGIN_FAILED',
   'ACCOUNT_LOCKED',
+  'BRUTE_FORCE_DETECTED',
+  'RATE_LIMIT_EXCEEDED',
+  'HONEYPOT_TRIGGERED',
+  'SUSPICIOUS_REQUEST',
+  'MALICIOUS_PAYLOAD',
+  'SUSPICIOUS_USER_AGENT',
+  'IP_BLOCKED',
   'PASSWORD_CHANGED',
   'EMAIL_CHANGED',
   'UNAUTHORIZED_ACCESS'
@@ -14,6 +21,13 @@ const ACTIVE_ALERT_TYPES = [
 const ALERT_TYPE_LABELS: Record<string, string> = {
   LOGIN_FAILED: 'Connexion échouée',
   ACCOUNT_LOCKED: 'Compte verrouillé (force brute)',
+  BRUTE_FORCE_DETECTED: 'Force brute par IP',
+  RATE_LIMIT_EXCEEDED: 'Pic de requêtes HTTP',
+  HONEYPOT_TRIGGERED: 'Honeypot déclenché',
+  SUSPICIOUS_REQUEST: 'URL suspecte (scan)',
+  MALICIOUS_PAYLOAD: 'Payload SQL / XSS',
+  SUSPICIOUS_USER_AGENT: 'User-Agent suspect',
+  IP_BLOCKED: 'IP bloquée automatiquement',
   PASSWORD_CHANGED: 'Mot de passe modifié (utilisateur)',
   EMAIL_CHANGED: 'E-mail modifié (utilisateur)',
   UNAUTHORIZED_ACCESS: 'Accès admin refusé (403)',
@@ -29,6 +43,13 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 const ALERT_SEVERITY: Record<string, 'critical' | 'warning' | 'legacy'> = {
   LOGIN_FAILED: 'warning',
   ACCOUNT_LOCKED: 'critical',
+  BRUTE_FORCE_DETECTED: 'critical',
+  RATE_LIMIT_EXCEEDED: 'critical',
+  HONEYPOT_TRIGGERED: 'critical',
+  SUSPICIOUS_REQUEST: 'critical',
+  MALICIOUS_PAYLOAD: 'critical',
+  SUSPICIOUS_USER_AGENT: 'warning',
+  IP_BLOCKED: 'critical',
   UNAUTHORIZED_ACCESS: 'critical',
   PASSWORD_CHANGED: 'warning',
   EMAIL_CHANGED: 'warning'
@@ -42,11 +63,14 @@ const ALERT_SEVERITY: Record<string, 'critical' | 'warning' | 'legacy'> = {
 export class AdminAlertsComponent implements OnInit {
   alerts: AdminAlert[] = [];
   stats: AdminAlertStats | null = null;
+  blockedIps: BlockedIpEntry[] = [];
   loading = true;
+  loadingBlocked = false;
   error: string | null = null;
 
   filterStatus = '';
   filterType = '';
+  tableOpen = true;
 
   readonly typeOptions = [...ACTIVE_ALERT_TYPES];
 
@@ -54,6 +78,7 @@ export class AdminAlertsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadBlockedIps();
   }
 
   load(): void {
@@ -75,6 +100,29 @@ export class AdminAlertsComponent implements OnInit {
       error: err => {
         this.loading = false;
         this.error = err?.error?.message || 'Impossible de charger les alertes.';
+      }
+    });
+  }
+
+  loadBlockedIps(): void {
+    this.loadingBlocked = true;
+    this.adminService.getBlockedIps().subscribe({
+      next: list => {
+        this.blockedIps = list ?? [];
+        this.loadingBlocked = false;
+      },
+      error: () => {
+        this.loadingBlocked = false;
+      }
+    });
+  }
+
+  unblockIp(entry: BlockedIpEntry, event: Event): void {
+    event.stopPropagation();
+    if (!confirm(`Débloquer l'IP ${entry.ip} ?`)) return;
+    this.adminService.unblockIp(entry.ip).subscribe({
+      next: () => {
+        this.blockedIps = this.blockedIps.filter(b => b.ip !== entry.ip);
       }
     });
   }
@@ -150,5 +198,9 @@ export class AdminAlertsComponent implements OnInit {
 
   onFilterChange(): void {
     this.load();
+  }
+
+  toggleTable(): void {
+    this.tableOpen = !this.tableOpen;
   }
 }

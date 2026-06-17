@@ -444,7 +444,8 @@
               {{ showResetPwd ? 'Masquer' : 'Afficher' }}
             </button>
           </div>
-          <span class="field-error" *ngIf="resetPasswordTooShort">Au moins 8 caractères requis.</span>
+          <app-password-requirements [password]="resetNewPassword"></app-password-requirements>
+          <span class="field-error" *ngIf="resetPasswordTooShort">Le mot de passe ne respecte pas toutes les contraintes.</span>
         </div>
 
         <div class="field">

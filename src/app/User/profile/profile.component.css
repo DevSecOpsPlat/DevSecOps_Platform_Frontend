@@ -170,6 +170,16 @@
   box-shadow: inset 3px 0 0 var(--color-primary, #f36c21);
 }
 
+.nav-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nav-item:disabled:hover {
+  background: transparent;
+  color: #475569;
+}
+
 .profile-main {
   min-width: 0;
 }
@@ -291,7 +301,31 @@
   display: block;
   margin-bottom: 0.35rem;
   color: #fff;
-  font-size: 0.9rem;
+}
+
+.twofactor-qr {
+  display: block;
+  margin: 1rem 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.twofactor-setup code {
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.twofactor-status.enabled {
+  padding: 1rem;
+  background: #f0fdf4;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+}
+
+.btn.ghost.danger {
+  color: #b91c1c;
 }
 
 .security-note p {
@@ -432,6 +466,53 @@
 .btn.ghost {
   background: #f1f5f9;
   color: #475569;
+}
+
+.field-note.warn-inline {
+  color: #b45309;
+  margin-bottom: 0.75rem;
+}
+
+.twofactor-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.method-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.method-card:hover:not(:disabled) {
+  border-color: var(--color-primary, #f36c21);
+  box-shadow: 0 4px 14px rgba(243, 108, 33, 0.12);
+}
+
+.method-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.method-card span {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.twofactor-qr {
+  display: block;
+  margin: 1rem 0;
+  border-radius: 8px;
 }
 
 @media (max-width: 860px) {

@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { AdminCreateUserPayload, AdminService } from '../../services/admin/admin.service';
+import { usernameValidator } from '../../shared/username/username.validator';
 
 @Component({
   selector: 'app-admin-create-user',
@@ -13,7 +14,7 @@ export class AdminCreateUserComponent implements OnChanges {
   @Output() userCreated = new EventEmitter<void>();
 
   form = new FormGroup({
-    username: new FormControl('', [Validators.required, Validators.minLength(2)]),
+    username: new FormControl('', [Validators.required, usernameValidator()]),
     email: new FormControl('', [Validators.required, Validators.email])
   });
 

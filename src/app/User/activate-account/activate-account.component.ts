@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { UserService } from '../../services/user/user.service';
+import { passwordStrengthValidator } from '../../shared/password/password-strength.validator';
+import { isPasswordStrong } from '../../shared/password/password-rules';
 
 @Component({
   selector: 'app-activate-account',
@@ -10,7 +12,7 @@ import { UserService } from '../../services/user/user.service';
 })
 export class ActivateAccountComponent implements OnInit {
   form = new FormGroup({
-    newPassword: new FormControl('', [Validators.required, Validators.minLength(8)]),
+    newPassword: new FormControl('', [Validators.required, passwordStrengthValidator()]),
     confirmPassword: new FormControl('', [Validators.required])
   });
 
@@ -32,6 +34,10 @@ export class ActivateAccountComponent implements OnInit {
         this.error = 'Lien d\'activation invalide. Vérifiez l\'URL reçue par e-mail.';
       }
     });
+  }
+
+  get newPasswordStrong(): boolean {
+    return isPasswordStrong(this.form.get('newPassword')?.value ?? '');
   }
 
   get passwordsMismatch(): boolean {

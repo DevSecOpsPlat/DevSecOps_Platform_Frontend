@@ -10,11 +10,22 @@ export class AdminGuard implements CanActivate {
   constructor(private authService: AuthService, private router: Router) {}
 
   canActivate(): boolean | UrlTree {
-    if (this.authService.isAuthenticated() && this.authService.hasRole('ROLE_ADMIN')) {
+    if (!this.authService.isAuthenticated()) {
+      return this.router.parseUrl('/sign-in');
+    }
+
+    if (this.authService.mustChangePassword()) {
+      return this.router.createUrlTree(['/profile'], { queryParams: { forcePassword: '1' } });
+    }
+
+    if (this.authService.requiresTwoFactorSetup()) {
+      return this.router.createUrlTree(['/profile'], { queryParams: { force2fa: '1' } });
+    }
+
+    if (this.authService.hasRole('ROLE_ADMIN')) {
       return true;
     }
-    // Rediriger les non-admins vers la page principale utilisateur
+
     return this.router.parseUrl('/environments');
   }
 }
-

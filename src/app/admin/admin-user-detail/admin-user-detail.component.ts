@@ -8,6 +8,7 @@ import {
   AdminUserEnvironmentDetail,
   AdminUserMetrics
 } from '../../services/admin/admin.service';
+import { isPasswordStrong } from '../../shared/password/password-rules';
 
 @Component({
   selector: 'app-admin-user-detail',
@@ -355,13 +356,13 @@ export class AdminUserDetailComponent implements OnInit {
   }
 
   get resetPasswordTooShort(): boolean {
-    return this.resetNewPassword.length > 0 && this.resetNewPassword.length < 8;
+    return this.resetNewPassword.length > 0 && !isPasswordStrong(this.resetNewPassword);
   }
 
   get canSubmitReset(): boolean {
     return (
       !this.resetSaving &&
-      this.resetNewPassword.length >= 8 &&
+      isPasswordStrong(this.resetNewPassword) &&
       this.resetNewPassword === this.resetConfirmPassword
     );
   }

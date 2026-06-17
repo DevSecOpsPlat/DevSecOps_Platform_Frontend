@@ -21,14 +21,17 @@
 
     <div class="profile-layout" *ngIf="!loading">
       <nav class="profile-nav" aria-label="Sections du profil">
-        <button type="button" class="nav-item" [class.active]="activePanel === 'overview'" (click)="setPanel('overview')">
+        <button type="button" class="nav-item" [class.active]="activePanel === 'overview'" (click)="setPanel('overview')" [disabled]="forcePasswordChange || forceTwoFactorSetup || twoFactorRequired">
           Vue d'ensemble
         </button>
-        <button type="button" class="nav-item" [class.active]="activePanel === 'email'" (click)="setPanel('email')">
+        <button type="button" class="nav-item" [class.active]="activePanel === 'email'" (click)="setPanel('email')" [disabled]="forcePasswordChange || forceTwoFactorSetup || twoFactorRequired">
           Adresse e-mail
         </button>
-        <button type="button" class="nav-item" [class.active]="activePanel === 'password'" (click)="setPanel('password')">
+        <button type="button" class="nav-item" [class.active]="activePanel === 'password'" (click)="setPanel('password')" [disabled]="forceTwoFactorSetup || twoFactorRequired">
           Mot de passe
+        </button>
+        <button type="button" class="nav-item" [class.active]="activePanel === 'twofactor'" (click)="setPanel('twofactor')" [disabled]="forcePasswordChange">
+          Double auth. (2FA)
         </button>
       </nav>
 
@@ -73,6 +76,15 @@
               </div>
               <p class="info-value masked">••••••••••••</p>
               <p class="info-hint">Renouvelez régulièrement votre mot de passe.</p>
+            </article>
+            <article class="info-card">
+              <div class="info-card-top">
+                <span class="info-label">Double authentification</span>
+                <button type="button" class="link-btn" (click)="setPanel('twofactor')">Configurer</button>
+              </div>
+              <p class="info-value">{{ twoFactorEnabled ? twoFactorMethodLabel : 'Non activée' }}</p>
+              <p class="info-hint" *ngIf="twoFactorRequired">Configuration obligatoire avant d'utiliser la plateforme.</p>
+              <p class="info-hint" *ngIf="twoFactorEnabled && twoFactorMandatory">Obligatoire — changement de méthode possible depuis le profil.</p>
             </article>
           </div>
 
@@ -174,8 +186,9 @@
                   {{ showNewPassword ? 'Masquer' : 'Afficher' }}
                 </button>
               </div>
-              <span class="field-error" *ngIf="passwordForm.get('newPassword')?.invalid && passwordForm.get('newPassword')?.touched">
-                Au moins 8 caractères requis.
+              <app-password-requirements [password]="passwordForm.get('newPassword')?.value ?? ''"></app-password-requirements>
+              <span class="field-error" *ngIf="passwordForm.get('newPassword')?.touched && passwordForm.get('newPassword')?.hasError('passwordStrength')">
+                Le mot de passe ne respecte pas toutes les contraintes ci-dessus.
               </span>
             </div>
 
@@ -199,11 +212,121 @@
 
             <footer class="form-actions">
               <button type="button" class="btn ghost" (click)="setPanel('overview')">Annuler</button>
-              <button type="submit" class="btn primary" [disabled]="passwordSaving || passwordForm.invalid || passwordsMismatch">
+              <button type="submit" class="btn primary" [disabled]="passwordSaving || passwordForm.invalid || passwordsMismatch || !newPasswordStrong">
                 {{ passwordSaving ? 'Mise à jour…' : 'Mettre à jour le mot de passe' }}
               </button>
             </footer>
           </form>
+        </section>
+
+        <!-- 2FA -->
+        <section class="panel" *ngIf="activePanel === 'twofactor'">
+          <header class="panel-head">
+            <h2>Authentification à deux facteurs</h2>
+            <p>Obligatoire pour tous les comptes. Choisissez une méthode — vous pourrez la changer plus tard, mais pas la supprimer.</p>
+          </header>
+
+          <div *ngIf="forceTwoFactorSetup || twoFactorRequired" class="alert alert-warning">
+            Configurez la double authentification pour accéder à la plateforme.
+          </div>
+
+          <div *ngIf="twoFactorSuccess" class="alert alert-success">{{ twoFactorSuccess }}</div>
+          <div *ngIf="twoFactorError" class="alert alert-error">{{ twoFactorError }}</div>
+
+          <!-- Méthode active -->
+          <div *ngIf="twoFactorEnabled && !switchingMethod" class="twofactor-status enabled">
+            <p><strong>2FA activée</strong> — méthode : {{ twoFactorMethodLabel }}</p>
+            <p *ngIf="twoFactorMethod === 'EMAIL'" class="field-note">
+              Les codes sont envoyés à <strong>{{ profile?.email || user?.email }}</strong> (e-mail du compte).
+            </p>
+            <p class="field-note">La 2FA est obligatoire. Vous pouvez changer de méthode, pas la désactiver.</p>
+            <button type="button" class="btn secondary" (click)="startChangeMethod()">Changer de méthode</button>
+          </div>
+
+          <!-- Choix ou changement de méthode -->
+          <div *ngIf="(!twoFactorEnabled || switchingMethod) && setupView === 'choose'" [formGroup]="twoFactorEnableForm">
+            <p *ngIf="switchingMethod" class="field-note warn-inline">
+              Saisissez votre mot de passe, puis choisissez la nouvelle méthode :
+            </p>
+            <div class="field" *ngIf="switchingMethod">
+              <label for="switch-password">Mot de passe actuel</label>
+              <input id="switch-password" type="password" formControlName="currentPassword" autocomplete="current-password" />
+            </div>
+
+            <div class="twofactor-method-grid">
+              <button type="button" class="method-card" (click)="selectSetupMethod('TOTP')" [disabled]="twoFactorSaving">
+                <strong>Application</strong>
+                <span>Authenticator+, Google Authenticator…</span>
+              </button>
+              <button type="button" class="method-card" (click)="selectSetupMethod('EMAIL')" [disabled]="twoFactorSaving">
+                <strong>E-mail</strong>
+                <span>Code envoyé à {{ profile?.email || user?.email }}</span>
+              </button>
+            </div>
+            <button type="button" class="btn ghost" *ngIf="switchingMethod" (click)="cancelChangeMethod()">Annuler</button>
+          </div>
+
+          <!-- Setup TOTP -->
+          <div *ngIf="setupView === 'totp' && (!twoFactorEnabled || switchingMethod)" class="twofactor-setup" [formGroup]="twoFactorEnableForm">
+            <div class="field" *ngIf="switchingMethod">
+              <label for="totp-switch-pwd">Mot de passe actuel</label>
+              <input id="totp-switch-pwd" type="password" formControlName="currentPassword" autocomplete="current-password" />
+            </div>
+            <div *ngIf="!twoFactorSetup">
+              <button type="button" class="btn primary" (click)="beginTotpSetup()" [disabled]="twoFactorSaving">
+                {{ twoFactorSaving ? 'Préparation…' : 'Générer le QR code' }}
+              </button>
+              <button type="button" class="btn ghost" (click)="setupView = 'choose'">Retour</button>
+            </div>
+            <div *ngIf="twoFactorSetup">
+              <img
+                [src]="'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeUri(twoFactorSetup.otpAuthUrl)"
+                alt="QR code 2FA"
+                class="twofactor-qr"
+                width="200"
+                height="200" />
+              <p class="field-note">Secret manuel : <code>{{ twoFactorSetup.secret }}</code></p>
+              <form (ngSubmit)="enableTotp()" class="secure-form">
+                <div class="field">
+                  <label for="enable-totp-code">Code à 6 chiffres (application)</label>
+                  <input id="enable-totp-code" type="text" maxlength="6" formControlName="code" inputmode="numeric" autocomplete="one-time-code" />
+                </div>
+                <footer class="form-actions">
+                  <button type="button" class="btn ghost" (click)="setupView = 'choose'">Retour</button>
+                  <button type="submit" class="btn primary" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
+                    {{ twoFactorSaving ? 'Activation…' : 'Activer' }}
+                  </button>
+                </footer>
+              </form>
+            </div>
+          </div>
+
+          <!-- Setup EMAIL -->
+          <div *ngIf="setupView === 'email' && (!twoFactorEnabled || switchingMethod)" class="twofactor-setup" [formGroup]="twoFactorEnableForm">
+            <p class="field-note">
+              Le code sera envoyé à <strong>{{ profile?.email || user?.email }}</strong> (e-mail de votre compte).
+            </p>
+            <div class="field" *ngIf="switchingMethod">
+              <label for="email-switch-pwd">Mot de passe actuel</label>
+              <input id="email-switch-pwd" type="password" formControlName="currentPassword" autocomplete="current-password" />
+            </div>
+            <button type="button" class="btn primary" (click)="beginEmailSetup()" [disabled]="twoFactorSaving || emailCodeSent">
+              {{ twoFactorSaving ? 'Envoi…' : (emailCodeSent ? 'Code envoyé' : 'Envoyer le code') }}
+            </button>
+            <button type="button" class="btn ghost" (click)="setupView = 'choose'">Retour</button>
+            <p *ngIf="emailSetupMessage && emailCodeSent" class="field-note">{{ emailSetupMessage }}</p>
+            <form *ngIf="emailCodeSent" (ngSubmit)="enableEmail()" class="secure-form">
+              <div class="field">
+                <label for="enable-email-code">Code reçu par e-mail (6 chiffres)</label>
+                <input id="enable-email-code" type="text" maxlength="6" formControlName="code" inputmode="numeric" autocomplete="one-time-code" />
+              </div>
+              <footer class="form-actions">
+                <button type="submit" class="btn primary" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
+                  {{ twoFactorSaving ? 'Activation…' : 'Activer' }}
+                </button>
+              </footer>
+            </form>
+          </div>
         </section>
       </main>
     </div>

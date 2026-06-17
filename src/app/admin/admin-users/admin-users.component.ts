@@ -108,9 +108,9 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  trackAlert(_index: number, alert: AdminSecurityAlert): string {
-    return this.alertUserId(alert);
-  }
+  /** Arrow function — conserve `this` quand Angular l'utilise comme trackBy. */
+  readonly trackAlert = (_index: number, alert: AdminSecurityAlert): string =>
+    String(alert.userId ?? '').trim();
 
   /** Échecs groupés par utilisateur (pour la modale détail). */
   get failuresByUser(): FailedUserGroup[] {

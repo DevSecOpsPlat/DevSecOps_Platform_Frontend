@@ -244,15 +244,43 @@ export class AdminService {
     return this.http.delete<{ message: string }>(BASE + `alerts/${id}`, { headers: this.authHeaders() });
   }
 
-  getAuditLog(page = 0, size = 50, userId?: string, action?: string): Observable<AdminAuditPage> {
+  getBlockedIps(): Observable<BlockedIpEntry[]> {
+    return this.http.get<BlockedIpEntry[]>(BASE + 'security/blocked-ips', { headers: this.authHeaders() });
+  }
+
+  unblockIp(ip: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      BASE + `security/blocked-ips/${encodeURIComponent(ip)}`,
+      { headers: this.authHeaders() }
+    );
+  }
+
+  getAuditLog(
+    page = 0,
+    size = 50,
+    userId?: string,
+    action?: string,
+    search?: string,
+    from?: string,
+    to?: string,
+    severity?: string
+  ): Observable<AdminAuditPage> {
     const params: string[] = [`page=${page}`, `size=${size}`];
     if (userId) params.push(`userId=${encodeURIComponent(userId)}`);
     if (action) params.push(`action=${encodeURIComponent(action)}`);
+    if (search?.trim()) params.push(`search=${encodeURIComponent(search.trim())}`);
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    if (severity) params.push(`severity=${encodeURIComponent(severity)}`);
     return this.http.get<AdminAuditPage>(BASE + 'audit-log?' + params.join('&'), { headers: this.authHeaders() });
   }
 
   getAuditStats(): Observable<AdminAuditStats> {
     return this.http.get<AdminAuditStats>(BASE + 'audit-log/stats', { headers: this.authHeaders() });
+  }
+
+  getAuditAnalytics(): Observable<AdminAuditAnalytics> {
+    return this.http.get<AdminAuditAnalytics>(BASE + 'audit-log/analytics', { headers: this.authHeaders() });
   }
 }
 
@@ -271,6 +299,12 @@ export interface AdminAlertStats {
   unreadCount: number;
   totalCount: number;
   countByType: Record<string, number>;
+}
+
+export interface BlockedIpEntry {
+  ip: string;
+  reason: string;
+  blockedUntil: string | number[];
 }
 
 export interface AdminAuditEntry {
@@ -295,4 +329,22 @@ export interface AdminAuditPage {
 export interface AdminAuditStats {
   totalCount: number;
   countByAction: Record<string, number>;
+}
+
+export interface AdminAuditDayCount {
+  date: string;
+  count: number;
+}
+
+export interface AdminAuditTopActor {
+  username: string;
+  count: number;
+}
+
+export interface AdminAuditAnalytics {
+  totalCount: number;
+  dailyTrend: AdminAuditDayCount[];
+  monthlyTrend: AdminAuditDayCount[];
+  allTimeTrend: AdminAuditDayCount[];
+  topAdmins: AdminAuditTopActor[];
 }

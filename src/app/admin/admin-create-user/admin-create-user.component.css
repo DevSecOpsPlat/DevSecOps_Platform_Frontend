@@ -156,6 +156,46 @@
   color: #dc2626;
 }
 
+.field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.field-hint.checking {
+  color: #64748b;
+}
+
+.field-hint.ok {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.field-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.field-warn {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  font-size: 0.75rem;
+  color: #9a3412;
+  line-height: 1.45;
+}
+
+.field-warn code {
+  font-size: 0.72rem;
+  background: #fff;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

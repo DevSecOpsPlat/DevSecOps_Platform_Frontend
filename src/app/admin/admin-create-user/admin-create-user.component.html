@@ -29,9 +29,13 @@
   <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form" *ngIf="!successMessage">
     <div class="field">
       <label for="create-username">Nom d'utilisateur</label>
-      <input id="create-username" type="text" formControlName="username" autocomplete="off" />
+      <input id="create-username" type="text" formControlName="username" autocomplete="off" maxlength="30" />
+      <p class="field-hint">Lettres, chiffres, point, tiret ou underscore — au moins une lettre.</p>
       <span class="field-error" *ngIf="form.get('username')?.invalid && form.get('username')?.touched">
-        Nom d'utilisateur requis (min. 2 caractères)
+        <ng-container *ngIf="form.get('username')?.errors?.['required']">Nom d'utilisateur requis</ng-container>
+        <ng-container *ngIf="form.get('username')?.errors?.['usernameInvalid'] as err">
+          {{ err.message }}
+        </ng-container>
       </span>
     </div>
 

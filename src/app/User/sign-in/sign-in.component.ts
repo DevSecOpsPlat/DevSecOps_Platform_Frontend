@@ -3,7 +3,7 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { catchError, of, Subscription } from 'rxjs';
 import { AuthService } from 'src/app/services/auth/auth.service';
-import { UserService } from 'src/app/services/user/user.service';
+import { SigninResponse } from 'src/app/models/user/signin-response';
 
 interface LoginErrorBody {
   message?: string;
@@ -20,17 +20,27 @@ interface LoginErrorBody {
 })
 export class SignInComponent implements OnInit, OnDestroy {
   formSignin!: FormGroup;
+  totpForm = new FormGroup({
+    code: new FormControl('', [Validators.required, Validators.pattern(/^\d{6}$/)])
+  });
+
   errorMessage = '';
   isLoading = false;
-  /** Verrouillage lié à l'identifiant qui a échoué 3 fois — pas au formulaire entier. */
   lockedIdentifier: string | null = null;
   minutesRemaining = 0;
+
+  /** Étape 2 : code 2FA après mot de passe valide. */
+  twoFactorStep = false;
+  pendingLoginId: string | null = null;
+  twoFactorUsername = '';
+  twoFactorMethod: 'TOTP' | 'EMAIL' = 'TOTP';
+  twoFactorInfoMessage = '';
+  resendLoading = false;
 
   private usernameSub?: Subscription;
 
   constructor(
     private authService: AuthService,
-    private userService: UserService,
     private router: Router
   ) {}
 
@@ -59,7 +69,6 @@ export class SignInComponent implements OnInit, OnDestroy {
     return (this.formSignin.get('username')?.value ?? '').trim().toLowerCase();
   }
 
-  /** Verrouillage affiché uniquement pour le compte actuellement saisi. */
   get isLockedForCurrentUser(): boolean {
     if (!this.lockedIdentifier) {
       return false;
@@ -69,6 +78,10 @@ export class SignInComponent implements OnInit, OnDestroy {
 
   get submitDisabled(): boolean {
     return this.isLoading || this.formSignin.invalid || this.isLockedForCurrentUser;
+  }
+
+  get totpSubmitDisabled(): boolean {
+    return this.isLoading || this.totpForm.invalid;
   }
 
   signin(): void {
@@ -97,21 +110,71 @@ export class SignInComponent implements OnInit, OnDestroy {
         return of(null);
       })
     ).subscribe(response => {
-      if (response) {
-        this.isLoading = false;
-        this.clearErrors();
-        const roles = response.roles || [];
-        if (response.mustChangePassword) {
-          this.router.navigate(['/profile'], { queryParams: { forcePassword: '1' } });
-          return;
-        }
-        if (roles.includes('ROLE_ADMIN')) {
-          this.router.navigate(['/admin-home']);
-        } else {
-          this.router.navigate(['/home']);
-        }
+      this.isLoading = false;
+      if (!response) return;
+
+      if (response.requiresTwoFactor && response.pendingLoginId) {
+        this.twoFactorStep = true;
+        this.pendingLoginId = response.pendingLoginId;
+        this.twoFactorUsername = response.username;
+        this.twoFactorMethod = (response.twoFactorMethod as 'TOTP' | 'EMAIL') || 'TOTP';
+        this.twoFactorInfoMessage = response.message || '';
+        this.errorMessage = response.emailSent === false ? (response.message || '') : '';
+        return;
+      }
+
+      if (response.accessToken) {
+        this.authService.completeLogin(response);
+        this.authService.navigateAfterLogin(response);
       }
     });
+  }
+
+  verifyTotp(): void {
+    if (!this.pendingLoginId || this.totpForm.invalid) {
+      return;
+    }
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    const code = (this.totpForm.get('code')?.value ?? '').trim();
+
+    this.authService.verifyTwoFactor({ pendingLoginId: this.pendingLoginId, code }).pipe(
+      catchError(err => {
+        this.isLoading = false;
+        this.errorMessage = err?.error?.message || 'Code incorrect.';
+        return of(null);
+      })
+    ).subscribe(response => {
+      this.isLoading = false;
+      if (response?.accessToken) {
+        this.authService.navigateAfterLogin(response);
+      }
+    });
+  }
+
+  resendEmailCode(): void {
+    if (!this.pendingLoginId || this.twoFactorMethod !== 'EMAIL') return;
+    this.resendLoading = true;
+    this.authService.resendLoginTwoFactor(this.pendingLoginId).subscribe({
+      next: res => {
+        this.resendLoading = false;
+        this.twoFactorInfoMessage = res.message;
+      },
+      error: err => {
+        this.resendLoading = false;
+        this.errorMessage = err?.error?.message || 'Renvoi impossible.';
+      }
+    });
+  }
+
+  backToPasswordStep(): void {
+    this.twoFactorStep = false;
+    this.pendingLoginId = null;
+    this.twoFactorMethod = 'TOTP';
+    this.twoFactorInfoMessage = '';
+    this.totpForm.reset();
+    this.errorMessage = '';
   }
 
   private onIdentifierChanged(): void {

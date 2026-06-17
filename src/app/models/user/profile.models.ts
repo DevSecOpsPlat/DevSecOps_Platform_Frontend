@@ -5,6 +5,10 @@ export interface UserProfile {
   roles: string[];
   accountStatus: string;
   createdAt?: string | null;
+  twoFactorEnabled?: boolean;
+  totpEnabled?: boolean;
+  twoFactorMethod?: 'TOTP' | 'EMAIL' | null;
+  mustEnableTwoFactor?: boolean;
 }
 
 export interface UpdateEmailPayload {
