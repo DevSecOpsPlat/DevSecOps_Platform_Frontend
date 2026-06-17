@@ -1,171 +1,295 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
-<div class="admin-route-page alerts-page">
-  <header class="page-head">
+<div class="siem-dashboard">
+  <header class="siem-head">
     <div>
-      <p class="page-kicker">
-        <i class="fas fa-shield-alt"></i> Administration · Attijari Bank · Sécurité
-      </p>
-      <h1 class="page-title">
-        <i class="fas fa-bell"></i> Alertes
-      </h1>
-      <p class="page-lead">Incidents hors norme — attaques, verrouillages, changements d'identifiants, accès refusés.</p>
+      <p class="siem-kicker"><i class="fas fa-shield-alt"></i> SOC · Attijari Bank · EnviroTest</p>
+      <h1 class="siem-title"><i class="fas fa-radar"></i> Centre de sécurité</h1>
+      <p class="siem-lead">Surveillance sécurité — alertes, menaces et blocages IP (historique complet).</p>
     </div>
+    <button type="button" class="siem-refresh" (click)="loadAll()">
+      <i class="fas fa-sync-alt"></i> Actualiser
+    </button>
   </header>
 
-  <aside class="scope-panel scope-panel--alerts">
-    <h2 class="scope-title"><i class="fas fa-info-circle"></i> Détection en temps réel</h2>
-    <ul class="scope-list">
-      <li><strong>Connexion échouée</strong> — chaque tentative (compte connu ou identifiant inconnu)</li>
-      <li><strong>Force brute compte</strong> — 3 échecs consécutifs → verrouillage 15 min</li>
-      <li><strong>Force brute IP</strong> — 5 échecs / minute depuis la même IP → blocage 30 min</li>
-      <li><strong>Pic HTTP</strong> — trop de requêtes par IP (200/min global, 20/min sur login)</li>
-      <li><strong>Honeypot & scan</strong> — accès à <code>/.env</code>, <code>/wp-admin</code>, <code>/admin/secret</code>…</li>
-      <li><strong>Payload malveillant</strong> — motifs SQL / XSS dans les paramètres</li>
-      <li><strong>User-Agent suspect</strong> — absent ou outil d'attaque (sqlmap, nikto…)</li>
-      <li><strong>Takeover</strong> — mot de passe ou e-mail modifié par l'utilisateur</li>
-      <li><strong>IP bloquées</strong> — persistées en base (<code>blocked_ips</code>), restaurées au redémarrage</li>
-      <li><strong>Rate limiting</strong> — Bucket4j (token bucket) : global, login, API admin</li>
-    </ul>
-    <p class="scope-note">
-      <i class="fas fa-history"></i> Les connexions <strong>réussies</strong>, créations de compte et actions admin courantes sont dans le
-      <a routerLink="/admin/audit">Journal d'audit</a>.
-    </p>
-  </aside>
+  <div *ngIf="loading && !dashboard" class="siem-state">
+    <i class="fas fa-spinner fa-pulse"></i> Chargement du tableau de bord…
+  </div>
+  <div *ngIf="error" class="siem-state siem-state--err"><i class="fas fa-times-circle"></i> {{ error }}</div>
 
-  <section class="blocked-panel" *ngIf="blockedIps.length || loadingBlocked">
-    <h2 class="blocked-title"><i class="fas fa-ban"></i> IP bloquées actuellement</h2>
-    <p *ngIf="loadingBlocked" class="blocked-empty"><i class="fas fa-spinner fa-pulse"></i> Chargement…</p>
-    <ul class="blocked-list" *ngIf="!loadingBlocked && blockedIps.length">
-      <li *ngFor="let entry of blockedIps" class="blocked-item">
-        <div>
-          <code>{{ formatIp(entry.ip) }}</code>
-          <span class="blocked-reason">{{ entry.reason }}</span>
-          <span class="blocked-until">jusqu'au {{ formatDate(entry.blockedUntil) }}</span>
+  <ng-container *ngIf="dashboard">
+    <!-- KPIs -->
+    <section class="kpi-grid">
+      <article
+        class="kpi-card kpi-card--clickable"
+        [class.kpi-card--open]="expandedKpiKey === 'alerts'"
+        (click)="toggleKpiPanel('alerts')"
+      >
+        <div class="kpi-icon kpi-icon--blue"><i class="fas fa-bell"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">Total alertes</span>
+          <span class="kpi-value">{{ dashboard.kpis.alertsTotal }}</span>
+          <span class="kpi-hint">{{ kpiPanel('alerts')?.countHint }}</span>
         </div>
-        <button type="button" class="btn secondary btn-sm" (click)="unblockIp(entry, $event)">
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('alerts') }}</div>
+      </article>
+
+      <article
+        class="kpi-card kpi-card--clickable"
+        [class.kpi-card--open]="expandedKpiKey === 'blocked'"
+        (click)="toggleKpiPanel('blocked')"
+      >
+        <div class="kpi-icon kpi-icon--slate"><i class="fas fa-ban"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">IP bloquées</span>
+          <span class="kpi-value">{{ dashboard.kpis.blockedIpsActive }}</span>
+          <span class="kpi-hint">{{ kpiPanel('blocked')?.countHint }}</span>
+        </div>
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('blocked') }}</div>
+      </article>
+
+      <article
+        class="kpi-card kpi-card--clickable"
+        [class.kpi-card--open]="expandedKpiKey === 'brute'"
+        (click)="toggleKpiPanel('brute')"
+      >
+        <div class="kpi-icon kpi-icon--orange"><i class="fas fa-hammer"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">Force brute</span>
+          <span class="kpi-value">{{ dashboard.kpis.bruteForceTotal }}</span>
+          <span class="kpi-hint">{{ kpiPanel('brute')?.countHint }}</span>
+        </div>
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('brute') }}</div>
+      </article>
+
+      <article
+        class="kpi-card kpi-card--clickable kpi-card--danger"
+        [class.kpi-card--open]="expandedKpiKey === 'honeypot'"
+        (click)="toggleKpiPanel('honeypot')"
+      >
+        <div class="kpi-icon kpi-icon--red"><i class="fas fa-spider"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">Honeypot</span>
+          <span class="kpi-value">{{ dashboard.kpis.honeypotTotal }}</span>
+          <span class="kpi-hint">{{ kpiPanel('honeypot')?.countHint }}</span>
+        </div>
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('honeypot') }}</div>
+      </article>
+
+      <article
+        class="kpi-card kpi-card--clickable"
+        [class.kpi-card--open]="expandedKpiKey === 'ratelimit'"
+        (click)="toggleKpiPanel('ratelimit')"
+      >
+        <div class="kpi-icon kpi-icon--amber"><i class="fas fa-tachometer-alt"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">Rate limit / DDoS</span>
+          <span class="kpi-value">{{ dashboard.kpis.rateLimitTotal }}</span>
+          <span class="kpi-hint">DDoS applicatif = trop de requêtes/IP</span>
+        </div>
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('ratelimit') }}</div>
+      </article>
+
+      <article
+        class="kpi-card kpi-card--clickable"
+        [class.kpi-card--open]="expandedKpiKey === 'xsssql'"
+        (click)="toggleKpiPanel('xsssql')"
+      >
+        <div class="kpi-icon kpi-icon--indigo"><i class="fas fa-bug"></i></div>
+        <div class="kpi-body">
+          <span class="kpi-label">XSS / SQLi</span>
+          <span class="kpi-value">{{ dashboard.kpis.xssSqlTotal }}</span>
+          <span class="kpi-hint">{{ kpiPanel('xsssql')?.countHint }}</span>
+        </div>
+        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('xsssql') }}</div>
+      </article>
+    </section>
+
+    <!-- Graphiques -->
+    <section class="charts-grid">
+      <article class="chart-panel chart-panel--wide">
+        <h2><i class="fas fa-chart-line"></i> Alertes de sécurité par jour</h2>
+        <p class="chart-caption">Nombre total d'alertes enregistrées chaque jour (tous types : honeypot, XSS, force brute, rate limit…).</p>
+        <div class="chart-box"><canvas #lineCanvas></canvas></div>
+      </article>
+      <article class="chart-panel">
+        <h2><i class="fas fa-chart-pie"></i> Répartition par type</h2>
+        <div class="chart-box chart-box--donut"><canvas #doughnutCanvas></canvas></div>
+      </article>
+      <article class="chart-panel">
+        <h2><i class="fas fa-chart-bar"></i> Top 5 IPs malveillantes</h2>
+        <div class="chart-box"><canvas #barCanvas></canvas></div>
+      </article>
+    </section>
+  </ng-container>
+
+  <!-- Panneau détail KPI (clic sur une carte) -->
+  <section class="kpi-detail-panel" *ngIf="activeKpiPanel">
+    <header class="kpi-detail-head">
+      <div>
+        <h2><i class="fas fa-info-circle"></i> {{ activeKpiPanel.title }}</h2>
+        <p class="kpi-detail-desc">{{ activeKpiPanel.hoverDescription }}</p>
+        <p class="kpi-detail-count">{{ activeKpiPanel.countHint }}</p>
+      </div>
+      <div class="kpi-detail-actions">
+        <button
+          type="button"
+          class="btn-link-filter"
+          *ngIf="expandedKpiKey && expandedKpiKey !== 'alerts' && expandedKpiKey !== 'blocked'"
+          (click)="filterTableByKpi(expandedKpiKey!)"
+        >
+          <i class="fas fa-filter"></i> Filtrer le tableau
+        </button>
+        <button type="button" class="kpi-detail-close" (click)="closeKpiPanel()" aria-label="Fermer">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </header>
+
+    <ul class="kpi-detail-list" *ngIf="expandedKpiKey === 'blocked' && dashboard?.blockedIps?.length">
+      <li *ngFor="let b of dashboard!.blockedIps" class="kpi-detail-item">
+        <div class="kpi-detail-item-main">
+          <strong><code>{{ formatIp(b.ip) }}</code></strong>
+          <span>{{ b.reason }}</span>
+          <span class="muted">
+            {{ b.currentlyActive ? 'Actif' : 'Expiré' }} · source {{ b.source }}
+            · bloqué le {{ formatPanelDate(b.createdAt) }}
+            · jusqu'au {{ formatPanelDate(b.blockedUntil) }}
+          </span>
+        </div>
+        <button type="button" class="btn-unblock" *ngIf="b.currentlyActive" (click)="unblockFromPanel(b, $event)">
           <i class="fas fa-unlock"></i> Débloquer
         </button>
       </li>
     </ul>
-    <p *ngIf="!loadingBlocked && !blockedIps.length" class="blocked-empty">Aucune IP bloquée.</p>
+    <p class="kpi-detail-empty" *ngIf="expandedKpiKey === 'blocked' && !dashboard?.blockedIps?.length">
+      Aucune entrée dans blocked_ips. Les IP expirées restent visibles ici si elles figurent parmi les 50 derniers enregistrements.
+    </p>
+
+    <ng-container *ngIf="expandedKpiKey !== 'blocked'">
+      <ul class="kpi-detail-list" *ngIf="activeKpiPanel?.items?.length">
+        <li *ngFor="let item of activeKpiPanel!.items" class="kpi-detail-item">
+          <div class="kpi-detail-item-main">
+            <strong>{{ item.line1 }}</strong>
+            <span>{{ item.line2 }}</span>
+            <span class="muted">{{ item.line3 }}</span>
+            <span class="muted" *ngIf="item.occurredAt">· {{ formatPanelDate(item.occurredAt) }}</span>
+          </div>
+        </li>
+      </ul>
+      <p class="kpi-detail-empty" *ngIf="!activeKpiPanel?.items?.length">
+        Aucune alerte de ce type en base. Vérifiez la table <code>alerts</code> dans PostgreSQL.
+      </p>
+    </ng-container>
   </section>
-
-  <div class="kpi-row" *ngIf="stats">
-    <article class="kpi-card kpi-card--critical">
-      <div class="kpi-icon"><i class="fas fa-envelope"></i></div>
-      <div class="kpi-content">
-        <span class="kpi-label">Non lues</span>
-        <span class="kpi-value accent">{{ stats.unreadCount }}</span>
-      </div>
-    </article>
-    <article class="kpi-card">
-      <div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
-      <div class="kpi-content">
-        <span class="kpi-label">Total actives</span>
-        <span class="kpi-value">{{ stats.totalCount }}</span>
-      </div>
-    </article>
-    <article class="kpi-card wide" *ngIf="stats?.countByType">
-      <div class="kpi-icon"><i class="fas fa-chart-pie"></i></div>
-      <div class="kpi-content">
-        <span class="kpi-label">Par type</span>
-        <div class="type-chips">
-          <span class="chip" *ngFor="let t of typeOptions" [class.chip--empty]="typeCount(t) === 0">
-            {{ typeLabel(t) }} · {{ typeCount(t) }}
-          </span>
-        </div>
-      </div>
-    </article>
-  </div>
-
-  <div class="filters">
-    <label>
-      <span><i class="fas fa-filter"></i> Statut</span>
-      <select [(ngModel)]="filterStatus" (change)="onFilterChange()">
-        <option value="">Tous</option>
-        <option value="NON_LUE">Non lues</option>
-        <option value="LUE">Lues</option>
-      </select>
-    </label>
-    <label>
-      <span><i class="fas fa-tag"></i> Type</span>
-      <select [(ngModel)]="filterType" (change)="onFilterChange()">
-        <option value="">Tous les types actifs</option>
-        <option *ngFor="let t of typeOptions" [value]="t">{{ typeLabel(t) }} ({{ typeCount(t) }})</option>
-      </select>
-    </label>
-    <button type="button" class="btn secondary" (click)="load()"><i class="fas fa-sync-alt"></i> Actualiser</button>
-  </div>
-
-  <div *ngIf="loading" class="state"><i class="fas fa-spinner fa-pulse"></i> Chargement…</div>
-  <div *ngIf="error" class="state err"><i class="fas fa-times-circle"></i> {{ error }}</div>
-
-  <section class="table-section" *ngIf="!loading && !error">
-    <button
-      type="button"
-      class="table-section__toggle"
-      (click)="toggleTable()"
-      [attr.aria-expanded]="tableOpen"
-    >
-      <span class="table-section__title">
-        <i class="fas fa-bell"></i> Liste des alertes
-        <span class="table-section__count">{{ alerts.length }} alerte(s)</span>
-      </span>
-      <i class="fas table-section__caret" [class.fa-chevron-up]="tableOpen" [class.fa-chevron-down]="!tableOpen"></i>
-    </button>
-
-    <div class="table-wrap" *ngIf="tableOpen">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th><i class="fas fa-calendar-alt"></i> Date</th>
-          <th><i class="fas fa-tachometer-alt"></i> Type</th>
-          <th><i class="fas fa-comment"></i> Message</th>
-          <th><i class="fas fa-network-wired"></i> IP</th>
-          <th><i class="fas fa-flag-checkered"></i> Statut</th>
-          <th><i class="fas fa-cogs"></i> Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          *ngFor="let alert of alerts"
-          class="data-row"
-          [class.unread]="alert.status === 'NON_LUE'"
-          [class.row-critical]="typeSeverity(alert.type) === 'critical'"
-          (click)="openUser(alert)"
-          [class.clickable]="!!alert.relatedUserId"
-        >
-          <td class="nowrap">{{ formatDate(alert.createdAt) }}</td>
-          <td>
-            <span class="type-badge" [class]="'type-badge--' + typeSeverity(alert.type)">
-              {{ typeLabel(alert.type) }}
-            </span>
-          </td>
-          <td class="msg-cell">
-            <span *ngIf="alert.relatedUsername" class="user-ref"><i class="fas fa-user"></i> {{ alert.relatedUsername }}</span>
-            {{ formatMessage(alert.message) }}
-          </td>
-          <td><code class="ip-cell">{{ formatIp(alert.ipAddress) }}</code></td>
-          <td>
-            <span class="status-pill" [class.unread-pill]="alert.status === 'NON_LUE'">
-              {{ alert.status === 'NON_LUE' ? 'Non lue' : 'Lue' }}
-            </span>
-          </td>
-          <td class="actions">
-            <button type="button" class="btn-link" (click)="markRead(alert, $event)" [disabled]="alert.status === 'LUE'">
-              <i class="fas fa-check-circle"></i> Marquer lue
-            </button>
-            <button type="button" class="btn-link danger" (click)="remove(alert, $event)">
-              <i class="fas fa-trash-alt"></i> Supprimer
-            </button>
-          </td>
-        </tr>
-        <tr *ngIf="!alerts.length">
-          <td colspan="6" class="empty"><i class="fas fa-check-shield"></i> Aucune alerte pour ces filtres — c'est une bonne nouvelle.</td>
-        </tr>
-      </tbody>
-    </table>
+  <section class="table-section">
+    <div class="table-head">
+      <h2><i class="fas fa-list"></i> Journal des alertes</h2>
+      <span class="table-count">{{ totalElements }} entrée(s)</span>
     </div>
+
+    <div class="filters">
+      <label>
+        <span>Type</span>
+        <select [(ngModel)]="filterType" (change)="onFilterChange()">
+          <option value="">Tous</option>
+          <option *ngFor="let t of typeOptions" [value]="t" [hidden]="!t">{{ typeLabel(t) }}</option>
+        </select>
+      </label>
+      <label>
+        <span>IP</span>
+        <input type="text" [(ngModel)]="filterIp" placeholder="192.168…" (keyup.enter)="onFilterChange()" />
+      </label>
+      <label>
+        <span>Du</span>
+        <input type="date" [(ngModel)]="filterFrom" (change)="onFilterChange()" />
+      </label>
+      <label>
+        <span>Au</span>
+        <input type="date" [(ngModel)]="filterTo" (change)="onFilterChange()" />
+      </label>
+      <button type="button" class="btn-filter" (click)="onFilterChange()"><i class="fas fa-filter"></i> Filtrer</button>
+    </div>
+
+    <div class="table-wrap" *ngIf="!loading || alerts.length">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>IP</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let alert of alerts"
+            [class.row-unread]="alert.status === 'NON_LUE'"
+            [class.row-critical]="typeSeverity(alert.type) === 'critical'"
+            (click)="openUser(alert)"
+            [class.clickable]="!!alert.relatedUserId"
+          >
+            <td class="nowrap">{{ formatDate(alert.createdAt) }}</td>
+            <td>
+              <span class="badge" [class]="'badge--' + typeSeverity(alert.type)">{{ typeLabel(alert.type) }}</span>
+            </td>
+            <td class="desc">{{ formatDescription(alert) }}</td>
+            <td class="ip-col">
+              <code>{{ formatIp(alert.ipAddress) }}</code>
+              <button
+                type="button"
+                class="btn-block-ip"
+                *ngIf="alert.ipAddress"
+                [disabled]="isIpBlocked(alert.ipAddress) || blockingIp === alert.ipAddress"
+                (click)="blockIpFromRow(alert, $event)"
+                title="Bloquer cette IP"
+              >
+                <i class="fas fa-lock"></i>
+              </button>
+            </td>
+            <td>
+              <span class="status" [class.status--unread]="alert.status === 'NON_LUE'">
+                {{ alert.status === 'NON_LUE' ? 'Non lue' : 'Lue' }}
+              </span>
+            </td>
+            <td class="actions">
+              <button type="button" class="btn-icon" (click)="openDetails(alert, $event)" title="Détails">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button type="button" class="btn-icon" (click)="markRead(alert, $event)" [disabled]="alert.status === 'LUE'" title="Marquer lue">
+                <i class="fas fa-check"></i>
+              </button>
+              <button type="button" class="btn-icon btn-icon--danger" (click)="remove(alert, $event)" title="Supprimer">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="!alerts.length">
+            <td colspan="6" class="empty">Aucune alerte pour ces filtres.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <nav class="pagination" *ngIf="totalPages > 1">
+      <button type="button" [disabled]="page <= 0" (click)="goPage(page - 1)"><i class="fas fa-chevron-left"></i></button>
+      <span>Page {{ page + 1 }} / {{ totalPages }}</span>
+      <button type="button" [disabled]="page >= totalPages - 1" (click)="goPage(page + 1)"><i class="fas fa-chevron-right"></i></button>
+    </nav>
   </section>
+</div>
+
+<!-- Modal détails -->
+<div class="modal-backdrop" *ngIf="detailModalOpen" (click)="closeDetails()"></div>
+<div class="modal" *ngIf="detailModalOpen" role="dialog" aria-modal="true">
+  <header class="modal-head">
+    <h3><i class="fas fa-file-code"></i> Détails de l'alerte</h3>
+    <button type="button" class="modal-close" (click)="closeDetails()"><i class="fas fa-times"></i></button>
+  </header>
+  <div class="modal-body" *ngIf="detailAlert">
+    <p class="modal-summary">{{ formatDescription(detailAlert) }}</p>
+    <pre class="json-block">{{ detailJsonPretty }}</pre>
+  </div>
 </div>

@@ -228,6 +228,32 @@ export class AdminService {
     return this.http.get<AdminAlert[]>(BASE + 'alerts' + q, { headers: this.authHeaders() });
   }
 
+  getAlertsPage(
+    page = 0,
+    size = 20,
+    status?: string,
+    type?: string,
+    ip?: string,
+    from?: string,
+    to?: string
+  ): Observable<AdminAlertPage> {
+    const params: string[] = [`page=${page}`, `size=${size}`];
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    if (type) params.push(`type=${encodeURIComponent(type)}`);
+    if (ip?.trim()) params.push(`ip=${encodeURIComponent(ip.trim())}`);
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    return this.http.get<AdminAlertPage>(BASE + 'alerts?' + params.join('&'), { headers: this.authHeaders() });
+  }
+
+  getSecurityDashboard(): Observable<AdminSecurityDashboard> {
+    return this.http.get<AdminSecurityDashboard>(BASE + 'alerts/dashboard', { headers: this.authHeaders() });
+  }
+
+  getAlertById(id: string): Observable<AdminAlert> {
+    return this.http.get<AdminAlert>(BASE + `alerts/${id}`, { headers: this.authHeaders() });
+  }
+
   getAlertStats(): Observable<AdminAlertStats> {
     return this.http.get<AdminAlertStats>(BASE + 'alerts/stats', { headers: this.authHeaders() });
   }
@@ -251,6 +277,14 @@ export class AdminService {
   unblockIp(ip: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       BASE + `security/blocked-ips/${encodeURIComponent(ip)}`,
+      { headers: this.authHeaders() }
+    );
+  }
+
+  blockIp(ip: string, reason?: string, minutes?: number): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      BASE + 'security/blocked-ips',
+      { ip, reason, minutes },
       { headers: this.authHeaders() }
     );
   }
@@ -292,6 +326,58 @@ export interface AdminAlert {
   relatedUserId?: string | null;
   relatedUsername?: string | null;
   ipAddress?: string | null;
+  detailsJson?: string | null;
+  createdAt: string | number[];
+}
+
+export interface AdminAlertPage {
+  items: AdminAlert[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
+}
+
+export interface AdminSecurityDashboard {
+  kpis: {
+    alertsTotal: number;
+    blockedIpsActive: number;
+    bruteForceTotal: number;
+    honeypotTotal: number;
+    rateLimitTotal: number;
+    xssSqlTotal: number;
+    ddosLikeTotal: number;
+  };
+  kpiPanels: AdminKpiPanel[];
+  blockedIps: AdminBlockedIpDetail[];
+  hourlyTrend: { hour: string; count: number; tooltip: string }[];
+  typeDistribution: { type: string; label: string; count: number; tooltip: string }[];
+  topIps: { ip: string; count: number; tooltip: string; lastActivity: string }[];
+}
+
+export interface AdminKpiPanel {
+  key: string;
+  title: string;
+  hoverDescription: string;
+  count: number;
+  countHint: string;
+  items: AdminKpiPanelItem[];
+}
+
+export interface AdminKpiPanelItem {
+  line1: string;
+  line2: string;
+  line3: string;
+  ip?: string | null;
+  occurredAt: string | number[];
+}
+
+export interface AdminBlockedIpDetail {
+  ip: string;
+  reason: string;
+  source: string;
+  currentlyActive: boolean;
+  blockedUntil: string | number[];
   createdAt: string | number[];
 }
 
@@ -305,6 +391,9 @@ export interface BlockedIpEntry {
   ip: string;
   reason: string;
   blockedUntil: string | number[];
+  createdAt?: string | number[];
+  source?: string;
+  currentlyActive?: boolean;
 }
 
 export interface AdminAuditEntry {
