@@ -1,106 +1,241 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
-<div class="admin-route-page audit-page">
-  <header class="page-head">
+<div class="siem-dashboard audit-siem">
+  <header class="siem-head">
     <div>
-      <p class="page-kicker">
-        <i class="fas fa-shield-alt"></i> Administration · Attijari Bank · Sécurité
+      <p class="siem-kicker"><i class="fas fa-shield-alt"></i> SOC · Attijari Bank · EnviroTest</p>
+      <h1 class="siem-title"><i class="fas fa-clipboard-list"></i> Dashboard d'audit</h1>
+      <p class="siem-lead">
+        Journal d'audit complet — connexions, administration des comptes et corrélation des menaces.
       </p>
-      <h1 class="page-title">
-        <i class="fas fa-history"></i> Journal d'audit
-      </h1>
-      <p class="page-lead">
-        Trace d'audit complète — connexions (réussies et échouées), comptes et actions admin.
+      <p class="explore-banner" *ngIf="exploreContext">
+        <i class="fas fa-filter"></i> Contexte : {{ exploreContext }}
+        <button type="button" class="link-btn" (click)="clearFilters()">Effacer</button>
       </p>
     </div>
+    <button type="button" class="siem-refresh" (click)="refresh()">
+      <i class="fas fa-sync-alt"></i> Actualiser
+    </button>
   </header>
 
-  <aside class="scope-panel scope-panel--audit">
-    <h2 class="scope-title"><i class="fas fa-info-circle"></i> Contenu du journal d'audit</h2>
-    <ul class="scope-list">
-      <li><strong>Connexions</strong> — chaque tentative réussie ou échouée (avec IP)</li>
-      <li><strong>Comptes</strong> — création, suppression, activation, e-mail d'activation</li>
-      <li><strong>Administration</strong> — activation/désactivation, réinit. mot de passe, changement e-mail par admin</li>
-    </ul>
-    <p class="scope-note">
-      <i class="fas fa-bell"></i> Les <a routerLink="/admin/alerts">Alertes</a> notifient en temps réel les incidents (échecs, verrouillages, changements d'identifiants, accès 403).
-    </p>
-  </aside>
+  <!-- KPIs -->
+  <section class="kpi-grid" *ngIf="stats || dashboard">
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'total'"
+      (click)="toggleKpiPanel('total')"
+    >
+      <div class="kpi-icon kpi-icon--blue"><i class="fas fa-database"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Total entrées</span>
+        <span class="kpi-value">{{ stats?.totalCount ?? '…' }}</span>
+        <span class="kpi-hint">{{ kpiPanel('total')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('total') }}</div>
+    </article>
 
-  <!-- Statistiques & Graphiques -->
-  <div class="audit-analytics" *ngIf="stats || analytics">
-    <article class="analytics-card analytics-card--featured">
-      <header class="analytics-card__head">
-        <div class="analytics-card__title-block">
-          <div class="analytics-card__icon"><i class="fas fa-chart-line"></i></div>
-          <div>
-            <h3 class="analytics-card__title">Activité globale</h3>
-            <p class="analytics-card__subtitle">{{ trendPeriodLabel() }}</p>
-          </div>
-        </div>
-        <span class="analytics-kpi accent">{{ trendTotal() }}</span>
-      </header>
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'loginRate'"
+      (click)="toggleKpiPanel('loginRate')"
+    >
+      <div class="kpi-icon kpi-icon--green"><i class="fas fa-percentage"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Taux succès login</span>
+        <span class="kpi-value">{{ dashboard?.enhancedKpis?.loginSuccessRatePercent ?? '…' }}%</span>
+        <span class="kpi-hint">{{ kpiPanel('loginRate')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('loginRate') }}</div>
+    </article>
 
-      <div class="period-toggle" role="tablist" aria-label="Période du graphique">
-        <button
-          type="button"
-          *ngFor="let p of trendPeriods"
-          class="period-btn"
-          [class.period-btn--active]="trendPeriod === p.value"
-          (click)="setTrendPeriod(p.value)"
-          [attr.aria-selected]="trendPeriod === p.value"
-        >
-          {{ p.label }}
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'activeUsers'"
+      (click)="toggleKpiPanel('activeUsers')"
+    >
+      <div class="kpi-icon kpi-icon--teal"><i class="fas fa-users"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Utilisateurs actifs (24 h)</span>
+        <span class="kpi-value">{{ dashboard?.enhancedKpis?.activeUsers24h ?? '…' }}</span>
+        <span class="kpi-hint">{{ kpiPanel('activeUsers')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('activeUsers') }}</div>
+    </article>
+
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'adminActions'"
+      (click)="toggleKpiPanel('adminActions')"
+    >
+      <div class="kpi-icon kpi-icon--indigo"><i class="fas fa-user-shield"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Actions admin</span>
+        <span class="kpi-value">{{ dashboard?.enhancedKpis?.adminActionsCount ?? '…' }}</span>
+        <span class="kpi-hint">{{ kpiPanel('adminActions')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('adminActions') }}</div>
+    </article>
+
+    <article
+      class="kpi-card kpi-card--clickable kpi-card--danger"
+      [class.kpi-card--open]="expandedKpiKey === 'suspicious'"
+      (click)="toggleKpiPanel('suspicious')"
+    >
+      <div class="kpi-icon kpi-icon--red"><i class="fas fa-exclamation-triangle"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">IP suspectes</span>
+        <span class="kpi-value">{{ dashboard?.enhancedKpis?.suspiciousIpsCount ?? '…' }}</span>
+        <span class="kpi-hint">{{ kpiPanel('suspicious')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('suspicious') }}</div>
+    </article>
+
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'loginSuccess'"
+      (click)="toggleKpiPanel('loginSuccess')"
+    >
+      <div class="kpi-icon kpi-icon--success"><i class="fas fa-sign-in-alt"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Connexions réussies</span>
+        <span class="kpi-value">{{ actionCount('LOGIN_SUCCESS') }}</span>
+        <span class="kpi-hint">{{ kpiPanel('loginSuccess')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('loginSuccess') }}</div>
+    </article>
+
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'loginFailed'"
+      (click)="toggleKpiPanel('loginFailed')"
+    >
+      <div class="kpi-icon kpi-icon--orange"><i class="fas fa-times-circle"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Connexions échouées</span>
+        <span class="kpi-value">{{ actionCount('LOGIN_FAILED') }}</span>
+        <span class="kpi-hint">{{ kpiPanel('loginFailed')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('loginFailed') }}</div>
+    </article>
+
+    <article
+      class="kpi-card kpi-card--clickable"
+      [class.kpi-card--open]="expandedKpiKey === 'adminShare'"
+      (click)="toggleKpiPanel('adminShare')"
+    >
+      <div class="kpi-icon kpi-icon--amber"><i class="fas fa-balance-scale"></i></div>
+      <div class="kpi-body">
+        <span class="kpi-label">Part actions admin</span>
+        <span class="kpi-value">{{ dashboard?.adminVsUsers?.adminPercent ?? '…' }}%</span>
+        <span class="kpi-hint">{{ kpiPanel('adminShare')?.countHint }}</span>
+      </div>
+      <div class="kpi-tooltip" role="tooltip">{{ kpiHover('adminShare') }}</div>
+    </article>
+  </section>
+
+  <!-- Panneau détail KPI -->
+  <section class="kpi-detail-panel" *ngIf="activeKpiPanel">
+    <header class="kpi-detail-head">
+      <div>
+        <h2><i class="fas fa-info-circle"></i> {{ activeKpiPanel.title }}</h2>
+        <p class="kpi-detail-desc">{{ activeKpiPanel.hoverDescription }}</p>
+        <p class="kpi-detail-count">{{ activeKpiPanel.countHint }}</p>
+      </div>
+      <div class="kpi-detail-actions">
+        <button type="button" class="btn-link-filter" (click)="filterTableByKpi(expandedKpiKey!)">
+          <i class="fas fa-filter"></i> Filtrer le tableau
+        </button>
+        <button type="button" class="kpi-detail-close" (click)="closeKpiPanel()" aria-label="Fermer">
+          <i class="fas fa-times"></i>
         </button>
       </div>
+    </header>
 
-      <div class="chart-box chart-box--line">
-        <canvas #trendCanvas aria-label="Tendance de l'activité d'audit"></canvas>
-      </div>
-    </article>
-
-    <article class="analytics-card">
-      <header class="analytics-card__head">
-        <div class="analytics-card__title-block">
-          <div class="analytics-card__icon"><i class="fas fa-chart-pie"></i></div>
-          <div>
-            <h3 class="analytics-card__title">Répartition des actions</h3>
-            <p class="analytics-card__subtitle">{{ donutTotal() }} entrées</p>
-          </div>
+    <ul class="kpi-detail-list" *ngIf="activeKpiPanel.items?.length">
+      <li *ngFor="let item of activeKpiPanel.items" class="kpi-detail-item">
+        <div class="kpi-detail-item-main">
+          <strong>{{ item.line1 }}</strong>
+          <span>{{ item.line2 }}</span>
+          <span class="muted">{{ item.line3 }}</span>
+          <span class="muted" *ngIf="item.occurredAt">· {{ formatPanelDate(item.occurredAt) }}</span>
         </div>
-      </header>
-      <div class="chart-box chart-box--donut">
-        <canvas #donutCanvas aria-label="Répartition par type d'action"></canvas>
-      </div>
-      <div class="type-chips" *ngIf="stats?.countByAction">
-        <ng-container *ngFor="let group of actionGroups">
-          <span
-            class="chip"
-            *ngFor="let a of group.actions"
-            [class.chip--empty]="actionCount(a) === 0"
-            [hidden]="actionCount(a) === 0"
+        <div class="kpi-detail-item-actions" *ngIf="item.ip">
+          <button type="button" class="btn-link-filter" (click)="filterByKpiIp(item.ip, $event)">
+            <i class="fas fa-search"></i> Filtrer IP
+          </button>
+          <button
+            type="button"
+            class="block-btn"
+            *ngIf="expandedKpiKey === 'suspicious' || expandedKpiKey === 'loginFailed'"
+            [disabled]="blockingIp === item.ip"
+            (click)="blockIpFromPanel(item.ip, $event)"
           >
-            {{ actionLabel(a) }} · {{ actionCount(a) }}
-          </span>
-        </ng-container>
-      </div>
-    </article>
-  </div>
+            🔒 Bloquer
+          </button>
+        </div>
+      </li>
+    </ul>
+    <p class="kpi-detail-empty" *ngIf="!activeKpiPanel.items?.length">
+      Aucune entrée détaillée pour cet indicateur.
+      <ng-container *ngIf="expandedKpiKey === 'suspicious'">
+        Une IP est suspecte si elle enregistre plus de 3 échecs de login en 5 minutes ou si un compte a été verrouillé depuis cette IP (historique complet).
+      </ng-container>
+    </p>
+  </section>
 
-  <!-- Filtres enrichis -->
-  <div class="filters">
-    <div class="filters__grid">
+  <!-- Graphiques -->
+  <section class="charts-grid" *ngIf="dashboard">
+    <article class="chart-panel">
+      <div class="chart-panel__head">
+        <div>
+          <h2><i class="fas fa-chart-bar"></i> Top 5 utilisateurs</h2>
+          <p class="chart-caption">Utilisateurs ayant généré le plus d'événements d'audit.</p>
+        </div>
+        <button type="button" class="explore-btn" (click)="exploreTopUsers()">
+          <i class="fas fa-search"></i> Explorer
+        </button>
+      </div>
+      <div class="chart-box chart-box--bar-h"><canvas #topUsersCanvas></canvas></div>
+    </article>
+
+    <article class="chart-panel chart-panel--wide">
+      <div class="chart-panel__head">
+        <div>
+          <h2><i class="fas fa-chart-column"></i> Succès vs échec login (24 h)</h2>
+          <p class="chart-caption">Comparaison horaire des connexions réussies et échouées.</p>
+        </div>
+        <button type="button" class="explore-btn" (click)="exploreLoginComparison()">
+          <i class="fas fa-search"></i> Explorer
+        </button>
+      </div>
+      <div class="chart-box"><canvas #loginCompareCanvas></canvas></div>
+    </article>
+
+    <article class="chart-panel">
+      <div class="chart-panel__head">
+        <div>
+          <h2><i class="fas fa-chart-pie"></i> Admin vs utilisateurs</h2>
+          <p class="chart-caption">Répartition des actions par type d'acteur.</p>
+        </div>
+        <button type="button" class="explore-btn" (click)="exploreAdminVsUsers()">
+          <i class="fas fa-search"></i> Explorer
+        </button>
+      </div>
+      <div class="chart-box chart-box--donut"><canvas #adminVsUsersCanvas></canvas></div>
+    </article>
+  </section>
+
+  <!-- Filtres -->
+  <section class="filters-bar">
+    <div class="filters-bar__main">
       <label class="filter-field filter-field--search">
         <span class="filter-label"><i class="fas fa-search"></i> Recherche</span>
-        <div class="search-wrap">
-          <i class="fas fa-search search-icon-fa"></i>
-          <input
-            type="text"
-            [(ngModel)]="filterSearch"
-            (keyup.enter)="onSearchSubmit()"
-            placeholder="Utilisateur, détails ou IP…"
-          />
-        </div>
+        <input
+          type="text"
+          [(ngModel)]="filterSearch"
+          (keyup.enter)="onSearchSubmit()"
+          placeholder="Utilisateur, détails ou IP…"
+        />
       </label>
 
       <label class="filter-field">
@@ -126,22 +261,20 @@
       </label>
     </div>
 
-    <div class="filters__actions">
+    <div class="filters-bar__actions">
       <button type="button" class="btn btn-primary" (click)="onSearchSubmit()">
         <i class="fas fa-search"></i> Rechercher
       </button>
       <button type="button" class="btn secondary" (click)="clearFilters()">
         <i class="fas fa-undo"></i> Réinitialiser
       </button>
-      <button type="button" class="btn secondary" (click)="refresh()">
-        <i class="fas fa-sync-alt"></i> Actualiser
-      </button>
     </div>
-  </div>
+  </section>
 
-  <div *ngIf="loading" class="state"><i class="fas fa-spinner fa-pulse"></i> Chargement…</div>
-  <div *ngIf="error" class="state err"><i class="fas fa-times-circle"></i> {{ error }}</div>
+  <div *ngIf="loading" class="siem-state"><i class="fas fa-spinner fa-pulse"></i> Chargement…</div>
+  <div *ngIf="error" class="siem-state siem-state--err"><i class="fas fa-times-circle"></i> {{ error }}</div>
 
+  <!-- Tableau -->
   <section class="table-section" *ngIf="!loading && !error && page">
     <button
       type="button"
@@ -157,51 +290,100 @@
     </button>
 
     <div class="table-wrap" *ngIf="tableOpen">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th><i class="fas fa-calendar-alt"></i> Date</th>
-          <th><i class="fas fa-user"></i> Utilisateur</th>
-          <th><i class="fas fa-tag"></i> Action</th>
-          <th><i class="fas fa-info-circle"></i> Détails</th>
-          <th><i class="fas fa-user-shield"></i> Effectué par</th>
-          <th><i class="fas fa-network-wired"></i> Adresse IP</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let entry of page.items" class="data-row">
-          <td class="nowrap">{{ formatDate(entry.createdAt) }}</td>
-          <td>{{ entry.username || '—' }}</td>
-          <td>
-            <span class="action-badge" [ngClass]="actionBadgeClass(entry.action)">
-              {{ actionLabel(entry.action) }}
-            </span>
-          </td>
-          <td class="details-cell">{{ entry.details || '—' }}</td>
-          <td>{{ entry.performedBy || '—' }}</td>
-          <td><code class="ip-cell">{{ formatIp(entry.ipAddress) }}</code></td>
-        </tr>
-        <tr *ngIf="!page.items.length">
-          <td colspan="6" class="empty">
-            <i class="fas fa-database"></i>
-            <ng-container *ngIf="filterAction || filterSearch || filterDateFrom || filterDateTo; else noData">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th><i class="fas fa-circle"></i> Statut</th>
+            <th><i class="fas fa-calendar-alt"></i> Date</th>
+            <th><i class="fas fa-user"></i> Utilisateur</th>
+            <th><i class="fas fa-tag"></i> Action</th>
+            <th><i class="fas fa-info-circle"></i> Détails</th>
+            <th><i class="fas fa-user-shield"></i> Effectué par</th>
+            <th><i class="fas fa-network-wired"></i> IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let entry of page.items" class="data-row">
+            <td class="status-cell" [title]="actionLabel(entry.action)">{{ statusIcon(entry.action) }}</td>
+            <td class="nowrap">
+              <span class="pin" *ngIf="isRecent24h(entry.createdAt)" title="Dernières 24 h">📌</span>
+              {{ formatDate(entry.createdAt) }}
+            </td>
+            <td>
+              <button
+                type="button"
+                class="link-btn"
+                *ngIf="entry.userId; else plainUser"
+                (click)="openUser(entry)"
+              >
+                {{ entry.username || '—' }}
+              </button>
+              <ng-template #plainUser>{{ entry.username || '—' }}</ng-template>
+            </td>
+            <td>
+              <button
+                type="button"
+                class="action-badge action-badge--clickable"
+                [ngClass]="actionBadgeClass(entry.action)"
+                (click)="filterByAction(entry.action, $event)"
+              >
+                {{ actionLabel(entry.action) }}
+              </button>
+            </td>
+            <td class="details-cell">
+              <ng-container *ngIf="entry.details as d; else plainDetails">
+                <ng-container *ngIf="extractIpFromDetails(d) as detailIp; else plainDetailsText">
+                  <span>{{ d.split(detailIp)[0] }}</span>
+                  <button type="button" class="link-btn ip-link" (click)="filterByIp(detailIp, $event)">{{ detailIp }}</button>
+                  <span>{{ d.split(detailIp)[1] }}</span>
+                </ng-container>
+                <ng-template #plainDetailsText>{{ d }}</ng-template>
+              </ng-container>
+              <ng-template #plainDetails>—</ng-template>
+            </td>
+            <td>
+              <button
+                type="button"
+                class="link-btn"
+                *ngIf="entry.performedBy; else noPerformer"
+                (click)="filterByPerformedBy(entry.performedBy!)"
+              >
+                {{ entry.performedBy }}
+              </button>
+              <ng-template #noPerformer>—</ng-template>
+            </td>
+            <td class="ip-actions">
+              <code class="ip-cell">{{ formatIp(entry.ipAddress) }}</code>
+              <button
+                type="button"
+                class="block-btn"
+                *ngIf="entry.ipAddress"
+                [disabled]="blockingIp === entry.ipAddress"
+                (click)="blockIpFromRow(entry.ipAddress, $event)"
+                title="Bloquer cette IP (60 min)"
+              >
+                🔒 Bloquer
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="!page.items.length">
+            <td colspan="7" class="empty">
+              <i class="fas fa-database"></i>
               Aucune entrée ne correspond aux filtres sélectionnés.
-            </ng-container>
-            <ng-template #noData>Aucune entrée dans le journal.</ng-template>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-    <footer class="pager" *ngIf="page.totalPages > 1">
-      <button type="button" class="btn secondary" (click)="prevPage()" [disabled]="currentPage === 0">
-        <i class="fas fa-chevron-left"></i> Précédent
-      </button>
-      <span><i class="fas fa-list"></i> Page {{ currentPage + 1 }} / {{ page.totalPages }} · {{ page.totalElements }} entrées</span>
-      <button type="button" class="btn secondary" (click)="nextPage()" [disabled]="currentPage >= page.totalPages - 1">
-        Suivant <i class="fas fa-chevron-right"></i>
-      </button>
-    </footer>
+      <footer class="pager" *ngIf="page.totalPages > 1">
+        <button type="button" class="btn secondary" (click)="prevPage()" [disabled]="currentPage === 0">
+          <i class="fas fa-chevron-left"></i> Précédent
+        </button>
+        <span>Page {{ currentPage + 1 }} / {{ page.totalPages }} · {{ page.totalElements }} entrées</span>
+        <button type="button" class="btn secondary" (click)="nextPage()" [disabled]="currentPage >= page.totalPages - 1">
+          Suivant <i class="fas fa-chevron-right"></i>
+        </button>
+      </footer>
     </div>
   </section>
 </div>

@@ -297,7 +297,11 @@ export class AdminService {
     search?: string,
     from?: string,
     to?: string,
-    severity?: string
+    severity?: string,
+    performedBy?: string,
+    timeFrom?: string,
+    timeTo?: string,
+    loginOutcome?: string
   ): Observable<AdminAuditPage> {
     const params: string[] = [`page=${page}`, `size=${size}`];
     if (userId) params.push(`userId=${encodeURIComponent(userId)}`);
@@ -306,7 +310,31 @@ export class AdminService {
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     if (severity) params.push(`severity=${encodeURIComponent(severity)}`);
+    if (performedBy?.trim()) params.push(`performedBy=${encodeURIComponent(performedBy.trim())}`);
+    if (timeFrom) params.push(`timeFrom=${encodeURIComponent(timeFrom)}`);
+    if (timeTo) params.push(`timeTo=${encodeURIComponent(timeTo)}`);
+    if (loginOutcome) params.push(`loginOutcome=${encodeURIComponent(loginOutcome)}`);
     return this.http.get<AdminAuditPage>(BASE + 'audit-log?' + params.join('&'), { headers: this.authHeaders() });
+  }
+
+  getAuditDashboard(): Observable<AdminAuditDashboard> {
+    return this.http.get<AdminAuditDashboard>(BASE + 'audit-log/dashboard', { headers: this.authHeaders() });
+  }
+
+  getAuditTopUsers(limit = 5): Observable<AdminAuditTopUser[]> {
+    return this.http.get<AdminAuditTopUser[]>(BASE + `audit-log/top-users?limit=${limit}`, { headers: this.authHeaders() });
+  }
+
+  getAuditLoginComparison(hours = 24): Observable<AdminAuditLoginHourPoint[]> {
+    return this.http.get<AdminAuditLoginHourPoint[]>(BASE + `audit-log/login-comparison?hours=${hours}`, { headers: this.authHeaders() });
+  }
+
+  getAuditAdminVsUsers(): Observable<AdminAuditAdminVsUsers> {
+    return this.http.get<AdminAuditAdminVsUsers>(BASE + 'audit-log/admin-vs-users', { headers: this.authHeaders() });
+  }
+
+  getAuditSuspiciousIps(): Observable<AdminAuditSuspiciousIp[]> {
+    return this.http.get<AdminAuditSuspiciousIp[]>(BASE + 'audit-log/suspicious-ips', { headers: this.authHeaders() });
   }
 
   getAuditStats(): Observable<AdminAuditStats> {
@@ -436,4 +464,54 @@ export interface AdminAuditAnalytics {
   monthlyTrend: AdminAuditDayCount[];
   allTimeTrend: AdminAuditDayCount[];
   topAdmins: AdminAuditTopActor[];
+}
+
+export interface AdminAuditDashboard {
+  enhancedKpis: AdminAuditEnhancedKpis;
+  topUsers: AdminAuditTopUser[];
+  loginComparison: AdminAuditLoginHourPoint[];
+  adminVsUsers: AdminAuditAdminVsUsers;
+  suspiciousIps: AdminAuditSuspiciousIp[];
+  kpiPanels: AdminKpiPanel[];
+}
+
+export interface AdminAuditEnhancedKpis {
+  loginSuccessRatePercent: number;
+  loginSuccessTooltip: string;
+  activeUsers24h: number;
+  activeUsersTooltip: string;
+  adminActionsCount: number;
+  adminActionsTooltip: string;
+  suspiciousIpsCount: number;
+  suspiciousIpsTooltip: string;
+}
+
+export interface AdminAuditTopUser {
+  username: string;
+  count: number;
+  tooltip: string;
+  lastAction: string;
+  lastActionAt: string | number[];
+}
+
+export interface AdminAuditLoginHourPoint {
+  hour: string;
+  success: number;
+  failed: number;
+  tooltip: string;
+}
+
+export interface AdminAuditAdminVsUsers {
+  adminActions: number;
+  userActions: number;
+  adminPercent: number;
+  adminTooltip: string;
+  userTooltip: string;
+}
+
+export interface AdminAuditSuspiciousIp {
+  ip: string;
+  failureCount: number;
+  tooltip: string;
+  lastFailureAt: string | number[];
 }

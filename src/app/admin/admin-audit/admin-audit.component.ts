@@ -6,12 +6,13 @@ import {
   OnInit,
   ViewChild
 } from '@angular/core';
+import { Router } from '@angular/router';
 import Chart from 'chart.js/auto';
 import {
-  AdminAuditAnalytics,
-  AdminAuditDayCount,
+  AdminAuditDashboard,
   AdminAuditPage,
   AdminAuditStats,
+  AdminKpiPanel,
   AdminService
 } from '../../services/admin/admin.service';
 
@@ -26,26 +27,36 @@ const ACTION_LABELS: Record<string, string> = {
   ACCOUNT_DISABLED: 'Compte désactivé (admin)',
   ADMIN_PASSWORD_RESET: 'Mot de passe réinitialisé (admin)',
   ADMIN_EMAIL_CHANGED: 'E-mail modifié (admin)',
-  ACCOUNT_LOCKED: 'Verrouillage (archivé)',
-  PASSWORD_CHANGED: 'Mot de passe modifié (archivé)',
-  EMAIL_CHANGED: 'E-mail modifié (archivé)'
+  PASSWORD_CHANGED: 'Mot de passe modifié',
+  EMAIL_CHANGED: 'E-mail modifié',
+  ACCOUNT_LOCKED: 'Verrouillage compte',
+  SUSPICIOUS_ACTIVITY: 'Activité suspecte',
+  IP_BLOCKED: 'IP bloquée',
+  TWO_FACTOR_ENABLED: '2FA activée',
+  TWO_FACTOR_DISABLED: '2FA désactivée',
+  TWO_FACTOR_FAILED: '2FA échouée',
+  TWO_FACTOR_METHOD_CHANGED: 'Méthode 2FA changée'
 };
 
 const ACTION_GROUPS: { label: string; actions: string[] }[] = [
-  { label: 'Connexions', actions: ['LOGIN_SUCCESS', 'LOGIN_FAILED'] },
+  { label: 'Connexions', actions: ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'ACCOUNT_LOCKED', 'TWO_FACTOR_FAILED'] },
+  {
+    label: 'Compte utilisateur',
+    actions: ['PASSWORD_CHANGED', 'EMAIL_CHANGED', 'ACCOUNT_ACTIVATED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'TWO_FACTOR_METHOD_CHANGED']
+  },
   {
     label: 'Cycle de vie du compte',
-    actions: ['ACCOUNT_CREATED', 'ACCOUNT_DELETED', 'ACCOUNT_ACTIVATED', 'ACTIVATION_EMAIL_SENT']
+    actions: ['ACCOUNT_CREATED', 'ACCOUNT_DELETED', 'ACTIVATION_EMAIL_SENT']
   },
   {
     label: 'Administration compte',
     actions: ['ACCOUNT_ENABLED', 'ACCOUNT_DISABLED', 'ADMIN_PASSWORD_RESET', 'ADMIN_EMAIL_CHANGED']
+  },
+  {
+    label: 'Sécurité',
+    actions: ['SUSPICIOUS_ACTIVITY', 'IP_BLOCKED']
   }
 ];
-
-const DONUT_COLORS = ['#ea580c', '#f97316', '#0f172a', '#475569', '#64748b', '#94a3b8', '#fdba74', '#fed7aa'];
-
-type TrendPeriod = 'days' | 'months' | 'all';
 
 @Component({
   selector: 'app-admin-audit',
@@ -53,41 +64,42 @@ type TrendPeriod = 'days' | 'months' | 'all';
   styleUrls: ['./admin-audit.component.css']
 })
 export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('trendCanvas') trendCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('donutCanvas') donutCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('topUsersCanvas') topUsersCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('loginCompareCanvas') loginCompareCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('adminVsUsersCanvas') adminVsUsersCanvas?: ElementRef<HTMLCanvasElement>;
 
   page: AdminAuditPage | null = null;
   stats: AdminAuditStats | null = null;
-  analytics: AdminAuditAnalytics | null = null;
+  dashboard: AdminAuditDashboard | null = null;
   loading = true;
   error: string | null = null;
   currentPage = 0;
-  pageSize = 50;
+  pageSize = 20;
 
   filterAction = '';
   filterSearch = '';
   filterDateFrom = '';
   filterDateTo = '';
-  trendPeriod: TrendPeriod = 'days';
+  filterPerformedBy = '';
+  filterLoginOutcome = '';
   tableOpen = true;
+  blockingIp: string | null = null;
+  exploreContext: string | null = null;
+  expandedKpiKey: string | null = null;
 
   readonly actionGroups = ACTION_GROUPS;
-  readonly trendPeriods: { value: TrendPeriod; label: string }[] = [
-    { value: 'days', label: 'Jours' },
-    { value: 'months', label: 'Mois' },
-    { value: 'all', label: 'Tout' }
-  ];
 
-  private trendChart?: Chart;
-  private donutChart?: Chart;
+  private topUsersChart?: Chart;
+  private loginChart?: Chart;
+  private adminVsChart?: Chart;
   private chartsReady = false;
   private pendingChartBuild = false;
 
-  constructor(private adminService: AdminService) {}
+  constructor(private adminService: AdminService, private router: Router) {}
 
   ngOnInit(): void {
     this.loadStats();
-    this.loadAnalytics();
+    this.loadDashboard();
     this.load();
   }
 
@@ -99,24 +111,22 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.trendChart?.destroy();
-    this.donutChart?.destroy();
+    this.topUsersChart?.destroy();
+    this.loginChart?.destroy();
+    this.adminVsChart?.destroy();
   }
 
   loadStats(): void {
     this.adminService.getAuditStats().subscribe({
-      next: s => {
-        this.stats = s;
-        this.scheduleChartBuild();
-      },
+      next: s => (this.stats = s),
       error: () => {}
     });
   }
 
-  loadAnalytics(): void {
-    this.adminService.getAuditAnalytics().subscribe({
-      next: a => {
-        this.analytics = a;
+  loadDashboard(): void {
+    this.adminService.getAuditDashboard().subscribe({
+      next: d => {
+        this.dashboard = d;
         this.scheduleChartBuild();
       },
       error: () => {}
@@ -135,7 +145,12 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
       this.filterAction || undefined,
       this.filterSearch || undefined,
       this.filterDateFrom || undefined,
-      this.filterDateTo || undefined
+      this.filterDateTo || undefined,
+      undefined,
+      this.filterPerformedBy || undefined,
+      undefined,
+      undefined,
+      this.filterLoginOutcome || undefined
     ).subscribe({
       next: res => {
         this.page = res;
@@ -146,6 +161,12 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         this.error = err?.error?.message || 'Impossible de charger le journal d\'audit.';
       }
     });
+  }
+
+  refresh(): void {
+    this.loadStats();
+    this.loadDashboard();
+    this.load(this.currentPage);
   }
 
   actionLabel(action: string): string {
@@ -173,17 +194,25 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         return 'badge-warning';
       case 'ACCOUNT_DELETED':
         return 'badge-danger';
-      case 'ACTIVATION_EMAIL_SENT':
-      case 'ACCOUNT_CREATED':
-        return 'badge-info';
       default:
         return 'badge-neutral';
     }
   }
 
+  statusIcon(action: string): string {
+    if (action === 'LOGIN_SUCCESS') return '🟢';
+    if (action === 'LOGIN_FAILED' || action === 'ACCOUNT_DELETED') return '🔴';
+    return '🟡';
+  }
+
+  isRecent24h(value: string | number[] | null | undefined): boolean {
+    const d = this.parseDate(value);
+    if (!d) return false;
+    return Date.now() - d.getTime() < 24 * 60 * 60 * 1000;
+  }
+
   formatIp(ip: string | null | undefined): string {
-    if (!ip || ip === '—') return '—';
-    return ip;
+    return ip?.trim() || '—';
   }
 
   formatDate(value: string | number[] | null | undefined): string {
@@ -191,27 +220,156 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     return d ? d.toLocaleString('fr-FR') : '—';
   }
 
-  trendPeriodLabel(): string {
-    switch (this.trendPeriod) {
-      case 'days': return '30 derniers jours';
-      case 'months': return '12 derniers mois';
-      case 'all': return 'Historique complet';
+  formatPanelDate(value: string | number[] | null | undefined): string {
+    return this.formatDate(value);
+  }
+
+  get activeKpiPanel(): AdminKpiPanel | null {
+    if (!this.expandedKpiKey || !this.dashboard?.kpiPanels) {
+      return null;
+    }
+    return this.dashboard.kpiPanels.find(p => p.key === this.expandedKpiKey) ?? null;
+  }
+
+  kpiPanel(key: string): AdminKpiPanel | undefined {
+    return this.dashboard?.kpiPanels?.find(p => p.key === key);
+  }
+
+  kpiHover(key: string): string {
+    return this.kpiPanel(key)?.hoverDescription ?? '';
+  }
+
+  toggleKpiPanel(key: string): void {
+    this.expandedKpiKey = this.expandedKpiKey === key ? null : key;
+  }
+
+  closeKpiPanel(): void {
+    this.expandedKpiKey = null;
+  }
+
+  filterTableByKpi(key: string): void {
+    const map: Record<string, () => void> = {
+      total: () => { this.filterAction = ''; this.filterLoginOutcome = ''; },
+      loginRate: () => { this.filterAction = ''; this.filterLoginOutcome = ''; },
+      activeUsers: () => { this.filterDateFrom = this.isoDateDaysAgo(1); },
+      adminActions: () => { this.filterAction = 'ADMIN_PASSWORD_RESET'; },
+      suspicious: () => {
+        this.filterAction = '';
+        this.filterLoginOutcome = 'FAILED';
+      },
+      loginSuccess: () => { this.filterAction = 'LOGIN_SUCCESS'; this.filterLoginOutcome = 'SUCCESS'; },
+      loginFailed: () => { this.filterAction = 'LOGIN_FAILED'; this.filterLoginOutcome = 'FAILED'; },
+      adminShare: () => { this.filterAction = 'ADMIN_PASSWORD_RESET'; }
+    };
+    map[key]?.();
+    this.exploreContext = this.kpiPanel(key)?.title ?? null;
+    this.load(0);
+  }
+
+  filterByKpiIp(ip: string | null | undefined, event: Event): void {
+    event.stopPropagation();
+    if (ip?.trim()) {
+      this.filterByIp(ip, event);
     }
   }
 
-  setTrendPeriod(period: TrendPeriod): void {
-    if (this.trendPeriod === period) return;
-    this.trendPeriod = period;
-    this.buildTrendChart();
+  blockIpFromPanel(ip: string | null | undefined, event: Event): void {
+    this.blockIpFromRow(ip, event);
   }
 
-  trendTotal(): number {
-    return this.activeTrend().reduce((s, d) => s + d.count, 0);
+  extractIpFromDetails(details?: string | null): string | null {
+    if (!details) return null;
+    const m = details.match(/\b(?:\d{1,3}\.){3}\d{1,3}(?:\s*\([^)]+\))?|\b[0-9a-fA-F:]+\b/);
+    return m?.[0] ?? null;
   }
 
-  donutTotal(): number {
-    if (!this.stats?.countByAction) return 0;
-    return Object.values(this.stats.countByAction).reduce((s, n) => s + n, 0);
+  filterByAction(action: string, event?: Event): void {
+    event?.stopPropagation();
+    this.filterAction = action;
+    this.exploreContext = `Action : ${this.actionLabel(action)}`;
+    this.load(0);
+  }
+
+  filterByIp(ip: string, event?: Event): void {
+    event?.stopPropagation();
+    this.filterSearch = ip.replace(/\s*\([^)]+\)/, '').trim();
+    this.exploreContext = `IP : ${ip}`;
+    this.load(0);
+  }
+
+  filterByPerformedBy(username: string): void {
+    this.filterPerformedBy = username;
+    this.exploreContext = `Utilisateur : ${username}`;
+    this.load(0);
+  }
+
+  exploreTopUsers(): void {
+    this.filterPerformedBy = '';
+    this.filterSearch = '';
+    this.exploreContext = 'Top utilisateurs actifs (audit)';
+    this.load(0);
+  }
+
+  exploreLoginComparison(): void {
+    this.filterLoginOutcome = '';
+    this.filterAction = '';
+    this.exploreContext = 'Connexions — comparaison 24 h';
+    this.load(0);
+  }
+
+  exploreAdminVsUsers(): void {
+    this.exploreContext = 'Actions administrateur vs utilisateurs';
+    this.load(0);
+  }
+
+  onTopUserClick(index: number): void {
+    const user = this.dashboard?.topUsers?.[index];
+    if (user) {
+      this.filterByPerformedBy(user.username);
+    }
+  }
+
+  onSearchSubmit(): void {
+    this.load(0);
+  }
+
+  onFilterChange(): void {
+    this.load(0);
+  }
+
+  clearFilters(): void {
+    this.filterAction = '';
+    this.filterSearch = '';
+    this.filterDateFrom = '';
+    this.filterDateTo = '';
+    this.filterPerformedBy = '';
+    this.filterLoginOutcome = '';
+    this.exploreContext = null;
+    this.expandedKpiKey = null;
+    this.load(0);
+  }
+
+  private isoDateDaysAgo(days: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  openUser(entry: { userId?: string | null; username?: string | null }): void {
+    if (entry.userId) {
+      this.router.navigate(['/admin/users', entry.userId]);
+    }
+  }
+
+  blockIpFromRow(ip: string | null | undefined, event: Event): void {
+    event.stopPropagation();
+    const clean = ip?.replace(/\s*\([^)]+\)/, '').trim();
+    if (!clean) return;
+    this.blockingIp = clean;
+    this.adminService.blockIp(clean, 'Blocage manuel depuis journal d\'audit', 60).subscribe({
+      next: () => (this.blockingIp = null),
+      error: () => (this.blockingIp = null)
+    });
   }
 
   prevPage(): void {
@@ -224,39 +382,8 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  onFilterChange(): void {
-    this.load(0);
-  }
-
-  onSearchSubmit(): void {
-    this.load(0);
-  }
-
-  clearFilters(): void {
-    this.filterAction = '';
-    this.filterSearch = '';
-    this.filterDateFrom = '';
-    this.filterDateTo = '';
-    this.load(0);
-  }
-
   toggleTable(): void {
     this.tableOpen = !this.tableOpen;
-  }
-
-  refresh(): void {
-    this.loadStats();
-    this.loadAnalytics();
-    this.load(this.currentPage);
-  }
-
-  private activeTrend(): AdminAuditDayCount[] {
-    if (!this.analytics) return [];
-    switch (this.trendPeriod) {
-      case 'months': return this.analytics.monthlyTrend ?? [];
-      case 'all': return this.analytics.allTimeTrend ?? [];
-      default: return this.analytics.dailyTrend ?? [];
-    }
   }
 
   private scheduleChartBuild(): void {
@@ -268,131 +395,172 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private buildCharts(): void {
     this.pendingChartBuild = false;
-    if (!this.trendCanvas || !this.donutCanvas) return;
-    this.buildTrendChart();
-    this.buildDonutChart();
+    if (!this.dashboard) return;
+    this.buildTopUsersChart();
+    this.buildLoginCompareChart();
+    this.buildAdminVsUsersChart();
   }
 
-  private buildTrendChart(): void {
-    const canvas = this.trendCanvas!.nativeElement;
-    this.trendChart?.destroy();
-    const trend = this.activeTrend();
-    const labels = trend.map(d => this.formatTrendLabel(d.date));
-    const data = trend.map(d => d.count);
-    const isDaily = this.trendPeriod === 'days';
+  private buildTopUsersChart(): void {
+    const canvas = this.topUsersCanvas?.nativeElement;
+    if (!canvas || !this.dashboard) return;
+    this.topUsersChart?.destroy();
+    const users = this.dashboard.topUsers ?? [];
+    const labels = users.map(u => u.username);
+    const data = users.map(u => u.count);
+    const tooltips = users.map(u => u.tooltip);
 
-    this.trendChart = new Chart(canvas, {
-      type: 'line',
+    this.topUsersChart = new Chart(canvas, {
+      type: 'bar',
       data: {
         labels,
         datasets: [{
-          label: 'Entrées d\'audit',
+          label: 'Actions audit',
           data,
-          borderColor: '#ea580c',
-          backgroundColor: 'rgba(234, 88, 12, 0.12)',
-          borderWidth: 2.5,
-          pointBackgroundColor: '#ea580c',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: isDaily ? 3 : 4,
-          pointHoverRadius: 6,
-          fill: true,
-          tension: 0.35
+          backgroundColor: 'rgba(234, 88, 12, 0.85)',
+          borderRadius: 6
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 600, easing: 'easeOutQuart' },
+        indexAxis: 'y',
+        onClick: (_e, items) => {
+          if (items[0]?.index != null) this.onTopUserClick(items[0].index);
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#0f172a',
-            titleFont: { family: 'Inter', weight: 'normal' },
-            bodyFont: { family: 'Inter', weight: 'normal' },
             padding: 12,
             callbacks: {
-              title: items => {
+              afterBody: items => {
                 const idx = items[0]?.dataIndex ?? 0;
-                return this.formatTrendTooltip(trend[idx]?.date ?? '');
-              },
-              label: ctx => ` ${ctx.parsed.y} entrée(s)`
+                return this.wrapTooltip(tooltips[idx] ?? '');
+              }
             }
           }
         },
         scales: {
-          x: {
-            grid: { color: '#f1f5f9' },
-            ticks: {
-              color: '#64748b',
-              font: { family: 'Inter', size: 10 },
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: isDaily ? 10 : 12
-            }
-          },
-          y: {
-            beginAtZero: true,
-            ticks: { stepSize: 1, color: '#64748b', font: { family: 'Inter', size: 11 } },
-            grid: { color: '#f1f5f9' }
-          }
+          x: { beginAtZero: true, ticks: { stepSize: 1 } },
+          y: { ticks: { color: '#334155' } }
         }
       }
     });
   }
 
-  private buildDonutChart(): void {
-    const canvas = this.donutCanvas!.nativeElement;
-    this.donutChart?.destroy();
-    const counts = this.stats?.countByAction ?? {};
-    const entries = Object.entries(counts).filter(([, v]) => v > 0);
-    const labels = entries.map(([k]) => this.actionLabel(k));
-    const data = entries.map(([, v]) => v);
+  private buildLoginCompareChart(): void {
+    const canvas = this.loginCompareCanvas?.nativeElement;
+    if (!canvas || !this.dashboard) return;
+    this.loginChart?.destroy();
+    const points = this.dashboard.loginComparison ?? [];
+    const labels = points.map(p => {
+      const d = new Date(p.hour);
+      return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    });
+    const tooltips = points.map(p => p.tooltip);
 
-    this.donutChart = new Chart(canvas, {
-      type: 'doughnut',
+    this.loginChart = new Chart(canvas, {
+      type: 'bar',
       data: {
         labels,
+        datasets: [
+          {
+            label: 'Succès',
+            data: points.map(p => p.success),
+            backgroundColor: '#15803d',
+            borderRadius: 4
+          },
+          {
+            label: 'Échecs',
+            data: points.map(p => p.failed),
+            backgroundColor: '#dc2626',
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            backgroundColor: '#0f172a',
+            padding: 12,
+            callbacks: {
+              afterBody: items => {
+                const idx = items[0]?.dataIndex ?? 0;
+                return this.wrapTooltip(tooltips[idx] ?? '');
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: false, ticks: { maxTicksLimit: 12 } },
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+  }
+
+  private buildAdminVsUsersChart(): void {
+    const canvas = this.adminVsUsersCanvas?.nativeElement;
+    if (!canvas || !this.dashboard) return;
+    this.adminVsChart?.destroy();
+    const av = this.dashboard.adminVsUsers;
+    if (!av) return;
+
+    this.adminVsChart = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Admin', 'Utilisateurs'],
         datasets: [{
-          data,
-          backgroundColor: DONUT_COLORS.slice(0, data.length),
-          borderWidth: 0,
-          hoverOffset: 6
+          data: [av.adminActions, av.userActions],
+          backgroundColor: ['#0f172a', '#ea580c'],
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 10
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '68%',
-        animation: { animateRotate: true, duration: 700 },
+        cutout: '62%',
+        animation: { animateRotate: true, duration: 800 },
         plugins: {
-          legend: { display: false },
+          legend: { position: 'bottom' },
           tooltip: {
             backgroundColor: '#0f172a',
-            bodyFont: { family: 'Inter' },
-            padding: 10
+            padding: 12,
+            callbacks: {
+              label: ctx => ` ${ctx.label} : ${ctx.parsed}`,
+              afterBody: items => {
+                const idx = items[0]?.dataIndex ?? 0;
+                return this.wrapTooltip(idx === 0 ? av.adminTooltip : av.userTooltip);
+              }
+            }
           }
         }
       }
     });
   }
 
-  private formatTrendLabel(iso: string): string {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    if (this.trendPeriod === 'days') {
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  private wrapTooltip(text: string): string[] {
+    if (!text) return [];
+    const max = 70;
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w;
+      if (next.length > max) {
+        if (line) lines.push(line);
+        line = w;
+      } else {
+        line = next;
+      }
     }
-    return d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
-  }
-
-  private formatTrendTooltip(iso: string): string {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    if (this.trendPeriod === 'days') {
-      return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    }
-    return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    if (line) lines.push(line);
+    return lines;
   }
 
   private parseDate(value: string | number[] | null | undefined): Date | null {

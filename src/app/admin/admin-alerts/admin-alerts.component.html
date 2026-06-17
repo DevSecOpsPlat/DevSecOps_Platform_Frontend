@@ -209,6 +209,7 @@
         <input type="date" [(ngModel)]="filterTo" (change)="onFilterChange()" />
       </label>
       <button type="button" class="btn-filter" (click)="onFilterChange()"><i class="fas fa-filter"></i> Filtrer</button>
+      <button type="button" class="btn-reset" (click)="resetFilters()"><i class="fas fa-undo"></i> Réinitialiser</button>
     </div>
 
     <div class="table-wrap" *ngIf="!loading || alerts.length">

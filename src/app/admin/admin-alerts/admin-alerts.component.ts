@@ -174,6 +174,16 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loadAlerts();
   }
 
+  resetFilters(): void {
+    this.filterType = '';
+    this.filterIp = '';
+    this.filterFrom = '';
+    this.filterTo = '';
+    this.expandedKpiKey = null;
+    this.page = 0;
+    this.loadAlerts();
+  }
+
   goPage(p: number): void {
     if (p < 0 || p >= this.totalPages) {
       return;
