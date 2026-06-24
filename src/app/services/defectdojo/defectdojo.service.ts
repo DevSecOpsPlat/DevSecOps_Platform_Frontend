@@ -136,6 +136,47 @@ export interface DefectDojoDashboardCharts {
   lastScanDate?: string;
 }
 
+export interface DefectDojoDashboard2Response {
+  configured: boolean;
+  message?: string;
+  scope: 'global' | 'branch';
+  applicationName?: string;
+  productName?: string;
+  productId?: number;
+  productUrl?: string;
+  selectedBranch?: string | null;
+  engagementId?: number;
+  engagementName?: string;
+  bySeverity?: Record<string, number>;
+  byTool?: Record<string, number>;
+  byStatus?: Record<string, number>;
+  totalOpen?: number;
+  totalClosed?: number;
+  securityScore?: {
+    grade: string;
+    score: number;
+    summary: string;
+  };
+  topRecurrent?: {
+    identifier: string;
+    label: string;
+    count: number;
+    severity: string;
+    type: string;
+  }[];
+  trendPoints?: {
+    label: string;
+    date?: string;
+    openStock: number;
+    newFindings: number;
+    resolved: number;
+  }[];
+  branches?: string[];
+  engagements?: { id?: number; name?: string; branchTag?: string; activeFindings?: number }[];
+  charts?: DefectDojoDashboardCharts;
+  defectDojoBaseUrl?: string;
+}
+
 export interface DefectDojoDashboardResponse {
   configured: boolean;
   message?: string;
@@ -178,9 +219,20 @@ export class DefectDojoService {
     });
   }
 
+  /** Dashboard sécurité v2 — vue globale par défaut (branch = __all__ ou omis). */
+  getDashboard2(applicationId: string, branch?: string): Observable<DefectDojoDashboard2Response> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    const b = branch?.trim();
+    if (b) params = params.set('branch', b);
+    return this.http.get<DefectDojoDashboard2Response>(BASE + 'api/defectdojo/dashboard2', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
   getFindings(
     applicationId: string,
-    branch: string,
+    branch: string | undefined,
     category: DefectDojoMetricCategory,
     page = 0,
     size = 25,
@@ -188,10 +240,10 @@ export class DefectDojoService {
   ): Observable<DefectDojoFindingsPage> {
     let params = new HttpParams()
       .set('applicationId', applicationId)
-      .set('branch', branch)
       .set('category', category)
       .set('page', String(page))
       .set('size', String(size));
+    if (branch?.trim()) params = params.set('branch', branch.trim());
     if (severity?.trim()) params = params.set('severity', severity.trim());
     return this.http.get<DefectDojoFindingsPage>(BASE + 'api/defectdojo/findings', {
       headers: this.authHeaders(),

@@ -25,6 +25,7 @@ import { EnvironmentDetailsComponent } from './project/environments/environment-
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
+import { Dashboard2Component } from './project/dashboard2/dashboard2.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
@@ -50,8 +51,10 @@ const routes: Routes = [
     component: ProjectLayoutComponent,
     canActivate: [AuthGuard],
     children: [
-      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: '', redirectTo: 'security-center', pathMatch: 'full' },
       { path: 'overview', component: ProjectOverviewComponent },
+      { path: 'security-center', component: Dashboard2Component },
+      { path: 'security-center/finding/:findingId', component: DefectDojoFindingDetailsComponent },
       { path: 'deployments', component: ProjectDeploymentsComponent },
       { path: 'logs', component: ProjectLogsComponent },
       { path: 'security', component: ProjectSecurityComponent },

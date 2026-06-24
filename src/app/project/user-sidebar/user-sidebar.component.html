@@ -205,8 +205,17 @@
           [class.active]="isSecurityDashboardRoute()"
         >
           <span class="nav-dot" style="background: #8b5cf6;"></span>
-          <span class="nav-text">Dashboard sécurité</span>
+          <span class="nav-text">Centre de sécurité</span>
           <span class="nav-badge">DefectDojo</span>
+        </button>
+        <button
+          type="button"
+          class="nav-item"
+          (click)="goToLegacySecurityDashboard()"
+          [class.active]="isLegacySecurityDashboardRoute()"
+        >
+          <span class="nav-dot" style="background: #94a3b8;"></span>
+          <span class="nav-text">Dashboard sécurité (v1)</span>
         </button>
         <button
           type="button"
