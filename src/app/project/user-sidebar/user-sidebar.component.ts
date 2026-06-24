@@ -237,6 +237,21 @@ export class UserSidebarComponent implements OnInit {
     );
   }
 
+  /** Dashboard DefectDojo : /project/:appId/security-dashboard */
+  navigateSecurityDashboard(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'security-dashboard']);
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isSecurityDashboardRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/security-dashboard$/.test(path);
+  }
+
   /** Même layout que le projet : /project/:appId/vulnerabilities */
   navigateSecurityVulnerabilities(): void {
     const appId = this.lastKnownApplicationId();

@@ -201,12 +201,21 @@
         <button
           type="button"
           class="nav-item"
+          (click)="navigateSecurityDashboard()"
+          [class.active]="isSecurityDashboardRoute()"
+        >
+          <span class="nav-dot" style="background: #8b5cf6;"></span>
+          <span class="nav-text">Dashboard sécurité</span>
+          <span class="nav-badge">DefectDojo</span>
+        </button>
+        <button
+          type="button"
+          class="nav-item"
           (click)="navigateSecurityVulnerabilities()"
           [class.active]="isSecurityVulnerabilitiesRoute()"
         >
           <span class="nav-dot" style="background: #ef4444;"></span>
-          <span class="nav-text">Vulnérabilités</span>
-          <span class="nav-count danger">12</span>
+          <span class="nav-text">Vulnérabilités (GitLab)</span>
         </button>
         <button class="nav-item" (click)="navigate('/security/scans')">
           <span class="nav-dot"></span>

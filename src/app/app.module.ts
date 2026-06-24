@@ -36,6 +36,8 @@ import { MyApplicationsComponent } from './applications/my-applications/my-appli
 import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
+import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
+import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
@@ -95,7 +97,9 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     ReactiveFormsModule,
     FormsModule,
     VulnerabilitiesDashboardComponent,
-    VulnerabilityDetailsComponent
+    VulnerabilityDetailsComponent,
+    SecurityDashboardComponent,
+    DefectDojoFindingDetailsComponent
   ],
   providers: [],
   bootstrap: [AppComponent]

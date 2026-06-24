@@ -24,6 +24,8 @@ import { ApplicationsActiveComponent } from './applications/applications-active/
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
+import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
+import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
 
@@ -57,6 +59,8 @@ const routes: Routes = [
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
       { path: 'monitoring', component: MonitoringComponent },
+      { path: 'security-dashboard', component: SecurityDashboardComponent },
+      { path: 'security-dashboard/finding/:findingId', component: DefectDojoFindingDetailsComponent },
       { path: 'vulnerabilities/:findingId', component: VulnerabilityDetailsComponent },
       { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent }
     ]
