@@ -1,0 +1,106 @@
+<div class="admin-route-page admin-recl-root">
+  <header class="page-head admin-recl-hero">
+    <div>
+      <p class="page-kicker">Support utilisateurs</p>
+      <h1 class="page-title">Réclamations</h1>
+      <p class="page-lead">
+        Consultez le fil de chaque demande : vous pouvez répondre plusieurs fois tant que la réclamation est
+        <strong>ouverte</strong>. Une fois <strong>clôturée</strong>, plus aucun nouveau message n’est possible.
+      </p>
+    </div>
+    <button type="button" class="btn-refresh" (click)="load()" [disabled]="loading">Actualiser</button>
+  </header>
+
+  <div *ngIf="loading" class="state state-load">
+    <span class="spinner" aria-hidden="true"></span>
+    Chargement…
+  </div>
+  <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+  <section *ngIf="!loading" class="admin-recl-panel" aria-label="Filtres">
+    <div class="filter-tabs" role="tablist">
+      <button type="button" class="filter-tab" [class.active]="filterStatus === ''" (click)="setFilter('')">Toutes</button>
+      <button type="button" class="filter-tab" [class.active]="filterStatus === 'OPEN'" (click)="setFilter('OPEN')">Ouvertes</button>
+      <button type="button" class="filter-tab" [class.active]="filterStatus === 'CLOSED'" (click)="setFilter('CLOSED')">Clôturées</button>
+    </div>
+  </section>
+
+  <div class="admin-table-wrap" *ngIf="!loading && list.length">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Auteur</th>
+          <th>Sujet</th>
+          <th>Statut</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let c of list">
+          <td class="nowrap">{{ c.createdAt | date: 'short' }}</td>
+          <td>
+            <span class="admin-cell-title">{{ c.authorUsername }}</span>
+            <span class="admin-cell-sub">{{ c.authorEmail }}</span>
+          </td>
+          <td>
+            <span class="admin-cell-strong">{{ c.subject }}</span>
+            <p class="recl-msg-preview">{{ firstMessagePreview(c) }}</p>
+          </td>
+          <td><span class="admin-badge-status">{{ c.status }}</span></td>
+          <td>
+            <button type="button" class="recl-admin-btn" (click)="openThread(c)">Discussion</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p *ngIf="!loading && !list.length" class="admin-url-muted" style="padding: 1rem 0">Aucune réclamation.</p>
+
+  <div class="recl-backdrop" *ngIf="threadTarget" (click)="cancelThread()"></div>
+  <div class="recl-sheet recl-sheet--wide" *ngIf="threadTarget" role="dialog" aria-modal="true">
+    <h3 class="recl-sheet-title">Fil de discussion</h3>
+    <p class="recl-sheet-meta">
+      <strong>{{ threadTarget.authorUsername }}</strong> — {{ threadTarget.subject }}
+      <span class="admin-badge-status" style="margin-left: 0.5rem">{{ threadTarget.status }}</span>
+    </p>
+
+    <div class="recl-thread recl-thread--sheet">
+      <div
+        *ngFor="let m of threadTarget.messages"
+        class="recl-bubble"
+        [class.recl-bubble--user]="!m.fromAdmin"
+        [class.recl-bubble--admin]="m.fromAdmin"
+      >
+        <p class="recl-bubble-meta">
+          <strong>{{ m.authorUsername }}</strong>
+          <span *ngIf="m.fromAdmin" class="recl-bubble-tag">Admin</span>
+          <span class="recl-bubble-date">{{ m.createdAt | date: 'short' }}</span>
+        </p>
+        <p class="recl-bubble-body">{{ m.body }}</p>
+      </div>
+    </div>
+
+    <ng-container *ngIf="threadTarget.status === 'OPEN'">
+      <label class="recl-sheet-label" for="admin-reply">Nouveau message</label>
+      <textarea id="admin-reply" class="recl-sheet-ta" rows="4" [(ngModel)]="replyText"></textarea>
+      <div class="recl-sheet-actions">
+        <button type="button" class="recl-admin-btn recl-admin-btn--ghost" (click)="cancelThread()" [disabled]="submitting || closing">
+          Fermer
+        </button>
+        <button type="button" class="recl-admin-btn recl-admin-btn--ghost" (click)="closeThread()" [disabled]="submitting || closing">
+          {{ closing ? 'Clôture…' : 'Clôturer le ticket' }}
+        </button>
+        <button type="button" class="recl-admin-btn recl-admin-btn--primary" (click)="sendReply()" [disabled]="submitting || closing">
+          {{ submitting ? 'Envoi…' : 'Envoyer' }}
+        </button>
+      </div>
+    </ng-container>
+
+    <div *ngIf="threadTarget.status === 'CLOSED'" class="recl-sheet-actions">
+      <p class="admin-url-muted" style="margin: 0 0 0.75rem; flex: 1 1 100%">Ticket fermé — lecture seule.</p>
+      <button type="button" class="recl-admin-btn recl-admin-btn--ghost" (click)="cancelThread()">Fermer</button>
+    </div>
+  </div>
+</div>

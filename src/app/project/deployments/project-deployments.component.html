@@ -217,6 +217,57 @@
   </div>
 </div>
 
+      <!-- URL publique + aperçu (remplace l’ancien lien basé sur l’UUID) -->
+      <div class="deploy-preview-block">
+        <h4 class="preview-block-title">Application déployée</h4>
+
+        <div *ngIf="isEnvironmentExpired(env)" class="preview-state preview-state-muted">
+          <p class="preview-state-title">Aperçu indisponible</p>
+          <p class="preview-state-text">
+            Cet environnement est expiré, détruit ou terminé. L’URL de preview n’est plus utilisable.
+          </p>
+        </div>
+
+        <ng-container *ngIf="!isEnvironmentExpired(env)">
+          <ng-container *ngIf="isEnvironmentActive(env.environmentStatus) && deploymentLink(env) as appUrl">
+            <div class="info-row preview-url-row">
+              <span class="info-icon">🔗</span>
+              <span class="info-label">URL publique</span>
+              <span class="info-value url-value">
+                <a [href]="appUrl" target="_blank" rel="noopener noreferrer">{{ appUrl }}</a>
+              </span>
+            </div>
+            <div *ngIf="canEmbedPreview(appUrl)" class="preview-iframe-wrap">
+              <iframe [src]="trustedEmbed(appUrl)" class="preview-iframe" title="Aperçu de l'application"></iframe>
+            </div>
+          </ng-container>
+
+          <div *ngIf="isEnvironmentActive(env.environmentStatus) && !deploymentLink(env)" class="preview-state">
+            <p class="preview-state-text">
+              Environnement <strong>actif</strong>, mais l’URL publique n’a pas encore été enregistrée
+              (webhook <code>deployment-published</code> ou synchro en attente).
+            </p>
+          </div>
+
+          <div *ngIf="!isEnvironmentActive(env.environmentStatus) && isDeploymentInProgress(env)" class="preview-state preview-state-pending">
+            <p class="preview-state-text">
+              Déploiement <strong>en cours</strong>. L’URL et l’aperçu s’afficheront lorsque le statut passera à
+              <strong>RUNNING</strong>.
+            </p>
+          </div>
+
+          <div *ngIf="!isEnvironmentActive(env.environmentStatus) && isDeploymentFailed(env)" class="preview-state preview-state-warning">
+            <p class="preview-state-text">
+              Le déploiement a <strong>échoué</strong>. Aucune application n’est exposée sur cet environnement.
+            </p>
+          </div>
+
+          <div *ngIf="!isEnvironmentActive(env.environmentStatus) && !isDeploymentInProgress(env) && !isDeploymentFailed(env)" class="preview-state preview-state-muted">
+            <p class="preview-state-text">Aperçu non disponible pour cet état.</p>
+          </div>
+        </ng-container>
+      </div>
+
       <!-- Actions de la carte -->
       <div class="card-actions">
         <button class="btn-primary" (click)="viewEnvironment(env.environmentId)">
@@ -229,9 +280,10 @@
           Voir le pipeline
         </button>
         
-        <a *ngIf="isEnvironmentActive(env.environmentStatus)" 
-           [href]="getEnvironmentUrl(env.environmentId)" 
-           target="_blank" 
+        <a *ngIf="isEnvironmentActive(env.environmentStatus) && deploymentLink(env) as openUrl"
+           [href]="openUrl"
+           target="_blank"
+           rel="noopener noreferrer"
            class="btn-link">
           <span class="btn-icon">🌐</span>
           Ouvrir l'app

@@ -1,0 +1,328 @@
+<div class="vuln-container dd-dashboard">
+  <header class="vuln-header">
+    <div class="vuln-header-content">
+      <div class="vuln-header-left">
+        <div class="vuln-badge"><span class="vuln-badge-dot"></span>DefectDojo · EnviroTest</div>
+        <h1 class="vuln-title">Dashboard de sécurité</h1>
+        <p class="vuln-subtitle">
+          Vue analytique par branche — répartitions et tendances avant le détail des vulnérabilités.
+        </p>
+        <p class="vuln-subtitle vuln-subtitle--meta" *ngIf="dashboard?.engagementName">
+          Produit <strong>{{ dashboard!.productName }}</strong>
+          · engagement <strong>{{ dashboard!.engagementName }}</strong>
+          · branche <strong>{{ selectedBranch }}</strong>
+        </p>
+      </div>
+      <div class="vuln-header-right">
+        <div class="vuln-header-controls">
+          <div class="vuln-env-card">
+            <span class="vuln-env-label">Branche testée</span>
+            <div class="vuln-env-value">
+              <span class="vuln-env-icon">🌿</span>
+              <select class="vuln-env-select" [(ngModel)]="selectedBranch" (ngModelChange)="onBranchChange()" [disabled]="loading">
+                <option *ngFor="let b of branches" [ngValue]="b">
+                  {{ b }}<ng-container *ngIf="envCountForBranch(b) > 0"> — {{ envCountForBranch(b) }} env.</ng-container>
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="vuln-actions">
+            <button type="button" class="vuln-btn vuln-btn-secondary" (click)="reload()" [disabled]="loading">Actualiser</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="vuln-messages">
+    <div *ngIf="error" class="vuln-alert vuln-alert-error"><span class="vuln-alert-icon">⚠️</span><span>{{ error }}</span></div>
+    <div *ngIf="!loading && dashboard && !dashboard.configured" class="vuln-alert vuln-alert-warning">{{ dashboard.message }}</div>
+    <div *ngIf="!loading && dashboard?.message && !dashboard!.engagementId" class="vuln-alert vuln-alert-info">{{ dashboard!.message }}</div>
+    <div *ngIf="dashboard?.deployRecommendation" class="vuln-alert"
+      [class.vuln-alert-success]="dashboard!.deployRecommendation!.deployRecommended"
+      [class.vuln-alert-error]="!dashboard!.deployRecommendation!.deployRecommended">
+      <span class="vuln-alert-icon">{{ dashboard!.deployRecommendation!.deployRecommended ? '✅' : '⛔' }}</span>
+      <div class="vuln-alert-body">
+        <strong>{{ dashboard!.deployRecommendation!.deployRecommended ? 'Déploiement recommandé' : 'Déploiement NON recommandé' }}</strong>
+        — {{ dashboard!.deployRecommendation!.reason }}
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="dd-loading">Chargement des métriques DefectDojo…</div>
+
+  <ng-container *ngIf="!loading && dashboard?.engagementId && charts">
+
+    <!-- Barre sévérité (style DefectDojo, thème bleu foncé / orange) -->
+    <section class="dd-metrics-block">
+      <div class="dd-metrics-bar-head">
+        <span class="dd-metrics-bar-icon">◔</span>
+        <span>Métriques par sévérité</span>
+        <span class="dd-metrics-bar-meta" *ngIf="charts!.lastScanDate">Dernier scan : {{ charts!.lastScanDate }}</span>
+      </div>
+      <div class="dd-metrics-bar">
+        <div class="dd-metric-cell sev-critical">
+          <span class="dd-metric-cell-value">{{ severityCount('Critical') }}</span>
+          <span class="dd-metric-cell-label">Critical</span>
+        </div>
+        <div class="dd-metric-cell sev-high">
+          <span class="dd-metric-cell-value">{{ severityCount('High') }}</span>
+          <span class="dd-metric-cell-label">High</span>
+        </div>
+        <div class="dd-metric-cell sev-medium">
+          <span class="dd-metric-cell-value">{{ severityCount('Medium') }}</span>
+          <span class="dd-metric-cell-label">Medium</span>
+        </div>
+        <div class="dd-metric-cell sev-low">
+          <span class="dd-metric-cell-value">{{ severityCount('Low') }}</span>
+          <span class="dd-metric-cell-label">Low</span>
+        </div>
+        <div class="dd-metric-cell sev-info">
+          <span class="dd-metric-cell-value">{{ severityCount('Info') }}</span>
+          <span class="dd-metric-cell-label">Info</span>
+        </div>
+        <div class="dd-metric-cell sev-total">
+          <span class="dd-metric-cell-value">{{ severityTotal }}</span>
+          <span class="dd-metric-cell-label">Total</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Barre résolution -->
+    <section class="dd-metrics-block">
+      <div class="dd-metrics-bar-head">
+        <span class="dd-metrics-bar-icon">◑</span>
+        <span>Non résolues vs résolues</span>
+        <span class="dd-metrics-bar-meta">{{ scanTestCount }} test(s) DefectDojo</span>
+      </div>
+      <div class="dd-metrics-bar dd-metrics-bar--resolution">
+        <div class="dd-metric-cell res-open">
+          <span class="dd-metric-cell-value">{{ charts!.openCount }}</span>
+          <span class="dd-metric-cell-label">Non résolues</span>
+        </div>
+        <div class="dd-metric-cell res-closed">
+          <span class="dd-metric-cell-value">{{ charts!.closedCount }}</span>
+          <span class="dd-metric-cell-label">Résolues</span>
+        </div>
+        <div class="dd-metric-cell res-total">
+          <span class="dd-metric-cell-value">{{ charts!.totalCount }}</span>
+          <span class="dd-metric-cell-label">Total</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics Overview (DefectDojo) -->
+    <div class="dd-section-head">
+      <h2>Metrics Overview</h2>
+      <p>Cartes par catégorie DefectDojo — cliquez pour ouvrir la liste</p>
+    </div>
+    <div class="dd-overview-grid" *ngIf="dashboard?.metricCards?.length">
+      <button type="button" class="dd-overview-card"
+        *ngFor="let card of dashboard!.metricCards"
+        [class.active]="isCategoryActive(card.key)"
+        (click)="selectCategory(card)">
+        <div class="dd-overview-head">
+          <span class="dd-overview-icon">{{ metricMeta(card.key).icon }}</span>
+          <div class="dd-overview-head-text">
+            <span class="dd-overview-count">{{ card.total }}</span>
+            <span class="dd-overview-label">{{ card.label }}</span>
+          </div>
+        </div>
+        <div class="dd-overview-chart-wrap">
+          <canvas #overviewChart></canvas>
+        </div>
+        <div class="dd-overview-foot">Consulter la liste →</div>
+      </button>
+    </div>
+
+    <!-- Detailed Metrics (DefectDojo) -->
+    <div class="dd-section-head dd-section-head--detailed">
+      <h2>Detailed Metrics</h2>
+      <p>Évolution par scan, âge des findings, activité et CWE</p>
+    </div>
+    <div class="dd-charts-grid" *ngIf="charts!.detailedMetrics">
+      <section class="dd-chart-panel dd-chart-panel--wide dd-chart-panel--defectdojo">
+        <div class="dd-chart-panel-head">
+          <span class="dd-chart-panel-title">Open by Severity (par scan)</span>
+          <span class="dd-chart-panel-info" title="Un point par import de test DefectDojo — vulnérabilités ouvertes par sévérité">ⓘ</span>
+        </div>
+        <div class="dd-chart-panel-body">
+          <div class="dd-granularity-toolbar">
+            <span class="dd-granularity-label">Granularité :</span>
+            <button
+              type="button"
+              class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'hour'"
+              (click)="setOpenSeverityGranularity('hour')">
+              Heure
+            </button>
+            <button
+              type="button"
+              class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'day'"
+              (click)="setOpenSeverityGranularity('day')">
+              Jour
+            </button>
+          </div>
+          <div class="dd-chart-canvas dd-chart-canvas--medium">
+            <canvas #daySeverityCanvas></canvas>
+          </div>
+          <p class="dd-chart-footnote">
+            Un point par import de scan — dates basées sur les tests DefectDojo (/api/v2/tests/)
+          </p>
+        </div>
+      </section>
+      <section class="dd-chart-panel dd-chart-panel--wide">
+        <h3 class="dd-chart-title">Évolution entre analyses</h3>
+        <p class="dd-chart-sub">Stock ouvert, nouvelles et résolues entre imports successifs</p>
+        <div class="dd-chart-canvas dd-chart-canvas--medium">
+          <canvas #trendCanvas></canvas>
+        </div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Open, Closed & Risk Accepted Week to Week</h3>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #weekStatusCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Week to Week by Severity</h3>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #weekSeverityCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Critical Week to Week</h3>
+        <div class="dd-chart-canvas"><canvas #criticalWeekCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">High Week to Week</h3>
+        <div class="dd-chart-canvas"><canvas #highWeekCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Medium Week to Week</h3>
+        <div class="dd-chart-canvas"><canvas #mediumWeekCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Finding Age</h3>
+        <p class="dd-chart-sub">Répartition par ancienneté (findings ouverts)</p>
+        <div class="dd-chart-canvas"><canvas #findingAgeCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Weekly Activity</h3>
+        <p class="dd-chart-sub">Findings signalés par jour de la semaine</p>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #weeklyActivityCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Open CWE Vulnerabilities</h3>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #openCweCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Total CWE Vulnerabilities</h3>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #totalCweCanvas></canvas></div>
+      </section>
+    </div>
+
+    <!-- Grille analytics -->
+    <div class="dd-charts-grid">
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Répartition par sévérité</h3>
+        <p class="dd-chart-sub">Findings ouverts uniquement</p>
+        <div class="dd-chart-canvas"><canvas #severityCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Non résolues vs résolues</h3>
+        <div class="dd-chart-canvas"><canvas #resolutionCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Outils de détection</h3>
+        <p class="dd-chart-sub">Par scan_type DefectDojo</p>
+        <div class="dd-chart-canvas"><canvas #toolsCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Types d'analyse</h3>
+        <p class="dd-chart-sub">SCA · SAST · Secrets · Container · IaC</p>
+        <div class="dd-chart-canvas"><canvas #analysisCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Répartition par statut</h3>
+        <div class="dd-chart-canvas"><canvas #statusCanvas></canvas></div>
+      </section>
+      <section class="dd-chart-panel dd-chart-panel--wide">
+        <h3 class="dd-chart-title">Par outil de scan (stack sévérité)</h3>
+        <p class="dd-chart-sub">État actuel de chaque test importé dans l'engagement</p>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #scanCanvas></canvas></div>
+      </section>
+    </div>
+
+  </ng-container>
+
+  <!-- Tableau findings -->
+  <div id="dd-findings-table" class="vuln-filters-panel" *ngIf="dashboard?.engagementId && showFindingsTable">
+    <div class="vuln-filters-head">
+      <span class="vuln-filters-title">{{ selectedCategoryLabel }}</span>
+      <span class="vuln-filters-hint">Cliquez une ligne pour le détail + correction IA</span>
+    </div>
+    <div class="vuln-filters-bar">
+      <div class="vuln-filters-left">
+        <div class="vuln-filter-group">
+          <label class="vuln-filter-label">Sévérité</label>
+          <select class="vuln-select" [(ngModel)]="filterSeverity" (ngModelChange)="onListFiltersChanged()">
+            <option value="">Toutes</option>
+            <option *ngFor="let s of severities" [value]="s">{{ s }}</option>
+          </select>
+        </div>
+        <div class="vuln-filter-group search">
+          <label class="vuln-filter-label">Recherche</label>
+          <input type="search" class="vuln-search" [(ngModel)]="searchQuery" placeholder="CVE, titre, fichier…" />
+        </div>
+        <button type="button" class="vuln-btn-clear" *ngIf="filterSeverity || searchQuery" (click)="clearFilters()">Réinitialiser</button>
+      </div>
+      <div class="vuln-filters-right">
+        <div class="vuln-count-pill"><span class="vuln-count-strong">{{ displayedFindings.length }}</span> / {{ totalElements }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="vuln-table" class="vuln-table-container" *ngIf="dashboard?.engagementId && showFindingsTable">
+    <div class="vuln-table-header">
+      <div class="vuln-table-title">
+        <h2>Liste des vulnérabilités</h2>
+        <span class="vuln-table-scope-chip">{{ selectedCategoryLabel }}</span>
+      </div>
+      <div class="vuln-table-pagination">
+        <button type="button" class="vuln-page-btn" (click)="prevPage()" [disabled]="listLoading || page <= 0">←</button>
+        <span class="vuln-page-current">{{ page + 1 }}</span>
+        <button type="button" class="vuln-page-btn" (click)="nextPage()" [disabled]="listLoading || (page + 1) * size >= totalElements">→</button>
+      </div>
+    </div>
+    <div class="vuln-table-wrapper" [class.dd-table-loading]="listLoading">
+      <table class="vuln-table">
+        <thead>
+          <tr>
+            <th>Sévérité</th><th>Scan</th><th>Titre / CVE</th><th>Statut</th><th>Localisation</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let f of displayedFindings" class="dd-row-clickable"
+            [class]="'vuln-row severity-' + (f.severity || 'info').toLowerCase()" (click)="openDetail(f)">
+            <td><span class="vuln-severity-badge" [class]="'severity-' + (f.severity || 'info').toLowerCase()">{{ f.severity }}</span></td>
+            <td><span class="vuln-tool-badge">{{ f.scanType || '—' }}</span></td>
+            <td class="vuln-cell-title">
+              <div class="vuln-title-text">{{ f.title }}</div>
+              <div class="vuln-meta" *ngIf="f.cve || f.cwe">
+                <span *ngIf="f.cve" class="vuln-cve">{{ f.cve }}</span>
+                <span *ngIf="f.cwe" class="vuln-cwe">{{ f.cwe }}</span>
+              </div>
+            </td>
+            <td><span class="dd-status-chip">{{ f.status }}</span></td>
+            <td class="vuln-cell-location">
+              <span class="vuln-location-path">{{ f.filePath || f.componentName || '—' }}</span>
+              <span *ngIf="f.line" class="vuln-line">:{{ f.line }}</span>
+            </td>
+            <td><button type="button" class="vuln-detail-btn" (click)="openDetail(f); $event.stopPropagation()">Détails & IA</button></td>
+          </tr>
+          <tr *ngIf="!listLoading && displayedFindings.length === 0">
+            <td colspan="6" class="vuln-empty-state"><p>Aucune vulnérabilité dans cette catégorie.</p></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

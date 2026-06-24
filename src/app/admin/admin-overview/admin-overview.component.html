@@ -1,0 +1,307 @@
+<div class="admin-route-page admin-overview-root">
+  <header class="page-head admin-overview-hero">
+    <div>
+      <p class="page-kicker">Pilotage</p>
+      <h1 class="page-title">Vue d’ensemble exécutive</h1>
+      <p class="page-lead">
+        Synthèse <strong>admin</strong> alignée sur les mêmes familles d’information que l’espace projet métier (déploiements,
+        pipelines, applications, sécurité / qualité en externe), mais agrégée sur tous les comptes métier — sans ouvrir les
+        écrans <code>/project/…</code>. Données : <strong>GET /api/admin/users</strong>.
+      </p>
+    </div>
+    <button type="button" class="btn-refresh" (click)="load()" [disabled]="loading">Actualiser</button>
+  </header>
+
+  <div *ngIf="loading" class="state state-load">
+    <span class="spinner" aria-hidden="true"></span>
+    Chargement des indicateurs…
+  </div>
+  <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <section class="kpi-section" aria-label="Indicateurs clés">
+      <div class="kpi-grid">
+        <article class="kpi-card kpi-accent">
+          <span class="kpi-label">Utilisateurs métier</span>
+          <span class="kpi-value">{{ totalPlatformUsers }}</span>
+          <a routerLink="/admin/users" class="kpi-link">Gérer les comptes →</a>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Comptes actifs</span>
+          <span class="kpi-value">{{ activeCount }}</span>
+          <span class="kpi-meta">{{ disabledCount }} désactivés</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Avec au moins une app</span>
+          <span class="kpi-value">{{ usersWithApplications }}</span>
+          <span class="kpi-meta">Comptes ayant créé une application</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Applications</span>
+          <span class="kpi-value">{{ totalApplications }}</span>
+          <a routerLink="/admin/inventory" class="kpi-link">Inventaire détaillé →</a>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Environnements (lignes)</span>
+          <span class="kpi-value">{{ totalEnvironments }}</span>
+          <span class="kpi-meta">{{ totalActiveEnvironments }} actifs (RUNNING) · {{ envRunning }} dans l’agrégat statuts</span>
+        </article>
+        <article class="kpi-card kpi-wide">
+          <span class="kpi-label">Pipelines enregistrés (tous utilisateurs)</span>
+          <span class="kpi-value">{{ totalPipelines }}</span>
+          <div
+            class="bar-stack"
+            role="img"
+            [attr.aria-label]="
+              'Répartition: succès ' +
+              pipelineSuccess +
+              ', échecs ' +
+              pipelineFailed +
+              ', en cours ' +
+              pipelineRunning +
+              ', attente ' +
+              pipelinePending +
+              ', annulés / ignorés ' +
+              (pipelineCanceled + pipelineSkipped)
+            "
+          >
+            <div class="bar-seg bar-ok" [style.flex]="pipelineSuccess || 0.001"></div>
+            <div class="bar-seg bar-bad" [style.flex]="pipelineFailed || 0"></div>
+            <div class="bar-seg bar-run" [style.flex]="pipelineRunning || 0"></div>
+            <div class="bar-seg bar-pend" [style.flex]="pipelinePending || 0"></div>
+            <div class="bar-seg bar-rest" [style.flex]="(pipelineCanceled + pipelineSkipped) || 0"></div>
+          </div>
+          <ul class="bar-legend">
+            <li><span class="dot dot-ok"></span> Succès {{ pipelineSuccess }} ({{ pipelineBarPct(pipelineSuccess) }}%)</li>
+            <li><span class="dot dot-bad"></span> Échecs {{ pipelineFailed }}</li>
+            <li><span class="dot dot-run"></span> En cours {{ pipelineRunning }}</li>
+            <li><span class="dot dot-pend"></span> En attente {{ pipelinePending }}</li>
+            <li><span class="dot dot-rest"></span> Annulés {{ pipelineCanceled }} · Ignorés {{ pipelineSkipped }}</li>
+          </ul>
+        </article>
+        <article class="kpi-card kpi-wide">
+          <span class="kpi-label">Statuts environnements (agrégé)</span>
+          <div class="env-chips">
+            <span class="chip">En attente {{ envPending }}</span>
+            <span class="chip">Build {{ envBuilding }}</span>
+            <span class="chip chip-ok">Running {{ envRunning }}</span>
+            <span class="chip chip-bad">Failed {{ envFailed }}</span>
+            <span class="chip">Destroyed {{ envDestroyed }}</span>
+            <span class="chip">Expired {{ envExpired }}</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section
+      class="detail-panel detail-panel-wide detail-panel--accent"
+      *ngIf="deployedEnvironments.length"
+      aria-label="Déploiements actifs avec URL"
+    >
+      <div class="detail-panel-head">
+        <h2>Déploiements actifs</h2>
+        <span class="detail-badge detail-badge--live">{{ deployedEnvironments.length }} URL(s)</span>
+      </div>
+      <p class="detail-sub">
+        Environnements en <strong>RUNNING</strong> pour lesquels l’API expose une URL d’accès (équivalent du lien déployé côté métier).
+        Ouverture dans un nouvel onglet.
+      </p>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Environnement</th>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Branche</th>
+              <th>URL déployée</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of deployedEnvironments">
+              <td class="admin-cell-strong">{{ d.environmentName }}</td>
+              <td>{{ d.applicationName }}</td>
+              <td>
+                <span class="admin-cell-strong">{{ d.ownerUsername }}</span>
+                <span class="admin-cell-sub">{{ d.ownerEmail }}</span>
+              </td>
+              <td class="admin-cell-mono">{{ d.gitBranch }}</td>
+              <td>
+                <a
+                  class="admin-external-link"
+                  [href]="d.deploymentUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [title]="d.deploymentUrl"
+                  >{{ deploymentUrlLabel(d.deploymentUrl) }}</a
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="admin-map-hint">
+      <span class="admin-map-hint__icon" aria-hidden="true">⎘</span>
+      <div>
+        Côté métier, le sidebar projet regroupe <strong>Déploiements</strong>, <strong>Pipelines</strong> (filtres statut),
+        <strong>Sécurité</strong>, <strong>Sonar</strong>, <strong>Monitoring</strong>. Ici : volumes, URLs déployées et anomalies agrégés ;
+        détail par compte dans <a routerLink="/admin/users">Utilisateurs</a>, par ressource dans
+        <a routerLink="/admin/inventory">Inventaire</a>, liens outils dans <a routerLink="/admin/observability">Observabilité</a>.
+      </div>
+    </div>
+
+    <div class="detail-columns">
+
+      <section class="detail-panel" aria-label="Comptes les plus sollicités">
+        <div class="detail-panel-head">
+          <h2>Comptes par volume de pipelines</h2>
+          <span class="detail-badge">Top 12</span>
+        </div>
+        <p class="detail-sub">
+          Équivalent agrégé du compteur « Tous les pipelines » dans le sidebar projet ; utile pour repérer l’activité globale par compte.
+        </p>
+        <div class="admin-table-wrap" *ngIf="topUsers.length">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Statut</th>
+                <th>Apps</th>
+                <th>Envs actifs</th>
+                <th>Pipelines</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of topUsers">
+                <td class="admin-cell-strong">{{ r.username }}</td>
+                <td><span class="admin-badge-status">{{ r.accountStatus }}</span></td>
+                <td>{{ r.applicationsCount }}</td>
+                <td>{{ r.activeEnvironmentsCount }}</td>
+                <td><span class="admin-metric-pill">{{ r.pipelinesCount }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="detail-foot muted" *ngIf="!topUsers.length">Aucune donnée.</p>
+      </section>
+    </div>
+
+    <section class="detail-panel detail-panel-wide" aria-label="Environnements par filtre">
+      <div class="detail-panel-head detail-panel-head--stack">
+        <h2>Environnements (filtre)</h2>
+        <div class="watch-tabs" role="tablist" aria-label="Type d’environnements">
+          <button
+            type="button"
+            role="tab"
+            class="watch-tab"
+            [class.watch-tab--active]="envWatchFilter === 'issues'"
+            [attr.aria-selected]="envWatchFilter === 'issues'"
+            (click)="setEnvWatchFilter('issues')"
+          >
+            Anomalies
+            <span class="watch-tab-count">{{ riskEnvironments.length }}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="watch-tab watch-tab--success"
+            [class.watch-tab--active]="envWatchFilter === 'success'"
+            [attr.aria-selected]="envWatchFilter === 'success'"
+            (click)="setEnvWatchFilter('success')"
+          >
+            Réussis
+            <span class="watch-tab-count">{{ successEnvironments.length }}</span>
+          </button>
+        </div>
+      </div>
+      <p class="detail-sub" *ngIf="envWatchFilter === 'issues'">
+        <span class="chip-bad-soft chip-inline">Anomalies</span>
+        Statut env. <strong>FAILED</strong> ou pipeline <strong>FAILED</strong> / <strong>CANCELED</strong> — avec l’URL déployée si l’API la fournit encore.
+      </p>
+      <p class="detail-sub" *ngIf="envWatchFilter === 'success'">
+        <span class="chip-ok-soft chip-inline">Réussis</span>
+        Pipeline <strong>SUCCESS</strong>, ou environnement <strong>RUNNING</strong> sans anomalie pipeline (stable / en service). Exclut les lignes du filtre « Anomalies ».
+      </p>
+      <div class="admin-table-wrap" *ngIf="activeWatchEnvironments.length">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Environnement</th>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Branche</th>
+              <th>Statut env.</th>
+              <th>Statut pipeline</th>
+              <th>URL déployée</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of activeWatchEnvironments">
+              <td class="admin-cell-strong">{{ e.environmentName }}</td>
+              <td>{{ e.applicationName }}</td>
+              <td>
+                <span class="admin-cell-strong">{{ e.ownerUsername }}</span>
+                <span class="admin-cell-sub">{{ e.ownerEmail }}</span>
+              </td>
+              <td class="admin-cell-mono">{{ e.gitBranch }}</td>
+              <td><span class="admin-badge-status">{{ e.status }}</span></td>
+              <td>{{ e.pipelineStatus || '—' }}</td>
+              <td>
+                <a
+                  *ngIf="e.deploymentUrl"
+                  class="admin-external-link"
+                  [href]="e.deploymentUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [title]="e.deploymentUrl"
+                  >{{ deploymentUrlLabel(e.deploymentUrl) }}</a
+                >
+                <span *ngIf="!e.deploymentUrl" class="admin-url-muted">Non renseignée</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="detail-foot muted" *ngIf="envWatchFilter === 'issues' && !riskEnvironments.length">
+        Aucune anomalie (FAILED / pipeline FAILED·CANCELED).
+      </p>
+      <p class="detail-foot muted" *ngIf="envWatchFilter === 'success' && !successEnvironments.length">
+        Aucun environnement ne correspond au filtre « Réussis » (SUCCESS ou RUNNING stable).
+      </p>
+    </section>
+
+    <section class="detail-panel detail-panel-wide" aria-label="Applications récentes">
+      <div class="detail-panel-head">
+        <h2>Applications créées récemment</h2>
+        <a routerLink="/admin/inventory" class="detail-link">Inventaire →</a>
+      </div>
+      <p class="detail-sub">Tri par date de création décroissante (tous propriétaires).</p>
+      <div class="admin-table-wrap" *ngIf="recentApplications.length">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Dépôt</th>
+              <th>Créée le</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let a of recentApplications">
+              <td class="admin-cell-strong">{{ a.name }}</td>
+              <td>
+                <span class="admin-cell-strong">{{ a.ownerUsername }}</span>
+                <span class="admin-cell-sub">{{ a.ownerEmail }}</span>
+              </td>
+              <td class="admin-cell-mono admin-cell-clip" [title]="a.gitRepositoryUrl">{{ a.gitRepositoryUrl }}</td>
+              <td>{{ a.createdLabel }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="detail-foot muted" *ngIf="!recentApplications.length">Aucune application enregistrée.</p>
+    </section>
+  </ng-container>
+</div>

@@ -24,16 +24,25 @@ export class PipelineService {
     });
   }
 
-  listPipelines(): Observable<PipelineListItem[]> {
-    return this.http.get<PipelineListItem[]>(BASE + 'api/pipelines', {
+  listPipelines(page: number = 0, size: number = 10): Observable<any> {
+  return this.http.get(`${BASE}api/pipelines?page=${page}&size=${size}`, {
+    headers: this.authHeaders()
+  });
+}
+
+  getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
+    // BDD-first côté backend (reports non inclus par défaut)
+    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}?includeReports=false`, {
       headers: this.authHeaders()
     });
   }
 
-  getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
-    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-environment/${envId}`, {
-      headers: this.authHeaders()
-    });
+  /** Mode “live”: demande au backend de rafraîchir les jobs en arrière-plan. */
+  getPipelineAndScanLive(envId: string): Observable<PipelineScanResponse> {
+    return this.http.get<PipelineScanResponse>(
+      BASE + `api/pipelines/by-environment/${envId}?includeReports=false&refresh=true`,
+      { headers: this.authHeaders() }
+    );
   }
 
   getSecuritySummary(envId: string): Observable<SecuritySummaryResponse> {
@@ -42,11 +51,17 @@ export class PipelineService {
     });
   }
 
-  getByPipelineId(pipelineId: number): Observable<PipelineScanResponse> {
-    return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/${pipelineId}`, {
-      headers: this.authHeaders()
-    });
-  }
+  getPipelineById(pipelineId: number): Observable<PipelineScanResponse> {
+  return this.http.get<PipelineScanResponse>(BASE + `api/pipelines/by-id/${pipelineId}?includeReports=false`, {
+    headers: this.authHeaders()
+  });
+}
+
+getLatestPipeline(): Observable<any> {
+  return this.http.get(BASE + 'api/pipelines/latest', {
+    headers: this.authHeaders()
+  });
+}
 
   cancelPipeline(pipelineId: number): Observable<void> {
     return this.http.post<void>(BASE + `api/pipelines/${pipelineId}/cancel`, null, {
@@ -61,10 +76,23 @@ export class PipelineService {
     });
   }
 
+  retryJob(jobId: number): Observable<void> {
+    return this.http.post<void>(BASE + `api/pipelines/jobs/${jobId}/retry`, null, {
+      headers: this.authHeaders()
+    });
+  }
+
   getScanResults(jobId: number): Observable<any> {
     return this.http.get(BASE + `api/pipelines/jobs/${jobId}/scan`, {
       headers: this.authHeaders()
     });
   }
+
+  // Dans pipeline.service.ts
+deletePipeline(pipelineId: number): Observable<void> {
+  return this.http.delete<void>(BASE + `api/pipelines/${pipelineId}`, {
+    headers: this.authHeaders()
+  });
+}
 }
 

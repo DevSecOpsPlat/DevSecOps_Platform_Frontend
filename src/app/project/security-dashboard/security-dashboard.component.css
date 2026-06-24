@@ -1,0 +1,455 @@
+/* Dashboard DefectDojo — thème bleu foncé + orange */
+
+:host {
+  --dd-navy: #0f172a;
+  --dd-navy-mid: #1e293b;
+  --dd-navy-light: #334155;
+  --dd-slate: #475569;
+  --dd-orange: #f36c21;
+  --dd-orange-dark: #ea580c;
+  --dd-orange-deep: #c2410c;
+  --dd-orange-soft: #fb923c;
+  --dd-green: #22c55e;
+}
+
+.dd-dashboard {
+  min-height: calc(100vh - 64px);
+}
+
+.dd-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+/* ── Barres métriques en haut (style DefectDojo, thème marque) ── */
+.dd-metrics-block {
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+
+.dd-metrics-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  background: var(--dd-navy-mid);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dd-metrics-bar-icon {
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+.dd-metrics-bar-meta {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.dd-metrics-bar {
+  display: flex;
+  width: 100%;
+}
+
+.dd-metric-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem 0.4rem;
+  color: #fff;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dd-metric-cell:last-child {
+  border-right: none;
+}
+
+.dd-metric-cell-value {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.35rem;
+}
+
+.dd-metric-cell-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.92;
+}
+
+/* Sévérité — dégradé orange → bleu foncé */
+.sev-critical { background: var(--dd-orange-deep); }
+.sev-high { background: var(--dd-orange-dark); }
+.sev-medium { background: var(--dd-orange); }
+.sev-low { background: var(--dd-slate); }
+.sev-info { background: var(--dd-navy-light); }
+.sev-total { background: var(--dd-navy); }
+
+/* Résolution */
+.res-open { background: var(--dd-orange); flex: 1.2; }
+.res-closed { background: var(--dd-navy-light); flex: 1.2; }
+.res-total { background: var(--dd-navy); }
+
+/* ── Charts ── */
+.dd-chart-panel {
+  background: var(--vuln-surface, #fff);
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  border-radius: 14px;
+  padding: 1rem 1.15rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.dd-chart-panel--wide {
+  grid-column: 1 / -1;
+}
+
+/* Panneau style DefectDojo (Open Day to Day by Severity) */
+.dd-chart-panel--defectdojo {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dd-chart-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: #5bc0de;
+  color: #fff;
+}
+
+.dd-chart-panel-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.dd-chart-panel-info {
+  font-size: 0.75rem;
+  opacity: 0.85;
+  cursor: help;
+}
+
+.dd-chart-panel-body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.dd-granularity-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.dd-granularity-label {
+  font-size: 0.78rem;
+  color: var(--vuln-text-muted, #64748b);
+  margin-right: 0.25rem;
+}
+
+.dd-granularity-btn {
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  background: #fff;
+  color: var(--dd-navy);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dd-granularity-btn:hover {
+  border-color: #5bc0de;
+  color: #0284c7;
+}
+
+.dd-granularity-btn.active {
+  background: #5bc0de;
+  border-color: #5bc0de;
+  color: #fff;
+}
+
+.dd-chart-footnote {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--vuln-text-muted, #64748b);
+  font-style: italic;
+}
+
+.dd-chart-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dd-navy);
+}
+
+.dd-chart-sub {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.dd-chart-canvas {
+  position: relative;
+  height: 220px;
+}
+
+.dd-chart-canvas--medium {
+  height: 280px;
+}
+
+.dd-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dd-section-head {
+  margin: 0.5rem 0 1rem;
+}
+
+.dd-section-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  color: var(--dd-navy);
+}
+
+.dd-section-head p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.dd-section-head--detailed {
+  margin-top: 1.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--vuln-border, #e2e8f0);
+}
+
+/* Metrics Overview (DefectDojo) */
+.dd-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.dd-overview-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--vuln-surface, #fff);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.dd-overview-card:hover,
+.dd-overview-card.active {
+  border-color: var(--dd-orange);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+}
+
+.dd-overview-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--dd-navy-mid);
+  color: #fff;
+}
+
+.dd-overview-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+
+.dd-overview-head-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dd-overview-count {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.dd-overview-label {
+  font-size: 0.72rem;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-overview-chart-wrap {
+  height: 120px;
+  padding: 0.5rem 0.65rem 0.25rem;
+}
+
+.dd-overview-foot {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.68rem;
+  color: var(--vuln-text-muted, #64748b);
+  background: #f8fafc;
+  border-top: 1px solid var(--vuln-border, #e2e8f0);
+}
+
+/* Cartes catégories (legacy) */
+.dd-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.dd-metrics-grid--compact .dd-metric-card {
+  padding: 0.85rem 0.85rem 1.75rem;
+}
+
+.dd-metric-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 1rem 1rem 2.1rem;
+  border-radius: 14px;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  background: var(--vuln-surface, #fff);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  font-family: inherit;
+  color: inherit;
+}
+
+.dd-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border-color: rgba(243, 108, 33, 0.45);
+}
+
+.dd-metric-card.active {
+  border-color: var(--dd-orange);
+  box-shadow: 0 0 0 2px rgba(243, 108, 33, 0.18);
+}
+
+.dd-metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dd-metric-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--vuln-bg-page, #f8fafc);
+  font-size: 0.9rem;
+}
+
+.tone-open .dd-metric-icon { background: rgba(243, 108, 33, 0.15); color: var(--dd-orange-dark); }
+.tone-closed .dd-metric-icon { background: rgba(30, 41, 59, 0.12); color: var(--dd-navy-mid); }
+.tone-verified .dd-metric-icon { background: rgba(51, 65, 85, 0.12); color: var(--dd-navy-light); }
+.tone-total .dd-metric-icon { background: rgba(243, 108, 33, 0.12); color: var(--dd-orange); }
+
+.dd-metric-count {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--dd-navy);
+}
+
+.dd-metric-label {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.dd-metric-bar-track {
+  display: flex;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.dd-metric-bar-seg {
+  display: block;
+  height: 100%;
+}
+
+.dd-metric-cta {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--dd-orange);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.dd-metric-card:hover .dd-metric-cta,
+.dd-metric-card.active .dd-metric-cta {
+  opacity: 1;
+}
+
+.dd-row-clickable { cursor: pointer; }
+.dd-row-clickable:hover { background: rgba(243, 108, 33, 0.04); }
+
+.dd-status-chip {
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  font-size: 0.72rem;
+  color: var(--dd-navy-light);
+}
+
+.dd-table-loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .dd-charts-grid { grid-template-columns: 1fr; }
+  .dd-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dd-metrics-bar { flex-wrap: wrap; }
+  .dd-metric-cell { flex: 1 1 33%; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .dd-metrics-bar--resolution .dd-metric-cell { flex: 1 1 50%; }
+}
+
+@media (max-width: 520px) {
+  .dd-overview-grid { grid-template-columns: 1fr; }
+  .dd-metric-cell { flex: 1 1 50%; }
+  .dd-metrics-bar-meta { display: none; }
+}

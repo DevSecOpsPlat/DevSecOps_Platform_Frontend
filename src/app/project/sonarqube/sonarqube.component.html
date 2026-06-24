@@ -1,0 +1,936 @@
+<div class="user-shell">
+  <app-user-sidebar></app-user-sidebar>
+  <div class="user-main">
+    <div class="sonar-page">
+
+      <!-- ─── Header ─── -->
+      <header class="sonar-header">
+        <div class="title-block">
+          <h1>Analyse SonarQube</h1>
+          <p class="subtitle">
+            <ng-container *ngIf="sonarProjectKey">{{ sonarProjectKey }} · </ng-container>
+            Branche : {{ currentBranch }}
+            <ng-container *ngIf="metrics?.ncloc"> · {{ metrics.ncloc | number }} lignes</ng-container>
+          </p>
+        </div>
+        <div class="header-actions">
+          <button type="button"
+                  class="qg-hero-badge qg-hero-badge--click"
+                  [ngClass]="qualityGateClass()"
+                  *ngIf="!loading && !error"
+                  (click)="openQualityGateTab()"
+                  title="Voir le Quality Gate">
+            <span class="qg-hero-dot"></span>
+            <ng-container *ngIf="getQualityGateStatus() === 'OK'">Quality Gate : Passed</ng-container>
+            <ng-container *ngIf="getQualityGateStatus() !== 'OK'">
+              {{ getQualityGateFailedCount() }} condition<ng-container *ngIf="getQualityGateFailedCount() > 1">s</ng-container> en échec
+            </ng-container>
+          </button>
+          <button type="button" class="refresh-btn" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+        </div>
+      </header>
+
+      <!-- ─── Loading ─── -->
+      <div *ngIf="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Chargement des métriques SonarQube...</p>
+      </div>
+
+      <!-- ─── Error ─── -->
+      <div *ngIf="!loading && error" class="error-state">
+        <div class="error-icon">⚠</div>
+        <p>{{ error }}</p>
+        <button class="refresh-btn" (click)="load()">Réessayer</button>
+      </div>
+
+      <!-- ─── Content ─── -->
+      <div *ngIf="!loading && !error" class="sonar-content">
+
+        <!-- Branch selector -->
+        <div class="branch-bar">
+          <span class="branch-label">Branche :</span>
+          <select class="branch-select" [ngModel]="currentBranch" (ngModelChange)="onBranchChange($event)">
+            <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
+          </select>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="tabs">
+          <button class="tab-btn" [class.active]="activeTab === 'overview'"    (click)="setTab('overview')">Vue d'ensemble</button>
+          <button class="tab-btn" [class.active]="activeTab === 'quality'"     (click)="setTab('quality')">Quality Gate</button>
+          <button class="tab-btn" [class.active]="activeTab === 'issues'"      (click)="setTab('issues')">Issues ({{ totalIssues }})</button>
+          <button class="tab-btn" [class.active]="activeTab === 'hotspots'"    (click)="setTab('hotspots')">Hotspots ({{ totalHotspots || hotspots.length || 0 }})</button>
+          <button class="tab-btn" [class.active]="activeTab === 'duplication'" (click)="setTab('duplication')">Duplication</button>
+          <button class="tab-btn" [class.active]="activeTab === 'coverage'" (click)="setTab('coverage')">Coverage</button>
+        </nav>
+
+        <!-- ══════════════════════════════════════════
+             OVERVIEW
+        ══════════════════════════════════════════ -->
+        <section *ngIf="activeTab === 'overview'" class="overview-tab">
+
+          <!-- KPI Cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card" (click)="onOverviewCardClick('bug')">
+              <div class="kpi-label">Bugs</div>
+              <div class="kpi-val">{{ metrics?.bugs || 0 }}</div>
+              <div class="kpi-sub" [class.kpi-err]="(metrics?.bugs || 0) > 0">
+                Fiabilité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.reliability_rating)">
+                  {{ getRatingLabel(metrics?.reliability_rating) }}
+                </span>
+              </div>
+            </div>
+            <div class="kpi-card" (click)="onOverviewCardClick('vuln')">
+              <div class="kpi-label">Vulnérabilités</div>
+              <div class="kpi-val">{{ metrics?.vulnerabilities || 0 }}</div>
+              <div class="kpi-sub">
+                Sécurité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.security_rating)">
+                  {{ getRatingLabel(metrics?.security_rating) }}
+                </span>
+              </div>
+            </div>
+            <div class="kpi-card" (click)="onOverviewCardClick('smell')">
+              <div class="kpi-label">Code Smells</div>
+              <div class="kpi-val">{{ metrics?.code_smells || 0 }}</div>
+              <div class="kpi-sub">
+                Maintenabilité
+                <span class="rating-badge" [ngClass]="getRatingClass(metrics?.maintainability_rating)">
+                  {{ getRatingLabel(metrics?.maintainability_rating) }}
+                </span>
+              </div>
+            </div>
+            <div class="kpi-card" (click)="onOverviewCardClick('hotspot')">
+              <div class="kpi-label">Hotspots</div>
+              <div class="kpi-val">{{ totalHotspots || hotspots.length || 0 }}</div>
+              <div class="kpi-sub kpi-warn" *ngIf="(totalHotspots || hotspots.length) > 0">À revoir</div>
+              <div class="kpi-sub kpi-ok" *ngIf="(totalHotspots || hotspots.length) === 0">Aucun</div>
+            </div>
+          </div>
+
+          <!-- Progress Bars: Coverage + Duplication -->
+          <div class="metric-bars-row">
+            <div class="bar-card" (click)="coverageView = 'tree'; setTab('coverage')" title="Voir le détail Coverage">
+              <div class="bar-header">
+                <span class="bar-title-text">Couverture des tests</span>
+                <span class="bar-val" [style.color]="getCoverageColor(getCoveragePercent())">
+                  {{ getCoveragePercent() | number:'1.1-1' }}%
+                </span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill fill-cov" [style.width.%]="getCoveragePercent()"></div>
+              </div>
+              <div class="bar-hint">seuil ≥ 80%</div>
+            </div>
+            <div class="bar-card" (click)="setTab('duplication')" title="Voir le détail Duplication">
+              <div class="bar-header">
+                <span class="bar-title-text">Duplication de code</span>
+                <span class="bar-val" style="color: var(--c-orange)">
+                  {{ getDuplicationPercent() | number:'1.1-1' }}%
+                </span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill fill-dup" [style.width.%]="getDuplicationPercent()"></div>
+              </div>
+              <div class="bar-hint">seuil ≤ 3% · {{ duplicationFiles.length }} fichiers affectés</div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="charts-row">
+
+            <!-- Répartition des issues (couleurs alignées sur les filtres) -->
+              <div class="overview-issues-viz" *ngIf="totalIssues > 0">
+            <div class="overview-issues-viz__head">
+              <h3 class="overview-section-title">Répartition des issues</h3>
+              <button type="button" class="overview-link overview-link--pill" (click)="setTab('issues')">Voir tout ({{ totalIssues }})</button>
+            </div>
+            <div class="severity-bars">
+              <div class="severity-bar-row"
+                   *ngFor="let sev of overviewSeverityOrder"
+                   (click)="setTab('issues'); applyIssueFilters(sev, typeFilter)">
+                <span class="severity-bar-label-wrap">
+                  <span class="filter-sev-dot overview-sev-dot" [ngClass]="'filter-sev-dot--' + sev.toLowerCase()" aria-hidden="true"></span>
+                  <span class="severity-bar-label">{{ sev }}</span>
+                </span>
+                <div class="severity-bar-track">
+                  <div class="severity-bar-fill" [ngClass]="'sev-' + sev.toLowerCase()" [style.width.%]="getSeverityBarWidth(sev)"></div>
+                </div>
+                <span class="severity-bar-count">{{ getSeverityCount(sev) }}</span>
+              </div>
+            </div>
+            <div class="overview-type-chips">
+              <button type="button" class="type-chip type-chip--bug" (click)="onOverviewCardClick('bug')">
+                <span class="type-chip__mark type-chip__mark--bug" aria-hidden="true"></span>
+                Bugs : {{ metrics?.bugs || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--vuln" (click)="onOverviewCardClick('vuln')">
+                <span class="type-chip__mark type-chip__mark--vuln" aria-hidden="true"></span>
+                Vulnérabilités : {{ metrics?.vulnerabilities || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--smell" (click)="onOverviewCardClick('smell')">
+                <span class="type-chip__mark type-chip__mark--smell" aria-hidden="true"></span>
+                Code Smells : {{ metrics?.code_smells || 0 }}
+              </button>
+              <button type="button" class="type-chip type-chip--cov" (click)="onOverviewCardClick('coverage')">
+                <span class="type-chip__mark type-chip__mark--cov" aria-hidden="true"></span>
+                Coverage : {{ getCoveragePercent() | number:'1.1-1' }}%
+              </button>
+            </div>
+          </div>
+
+            <!-- Donut Chart -->
+            <div class="panel">
+              <div class="panel-title">Répartition par type</div>
+              <div class="panel-sub">{{ totalIssues }} issues au total</div>
+              <div class="donut-wrap">
+                <div class="donut-canvas-wrap">
+                  <canvas #donutCanvas></canvas>
+                  <div class="donut-center">
+                    <span class="donut-num">{{ totalIssues }}</span>
+                    <span class="donut-label">issues</span>
+                  </div>
+                </div>
+                <div class="donut-legend">
+                  <span class="legend-item"><span class="legend-dot legend-dot--bug"></span>Bug {{ typeCounts['BUG'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot legend-dot--vuln"></span>Vuln {{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                  <span class="legend-item"><span class="legend-dot legend-dot--smell"></span>Smell {{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hotspot summary -->
+          <div class="panel hotspot-summary" *ngIf="(totalHotspots || hotspots.length) > 0"   class="bar-card"  (click)="onOverviewCardClick('hotspot')">
+            <div class="hs-summary-content" >
+              <div >
+                <div class="panel-title">Security Hotspots</div>
+                <p class="panel-sub" style="margin-bottom:0">Points de sécurité à valider manuellement.</p>
+              </div>
+              <button class="overview-link-btn" (click)="onOverviewCardClick('hotspot')">
+                {{ totalHotspots || hotspots.length }} à revoir →
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+
+        <!-- ══════════════════════════════════════════
+             QUALITY GATE
+        ══════════════════════════════════════════ -->
+        <section *ngIf="activeTab === 'quality'" class="quality-tab">
+          <div class="panel">
+            <div class="qg-summary-row">
+              <div>
+                <div class="panel-title">Conditions du Quality Gate</div>
+                <p class="panel-sub" *ngIf="qualityGateConditions.length">
+                  {{ getQualityGateFailedCount() }} en échec · {{ qualityGateConditions.length - getQualityGateFailedCount() }} validée(s)
+                </p>
+                <p class="panel-sub" *ngIf="!qualityGateConditions.length">Aucune condition disponible.</p>
+              </div>
+              <span class="qg-hero-badge" [ngClass]="qualityGateClass()">
+                <span class="qg-hero-dot"></span>
+                {{ getQualityGateStatus() === 'OK' ? 'Passed' : 'Failed' }}
+              </span>
+            </div>
+
+            <div class="qg-cond-list" *ngIf="qualityGateConditions.length">
+              <ng-container *ngFor="let cond of qualityGateConditions">
+                <div class="qg-cond-item"
+                     [class.cond-failed]="cond.status === 'ERROR'"
+                     [class.cond-ok]="cond.status === 'OK'"
+                     (click)="onQualityGateConditionClick(cond)">
+                  <div class="qg-cond-header">
+                    <span class="qg-cond-metric">{{ formatConditionMetric(cond.metric || cond.metricKey) }}</span>
+                    <span class="qg-cond-status" [class.status-ok]="cond.status === 'OK'" [class.status-err]="cond.status === 'ERROR'">
+                      {{ cond.status }}
+                    </span>
+                  </div>
+                  <p class="qg-cond-values">
+                    <strong>{{ formatQgPrimaryValue(cond) }}</strong>
+                    <span class="qg-threshold"> · {{ formatQgRequirementHint(cond) }}</span>
+                  </p>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </section>
+
+        <!-- COVERAGE TAB -->
+        <section *ngIf="activeTab === 'coverage'" class="coverage-tab">
+          <div class="panel" *ngIf="coverageFiles.length">
+            <div class="qg-extra-header">
+              <div class="panel-title">Couverture par fichier</div>
+              <div class="view-toggle">
+                <button class="view-btn" [class.active]="coverageView === 'list'" (click)="coverageView = 'list'">Liste</button>
+                <button class="view-btn" [class.active]="coverageView === 'tree'" (click)="coverageView = 'tree'">Arbre</button>
+              </div>
+            </div>
+
+
+            <div class="coverage-table">
+              <div class="coverage-header">
+                <span class="col-path">Fichier</span>
+                <span class="col-cov">Coverage</span>
+                <span class="col-unl">Non couvertes</span>
+                <span class="col-unc">Conditions</span>
+              </div>
+
+              <!-- List view -->
+              <ng-container *ngIf="coverageView === 'list'">
+                <div class="coverage-row" *ngFor="let f of coverageFiles">
+                  <span class="col-path">{{ f.path }}</span>
+                  <span class="col-cov" [style.color]="getCoverageColor(f.coverage)">{{ f.coverage | number:'1.1-1' }}%</span>
+                  <span class="col-unl">{{ f.uncoveredLines }}</span>
+                  <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                </div>
+              </ng-container>
+
+              <!-- Tree view -->
+              <ng-container *ngIf="coverageView === 'tree'">
+                <ng-container *ngFor="let group of coverageTree">
+                  <div class="coverage-row coverage-group-row" (click)="toggleCoverageGroup(group.group)">
+                    <span class="col-path">
+                      <span class="folder-icon" [class.open]="isCoverageGroupExpanded(group.group)"></span>
+                      {{ group.group }}
+                    </span>
+                    <span class="col-cov">–</span>
+                    <span class="col-unl">–</span>
+                    <span class="col-unc">–</span>
+                  </div>
+                  <ng-container *ngIf="isCoverageGroupExpanded(group.group)">
+                    <div class="coverage-row coverage-file-row" *ngFor="let f of group.files">
+                      <span class="col-path">{{ f.path }}</span>
+                      <span class="col-cov" [style.color]="getCoverageColor(f.coverage)">{{ f.coverage | number:'1.1-1' }}%</span>
+                      <span class="col-unl">{{ f.uncoveredLines }}</span>
+                      <span class="col-unc">{{ f.uncoveredConditions }}</span>
+                    </div>
+                  </ng-container>
+                </ng-container>
+              </ng-container>
+            </div>
+          </div>
+          <p class="empty-text" *ngIf="!coverageFiles.length">
+            Aucune donnée de couverture disponible.
+          </p>
+        </section>
+
+
+        <!-- ══════════════════════════════════════════
+             ISSUES
+        ══════════════════════════════════════════ -->
+
+
+        
+        <section *ngIf="activeTab === 'issues'" class="issues-tab">
+          <div class="issues-layout">
+            <!-- Filtres latéraux -->
+            <aside class="panel issues-filters issues-filters-panel">
+              <div class="issues-filters-accent" aria-hidden="true"></div>
+              <div class="issues-filters-header">
+                <div class="issues-filters-title-row">
+                  <span class="issues-filters-mark" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                  <div class="panel-title issues-filters-title">Filtres</div>
+                </div>
+                <button type="button" class="link-btn issues-filters-reset" (click)="clearIssueFilters()">Réinitialiser</button>
+              </div>
+
+              <div class="issues-search">
+                <span class="issues-search-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4.5-4.5"/>
+                  </svg>
+                </span>
+                <input class="issues-search-input"
+                       type="search"
+                       placeholder="Message, fichier, règle…"
+                       [(ngModel)]="issueSearch"
+                       (ngModelChange)="applyIssueFilters()" />
+              </div>
+
+              <details class="filter-section filter-section--enhanced" open>
+                <summary>Software quality</summary>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'ALL'" (click)="setSoftwareQualityFilter('ALL')">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'SECURITY'" [disabled]="(softwareQualityCounts['SECURITY'] || 0) === 0 && softwareQualityFilter !== 'SECURITY'" (click)="setSoftwareQualityFilter('SECURITY')">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-security" aria-hidden="true"></span>
+                    <span class="filter-item__text">Security</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['SECURITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'RELIABILITY'" [disabled]="(softwareQualityCounts['RELIABILITY'] || 0) === 0 && softwareQualityFilter !== 'RELIABILITY'" (click)="setSoftwareQualityFilter('RELIABILITY')">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-reliability" aria-hidden="true"></span>
+                    <span class="filter-item__text">Reliability</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['RELIABILITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="softwareQualityFilter === 'MAINTAINABILITY'" [disabled]="(softwareQualityCounts['MAINTAINABILITY'] || 0) === 0 && softwareQualityFilter !== 'MAINTAINABILITY'" (click)="setSoftwareQualityFilter('MAINTAINABILITY')">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--sq filter-swatch--quality-maintainability" aria-hidden="true"></span>
+                    <span class="filter-item__text">Maintainability</span>
+                  </span>
+                  <span class="count">{{ softwareQualityCounts['MAINTAINABILITY'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section filter-section--enhanced" open>
+                <summary>Severity</summary>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'ALL'" (click)="applyIssueFilters('ALL', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'BLOCKER'" [disabled]="(severityCounts['BLOCKER'] || 0) === 0 && severityFilter !== 'BLOCKER'" (click)="applyIssueFilters('BLOCKER', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--blocker" aria-hidden="true"></span>
+                    <span class="filter-item__text">Blocker</span>
+                  </span>
+                  <span class="count">{{ severityCounts['BLOCKER'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'CRITICAL'" [disabled]="(severityCounts['CRITICAL'] || 0) === 0 && severityFilter !== 'CRITICAL'" (click)="applyIssueFilters('CRITICAL', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--critical" aria-hidden="true"></span>
+                    <span class="filter-item__text">Critical</span>
+                  </span>
+                  <span class="count">{{ severityCounts['CRITICAL'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MAJOR'" [disabled]="(severityCounts['MAJOR'] || 0) === 0 && severityFilter !== 'MAJOR'" (click)="applyIssueFilters('MAJOR', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--major" aria-hidden="true"></span>
+                    <span class="filter-item__text">Major</span>
+                  </span>
+                  <span class="count">{{ severityCounts['MAJOR'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'MINOR'" [disabled]="(severityCounts['MINOR'] || 0) === 0 && severityFilter !== 'MINOR'" (click)="applyIssueFilters('MINOR', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--minor" aria-hidden="true"></span>
+                    <span class="filter-item__text">Minor</span>
+                  </span>
+                  <span class="count">{{ severityCounts['MINOR'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="severityFilter === 'INFO'" [disabled]="(severityCounts['INFO'] || 0) === 0 && severityFilter !== 'INFO'" (click)="applyIssueFilters('INFO', typeFilter)">
+                  <span class="filter-item__start">
+                    <span class="filter-sev-dot filter-sev-dot--info" aria-hidden="true"></span>
+                    <span class="filter-item__text">Info</span>
+                  </span>
+                  <span class="count">{{ severityCounts['INFO'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section filter-section--enhanced" open>
+                <summary>Type</summary>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'ALL'" (click)="applyIssueFilters(severityFilter, 'ALL')">
+                  <span class="filter-item__start">
+                    <span class="filter-swatch filter-swatch--all" aria-hidden="true"></span>
+                    <span class="filter-item__text">All</span>
+                  </span>
+                  <span class="count">{{ issuesBaseTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'BUG'" [disabled]="(typeCounts['BUG'] || 0) === 0 && typeFilter !== 'BUG'" (click)="applyIssueFilters(severityFilter, 'BUG')">
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--bug" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#ef4444"/><path d="M12 7v6M12 16h.01" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+                    </span>
+                    <span class="filter-item__text">Bug</span>
+                  </span>
+                  <span class="count">{{ typeCounts['BUG'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'VULNERABILITY'" [disabled]="(typeCounts['VULNERABILITY'] || 0) === 0 && typeFilter !== 'VULNERABILITY'" (click)="applyIssueFilters(severityFilter, 'VULNERABILITY')">
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--vuln" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3L4 19h16L12 3z" fill="#c4b5fd" stroke="#a78bfa" stroke-width="1"/></svg>
+                    </span>
+                    <span class="filter-item__text">Vulnerability</span>
+                  </span>
+                  <span class="count">{{ typeCounts['VULNERABILITY'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="typeFilter === 'CODE_SMELL'" [disabled]="(typeCounts['CODE_SMELL'] || 0) === 0 && typeFilter !== 'CODE_SMELL'" (click)="applyIssueFilters(severityFilter, 'CODE_SMELL')">
+                  <span class="filter-item__start">
+                    <span class="filter-type-icon filter-type-icon--smell" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <rect x="4" y="4" width="16" height="16" rx="3" fill="#60a5fa"/>
+                        <path d="M7 14c1.5-2 2.5-2 4 0s2.5 2 4 0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                      </svg>
+                    </span>
+                    <span class="filter-item__text">Code Smell</span>
+                  </span>
+                  <span class="count">{{ typeCounts['CODE_SMELL'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section" open>
+                <summary>Status</summary>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'ALL'" (click)="setStatusFilter('ALL')">
+                  All <span class="count">{{ issuesBaseTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'OPEN'" [disabled]="(statusCounts['OPEN'] || 0) === 0 && statusFilter !== 'OPEN'" (click)="setStatusFilter('OPEN')">
+                  Open <span class="count">{{ statusCounts['OPEN'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'CONFIRMED'" [disabled]="(statusCounts['CONFIRMED'] || 0) === 0 && statusFilter !== 'CONFIRMED'" (click)="setStatusFilter('CONFIRMED')">
+                  Confirmed <span class="count">{{ statusCounts['CONFIRMED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FALSE_POSITIVE'" [disabled]="(statusResolutionCounts['FALSE_POSITIVE'] || 0) === 0 && statusFilter !== 'FALSE_POSITIVE'" (click)="setStatusFilter('FALSE_POSITIVE')">
+                  False Positive <span class="count">{{ statusResolutionCounts['FALSE_POSITIVE'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'ACCEPTED'" [disabled]="(statusResolutionCounts['ACCEPTED'] || 0) === 0 && statusFilter !== 'ACCEPTED'" (click)="setStatusFilter('ACCEPTED')">
+                  Accepted <span class="count">{{ statusResolutionCounts['ACCEPTED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="statusFilter === 'FIXED'" [disabled]="(statusResolutionCounts['FIXED'] || 0) === 0 && statusFilter !== 'FIXED'" (click)="setStatusFilter('FIXED')">
+                  Fixed <span class="count">{{ statusResolutionCounts['FIXED'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Code attribute</summary>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'ALL'" (click)="setCodeAttributeFilter('ALL')">
+                  All <span class="count">{{ issuesBaseTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Consistency'" [disabled]="(codeAttributeCounts['Consistency'] || 0) === 0 && codeAttributeFilter !== 'Consistency'" (click)="setCodeAttributeFilter('Consistency')">
+                  Consistency <span class="count">{{ codeAttributeCounts['Consistency'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Intentionality'" [disabled]="(codeAttributeCounts['Intentionality'] || 0) === 0 && codeAttributeFilter !== 'Intentionality'" (click)="setCodeAttributeFilter('Intentionality')">
+                  Intentionality <span class="count">{{ codeAttributeCounts['Intentionality'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Adaptability'" [disabled]="(codeAttributeCounts['Adaptability'] || 0) === 0 && codeAttributeFilter !== 'Adaptability'" (click)="setCodeAttributeFilter('Adaptability')">
+                  Adaptability <span class="count">{{ codeAttributeCounts['Adaptability'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="codeAttributeFilter === 'Responsibility'" [disabled]="(codeAttributeCounts['Responsibility'] || 0) === 0 && codeAttributeFilter !== 'Responsibility'" (click)="setCodeAttributeFilter('Responsibility')">
+                  Responsibility <span class="count">{{ codeAttributeCounts['Responsibility'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section" open>
+                <summary>Security Category</summary>
+                <button type="button" class="filter-item" [class.active]="securityCategoryFilter === 'ALL'" (click)="setSecurityCategoryFilter('ALL')">
+                  All <span class="count">{{ filteredIssuesTotal }}</span>
+                </button>
+
+                <ng-container *ngIf="topSecurityCategories.length; else noSecCat">
+                  <button
+                    type="button"
+                    class="filter-item"
+                    *ngFor="let s of topSecurityCategories"
+                    [class.active]="securityCategoryFilter === s.key"
+                    (click)="setSecurityCategoryFilter(s.key)">
+                    {{ s.key }} <span class="count">{{ s.count }}</span>
+                  </button>
+                </ng-container>
+
+                <ng-template #noSecCat>
+                  <div class="filter-empty">No results</div>
+                </ng-template>
+              </details>
+
+              <details class="filter-section">
+                <summary>Directory</summary>
+                <div class="issues-search">
+                  <input class="issues-search-input"
+                         type="text"
+                         placeholder="Search for directories…"
+                         [(ngModel)]="directorySearch" />
+                </div>
+                <button type="button" class="filter-item" [class.active]="directoryFilter === 'ALL'" (click)="setDirectoryFilter('ALL')">All</button>
+                <ng-container *ngFor="let d of topDirectories">
+                  <button type="button"
+                          class="filter-item"
+                          *ngIf="!directorySearch || d.key.toLowerCase().includes(directorySearch.toLowerCase())"
+                          [class.active]="directoryFilter === d.key"
+                          (click)="setDirectoryFilter(d.key)">
+                    {{ d.key }} <span class="count">{{ d.count }}</span>
+                  </button>
+                </ng-container>
+              </details>
+
+              <details class="filter-section">
+                <summary>File</summary>
+                <div class="issues-search">
+                  <input class="issues-search-input"
+                         type="text"
+                         placeholder="Search for files…"
+                         [(ngModel)]="fileSearch" />
+                </div>
+                <button type="button" class="filter-item" [class.active]="fileFilter === 'ALL'" (click)="setFileFilter('ALL')">All</button>
+                <ng-container *ngFor="let f of topFiles">
+                  <button type="button"
+                          class="filter-item"
+                          *ngIf="!fileSearch || f.key.toLowerCase().includes(fileSearch.toLowerCase())"
+                          [class.active]="fileFilter === f.key"
+                          (click)="setFileFilter(f.key)">
+                    {{ f.key }} <span class="count">{{ f.count }}</span>
+                  </button>
+                </ng-container>
+              </details>
+
+              <details class="filter-section">
+                <summary>Assignee</summary>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'ALL'" (click)="setAssigneeFilter('ALL')">
+                  All <span class="count">{{ filteredIssuesTotal }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'UNASSIGNED'" (click)="setAssigneeFilter('UNASSIGNED')">
+                  Not assigned <span class="count">{{ assigneeCounts['UNASSIGNED'] || 0 }}</span>
+                </button>
+                <button type="button" class="filter-item" [class.active]="assigneeFilter === 'ME'" (click)="setAssigneeFilter('ME')">
+                  Assigned to me <span class="count">{{ assigneeCounts['ME'] || 0 }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Language</summary>
+                <button type="button" class="filter-item" [class.active]="languageFilter === 'ALL'" (click)="setLanguageFilter('ALL')">
+                  All
+                </button>
+                <button type="button" class="filter-item" *ngFor="let l of (languageCounts | keyvalue)" [class.active]="languageFilter === l.key" (click)="setLanguageFilter(l.key)">
+                  {{ l.key }} <span class="count">{{ l.value }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Rule</summary>
+                <button type="button" class="filter-item" [class.active]="ruleFilter === 'ALL'" (click)="setRuleFilter('ALL')">All</button>
+                <button type="button" class="filter-item" *ngFor="let r of topRules" [class.active]="ruleFilter === r.key" (click)="setRuleFilter(r.key)">
+                  {{ r.key }} <span class="count">{{ r.count }}</span>
+                </button>
+              </details>
+
+              <details class="filter-section">
+                <summary>Tag</summary>
+                <button type="button" class="filter-item" [class.active]="tagFilter === 'ALL'" (click)="setTagFilter('ALL')">All</button>
+                <button type="button" class="filter-item" *ngFor="let t of topTags" [class.active]="tagFilter === t.key" (click)="setTagFilter(t.key)">
+                  {{ t.key }} <span class="count">{{ t.count }}</span>
+                </button>
+              </details>
+            </aside>
+
+            <!-- Liste des issues -->
+            <div class="panel issues-main issues-main-panel">
+              <div class="issues-main-head">
+                <div>
+                  <div class="panel-title issues-main-title">Issues</div>
+                  <div class="issues-main-subrow">
+                    <span class="panel-sub issues-main-count">{{ filteredIssues.length }} résultat(s) · {{ totalIssues }} au total (branche)</span>
+                    <span class="issues-page-range" *ngIf="filteredIssues.length">
+                      {{ issuesPageRangeLabel() }}
+                      <ng-container *ngIf="filteredIssues.length > issuesPageSize">
+                        · page {{ issuesPageIndex + 1 }} / {{ issuesPageTotalPages() }}
+                      </ng-container>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="issue-list issue-list-compact" *ngIf="filteredIssues.length">
+                <article *ngFor="let issue of displayedIssues" class="issue-item-sc issue-card-compact">
+                  <div class="issue-path-above" *ngIf="issue._displayPath">
+                    <svg class="path-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 6h16M4 12h10M4 18h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    {{ issue._displayPath }}
+                  </div>
+                  <div class="issue-item-row">
+                    <span class="sev-pill" [ngClass]="'sev-' + (issue.severity || '').toLowerCase()">{{ issue.severity }}</span>
+                    <div class="issue-body">
+                      <div class="issue-head-row">
+                        <h3 class="issue-message-title">{{ issue.message }}</h3>
+                        <span class="issue-code-attr-pill" *ngIf="issue._codeAttr">
+                          <svg class="attr-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M4 8l8-4 8 4v8l-8 4-8-4V8z"/>
+                          </svg>
+                          {{ issue._codeAttr }}
+                        </span>
+                      </div>
+                      <div class="issue-impacts-row" *ngIf="issue._impactsUi?.length">
+                        <span class="issue-impact-badge" *ngFor="let im of issue._impactsUi">
+                          <span class="impact-q">{{ im.quality }}</span><span class="impact-sep">·</span><span class="impact-s">{{ im.impactSev }}</span>
+                        </span>
+                      </div>
+                      <div class="issue-tags-row" *ngIf="issue._tags?.length">
+                        <span class="issue-tag-chip" *ngFor="let t of issue._tags">
+                          <svg class="tag-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                            <path d="M4 6h4v4H4V6zm6 0h10v4H10V6zM4 14h4v4H4v-4zm6 0h10v4H10v-4z"/>
+                          </svg>
+                          {{ t }}
+                        </span>
+                      </div>
+                      <div class="issue-meta issue-meta-icons">
+                        <span class="meta-type" *ngIf="issue.type">
+                          <span class="meta-dot" [ngClass]="'type-' + (issue.type || '').toLowerCase()"></span>
+                          {{ issue.type }}
+                        </span>
+                        <span class="meta-line" *ngIf="issue.line">
+                          <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M4 6h16M4 12h16M4 18h10"/>
+                          </svg>
+                          L{{ issue.line }}
+                        </span>
+                        <span class="meta-rule" *ngIf="issue.rule">
+                          <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <path d="M8 9h8M8 13h5"/>
+                          </svg>
+                          <span class="meta-rule-text">{{ issue.rule }}</span>
+                        </span>
+                      </div>
+                      <div class="issue-actions issue-actions-compact">
+                        <div class="issue-action-row">
+                          <span class="issue-action-label">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                            Statut
+                          </span>
+                          <span class="issue-status-badge">{{ getIssueStatusLabel(issue.status) }}</span>
+                          <select class="issue-transition-select"
+                                  [disabled]="issueUpdatingKey === issue.key || !canChangeIssueStatus(issue)"
+                                  [title]="getIssueStatusHint(issue)"
+                                  (change)="changeIssueStatus(issue, $any($event.target).value); $any($event.target).value = ''">
+                            <option value="">Changer…</option>
+                            <option *ngFor="let tr of issueTransitions" [value]="tr.value">{{ tr.label }}</option>
+                          </select>
+                          <span *ngIf="issueUpdatingKey === issue.key" class="updating-badge">…</span>
+                          <span *ngIf="issueUpdateError[issue.key]" class="issue-error-badge">{{ issueUpdateError[issue.key] }}</span>
+                        </div>
+                        <div class="issue-action-row">
+                          <span class="issue-action-label">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                              <circle cx="12" cy="8" r="3"/><path d="M6 20v-1a6 6 0 0 1 12 0v1"/>
+                            </svg>
+                            Assigné
+                          </span>
+                          <span class="issue-assignee">{{ getIssueAssigneeLabel(issue.assignee) }}</span>
+                          <button type="button" class="action-btn" (click)="assignIssueToMe(issue)" [disabled]="issueUpdatingKey === issue.key">Moi</button>
+                          <button type="button" class="action-btn action-btn-ghost" (click)="unassignIssue(issue)" [disabled]="issueUpdatingKey === issue.key || !issue.assignee">Retirer</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <nav class="issues-pagination issues-pagination--footer" *ngIf="filteredIssues.length > issuesPageSize" aria-label="Pagination des issues">
+                  <button type="button" class="issues-page-btn" (click)="goIssuesPrevPage()" [disabled]="!issuesHasPrevPage()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                    Précédent
+                  </button>
+                  <span class="issues-page-num">{{ issuesPageRangeLabel() }}</span>
+                  <button type="button" class="issues-page-btn issues-page-btn--primary" (click)="goIssuesNextPage()" [disabled]="!issuesHasNextPage()">
+                    Suivant
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                </nav>
+              </div>
+
+              <p *ngIf="!filteredIssues.length" class="empty-text">
+                {{ totalIssues === 0 ? 'Aucun problème détecté.' : 'Aucune issue pour les filtres sélectionnés.' }}
+              </p>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ══════════════════════════════════════════
+             HOTSPOTS
+        ══════════════════════════════════════════ -->
+        <section *ngIf="activeTab === 'hotspots'" class="hotspots-tab">
+          <div class="hotspots-layout">
+
+            <!-- List -->
+            <div class="panel hotspots-list-panel">
+              <div class="panel-title">Security Hotspots</div>
+              <p class="panel-sub">{{ totalHotspots || hotspots.length || 0 }} total · {{ filteredHotspots.length }} affiché(s)</p>
+
+              <div class="hotspot-filters">
+                <button class="chip" [class.active]="hotspotStatusFilter === 'ALL'"       (click)="applyHotspotStatusFilter('ALL')">Tous ({{ hotspotCountByStatus['ALL'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'TO_REVIEW'" (click)="applyHotspotStatusFilter('TO_REVIEW')">À revoir ({{ hotspotCountByStatus['TO_REVIEW'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'FIXED'"     (click)="applyHotspotStatusFilter('FIXED')">Corrigé ({{ hotspotCountByStatus['FIXED'] || 0 }})</button>
+                <button class="chip" [class.active]="hotspotStatusFilter === 'SAFE'"      (click)="applyHotspotStatusFilter('SAFE')">Sûr ({{ hotspotCountByStatus['SAFE'] || 0 }})</button>
+              </div>
+
+              <div class="hs-list" *ngIf="filteredHotspots.length">
+                <div *ngFor="let h of filteredHotspots" class="hs-item"
+                     [class.selected]="selectedHotspot?.key === h.key"
+                     (click)="loadHotspotDetails(h)">
+                  <span class="sev-pill sev-hotspot">{{ h.securityCategory || 'HOTSPOT' }}</span>
+                  <div class="issue-body">
+                    <div class="issue-message">{{ h.message }}</div>
+                    <div class="issue-meta hs-meta-icons">
+                      <span *ngIf="h.component" class="hs-meta-path">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M4 6h16M4 12h10M4 18h8"/>
+                        </svg>
+                        {{ h.component }}
+                      </span>
+                      <span *ngIf="h.line" class="hs-meta-line">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M4 6h16M4 12h16M4 18h10"/>
+                        </svg>
+                        L{{ h.line }}
+                      </span>
+                      <span *ngIf="h.vulnerabilityProbability" class="hs-meta-risk">
+                        <svg class="meta-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d="M12 3l8 14H4l8-14z"/><path d="M12 9v4M12 16h.01"/>
+                        </svg>
+                        {{ h.vulnerabilityProbability }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p *ngIf="!filteredHotspots.length" class="empty-text">
+                {{ (totalHotspots || hotspots.length || 0) === 0 ? 'Aucun hotspot détecté.' : 'Aucun hotspot pour ce filtre.' }}
+              </p>
+            </div>
+
+            <!-- Detail -->
+            <div class="panel hotspot-detail-panel" *ngIf="selectedHotspot">
+              <div *ngIf="!selectedHotspotDetails" class="detail-loading">Chargement...</div>
+              <div *ngIf="selectedHotspotDetails?.error" class="detail-error">Impossible de charger le détail.</div>
+
+              <ng-container *ngIf="selectedHotspotDetails && !selectedHotspotDetails.error">
+                <h3 class="hs-detail-title">{{ selectedHotspotDetails.hotspot?.message }}</h3>
+                <p class="hs-detail-rule" *ngIf="selectedHotspotDetails.hotspot?.ruleKey">
+                  {{ selectedHotspotDetails.hotspot.ruleKey }}
+                </p>
+
+                <div class="hs-meta-row">
+                  <span class="sev-pill sev-hotspot">{{ selectedHotspotDetails.hotspot?.securityCategory }}</span>
+                  <span class="meta-badge">{{ getHotspotStatusLabel(selectedHotspotDetails.hotspot?.status) }}</span>
+                  <span class="meta-badge meta-badge-warn meta-badge-risk" *ngIf="selectedHotspotDetails.hotspot?.vulnerabilityProbability">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path d="M12 3l8 14H4l8-14z"/><path d="M12 9v4M12 16h.01"/>
+                    </svg>
+                    {{ selectedHotspotDetails.hotspot.vulnerabilityProbability }}
+                  </span>
+                </div>
+
+                <nav class="detail-tabs">
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'where'"  (click)="hotspotDetailTab = 'where'">Localisation</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'risk'"   (click)="hotspotDetailTab = 'risk'">Risque</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'access'" (click)="hotspotDetailTab = 'access'">Accès</button>
+                  <button class="dtab" [class.active]="hotspotDetailTab === 'fix'"    (click)="hotspotDetailTab = 'fix'">Correction</button>
+                </nav>
+
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'where'">
+                  <p class="hs-file-path" *ngIf="getHotspotComponentDisplay()">{{ getHotspotComponentDisplay() }}</p>
+                  <pre class="hotspot-code" *ngIf="selectedHotspotDetails.sourceLines?.length">
+<ng-container *ngFor="let line of selectedHotspotDetails.sourceLines; let i = index">
+<span [class.highlight-line]="selectedHotspotDetails.sourceLineFrom + i === selectedHotspotDetails.highlightLine">{{ selectedHotspotDetails.sourceLineFrom + i }}</span>  {{ line }}
+</ng-container></pre>
+                  <p *ngIf="!selectedHotspotDetails.sourceLines?.length" class="empty-text">Aucun extrait disponible.</p>
+                </div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'risk'">
+                  <div class="rule-content" [innerHTML]="getRuleRiskContent() || 'Aucune description du risque.'"></div>
+                </div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'access'">
+                  <div class="rule-content" [innerHTML]="getRuleAccessContent()"></div>
+                </div>
+                <div class="dtab-content" *ngIf="hotspotDetailTab === 'fix'">
+                  <div class="rule-content" [innerHTML]="getRuleFixContent() || 'Aucune recommandation.'"></div>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ══════════════════════════════════════════
+             DUPLICATION
+        ══════════════════════════════════════════ -->
+        <section *ngIf="activeTab === 'duplication'" class="duplication-tab">
+          <div class="duplication-layout">
+
+            <!-- File list -->
+            <div class="panel">
+              <div class="dup-header-row">
+                <div class="panel-title">Duplication par fichier</div>
+                <div class="view-toggle">
+                  <button class="view-btn" [class.active]="duplicationView === 'list'" (click)="duplicationView = 'list'">Liste</button>
+                  <button class="view-btn" [class.active]="duplicationView === 'tree'" (click)="duplicationView = 'tree'">Arbre</button>
+                </div>
+              </div>
+              <p class="panel-sub">
+                {{ duplicationFiles.length }} fichiers &gt; 0%
+                <ng-container *ngIf="duplicationZeroCount > 0"> · {{ duplicationZeroCount }} à 0%</ng-container>
+              </p>
+
+              <!-- List view -->
+              <div *ngIf="duplicationView === 'list' && duplicationFiles.length">
+                <div *ngFor="let f of duplicationFiles" class="dup-item"
+                     [class.selected]="selectedDupFile?.key === f.key"
+                     (click)="loadDuplicationDetails(f)">
+                  <div class="dup-main">
+                    <div class="dup-path">{{ f.path }}</div>
+                    <div class="dup-name">{{ f.name }}</div>
+                  </div>
+                  <span class="dup-score">{{ f.duplication | number:'1.1-1' }}<span class="unit">%</span></span>
+                </div>
+              </div>
+
+              <!-- Tree view -->
+              <div *ngIf="duplicationView === 'tree' && duplicationTree.length" class="dup-table">
+                <div class="dup-table-header">
+                  <span>Fichier</span>
+                  <span>Duplication</span>
+                </div>
+                <ng-container *ngFor="let group of duplicationTree">
+                  <div class="dup-group-row" (click)="toggleDuplicationGroup(group.group)">
+                    <span>
+                      <span class="folder-icon" [class.open]="isDuplicationGroupExpanded(group.group)"></span>
+                      {{ group.group }}
+                    </span>
+                    <span>–</span>
+                  </div>
+                  <ng-container *ngIf="isDuplicationGroupExpanded(group.group)">
+                    <div class="dup-file-row" *ngFor="let f of group.files"
+                         [class.selected]="selectedDupFile?.key === f.key"
+                         (click)="loadDuplicationDetails(f); $event.stopPropagation()">
+                      <span>{{ f.path }}</span>
+                      <span class="dup-score-sm">{{ f.duplication | number:'1.1-1' }}%</span>
+                    </div>
+                  </ng-container>
+                </ng-container>
+              </div>
+
+              <p *ngIf="!duplicationFiles.length" class="empty-text">Aucune duplication détectée.</p>
+            </div>
+
+            <!-- Source panel -->
+            <div class="panel dup-source-panel" *ngIf="selectedDupFile">
+              <h3 class="dup-source-title">
+                {{ selectedDupFile.path }}
+                <span *ngIf="selectedDupFile.loading" class="badge-loading">Chargement...</span>
+              </h3>
+              <div *ngIf="!selectedDupFile.loading">
+                <pre class="code-block" *ngIf="selectedDupSourceLines.length">
+<ng-container *ngFor="let line of selectedDupSourceLines; let i = index">
+<span class="line-number">{{ i + 1 }}</span> {{ line }}
+</ng-container></pre>
+                <details *ngIf="selectedDupMeta" class="dup-meta-details">
+                  <summary>Métadonnées (JSON brut)</summary>
+                  <pre>{{ selectedDupMeta | json }}</pre>
+                </details>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div><!-- /sonar-content -->
+    </div><!-- /sonar-page -->
+  </div><!-- /user-main -->
+</div><!-- /user-shell -->
+
+
+

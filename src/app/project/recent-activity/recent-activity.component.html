@@ -1,0 +1,143 @@
+<div class="activity-page-container">
+  <!-- En-tête avec skeleton loading -->
+  <header class="activity-page-header">
+    <button class="back-btn" (click)="goBack()" [disabled]="loading">
+      <span class="back-icon">←</span>
+      Retour
+    </button>
+    
+    <button class="refresh-btn" (click)="refresh()" [disabled]="loading">
+      <span class="refresh-icon" [class.spinning]="loading">🔄</span>
+      Actualiser
+    </button>
+  </header>
+
+  <!-- Filtres -->
+  <!-- Version corrigée des boutons de filtre -->
+<div class="activity-filters" *ngIf="!loading || activities.length > 0">
+  <button 
+    class="filter-btn" 
+    [class.active]="activeFilter === 'all'"
+    (click)="applyFilter('all')">
+    Tous ({{ allActivities.length }})
+  </button>
+  <button 
+    class="filter-btn" 
+    [class.active]="activeFilter === 'deployment'"
+    (click)="applyFilter('deployment')">
+    Déploiements ({{ getCountByType('deployment') }})
+  </button>
+  <button 
+    class="filter-btn" 
+    [class.active]="activeFilter === 'pipeline'"
+    (click)="applyFilter('pipeline')">
+    Pipelines ({{ getCountByType('pipeline') }})
+  </button>
+  <button 
+    class="filter-btn" 
+    [class.active]="activeFilter === 'environment'"
+    (click)="applyFilter('environment')">
+    Environnements ({{ getCountByType('environment') }})
+  </button>
+</div>
+
+  <!-- Loading State avec skeleton -->
+  <div *ngIf="loading" class="activity-loading">
+    <div class="skeleton-timeline">
+      <div class="skeleton-item" *ngFor="let i of [1,2,3]">
+        <div class="skeleton-marker"></div>
+        <div class="skeleton-content">
+          <div class="skeleton-line w-60"></div>
+          <div class="skeleton-line w-80"></div>
+          <div class="skeleton-line w-40"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="error && !loading" class="activity-error">
+    <span class="error-icon">⚠️</span>
+    <p>{{ error }}</p>
+    <button class="retry-btn" (click)="refresh()">Réessayer</button>
+  </div>
+
+  <!-- Timeline -->
+  <div *ngIf="!loading && !error" class="activity-timeline">
+    <div *ngIf="filteredActivities.length === 0" class="empty-state">
+      <div class="empty-icon">📭</div>
+      <h3>Aucune activité</h3>
+      <p>Aucune activité {{ activeFilter !== 'all' ? 'de ce type' : '' }} trouvée</p>
+    </div>
+
+    <div *ngFor="let activity of filteredActivities; let last = last" 
+         class="timeline-item"
+         [class.last]="last">
+      <div class="timeline-marker" [ngClass]="'marker-' + activity.type"></div>
+      
+      <div class="timeline-content" (click)="navigateToActivity(activity)">
+        <div class="timeline-header">
+          <div class="timeline-title">
+            <span class="activity-icon" [ngClass]="'icon-' + activity.type">
+              {{ activity.icon }}
+            </span>
+            <div>
+              <h3>{{ activity.title }}</h3>
+              <p class="timeline-description">{{ activity.description }}</p>
+            </div>
+          </div>
+          <div class="timeline-time" [attr.data-tooltip]="getFullDate(activity.timestamp)">
+            {{ getTimeAgo(activity.timestamp) }}
+          </div>
+        </div>
+
+        <div class="timeline-meta" *ngIf="activity.metadata">
+          <span class="meta-item" *ngIf="activity.metadata.branch">
+            <span class="meta-icon">🌿</span>
+            {{ activity.metadata.branch }}
+          </span>
+          <span class="meta-item" *ngIf="activity.metadata.environment">
+            <span class="meta-icon">🌍</span>
+            {{ activity.metadata.environment }}
+          </span>
+          <span class="meta-item" *ngIf="activity.metadata.triggeredBy">
+            <span class="meta-icon">👤</span>
+            {{ activity.metadata.triggeredBy }}
+          </span>
+          <span class="meta-item" *ngIf="activity.metadata.duration">
+            <span class="meta-icon">⏱️</span>
+            {{ formatDuration(activity.metadata.duration) }}
+          </span>
+        </div>
+
+        <div class="timeline-app-url" *ngIf="activity.metadata?.previewUrl as previewUrl">
+          <a
+            class="app-preview-link"
+            [href]="previewUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            [title]="previewUrl"
+            (click)="$event.stopPropagation()"
+          >Visiter l'application</a>
+        </div>
+
+        <div class="timeline-footer">
+          <span class="status-badge" [ngClass]="getStatusClass(activity.status)">
+            {{ activity.status }}
+          </span>
+          <span class="view-link">
+            Voir les détails
+            <span class="view-arrow">→</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Infinite scroll trigger -->
+    <div *ngIf="activities.length > 20" class="load-more">
+      <button class="load-more-btn" (click)="loadMore()">
+        Charger plus d'activités
+      </button>
+    </div>
+  </div>
+</div>

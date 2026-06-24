@@ -1,0 +1,21 @@
+.vuln-snippet-refine {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vuln-snippet-refine label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.vuln-snippet-refine textarea {
+  width: 100%;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.65rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}

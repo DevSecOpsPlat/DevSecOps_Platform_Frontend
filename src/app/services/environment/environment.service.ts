@@ -3,8 +3,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
-import { DeployRequest } from '../../models/environment/deploy-request';
-import { DeployResponse } from '../../models/environment/deploy-response';
+import { DeployRequest } from '../../models/deployment/deploy-request';
+import { DeployResponse } from '../../models/deployment/deploy-response';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 import { map } from 'rxjs/operators';
 
@@ -28,13 +28,17 @@ export class EnvironmentService {
     });
   }
 
-  getEnvironmentById(id: string): Observable<EnvironmentSummaryResponse> {
-    return this.http.get<any>(`${BASE}api/environments/${id}`, {
-      headers: this.authHeaders()
-    }).pipe(
-      map(response => this.convertEnvironment(response))
-    );
-  }
+  getEnvironmentById(envId: string): Observable<EnvironmentSummaryResponse> {
+  return this.http.get<any>(BASE + `api/environments/by-id/${envId}`, {
+    headers: this.authHeaders()
+  }).pipe(map((data) => this.convertEnvironment(data)));
+}
+
+getLatestEnvironment(): Observable<any> {
+  return this.http.get<any>(BASE + 'api/environments/latest', {
+    headers: this.authHeaders()
+  }).pipe(map((data) => this.convertEnvironment(data)));
+}
 
   private convertEnvironment(data: any): EnvironmentSummaryResponse {
     return {
@@ -72,11 +76,17 @@ export class EnvironmentService {
       headers: this.authHeaders()
     });
   }
+   getMyEnvironments(appId?: string): Observable<EnvironmentSummaryResponse[]> {
+    const url = appId ? `${BASE}api/environments?appId=${encodeURIComponent(appId)}` : `${BASE}api/environments`;
+    return this.http.get<any[]>(url, {
+      headers: this.authHeaders()
+    }).pipe(map((list) => (list || []).map((e) => this.convertEnvironment(e))));
+  }
 
   getEnvironment(envId: string): Observable<EnvironmentSummaryResponse> {
-    return this.http.get<EnvironmentSummaryResponse>(BASE + `api/environments/${envId}`, {
+    return this.http.get<any>(BASE + `api/environments/${envId}`, {
       headers: this.authHeaders()
-    });
+    }).pipe(map((data) => this.convertEnvironment(data)));
   }
 
 }

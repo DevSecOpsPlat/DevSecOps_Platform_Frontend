@@ -1,0 +1,58 @@
+<div class="modal-backdrop" *ngIf="open" (click)="cancel()" role="presentation"></div>
+
+<div class="modal" *ngIf="open" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+  <header class="modal-head">
+    <div>
+      <p class="modal-kicker">Administration</p>
+      <h2 id="create-user-title" class="modal-title">Nouvel utilisateur</h2>
+      <p class="modal-lead">
+        Le compte est créé sans mot de passe définitif. L'utilisateur reçoit un e-mail avec un lien
+        pour définir son mot de passe (plus sécurisé qu'un mot de passe envoyé en clair).
+      </p>
+    </div>
+    <button type="button" class="modal-close" (click)="cancel()" aria-label="Fermer">×</button>
+  </header>
+
+  <div *ngIf="error" class="modal-error">{{ error }}</div>
+  <div *ngIf="successMessage" class="modal-success" [class.modal-warn]="!emailSent">
+    {{ successMessage }}
+    <div *ngIf="activationLink && !emailSent" class="activation-link-box">
+      <label>Lien d'activation (à transmettre manuellement)</label>
+      <code>{{ activationLink }}</code>
+      <button type="button" class="btn secondary" (click)="copyLink()">Copier le lien</button>
+    </div>
+    <div *ngIf="emailSent && activationLink" class="activation-link-hint">
+      Si l'utilisateur ne reçoit rien, vérifiez les spams ou renvoyez depuis sa fiche utilisateur.
+    </div>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form" *ngIf="!successMessage">
+    <div class="field">
+      <label for="create-username">Nom d'utilisateur</label>
+      <input id="create-username" type="text" formControlName="username" autocomplete="off" maxlength="30" />
+      <p class="field-hint">Lettres, chiffres, point, tiret ou underscore — au moins une lettre.</p>
+      <span class="field-error" *ngIf="form.get('username')?.invalid && form.get('username')?.touched">
+        <ng-container *ngIf="form.get('username')?.errors?.['required']">Nom d'utilisateur requis</ng-container>
+        <ng-container *ngIf="form.get('username')?.errors?.['usernameInvalid'] as err">
+          {{ err.message }}
+        </ng-container>
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="create-email">E-mail</label>
+      <input id="create-email" type="email" formControlName="email" autocomplete="off" />
+      <span class="field-error" *ngIf="form.get('email')?.invalid && form.get('email')?.touched">
+        E-mail invalide
+      </span>
+    </div>
+
+    <footer class="modal-actions">
+      <button type="button" class="btn secondary" (click)="cancel()" [disabled]="saving">Annuler</button>
+      <button type="submit" class="btn primary" [disabled]="saving || form.invalid">
+        <span *ngIf="!saving">Créer et envoyer l'activation</span>
+        <span *ngIf="saving">Création…</span>
+      </button>
+    </footer>
+  </form>
+</div>

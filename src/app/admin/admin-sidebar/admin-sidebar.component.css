@@ -1,0 +1,27 @@
+/* Réutilise les styles du sidebar utilisateur (même rendu). */
+@import '../../project/user-sidebar/user-sidebar.component.css';
+
+/* Liens de navigation (le fichier user cible surtout des <button>). */
+a.nav-item {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.nav-badge {
+  margin-left: auto;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

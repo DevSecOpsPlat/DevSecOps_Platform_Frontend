@@ -1,0 +1,480 @@
+<div class="admin-route-page user-detail-page">
+  <button type="button" class="back-link" (click)="backToList()">‹ Tous les utilisateurs</button>
+
+  <div *ngIf="loading" class="state state-load">
+    <span class="spinner" aria-hidden="true"></span>
+    Chargement…
+  </div>
+
+  <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error && user as u">
+    <!-- Bannière de confirmation -->
+    <div class="flash flash-ok" *ngIf="actionSuccess">{{ actionSuccess }}</div>
+    <div class="flash flash-err" *ngIf="actionError">{{ actionError }}</div>
+
+    <!-- ===== Carte identité + actions ===== -->
+    <section class="identity-card" [class.identity-disabled]="!isActive">
+      <div class="identity-main">
+        <span class="identity-avatar" aria-hidden="true">{{ (u.username || '?')[0] | uppercase }}</span>
+        <div class="identity-text">
+          <h1 class="identity-name">{{ u.username }}</h1>
+          <p class="identity-email">{{ u.email }}</p>
+          <div class="identity-tags">
+            <span class="acct acct-{{ statusLower }}">{{ statusLabelText }}</span>
+            <span class="tag-muted">Membre depuis le {{ formatDt(u.createdAt) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="identity-actions">
+        <button type="button" class="btn-action" (click)="openEmailModal()">Modifier l'e-mail</button>
+        <button type="button" class="btn-action" (click)="openResetModal()">Réinitialiser le mot de passe</button>
+        <button
+          type="button"
+          class="btn-action"
+          [class.btn-danger]="isActive"
+          [class.btn-success]="!isActive"
+          (click)="openStatusModal()"
+        >
+          {{ isActive ? 'Désactiver le compte' : 'Réactiver le compte' }}
+        </button>
+        <button type="button" class="btn-action btn-delete" (click)="openDeleteModal()">
+          Supprimer le compte
+        </button>
+      </div>
+    </section>
+
+    <div class="notice-disabled" *ngIf="!isActive">
+      Ce compte est désactivé : l'utilisateur ne peut plus se connecter à la plateforme.
+    </div>
+
+    <!-- ===== KPIs ===== -->
+    <div class="kpi-row">
+      <div class="kpi">
+        <span class="kpi-value">{{ u.applicationsCount }}</span>
+        <span class="kpi-label">Applications</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-value">{{ pipelineTotal(u.pipelineCounts) }}</span>
+        <span class="kpi-label">Pipelines</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-value kpi-accent">{{ u.activeEnvironmentsCount }}</span>
+        <span class="kpi-label">Envs actifs</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-value">{{ envBreakdownTotal(u) }}</span>
+        <span class="kpi-label">Envs au total</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-value kpi-accent">{{ complaints.length }}</span>
+        <span class="kpi-label">Réclamations</span>
+      </div>
+    </div>
+
+    <!-- ===== Graphiques ===== -->
+    <div class="charts-row">
+      <section class="card chart-block">
+        <h2 class="card-title">Fiabilité des pipelines</h2>
+        <div class="donut-wrap">
+          <svg class="donut" viewBox="0 0 100 100" role="img" aria-label="Taux de réussite des pipelines">
+            <circle class="donut-track" cx="50" cy="50" r="42" />
+            <circle
+              class="donut-value"
+              cx="50" cy="50" r="42"
+              [attr.stroke-dasharray]="donutDash"
+            />
+          </svg>
+          <div class="donut-center">
+            <span class="donut-rate">{{ pipelineSuccessRate }}%</span>
+            <span class="donut-label">réussite</span>
+          </div>
+          <div class="donut-legend">
+            <div class="legend-line">
+              <span class="legend-dot legend-orange"></span>
+              Réussis <strong>{{ u.pipelineCounts.success }}</strong>
+            </div>
+            <div class="legend-line">
+              <span class="legend-dot legend-navy"></span>
+              Échecs <strong>{{ u.pipelineCounts.failed }}</strong>
+            </div>
+            <div class="legend-line legend-muted">
+              En cours {{ u.pipelineCounts.running }} · en attente {{ u.pipelineCounts.pending }}
+              · annulés {{ u.pipelineCounts.canceled + u.pipelineCounts.skipped }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card chart-block">
+        <h2 class="card-title">Environnements par statut</h2>
+        <p class="empty-block" *ngIf="!envBars.length">Aucun environnement créé.</p>
+        <div class="hbars" *ngIf="envBars.length">
+          <div class="hbar-row" *ngFor="let bar of envBars">
+            <span class="hbar-label">{{ bar.label }}</span>
+            <div class="hbar-track">
+              <div class="hbar-fill" [class.hbar-accent]="bar.accent" [style.width.%]="bar.pct"></div>
+            </div>
+            <span class="hbar-count">{{ bar.count }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Compte + journal d'activité ===== -->
+    <div class="grid-two">
+      <section class="card">
+        <h2 class="card-title">Informations du compte</h2>
+        <dl class="kv">
+          <dt>Nom d'utilisateur</dt><dd>{{ u.username }}</dd>
+          <dt>Adresse e-mail</dt><dd>{{ u.email }}</dd>
+          <dt>Statut</dt><dd><span class="acct acct-{{ statusLower }}">{{ statusLabelText }}</span></dd>
+          <dt>Créé le</dt><dd>{{ formatDt(u.createdAt) }}</dd>
+          <dt>Dernière mise à jour</dt><dd>{{ formatDt(u.updatedAt) }}</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Journal d'activité</h2>
+        <p class="card-hint">Création du compte, modifications d'e-mail et de mot de passe, activations / désactivations.</p>
+
+        <div *ngIf="activityLoading" class="state state-load">
+          <span class="spinner" aria-hidden="true"></span>
+          Chargement du journal…
+        </div>
+        <div *ngIf="activityError" class="state state-err">{{ activityError }}</div>
+
+        <p class="empty-block" *ngIf="!activityLoading && !activityError && !activity.length">
+          Aucune activité enregistrée pour ce compte.
+        </p>
+
+        <ol class="timeline" *ngIf="activity.length">
+          <li class="timeline-item kind-{{ activityKind(a) }}" *ngFor="let a of activity">
+            <span class="timeline-dot" aria-hidden="true"></span>
+            <div class="timeline-body">
+              <div class="timeline-top">
+                <span class="timeline-action">{{ activityLabel(a) }}</span>
+                <time class="timeline-date">{{ formatDt(a.createdAt) }}</time>
+              </div>
+              <p class="timeline-detail" *ngIf="a.detail">{{ a.detail }}</p>
+              <p class="timeline-by" *ngIf="a.performedBy">Par {{ a.performedBy }}</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+    </div>
+
+    <!-- ===== Discussions (réclamations) ===== -->
+    <section class="card section-full">
+      <h2 class="card-title">Discussions avec l'utilisateur ({{ complaints.length }})</h2>
+      <p class="card-hint">Réclamations ouvertes par cet utilisateur et échanges avec l'équipe d'administration.</p>
+
+      <div *ngIf="complaintsLoading" class="state state-load">
+        <span class="spinner" aria-hidden="true"></span>
+        Chargement des discussions…
+      </div>
+      <div *ngIf="complaintsError" class="state state-err">{{ complaintsError }}</div>
+
+      <p class="empty-block" *ngIf="!complaintsLoading && !complaintsError && !complaints.length">
+        Aucune discussion avec cet utilisateur.
+      </p>
+
+      <div class="thread-list" *ngIf="complaints.length">
+        <article class="thread" *ngFor="let c of complaints" [class.thread-open]="expandedComplaintId === c.id">
+          <button type="button" class="thread-head" (click)="toggleComplaint(c.id)">
+            <div class="thread-id">
+              <span class="thread-subject">{{ c.subject }}</span>
+              <span class="thread-meta">
+                {{ c.messages.length }} message(s) · ouverte le {{ formatIso(c.createdAt) }}
+              </span>
+            </div>
+            <span class="thread-status" [class.thread-status-open]="(c.status || '').toUpperCase() === 'OPEN'">
+              {{ complaintStatusLabel(c.status) }}
+            </span>
+            <span class="chevron" [class.chevron-open]="expandedComplaintId === c.id" aria-hidden="true">›</span>
+          </button>
+
+          <div class="thread-messages" *ngIf="expandedComplaintId === c.id">
+            <div
+              class="bubble-row"
+              *ngFor="let m of c.messages"
+              [class.bubble-row-admin]="m.fromAdmin"
+            >
+              <div class="bubble" [class.bubble-admin]="m.fromAdmin">
+                <div class="bubble-top">
+                  <span class="bubble-author">{{ m.fromAdmin ? 'Administration' : (m.authorUsername || u.username) }}</span>
+                  <time class="bubble-date">{{ formatIso(m.createdAt) }}</time>
+                </div>
+                <p class="bubble-body">{{ m.body }}</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Applications (repliable) ===== -->
+    <section class="card section-full">
+      <button type="button" class="section-toggle" (click)="toggleApplications()">
+        <h2 class="card-title">Applications ({{ u.applications.length }})</h2>
+        <span class="chevron" [class.chevron-open]="showApplications" aria-hidden="true">›</span>
+      </button>
+
+      <div class="section-body" *ngIf="showApplications">
+        <p class="empty-block" *ngIf="!u.applications.length">Aucune application créée.</p>
+
+        <div class="table-wrap" *ngIf="u.applications.length">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Application</th>
+                <th>Dépôt Git</th>
+                <th>Créée le</th>
+                <th class="num">Envs liés</th>
+                <th class="num">Pipelines OK / KO</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let app of u.applications">
+                <td>
+                  <span class="cell-strong">{{ app.name }}</span>
+                  <span class="cell-sub" *ngIf="app.description">{{ app.description }}</span>
+                </td>
+                <td>
+                  <a class="app-repo" [href]="app.gitRepositoryUrl" target="_blank" rel="noopener">{{ app.gitRepositoryUrl }}</a>
+                </td>
+                <td class="nowrap">{{ formatDt(app.createdAt) }}</td>
+                <td class="num">{{ app.linkedEnvironmentsCount }}</td>
+                <td class="num nowrap">
+                  <span class="ppc ok">{{ app.pipelineCounts.success }}</span>
+                  <span class="ppc bad">{{ app.pipelineCounts.failed }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Environnements (repliable, replié par défaut) ===== -->
+    <section class="card section-full">
+      <button type="button" class="section-toggle" (click)="toggleEnvironments()">
+        <h2 class="card-title">Environnements ({{ u.environments.length }})</h2>
+        <span class="chevron" [class.chevron-open]="showEnvironments" aria-hidden="true">›</span>
+      </button>
+
+      <div class="section-body" *ngIf="showEnvironments">
+        <p class="empty-block" *ngIf="!u.environments.length">Aucun environnement.</p>
+
+        <div class="table-wrap" *ngIf="u.environments.length">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Application</th>
+                <th>Environnement</th>
+                <th>Branche</th>
+                <th>Statut</th>
+                <th>Pipeline</th>
+                <th>Expire</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let env of u.environments">
+                <td>{{ env.applicationName }}</td>
+                <td class="cell-strong">{{ env.environmentName }}</td>
+                <td><code>{{ env.gitBranch }}</code></td>
+                <td><span class="env-pill env-{{ env.status }}">{{ envStatusLabel(env) }}</span></td>
+                <td>{{ pipelineStatusLabel(env.pipelineStatus) }}</td>
+                <td class="nowrap">{{ formatDt(env.expiresAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Modal : e-mail ===== -->
+    <div class="modal-backdrop" *ngIf="showEmailModal" (click)="closeEmailModal()" role="presentation"></div>
+    <div class="modal" *ngIf="showEmailModal" role="dialog" aria-modal="true" aria-labelledby="email-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Action administrateur</p>
+          <h2 id="email-title" class="modal-title">Modifier l'adresse e-mail</h2>
+          <p class="modal-lead">Nouvelle adresse e-mail pour <strong>{{ u.username }}</strong>.</p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeEmailModal()" aria-label="Fermer">×</button>
+      </header>
+
+      <div *ngIf="emailError" class="modal-alert modal-alert-error">{{ emailError }}</div>
+
+      <form class="modal-form" (ngSubmit)="submitEmail()">
+        <div class="field">
+          <label for="admin-email">Adresse e-mail</label>
+          <input
+            id="admin-email"
+            type="email"
+            name="emailValue"
+            [(ngModel)]="emailValue"
+            autocomplete="off"
+            placeholder="prenom.nom@banque.com"
+          />
+          <span class="field-error" *ngIf="emailInvalid">Format d'e-mail invalide.</span>
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="btn ghost" (click)="closeEmailModal()" [disabled]="emailSaving">Annuler</button>
+          <button type="submit" class="btn primary" [disabled]="!canSubmitEmail">
+            {{ emailSaving ? 'Enregistrement…' : 'Enregistrer' }}
+          </button>
+        </footer>
+      </form>
+    </div>
+
+    <!-- ===== Modal : statut ===== -->
+    <div class="modal-backdrop" *ngIf="showStatusModal" (click)="closeStatusModal()" role="presentation"></div>
+    <div class="modal" *ngIf="showStatusModal" role="dialog" aria-modal="true" aria-labelledby="status-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Action administrateur</p>
+          <h2 id="status-title" class="modal-title">
+            {{ isActive ? 'Désactiver le compte' : 'Réactiver le compte' }}
+          </h2>
+          <p class="modal-lead" *ngIf="isActive">
+            <strong>{{ u.username }}</strong> ne pourra plus se connecter à la plateforme tant que son compte est désactivé.
+            Ses applications et environnements sont conservés.
+          </p>
+          <p class="modal-lead" *ngIf="!isActive">
+            <strong>{{ u.username }}</strong> pourra de nouveau se connecter à la plateforme avec ses identifiants actuels.
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeStatusModal()" aria-label="Fermer">×</button>
+      </header>
+
+      <div *ngIf="statusError" class="modal-alert modal-alert-error">{{ statusError }}</div>
+
+      <footer class="modal-actions">
+        <button type="button" class="btn ghost" (click)="closeStatusModal()" [disabled]="statusSaving">Annuler</button>
+        <button
+          type="button"
+          class="btn"
+          [class.danger]="isActive"
+          [class.primary]="!isActive"
+          (click)="confirmStatusChange()"
+          [disabled]="statusSaving"
+        >
+          {{ statusSaving ? 'Application…' : (isActive ? 'Désactiver' : 'Réactiver') }}
+        </button>
+      </footer>
+    </div>
+
+    <!-- ===== Modal : suppression ===== -->
+    <div class="modal-backdrop" *ngIf="showDeleteModal" (click)="closeDeleteModal()" role="presentation"></div>
+    <div class="modal" *ngIf="showDeleteModal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Action irréversible</p>
+          <h2 id="delete-title" class="modal-title">Supprimer le compte</h2>
+          <p class="modal-lead">
+            Cette action supprime définitivement <strong>{{ u.username }}</strong>,
+            ses applications, environnements, pipelines et réclamations.
+            Saisissez le nom d'utilisateur pour confirmer.
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeDeleteModal()" aria-label="Fermer">×</button>
+      </header>
+
+      <div *ngIf="deleteError" class="modal-alert modal-alert-error">{{ deleteError }}</div>
+
+      <form class="modal-form" (ngSubmit)="confirmDelete()">
+        <div class="field">
+          <label for="delete-confirm">Nom d'utilisateur</label>
+          <input
+            id="delete-confirm"
+            type="text"
+            name="deleteConfirmText"
+            [(ngModel)]="deleteConfirmText"
+            autocomplete="off"
+            [placeholder]="u.username"
+          />
+        </div>
+
+        <footer class="modal-actions">
+          <button type="button" class="btn ghost" (click)="closeDeleteModal()" [disabled]="deleteSaving">Annuler</button>
+          <button type="submit" class="btn danger" [disabled]="!canConfirmDelete">
+            {{ deleteSaving ? 'Suppression…' : 'Supprimer définitivement' }}
+          </button>
+        </footer>
+      </form>
+    </div>
+
+    <!-- ===== Modal : mot de passe ===== -->
+    <div class="modal-backdrop" *ngIf="showResetModal" (click)="closeResetModal()" role="presentation"></div>
+    <div class="modal" *ngIf="showResetModal" role="dialog" aria-modal="true" aria-labelledby="reset-pwd-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Action administrateur</p>
+          <h2 id="reset-pwd-title" class="modal-title">Réinitialiser le mot de passe</h2>
+          <p class="modal-lead">
+            Définissez un nouveau mot de passe pour <strong>{{ u.username }}</strong>.
+            Communiquez-le par un canal sécurisé ; l'utilisateur pourra ensuite le changer depuis son profil.
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeResetModal()" aria-label="Fermer">×</button>
+      </header>
+
+      <div *ngIf="resetSuccess" class="modal-alert modal-alert-success">
+        {{ resetSuccess }}
+        <span class="alert-pwd" *ngIf="showResetPwd">Mot de passe : <code>{{ resetNewPassword }}</code></span>
+      </div>
+      <div *ngIf="resetError" class="modal-alert modal-alert-error">{{ resetError }}</div>
+
+      <form class="modal-form" (ngSubmit)="submitReset()" *ngIf="!resetSuccess">
+        <div class="field">
+          <label for="reset-new-pwd">Nouveau mot de passe</label>
+          <div class="pwd-wrap">
+            <input
+              id="reset-new-pwd"
+              [type]="showResetPwd ? 'text' : 'password'"
+              name="resetNewPassword"
+              [(ngModel)]="resetNewPassword"
+              autocomplete="new-password"
+            />
+            <button type="button" class="toggle-pwd" (click)="showResetPwd = !showResetPwd">
+              {{ showResetPwd ? 'Masquer' : 'Afficher' }}
+            </button>
+          </div>
+          <app-password-requirements [password]="resetNewPassword"></app-password-requirements>
+          <span class="field-error" *ngIf="resetPasswordTooShort">Le mot de passe ne respecte pas toutes les contraintes.</span>
+        </div>
+
+        <div class="field">
+          <label for="reset-confirm-pwd">Confirmer le mot de passe</label>
+          <input
+            id="reset-confirm-pwd"
+            [type]="showResetPwd ? 'text' : 'password'"
+            name="resetConfirmPassword"
+            [(ngModel)]="resetConfirmPassword"
+            autocomplete="new-password"
+          />
+          <span class="field-error" *ngIf="resetPasswordsMismatch">Les mots de passe ne correspondent pas.</span>
+        </div>
+
+        <button type="button" class="btn-generate" (click)="generatePassword()">
+          Générer un mot de passe sécurisé
+        </button>
+
+        <footer class="modal-actions">
+          <button type="button" class="btn ghost" (click)="closeResetModal()" [disabled]="resetSaving">Annuler</button>
+          <button type="submit" class="btn primary" [disabled]="!canSubmitReset">
+            {{ resetSaving ? 'Réinitialisation…' : 'Réinitialiser' }}
+          </button>
+        </footer>
+      </form>
+
+      <footer class="modal-actions" *ngIf="resetSuccess">
+        <button type="button" class="btn primary" (click)="closeResetModal()">Fermer</button>
+      </footer>
+    </div>
+  </ng-container>
+</div>

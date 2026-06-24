@@ -1,0 +1,73 @@
+<div class="admin-route-page">
+  <div class="admin-home-header">
+    <p class="home-kicker">Espace réservé · contrôle interne</p>
+    <h1 class="welcome-title">Bienvenue, {{ user?.username }}</h1>
+    <p class="welcome-subtitle">
+      Application d'administration séparée du portail métier : création des comptes utilisateurs, inventaire agrégé et liens d'infra
+      en lecture seule (sans accès aux écrans projet / pipeline utilisateur).
+    </p>
+  </div>
+
+  <div class="admin-stats-grid">
+    <a routerLink="/admin/overview" class="stat-card stat-card-link">
+      <div class="stat-icon stat-overview">◆</div>
+      <div class="stat-content">
+        <h3 class="stat-label">Vue d'ensemble</h3>
+        <p class="stat-description">KPI globaux issus des API admin.</p>
+        <span class="stat-link">Ouvrir →</span>
+      </div>
+    </a>
+
+    <a routerLink="/admin/users" class="stat-card stat-card-link">
+      <div class="stat-icon stat-users">👥</div>
+      <div class="stat-content">
+        <h3 class="stat-label">Utilisateurs &amp; activité</h3>
+        <p class="stat-description">Créer des comptes et consulter l'activité.</p>
+        <span class="stat-link">Gérer →</span>
+      </div>
+    </a>
+
+    <a routerLink="/admin/inventory" class="stat-card stat-card-link">
+      <div class="stat-icon stat-apps">▤</div>
+      <div class="stat-content">
+        <h3 class="stat-label">Inventaire</h3>
+        <p class="stat-description">Applications et environnements (vue transverse).</p>
+        <span class="stat-link">Parcourir →</span>
+      </div>
+    </a>
+
+    <a routerLink="/admin/observability" class="stat-card stat-card-link">
+      <div class="stat-icon stat-obs">◎</div>
+      <div class="stat-content">
+        <h3 class="stat-label">Observabilité</h3>
+        <p class="stat-description">Grafana / SonarCloud (hors périmètre écran projet).</p>
+        <span class="stat-link">Superviser →</span>
+      </div>
+    </a>
+
+    <a routerLink="/admin/reclamations" class="stat-card stat-card-link">
+      <div class="stat-icon stat-recl">✉</div>
+      <div class="stat-content">
+        <h3 class="stat-label">Réclamations</h3>
+        <p class="stat-description">Messages utilisateurs et réponses.</p>
+        <span class="stat-link">Traiter →</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="admin-info-section">
+    <div class="info-card">
+      <h2>Cadre d'usage</h2>
+      <p>
+        Les données affichées proviennent des API d'administration (<code>GET /api/admin/users</code>,
+        <code>POST /api/admin/users</code>). Aucune redirection vers le tableau de bord projet, les pipelines
+        détaillés ou les vues Sonar « par application » utilisateur.
+      </p>
+      <ul class="info-list">
+        <li>Création des comptes utilisateurs par l'administrateur</li>
+        <li>Vue transverse des environnements éphémères</li>
+        <li>Infra : liens externes et iframe Grafana globaux uniquement</li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ApplicationService } from '../../services/application/application.service';
-import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { SecuritySummaryResponse } from '../../models/pipeline/security-summary-response';
 

@@ -1,0 +1,140 @@
+<div class="vd-page vuln-container">
+  <header class="vd-toolbar">
+    <a class="vd-back-link" [routerLink]="backLink()" [queryParams]="backQueryParams()">
+      ← Retour au dashboard sécurité
+    </a>
+    <div class="vd-title-wrap">
+      <span class="vd-icon">🛡️</span>
+      <div>
+        <h1 class="vd-title">Vulnérabilité DefectDojo</h1>
+        <p class="vd-subtitle" *ngIf="detail">
+          {{ detail.productName }} · branche {{ detail.branch }} · {{ detail.engagementName }}
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <div class="vd-auth-error vuln-alert vuln-alert-error" *ngIf="authError">{{ authError }}</div>
+
+  <div class="vd-body vuln-modal-remediation" *ngIf="!authError">
+    <div class="vuln-alert vuln-alert-error" *ngIf="!detailLoading && detailError">{{ detailError }}</div>
+
+    <div *ngIf="detailLoading" class="vd-loading vuln-modal-loading">
+      <div class="vuln-spinner"></div>
+      <p>Chargement depuis DefectDojo…</p>
+    </div>
+
+    <ng-container *ngIf="!detailLoading && detail">
+      <div class="vuln-detail-header">
+        <div class="vuln-detail-severity">
+          <span class="vuln-severity-badge large" [class]="'severity-' + (detail.severity || 'info').toLowerCase()">
+            {{ detail.severity }}
+          </span>
+        </div>
+        <div class="vuln-detail-info">
+          <h3>{{ detail.title }}</h3>
+          <div class="vuln-detail-meta">
+            <span class="vuln-meta-item"><span class="vuln-meta-label">Scan</span><span>{{ detail.scanType }}</span></span>
+            <span class="vuln-meta-item"><span class="vuln-meta-label">Statut</span><span>{{ detail.status }}</span></span>
+            <span class="vuln-meta-item" *ngIf="detail.cve"><span class="vuln-meta-label">CVE</span><span>{{ detail.cve }}</span></span>
+            <span class="vuln-meta-item" *ngIf="detail.cwe"><span class="vuln-meta-label">CWE</span><span>{{ detail.cwe }}</span></span>
+          </div>
+        </div>
+      </div>
+
+      <section class="vuln-remediation-hero">
+        <div class="vuln-hero-head">
+          <div>
+            <h4 class="vuln-hero-title">Code / composant concerné</h4>
+            <p class="vuln-hero-sub">Extrait du dépôt (branche {{ detail.branch }}) si disponible — base de l'analyse IA.</p>
+          </div>
+          <span class="vuln-hero-badge">{{ sourceLabel(detail.codeContextSource) }}</span>
+        </div>
+        <div class="vuln-hero-path-row">
+          <code class="vuln-file-path vuln-file-path--hero">{{ detail.filePath || detail.componentName || 'Non spécifié' }}</code>
+          <span class="vuln-line-pill" *ngIf="detail.line != null">Ligne {{ detail.line }}</span>
+        </div>
+        <pre class="vuln-code-block" *ngIf="detail.codeSnippet?.trim()"><code>{{ detail.codeSnippet }}</code></pre>
+        <div class="vuln-hero-empty" *ngIf="!detail.codeSnippet?.trim()">
+          <p>Pas d'extrait code — collez un snippet ci-dessous puis regénérez l'analyse IA.</p>
+        </div>
+        <div class="vuln-snippet-refine">
+          <label>Affiner l'analyse (extrait optionnel)</label>
+          <textarea [(ngModel)]="codeSnippetInput" rows="4" placeholder="Coller du code…"></textarea>
+          <button type="button" class="vuln-btn vuln-btn-primary" (click)="runAiRemediation()" [disabled]="aiLoading">Regénérer l'analyse IA</button>
+        </div>
+      </section>
+
+      <section class="vuln-detail-section" *ngIf="detail.description">
+        <div class="vuln-section-title"><span class="vuln-section-icon">📝</span><h4>Description DefectDojo</h4></div>
+        <div class="vuln-description">{{ detail.description }}</div>
+      </section>
+
+      <section class="vuln-detail-section" *ngIf="detail.mitigation">
+        <div class="vuln-section-title"><span class="vuln-section-icon">🔧</span><h4>Mitigation scanner</h4></div>
+        <div class="vuln-description">{{ detail.mitigation }}</div>
+      </section>
+
+      <section class="vuln-detail-section ai-section">
+        <div class="vuln-section-title vuln-section-title--row">
+          <div class="vuln-section-title-text">
+            <span class="vuln-section-icon">🤖</span>
+            <h4>Analyse &amp; remédiation IA</h4>
+          </div>
+        </div>
+
+        <div class="vuln-ai-loading-panel" *ngIf="aiLoading">
+          <div class="vuln-ai-loading-bar"></div>
+          <p><strong>Analyse IA en cours…</strong></p>
+        </div>
+        <div class="vuln-alert vuln-alert-error" *ngIf="aiError && !aiLoading">{{ aiError }}</div>
+
+        <div class="vuln-ai-results-grid" *ngIf="aiResult && !aiLoading">
+          <article class="vuln-ai-panel vuln-ai-panel--problem" *ngIf="aiResult.problemSummary">
+            <h5 class="vuln-ai-panel-title">Quel est le problème ?</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.problemSummary | chatMarkdown"></div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--impact" *ngIf="aiResult.impact">
+            <h5 class="vuln-ai-panel-title">Risques &amp; impact</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.impact | chatMarkdown"></div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--steps" *ngIf="aiResult.remediationSteps?.length">
+            <h5 class="vuln-ai-panel-title">Plan de correction</h5>
+            <ol class="vuln-steps-list vuln-steps-list--detailed">
+              <li *ngFor="let step of aiResult.remediationSteps">
+                <div class="vuln-markdown" [innerHTML]="step | chatMarkdown"></div>
+              </li>
+            </ol>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--patch" *ngIf="aiResult.suggestedPatch">
+            <div class="vuln-patch-head">
+              <h5 class="vuln-ai-panel-title">Correctif suggéré</h5>
+              <button type="button" class="vuln-copy-chip" (click)="copyText('patch', aiResult.suggestedPatch || '')">Copier</button>
+            </div>
+            <pre class="vuln-code-patch vuln-code-patch--large"><code>{{ aiResult.suggestedPatch }}</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="vuln-chat-section">
+        <div class="vuln-chat-header">
+          <span class="vuln-chat-icon">💬</span>
+          <div>
+            <h4>Discussion avec l'assistant</h4>
+            <p class="vuln-chat-lead">Questions sur cette vulnérabilité DefectDojo et la correction sur votre branche.</p>
+          </div>
+        </div>
+        <div class="vuln-alert vuln-alert-error" *ngIf="chatError">{{ chatError }}</div>
+        <div class="vuln-chat-messages">
+          <div *ngFor="let msg of chatMessages" class="vuln-chat-message" [class.user]="msg.role === 'user'">
+            <div class="vuln-chat-bubble">{{ msg.content }}</div>
+          </div>
+        </div>
+        <div class="vuln-chat-input">
+          <textarea [(ngModel)]="chatInput" rows="2" (keydown.enter)="onChatEnter($event)" placeholder="Votre question…"></textarea>
+          <button type="button" (click)="sendChat()" [disabled]="!chatInput.trim() || chatLoading">Envoyer</button>
+        </div>
+      </section>
+    </ng-container>
+  </div>
+</div>

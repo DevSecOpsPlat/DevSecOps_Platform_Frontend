@@ -1,0 +1,27 @@
+/* Aligné sur project-layout : zone principale à droite de la sidebar utilisateur (300px). */
+.user-shell {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.user-main {
+  flex: 1;
+  margin-left: 300px;
+  min-width: 0;
+}
+
+.project-main {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-bg);
+  padding: 1.5rem clamp(0.75rem, 2vw, 2rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .user-main {
+    margin-left: 0;
+  }
+}

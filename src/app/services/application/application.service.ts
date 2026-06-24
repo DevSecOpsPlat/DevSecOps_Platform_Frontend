@@ -1,23 +1,39 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { ApplicationResponse } from '../../models/application/application-response';
-import { DeploymentHistoryItem } from '../../models/application/deployment-history-item';
+import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;
+
+/** Totaux pipelines pour une app (GET …/deployments/metrics) — indépendant de la pagination d’historique. */
+export interface DeploymentMetrics {
+  total: number;
+  success: number;
+  failed: number;
+  canceled: number;
+  pending: number;
+  running: number;
+  skipped: number;
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApplicationService {
 
-  constructor(private http: HttpClient, private userService: UserService) {}
+  private deploymentsCache = new Map<string, {data: DeploymentHistoryItem[], timestamp: number}>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  constructor(
+    private http: HttpClient, 
+    private userService: UserService
+  ) {}
 
-   private authHeaders(): HttpHeaders {
+  private authHeaders(): HttpHeaders {
     const token = this.userService.getToken();
     return new HttpHeaders({
       'Content-Type': 'application/json',
@@ -25,24 +41,125 @@ export class ApplicationService {
     });
   }
 
+  /** Invalide le cache des déploiements (ex. au refresh du dashboard). */
+  clearDeploymentsCache(appId?: string): void {
+    if (!appId) {
+      this.deploymentsCache.clear();
+      return;
+    }
+    const prefix = `${appId}-`;
+    for (const key of [...this.deploymentsCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        this.deploymentsCache.delete(key);
+      }
+    }
+  }
+
   getMyApplications(): Observable<ApplicationResponse[]> {
-    return this.http.get<ApplicationResponse[]>(BASE + 'api/applications', { headers: this.authHeaders() });
+    return this.http.get<any[]>(BASE + 'api/applications', { headers: this.authHeaders() }).pipe(
+      map(items => (items ?? []).map(x => this.convertApplication(x)))
+    );
   }
 
   getApplicationById(id: string): Observable<ApplicationResponse> {
-    return this.http.get<ApplicationResponse>(BASE + `api/applications/${id}`, { headers: this.authHeaders() });
-  }
-
-  getDeploymentHistory(appId: string, branch?: string): Observable<DeploymentHistoryItem[]> {
-    const url = branch && branch.trim().length > 0
-      ? `${BASE}api/applications/${appId}/deployments?branch=${encodeURIComponent(branch)}`
-      : `${BASE}api/applications/${appId}/deployments`;
-    
-    return this.http.get<any[]>(url, { headers: this.authHeaders() }).pipe(
-      map(items => items.map(item => this.convertDeploymentItem(item)))
+    return this.http.get<any>(BASE + `api/applications/${id}`, { headers: this.authHeaders() }).pipe(
+      map(x => this.convertApplication(x))
     );
   }
- 
+
+  /**
+   * Récupère l'historique des déploiements
+   * @param appId - ID de l'application
+   * @param branch - Filtre optionnel par branche
+   */
+  getDeploymentHistory(appId: string, branch?: string): Observable<DeploymentHistoryItem[]>;
+
+  /**
+   * Récupère l'historique des déploiements avec pagination
+   * @param appId - ID de l'application
+   * @param page - Numéro de page
+   * @param size - Taille de la page
+   */
+  getDeploymentHistory(appId: string, page: number, size: number): Observable<DeploymentHistoryItem[]>;
+
+  /**
+   * Récupère l'historique des déploiements avec options avancées
+   * @param appId - ID de l'application
+   * @param options - Options (branch, page, size)
+   */
+  getDeploymentHistory(
+    appId: string, 
+    options?: { branch?: string; page?: number; size?: number }
+  ): Observable<DeploymentHistoryItem[]>;
+
+  // Implémentation unique
+  getDeploymentHistory(
+    appId: string, 
+    param2?: string | number | { branch?: string; page?: number; size?: number },
+    param3?: number
+  ): Observable<DeploymentHistoryItem[]> {
+    
+    // Normaliser les paramètres
+    let branch: string | undefined;
+    let page: number | undefined;
+    let size: number | undefined;
+    
+    if (typeof param2 === 'string') {
+      // Cas 1: getDeploymentHistory(appId, branch)
+      branch = param2;
+    } else if (typeof param2 === 'number' && typeof param3 === 'number') {
+      // Cas 2: getDeploymentHistory(appId, page, size)
+      page = param2;
+      size = param3;
+    } else if (param2 && typeof param2 === 'object') {
+      // Cas 3: getDeploymentHistory(appId, options)
+      branch = param2.branch;
+      page = param2.page;
+      size = param2.size;
+    }
+    
+    // Créer une clé de cache unique
+    const cacheKey = `${appId}-${branch || ''}-${page || 0}-${size || 10}`;
+    
+    // Vérifier le cache
+    const cached = this.deploymentsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return of(cached.data);
+    }
+    
+    // Construire l'URL avec les paramètres
+    let url = `${BASE}api/applications/${appId}/deployments`;
+    const params: string[] = [];
+    
+    if (branch) {
+      params.push(`branch=${encodeURIComponent(branch)}`);
+    }
+    
+    if (page !== undefined && size !== undefined) {
+      params.push(`page=${page}`);
+      params.push(`size=${size}`);
+    }
+    
+    if (params.length > 0) {
+      url += `?${params.join('&')}`;
+    }
+    
+    // Faire l'appel API
+    return this.http.get<any[]>(url, { headers: this.authHeaders() }).pipe(
+      map(items => items.map(item => this.convertDeploymentItem(item))),
+      tap(data => {
+        // Mettre en cache
+        this.deploymentsCache.set(cacheKey, {data, timestamp: Date.now()});
+      })
+    );
+  }
+
+  getDeploymentMetrics(appId: string): Observable<DeploymentMetrics> {
+    return this.http.get<DeploymentMetrics>(
+      `${BASE}api/applications/${appId}/deployments/metrics`,
+      { headers: this.authHeaders() }
+    );
+  }
 
   private convertDeploymentItem(item: any): DeploymentHistoryItem {
     return {
@@ -52,7 +169,8 @@ export class ApplicationService {
       pipelineId: item.pipelineId,
       pipelineStatus: item.pipelineStatus,
       environmentStatus: item.environmentStatus,
-      ttlHours: item.ttlHours,
+      deploymentUrl: item.deploymentUrl ?? null,
+      ttlHours: item.ttlHours ?? 0,
       shortSha: item.shortSha,
       commitMessage: item.commitMessage,
       createdAt: this.convertDateArray(item.createdAt),
@@ -79,6 +197,18 @@ export class ApplicationService {
     return new Date().toISOString();
   }
 
-
+  private convertApplication(item: any): ApplicationResponse {
+    return {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      gitRepositoryUrl: item.gitRepositoryUrl,
+      dockerfilePath: item.dockerfilePath,
+      createdAt: this.convertDateArray(item.createdAt),
+      createdByUsername: item.createdByUsername,
+      hasGithubToken: !!item.hasGithubToken
+    };
+  }
+  
+  
 }
-

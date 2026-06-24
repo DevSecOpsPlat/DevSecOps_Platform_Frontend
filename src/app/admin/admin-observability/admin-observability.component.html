@@ -1,0 +1,51 @@
+<div class="admin-route-page">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Observabilité</p>
+      <h1 class="page-title">Qualité &amp; supervision</h1>
+      <p class="page-lead">
+        Liens externes SonarCloud et, si configuré, affichage embarqué Grafana (URL définie côté environnement).
+        L’admin reste séparé du portail métier : pas de raccourcis vers les écrans projet, pipelines ou findings.
+        Pour la liste des applications côté données admin, utilisez l’
+        <a routerLink="/admin/inventory">inventaire</a>.
+      </p>
+    </div>
+  </header>
+
+  <section class="card-row">
+    <a class="ext-card" [href]="sonarOrgUrl" target="_blank" rel="noopener noreferrer">
+      <span class="ext-icon" aria-hidden="true">◎</span>
+      <span class="ext-title">SonarCloud — Organisation</span>
+      <span class="ext-desc">Portail organisation, quality gates, portefeuille projets.</span>
+    </a>
+    <a class="ext-card" [href]="sonarProjectsUrl" target="_blank" rel="noopener noreferrer">
+      <span class="ext-icon" aria-hidden="true">▣</span>
+      <span class="ext-title">SonarCloud — Projets</span>
+      <span class="ext-desc">Liste des projets analysés côté Sonar.</span>
+    </a>
+    <a class="ext-card" routerLink="/admin/inventory">
+      <span class="ext-icon" aria-hidden="true">⌗</span>
+      <span class="ext-title">Inventaire apps</span>
+      <span class="ext-desc">Vue agrégée des applications et environnements (API admin).</span>
+    </a>
+  </section>
+
+  <section class="frame-section" *ngIf="grafanaUrl">
+    <div class="frame-head">
+      <h2>Grafana</h2>
+      <p class="frame-hint">Tableau de bord chargé depuis l’URL configurée pour l’administration.</p>
+    </div>
+    <div class="frame-shell">
+      <iframe
+        class="grafana-frame"
+        [src]="grafanaUrl"
+        title="Grafana — supervision"
+        loading="lazy"
+      ></iframe>
+    </div>
+  </section>
+
+  <p *ngIf="!grafanaUrl" class="frame-hint frame-hint-standalone">
+    Aucune URL Grafana embarquée n’est configurée (<code>adminObservability.grafanaEmbedUrl</code>).
+  </p>
+</div>
