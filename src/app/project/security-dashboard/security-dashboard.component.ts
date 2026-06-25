@@ -3,8 +3,8 @@ import { Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChild, ViewChi
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import Chart from 'chart.js/auto';
-import { Subject } from 'rxjs';
-import { distinctUntilChanged, finalize, map, takeUntil } from 'rxjs/operators';
+import { Subject, combineLatest } from 'rxjs';
+import { catchError, distinctUntilChanged, finalize, map, switchMap, takeUntil, timeout } from 'rxjs/operators';
 import {
   DefectDojoDashboardResponse,
   DefectDojoDetailedMetrics,
@@ -58,6 +58,8 @@ const DD_SEV_LINE_COLORS: Record<string, string> = {
   Info: '#17a2b8'
 };
 
+const SECURITY_REQUEST_TIMEOUT_MS = 120_000;
+
 @Component({
   selector: 'app-security-dashboard',
   standalone: true,
@@ -70,6 +72,7 @@ const DD_SEV_LINE_COLORS: Record<string, string> = {
 })
 export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
+  private readonly dashboardReload$ = new Subject<{ appId: string; branch: string; tags?: string }>();
   private chartInstances: Chart[] = [];
   private openSeverityChart?: Chart;
   private trendChart?: Chart;
@@ -96,6 +99,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   appId: string | null = null;
   selectedBranch = '';
+  selectedEnvironmentId = '';
   branches: string[] = [];
   environments: EnvironmentSummaryResponse[] = [];
 
@@ -125,11 +129,44 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.route.parent?.paramMap.pipe(
+    const appId$ = this.route.parent!.paramMap.pipe(
       map(p => p.get('appId')),
-      distinctUntilChanged(),
+      distinctUntilChanged()
+    );
+
+    this.dashboardReload$.pipe(
+      switchMap(({ appId, branch, tags }) => {
+        this.loading = true;
+        this.error = null;
+        this.destroyCharts();
+        return this.defectDojoService.getDashboard(appId, branch, tags).pipe(
+          timeout(SECURITY_REQUEST_TIMEOUT_MS),
+          catchError(err => {
+            const msg = err?.name === 'TimeoutError'
+              ? 'Chargement trop long — vérifiez DefectDojo / ngrok.'
+              : (err.error?.message || 'Impossible de charger le dashboard sécurité.');
+            throw { message: msg };
+          })
+        );
+      }),
       takeUntil(this.destroy$)
-    ).subscribe(id => {
+    ).subscribe({
+      next: d => {
+        this.dashboard = d;
+        this.loading = false;
+        if (d.engagementId) {
+          if (this.showFindingsTable) this.loadFindings();
+          setTimeout(() => this.renderCharts(), 80);
+        }
+      },
+      error: err => {
+        this.dashboard = null;
+        this.error = err.message || 'Impossible de charger le dashboard sécurité.';
+        this.loading = false;
+      }
+    });
+
+    appId$.pipe(takeUntil(this.destroy$)).subscribe(id => {
       this.appId = id;
       if (this.appId) {
         this.loadBranches();
@@ -137,12 +174,39 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(qp => {
-      const branch = qp.get('branch') ?? '';
-      const cat = (qp.get('category') ?? 'open') as DefectDojoMetricCategory;
-      if (branch && branch !== this.selectedBranch) this.selectedBranch = branch;
-      if (cat && cat !== this.selectedCategory) this.selectedCategory = cat;
-      if (this.appId && this.selectedBranch) this.reload();
+    combineLatest([
+      appId$,
+      this.route.queryParamMap.pipe(
+        map(qp => ({
+          branch: qp.get('branch') ?? '',
+          category: (qp.get('category') ?? 'open') as DefectDojoMetricCategory,
+          envId: qp.get('envId') ?? ''
+        })),
+        distinctUntilChanged((a, b) =>
+          a.branch === b.branch && a.envId === b.envId && a.category === b.category
+        )
+      )
+    ]).pipe(takeUntil(this.destroy$)).subscribe(([id, qp]) => {
+      if (!id) return;
+      const branchChanged = qp.branch !== this.selectedBranch;
+      const envChanged = qp.envId !== this.selectedEnvironmentId;
+      const catChanged = qp.category !== this.selectedCategory;
+      if (qp.branch) this.selectedBranch = qp.branch;
+      this.selectedEnvironmentId = qp.envId || '';
+      this.selectedCategory = qp.category;
+      if (this.selectedBranch && (branchChanged || envChanged)) {
+        this.requestDashboardReload(id, this.selectedBranch);
+      } else if (catChanged && this.showFindingsTable) {
+        this.loadFindings();
+      }
+    });
+  }
+
+  private requestDashboardReload(appId: string, branch: string): void {
+    this.dashboardReload$.next({
+      appId,
+      branch,
+      tags: this.selectedEnvironmentTag || undefined
     });
   }
 
@@ -182,7 +246,31 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   onBranchChange(): void {
     this.page = 0;
     this.syncQueryParams();
-    this.reload();
+  }
+
+  onEnvironmentChange(): void {
+    this.page = 0;
+    this.syncQueryParams();
+  }
+
+  backToProject(): void {
+    if (!this.appId) return;
+    const branch = this.selectedBranch && this.selectedBranch !== '__all__'
+      ? this.selectedBranch
+      : undefined;
+    this.router.navigate(['/project', this.appId, 'security-center'], {
+      queryParams: branch ? { branch } : {}
+    });
+  }
+
+  get selectedEnvironmentTag(): string | null {
+    if (!this.selectedEnvironmentId) return null;
+    return this.defectDojoService.environmentTag(this.selectedEnvironmentId);
+  }
+
+  get environmentsForBranch(): EnvironmentSummaryResponse[] {
+    if (!this.selectedBranch) return this.environments;
+    return this.environments.filter(e => (e.gitBranch || '') === this.selectedBranch);
   }
 
   selectCategory(card: DefectDojoMetricCard): void {
@@ -220,32 +308,22 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   reload(): void {
     if (!this.appId || !this.selectedBranch) return;
-    this.loading = true;
-    this.error = null;
-    this.destroyCharts();
-    this.defectDojoService
-      .getDashboard(this.appId, this.selectedBranch)
-      .pipe(finalize(() => (this.loading = false)))
-      .subscribe({
-        next: d => {
-          this.dashboard = d;
-          if (d.engagementId) {
-            if (this.showFindingsTable) this.loadFindings();
-            setTimeout(() => this.renderCharts(), 80);
-          }
-        },
-        error: err => {
-          this.dashboard = null;
-          this.error = err?.error?.message || 'Impossible de charger le dashboard sécurité.';
-        }
-      });
+    this.requestDashboardReload(this.appId, this.selectedBranch);
   }
 
   loadFindings(): void {
     if (!this.appId || !this.selectedBranch || !this.dashboard?.engagementId) return;
     this.listLoading = true;
     this.defectDojoService
-      .getFindings(this.appId, this.selectedBranch, this.selectedCategory, this.page, this.size, this.filterSeverity || undefined)
+      .getFindings(
+        this.appId,
+        this.selectedBranch,
+        this.selectedCategory,
+        this.page,
+        this.size,
+        this.filterSeverity || undefined,
+        this.selectedEnvironmentTag || undefined
+      )
       .pipe(finalize(() => (this.listLoading = false)))
       .subscribe({
         next: p => {
@@ -337,7 +415,8 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       relativeTo: this.route,
       queryParams: {
         branch: this.selectedBranch,
-        category: this.selectedCategory
+        category: this.selectedCategory,
+        envId: this.selectedEnvironmentId || null
       },
       queryParamsHandling: 'merge'
     });

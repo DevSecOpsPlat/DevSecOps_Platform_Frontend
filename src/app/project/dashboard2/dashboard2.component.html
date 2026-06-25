@@ -1,5 +1,19 @@
+<!-- dashboard2.component.html -->
 <div class="d2-page">
-  <!-- ── Partie 1 : Overview (hero, détails, KPI) ── -->
+
+  <!-- Navigation rapide -->
+  <nav class="d2-quick-nav" aria-label="Navigation du projet">
+    <button
+      *ngFor="let item of quickNav"
+      type="button"
+      class="d2-quick-nav-item"
+      (click)="onQuickNav(item)">
+      <span class="d2-quick-nav-icon">{{ item.icon }}</span>
+      <span>{{ item.label }}</span>
+    </button>
+  </nav>
+
+  <!-- ─── PARTIE 1 : EN-TÊTE & KPI ─── -->
   <div class="overview-container overview-embedded">
     <header class="overview-hero">
       <div class="hero-content">
@@ -27,19 +41,8 @@
         </div>
       </div>
       <div class="hero-actions">
-        <div class="env-switch" *ngIf="environmentsForApp?.length">
-          <label class="env-switch-label">Environnement</label>
-          <select class="env-switch-select"
-                  [ngModel]="selectedEnvironmentId"
-                  (ngModelChange)="onEnvironmentSelected($event)">
-            <option *ngFor="let e of environmentsForApp" [ngValue]="e.id">
-              {{ e.environmentName }} — {{ (e.status || '—') | uppercase }}
-            </option>
-          </select>
-        </div>
         <button class="btn-cta" type="button" (click)="createNewEnvironment()">
-          <span class="btn-icon">+</span>
-          Nouvel environnement
+          <span class="btn-icon">+</span> Nouvel environnement
         </button>
         <button class="btn-icon-only" type="button" (click)="refreshAll()" [disabled]="overviewLoading || loading" title="Actualiser">
           🔄
@@ -47,6 +50,7 @@
       </div>
     </header>
 
+    <!-- Détails de l'application -->
     <section class="app-details-card" *ngIf="appDetails && !overviewLoading">
       <h2 class="section-title">Détails de l'application</h2>
       <div class="app-details-grid">
@@ -79,6 +83,7 @@
       </div>
     </section>
 
+    <!-- KPI -->
     <div class="stats-grid" *ngIf="!overviewLoading">
       <div class="stat-card" *ngFor="let stat of stats">
         <div class="stat-icon-wrapper" [style.background]="stat.iconBg">
@@ -92,41 +97,75 @@
       </div>
     </div>
 
-    <div *ngIf="overviewLoading" class="loading-skeleton">
-      <div class="skeleton-hero"></div>
-      <div class="skeleton-grid">
-        <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]"></div>
-      </div>
-    </div>
-
-    <div *ngIf="overviewError && !overviewLoading" class="error-state">
-      <span class="error-icon">⚠️</span>
-      <p>{{ overviewError }}</p>
-      <button class="retry-btn" type="button" (click)="loadOverview()">Réessayer</button>
-    </div>
+    <!-- États de chargement / erreur -->
+    <div *ngIf="overviewLoading" class="loading-skeleton">…</div>
+    <div *ngIf="overviewError && !overviewLoading" class="error-state">…</div>
   </div>
 
-  <!-- ── Partie 2 : Centre de sécurité (DefectDojo) ── -->
-  <section class="d2-security-block">
-    <header class="d2-header">
-      <div class="d2-header-text">
-        <span class="d2-kicker">Centre de sécurité · DefectDojo</span>
-        <h2 class="d2-title">Sécurité du projet</h2>
-        <p class="d2-subtitle">{{ scopeLabel }}</p>
+  <!-- ─── ENVIRONNEMENTS ACTIFS (aperçu) ─── -->
+  <section id="d2-environments" class="d2-env-section" *ngIf="!overviewLoading && !overviewError">
+    <div class="section-header">
+      <h2 class="section-title">Environnements actifs</h2>
+      <a class="view-all" (click)="viewAllEnvironments()">Voir tout →</a>
+    </div>
+    <div class="environments-grid" *ngIf="activeEnvironmentCards.length > 0">
+      <div *ngFor="let env of activeEnvironmentCards" class="environment-card" (click)="viewEnvironment(env.id)">
+        <div class="env-header">
+          <h3>{{ env.name }}</h3>
+          <span class="env-badge">ACTIF</span>
+        </div>
+        <p class="env-branch">🌿 {{ env.branch }}</p>
+        <div class="env-footer">
+          <span class="env-expiry">⏳ expire dans {{ env.timeRemaining }}</span>
+          <span class="env-vulns" *ngIf="!envCountsLoading && env.vulnCount !== null" [class.env-vulns--alert]="env.vulnCount > 0">
+            🛡️ {{ env.vulnCount }} ouverte(s)
+          </span>
+        </div>
+        <div class="env-card-actions" (click)="$event.stopPropagation()">
+          <button type="button" class="btn-link" (click)="viewPipeline(env.id)">Pipeline</button>
+          <button type="button" class="btn-link" (click)="viewEnvSecurityAnalysis({ id: env.id, branch: env.branch })">Sécurité</button>
+        </div>
       </div>
-      <div class="d2-header-actions">
-        <label class="d2-branch-label" for="d2-branch-select">Filtrer par branche / engagement</label>
-        <select
-          id="d2-branch-select"
-          class="d2-branch-select"
-          [(ngModel)]="selectedBranch"
-          (change)="onBranchChange()"
-          [disabled]="loading">
-          <option [ngValue]="globalBranch">Toutes les branches (Vue Globale)</option>
-          <option *ngFor="let b of branches" [ngValue]="b">{{ b }}</option>
-        </select>
+    </div>
+    <div *ngIf="activeEnvironmentCards.length === 0" class="empty-list">
+      <p>Aucun environnement actif</p>
+      <button class="btn-link" type="button" (click)="createNewEnvironment()">Créer un environnement</button>
+    </div>
+  </section>
+
+  <!-- ─── CENTRE DE SÉCURITÉ (DEFECTDOJO) ─── -->
+  <section id="d2-security" class="d2-security-block">
+    <header class="d2-security-hero">
+      <div class="d2-security-hero-main">
+        <div class="d2-security-hero-badge">
+          <span aria-hidden="true">🛡️</span>
+          <span>DefectDojo</span>
+        </div>
+        <h2 class="d2-security-hero-title">Centre de sécurité</h2>
+        <p class="d2-security-hero-desc">Synthèse des vulnérabilités et scanners du projet</p>
+      </div>
+      <div class="d2-security-hero-aside">
+        <span class="d2-scope-chip" [class.d2-scope-chip--branch]="!isGlobalView">
+          <span class="d2-scope-chip-icon">{{ isGlobalView ? '🌐' : '🌿' }}</span>
+          {{ isGlobalView ? 'Vue globale' : selectedBranch }}
+        </span>
+        <button class="btn-cta d2-btn-sm" type="button" (click)="viewSecurityDashboard()" *ngIf="appId">
+          Graphiques &amp; analyse →
+        </button>
       </div>
     </header>
+
+    <div class="d2-branch-filter">
+      <span class="d2-branch-filter-label">Engagement</span>
+      <div class="d2-branch-pills" role="tablist">
+        <button type="button" class="d2-branch-pill" role="tab" [class.active]="isGlobalView" [disabled]="loading" (click)="selectBranch(globalBranch)">
+          <span class="d2-pill-icon">🌐</span> Toutes les branches
+        </button>
+        <button *ngFor="let b of branches" type="button" class="d2-branch-pill" role="tab" [class.active]="selectedBranch === b" [disabled]="loading" (click)="selectBranch(b)">
+          <span class="d2-pill-icon">🌿</span> {{ b }}
+        </button>
+      </div>
+    </div>
 
     <div class="d2-alert d2-alert--error" *ngIf="error">{{ error }}</div>
     <div class="d2-alert d2-alert--info" *ngIf="infoMessage && !error">{{ infoMessage }}</div>
@@ -136,28 +175,91 @@
         <span class="d2-spinner"></span> Mise à jour des métriques sécurité…
       </div>
 
-      <section class="d2-card d2-severity-strip">
-        <div class="d2-card-head">
-          <h3>Répartition par sévérité</h3>
-          <span class="d2-meta">{{ totalFindings }} vulnérabilités ouvertes</span>
-        </div>
-        <div class="d2-metrics-bar">
-          <div
-            *ngFor="let sev of severities"
-            class="d2-metric-cell"
-            [style.background]="severityBarColor(sev)">
-            <span class="d2-metric-value">{{ severityCount(sev) }}</span>
-            <span class="d2-metric-label">{{ sev }}</span>
+      <section class="d2-summary-card d2-summary-card--full">
+        <div class="d2-summary-card-head">
+          <span class="d2-summary-icon d2-summary-icon--sev">⚠️</span>
+          <div>
+            <h3 class="d2-summary-title">Répartition par sévérité</h3>
+            <p class="d2-summary-meta">{{ totalFindings }} vulnérabilité(s) ouverte(s)</p>
           </div>
-          <div class="d2-metric-cell d2-metric-cell--total">
-            <span class="d2-metric-value">{{ totalFindings }}</span>
-            <span class="d2-metric-label">Total</span>
+        </div>
+        <div class="dd-metrics-bar d2-metrics-bar--embedded">
+          <div *ngFor="let sev of severities" class="dd-metric-cell" [ngClass]="severityCssClass(sev)">
+            <span class="dd-metric-cell-value">{{ severityCount(sev) }}</span>
+            <span class="dd-metric-cell-label">{{ sev }}</span>
+          </div>
+          <div class="dd-metric-cell sev-total">
+            <span class="dd-metric-cell-value">{{ totalFindings }}</span>
+            <span class="dd-metric-cell-label">Total</span>
           </div>
         </div>
       </section>
 
-      <div class="d2-grid d2-grid--3">
-        <section class="d2-card d2-score-card">
+      <section class="d2-summary-card d2-summary-card--full">
+        <div class="d2-summary-card-head">
+          <span class="d2-summary-icon d2-summary-icon--tools">🔧</span>
+          <div>
+            <h3 class="d2-summary-title">Outils de détection</h3>
+            <p class="d2-summary-meta" *ngIf="isGlobalView">{{ toolList.length }} scanner(s) · vue globale</p>
+            <p class="d2-summary-meta" *ngIf="!isGlobalView">{{ toolList.length }} outil(s) · branche {{ selectedBranch }}</p>
+          </div>
+        </div>
+        <div class="d2-tool-chips" *ngIf="toolList.length; else noTools">
+          <div *ngFor="let t of toolList" class="d2-tool-chip" [class.d2-tool-chip--counted]="t.value > 0">
+            <span class="d2-tool-chip-icon">🔍</span>
+            <span class="d2-tool-chip-name">{{ formatToolName(t.key) }}</span>
+            <span class="d2-tool-chip-count" *ngIf="t.value > 0">{{ t.value }}</span>
+            <div class="d2-tool-chip-tooltip" role="tooltip">
+              <strong>{{ formatToolName(t.key) }}</strong>
+              <p>{{ toolDescription(t.key) }}</p>
+              <span *ngIf="t.value > 0">{{ t.value }} vulnérabilité(s) ouverte(s)</span>
+            </div>
+          </div>
+        </div>
+        <div class="d2-scanner-bars" *ngIf="hasToolCounts">
+          <div class="d2-scanner-row" *ngFor="let t of toolList">
+            <span class="d2-scanner-name">{{ formatToolName(t.key) }}</span>
+            <div class="d2-scanner-track"><div class="d2-scanner-fill" [style.width.%]="toolBarWidth(t.value)"></div></div>
+            <span class="d2-scanner-count">{{ t.value }}</span>
+          </div>
+        </div>
+        <ng-template #noTools>
+          <p class="d2-empty">Aucun scanner n'a encore alimenté DefectDojo pour cette vue.</p>
+        </ng-template>
+      </section>
+
+      <section class="d2-chart-panel dd-chart-panel--defectdojo">
+        <div class="d2-chart-panel-head">
+          <span class="d2-chart-panel-title">Open by Severity (par scan)</span>
+          <span class="d2-chart-scope" *ngIf="isGlobalView">· toutes les branches</span>
+          <span class="d2-chart-panel-info" title="Un point par import de test DefectDojo">ⓘ</span>
+        </div>
+        <div class="d2-chart-panel-body">
+          <div class="d2-granularity-toolbar" *ngIf="hasOpenSeverityChart && !loading">
+            <span class="d2-granularity-label">Granularité :</span>
+            <button type="button" class="d2-granularity-btn"
+              [class.active]="openSeverityGranularity === 'hour'"
+              (click)="setOpenSeverityGranularity('hour')">Heure</button>
+            <button type="button" class="d2-granularity-btn"
+              [class.active]="openSeverityGranularity === 'day'"
+              (click)="setOpenSeverityGranularity('day')">Jour</button>
+          </div>
+          <div class="d2-chart-loading" *ngIf="loading">
+            <span class="d2-spinner"></span> Chargement du graphique…
+          </div>
+          <div class="d2-chart-canvas-wrap dd-chart-canvas dd-chart-canvas--medium"
+               [class.d2-chart-canvas-wrap--hidden]="!hasOpenSeverityChart || loading">
+            <canvas #daySeverityCanvas></canvas>
+          </div>
+          <p class="d2-empty d2-chart-empty" *ngIf="!loading && !hasOpenSeverityChart">
+            Aucun scan DefectDojo — lancez un pipeline pour alimenter l'engagement.
+          </p>
+          <p class="d2-chart-footnote">Un point par import de scan — dates basées sur les tests DefectDojo</p>
+        </div>
+      </section>
+
+      <div class="d2-grid" [class.d2-grid--single]="isGlobalView">
+        <section class="d2-card d2-score-card" *ngIf="!isGlobalView">
           <h3 class="d2-card-title">Indice de maturité</h3>
           <div class="d2-score-ring" [style.--grade-color]="gradeColor(dashboard?.securityScore?.grade)">
             <span class="d2-score-grade">{{ dashboard?.securityScore?.grade || 'A' }}</span>
@@ -172,46 +274,32 @@
         </section>
 
         <section class="d2-card d2-recurrent-card">
-          <h3 class="d2-card-title">Top vulnérabilités récurrentes</h3>
-          <table class="d2-table d2-table--compact" *ngIf="dashboard?.topRecurrent?.length; else noRecurrent">
-            <thead>
-              <tr>
-                <th>Identifiant</th>
-                <th>Type</th>
-                <th>Sév.</th>
-                <th>#</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let r of dashboard!.topRecurrent">
-                <td class="d2-cell-id" [title]="r.label">{{ r.label }}</td>
-                <td>{{ r.type }}</td>
-                <td><span class="d2-sev-pill" [style.background]="severityBarColor(r.severity)">{{ r.severity }}</span></td>
-                <td><strong>{{ r.count }}</strong></td>
-              </tr>
-            </tbody>
-          </table>
+          <h3 class="d2-card-title">Vulnérabilités récurrentes</h3>
+          <p class="d2-card-sub">Les findings les plus fréquents sur cette vue</p>
+          <div class="d2-recurrent-list" *ngIf="dashboard?.topRecurrent?.length; else noRecurrent">
+            <article class="d2-recurrent-item" *ngFor="let r of dashboard!.topRecurrent; let i = index">
+              <div class="d2-recurrent-rank">{{ i + 1 }}</div>
+              <div class="d2-recurrent-body">
+                <span class="d2-sev-pill" [style.background]="severityBarColor(r.severity)">{{ r.severity }}</span>
+                <p class="d2-recurrent-label" [title]="r.label">{{ r.label }}</p>
+                <span class="d2-recurrent-type">{{ r.type }}</span>
+              </div>
+              <div class="d2-recurrent-count">
+                <span class="d2-recurrent-count-num">{{ r.count }}</span>
+                <span class="d2-recurrent-count-label">occ.</span>
+              </div>
+            </article>
+          </div>
           <ng-template #noRecurrent>
-            <p class="d2-empty">Aucune vulnérabilité ouverte — tout est à 0.</p>
+            <p class="d2-empty">Aucune vulnérabilité récurrente détectée.</p>
           </ng-template>
-        </section>
-
-        <section class="d2-card">
-          <h3 class="d2-card-title">Outils de détection actifs</h3>
-          <ul class="d2-tool-list" *ngIf="toolList.length">
-            <li *ngFor="let t of toolList">
-              <span>{{ t.key }}</span>
-              <strong>{{ t.value }}</strong>
-            </li>
-          </ul>
-          <p class="d2-empty" *ngIf="!toolList.length">Aucun scanner n'a encore alimenté DefectDojo.</p>
         </section>
       </div>
     </ng-container>
   </section>
 
-  <!-- ── Partie 3 : Activité & pipelines (Overview) ── -->
-  <div class="overview-container overview-embedded" *ngIf="!overviewLoading && !overviewError">
+  <!-- ─── ACTIVITÉ & PIPELINES ─── -->
+  <div id="d2-activity" class="overview-container overview-embedded" *ngIf="!overviewLoading && !overviewError">
     <div class="dashboard-grid">
       <section class="dashboard-section">
         <div class="section-header">
@@ -219,13 +307,13 @@
           <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
         </div>
         <div class="activity-list" *ngIf="!loadingSlow && recentActivities.length > 0">
-          <div *ngFor="let activity of recentActivities" class="activity-item">
+          <div *ngFor="let activity of recentActivities" class="activity-item activity-item--clickable" (click)="navigateActivity(activity)">
             <span class="activity-icon">{{ activity.icon }}</span>
             <div class="activity-content">
               <span class="activity-kind">{{ activityKindLabel(activity.type) }}</span>
               <p class="activity-title">{{ activity.title }}</p>
               <p class="activity-description">{{ activity.description }}</p>
-              <p class="activity-app-url" *ngIf="activity.previewUrl">
+              <p class="activity-app-url" *ngIf="activity.previewUrl" (click)="$event.stopPropagation()">
                 <a [href]="activity.previewUrl" target="_blank" rel="noopener noreferrer">Visiter l'application</a>
               </p>
               <span class="activity-time">{{ getActivityTimeAgo(activity) }}</span>
@@ -233,12 +321,8 @@
             <span class="activity-status" [ngClass]="statusClass(activity.status)">{{ activity.status }}</span>
           </div>
         </div>
-        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
-          <p>Chargement de l'activité…</p>
-        </div>
-        <div *ngIf="!loadingSlow && recentActivities.length === 0" class="empty-list">
-          <p>Aucune activité récente</p>
-        </div>
+        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">…</div>
+        <div *ngIf="!loadingSlow && recentActivities.length === 0" class="empty-list">Aucune activité récente</div>
       </section>
 
       <section class="dashboard-section">
@@ -258,36 +342,10 @@
             </div>
           </div>
         </div>
-        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
-          <p>Chargement des pipelines…</p>
-        </div>
-        <div *ngIf="!loadingSlow && recentPipelines.length === 0" class="empty-list">
-          <p>Aucun pipeline récent</p>
-        </div>
+        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">…</div>
+        <div *ngIf="!loadingSlow && recentPipelines.length === 0" class="empty-list">Aucun pipeline récent</div>
       </section>
     </div>
 
-    <section class="dashboard-section">
-      <div class="section-header">
-        <h2 class="section-title">Environnements actifs</h2>
-        <a class="view-all" (click)="viewAllEnvironments()">Voir tout →</a>
-      </div>
-      <div class="environments-grid" *ngIf="activeEnvironments.length > 0">
-        <div *ngFor="let env of activeEnvironments" class="environment-card" (click)="viewEnvironment(env.id)">
-          <div class="env-header">
-            <h3>{{ env.name }}</h3>
-            <span class="env-badge">ACTIF</span>
-          </div>
-          <p class="env-branch">🌿 {{ env.branch }}</p>
-          <div class="env-footer">
-            <span class="env-expiry">⏳ expire dans {{ env.timeRemaining }}</span>
-          </div>
-        </div>
-      </div>
-      <div *ngIf="activeEnvironments.length === 0" class="empty-list">
-        <p>Aucun environnement actif</p>
-        <button class="btn-link" type="button" (click)="createNewEnvironment()">Créer un environnement</button>
-      </div>
-    </section>
   </div>
 </div>

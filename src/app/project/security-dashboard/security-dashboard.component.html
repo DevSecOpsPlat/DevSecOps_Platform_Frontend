@@ -2,26 +2,36 @@
   <header class="vuln-header">
     <div class="vuln-header-content">
       <div class="vuln-header-left">
-        <div class="vuln-badge"><span class="vuln-badge-dot"></span>DefectDojo · EnviroTest</div>
-        <h1 class="vuln-title">Dashboard de sécurité</h1>
-        <p class="vuln-subtitle">
-          Vue analytique par branche — répartitions et tendances avant le détail des vulnérabilités.
+        <button type="button" class="vuln-btn vuln-btn-secondary dd-back-btn" (click)="backToProject()">← Retour au projet</button>
+        <div class="vuln-badge"><span class="vuln-badge-dot"></span>Analyse détaillée · DefectDojo</div>
+        <h1 class="vuln-title">Branche {{ selectedBranch || '—' }}</h1>
+        <p class="vuln-subtitle" *ngIf="dashboard?.engagementName">
+          Engagement <strong>{{ dashboard!.engagementName }}</strong>
+          <span *ngIf="charts?.lastScanDate"> · Dernier scan : {{ charts!.lastScanDate }}</span>
         </p>
-        <p class="vuln-subtitle vuln-subtitle--meta" *ngIf="dashboard?.engagementName">
-          Produit <strong>{{ dashboard!.productName }}</strong>
-          · engagement <strong>{{ dashboard!.engagementName }}</strong>
-          · branche <strong>{{ selectedBranch }}</strong>
+        <p class="vuln-subtitle vuln-subtitle--meta" *ngIf="selectedEnvironmentId">
+          Filtre environnement : <strong>{{ selectedEnvironmentTag }}</strong>
         </p>
       </div>
       <div class="vuln-header-right">
         <div class="vuln-header-controls">
           <div class="vuln-env-card">
-            <span class="vuln-env-label">Branche testée</span>
+            <span class="vuln-env-label">Branche</span>
             <div class="vuln-env-value">
               <span class="vuln-env-icon">🌿</span>
               <select class="vuln-env-select" [(ngModel)]="selectedBranch" (ngModelChange)="onBranchChange()" [disabled]="loading">
-                <option *ngFor="let b of branches" [ngValue]="b">
-                  {{ b }}<ng-container *ngIf="envCountForBranch(b) > 0"> — {{ envCountForBranch(b) }} env.</ng-container>
+                <option *ngFor="let b of branches" [ngValue]="b">{{ b }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="vuln-env-card">
+            <span class="vuln-env-label">Environnement (optionnel)</span>
+            <div class="vuln-env-value">
+              <span class="vuln-env-icon">🌍</span>
+              <select class="vuln-env-select" [(ngModel)]="selectedEnvironmentId" (ngModelChange)="onEnvironmentChange()" [disabled]="loading">
+                <option value="">Tous (engagement complet)</option>
+                <option *ngFor="let e of environmentsForBranch" [ngValue]="e.id">
+                  {{ e.environmentName }} — {{ e.status }}
                 </option>
               </select>
             </div>

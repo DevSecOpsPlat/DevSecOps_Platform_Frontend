@@ -23,6 +23,10 @@
 }
 
 /* ── Barres métriques en haut (style DefectDojo, thème marque) ── */
+.dd-back-btn {
+  margin-bottom: 0.75rem;
+}
+
 .dd-metrics-block {
   margin-bottom: 1rem;
   border-radius: 10px;
