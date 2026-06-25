@@ -251,21 +251,6 @@ export class UserSidebarComponent implements OnInit {
     return /\/project\/[^/]+\/security-dashboard(\/|$)/.test(path);
   }
 
-  /** Centre de sécurité v2 : /project/:appId/security-center */
-  navigateSecurityDashboard(): void {
-    const appId = this.lastKnownApplicationId();
-    if (appId) {
-      this.router.navigate(['/project', appId, 'security-center']);
-    } else {
-      this.router.navigate(['/my-applications']);
-    }
-  }
-
-  isSecurityDashboardRoute(): boolean {
-    const path = this.router.url.split(/[?#]/)[0];
-    return /\/project\/[^/]+\/(security-center|security-dashboard)(\/|$)/.test(path);
-  }
-
   /** Même layout que le projet : /project/:appId/vulnerabilities */
   navigateSecurityVulnerabilities(): void {
     const appId = this.lastKnownApplicationId();

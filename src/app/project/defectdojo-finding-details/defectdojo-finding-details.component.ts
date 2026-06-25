@@ -121,9 +121,9 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
 
   backLink(): string[] {
     if (!this.appId) return ['/my-applications'];
-    const fromCenter = this.router.url.includes('/security-center/');
-    return fromCenter
-      ? ['/project', this.appId, 'security-center']
+    const fromOverview = /\/(overview|security-center)\//.test(this.router.url);
+    return fromOverview
+      ? ['/project', this.appId, 'overview']
       : ['/project', this.appId, 'security-dashboard'];
   }
 

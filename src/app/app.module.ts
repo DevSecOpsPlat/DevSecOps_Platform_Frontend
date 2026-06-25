@@ -37,7 +37,6 @@ import { EnvironmentCreateComponent } from './project/environments/environment-c
 import { ToastContainerComponent } from './toast-container/toast-container.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
-import { Dashboard2Component } from './project/dashboard2/dashboard2.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
 import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
@@ -71,7 +70,6 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     AdminSidebarComponent,
     ToastContainerComponent,
     ProjectLayoutComponent,
-    ProjectOverviewComponent,
     ProjectDeploymentsComponent,
     ProjectLogsComponent,
     ProjectSecurityComponent,
@@ -100,7 +98,7 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     VulnerabilitiesDashboardComponent,
     VulnerabilityDetailsComponent,
     SecurityDashboardComponent,
-    Dashboard2Component,
+    ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent
   ],
   providers: [],

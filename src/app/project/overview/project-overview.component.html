@@ -1,437 +1,765 @@
-<!-- project-overview.component.html - Dark blue / orange / yellow theme -->
-<div class="overview-container">
-  <!-- Hero & Application summary -->
-  <header class="overview-hero">
-  <div class="hero-content">
-    <div class="hero-badge">PROJECT DASHBOARD</div>
-    <h1 class="hero-title">
-      {{ appName || 'Application' }}
-      <span class="hero-status" *ngIf="latestDeployment?.pipelineStatus">
-        <span class="status-dot" [ngClass]="statusClass(latestDeployment?.pipelineStatus || '')"></span>
-        {{ latestDeployment?.pipelineStatus }}
-      </span>
-    </h1>
-    <p class="hero-subtitle" *ngIf="appDetails?.description">{{ appDetails?.description }}</p>
-    <p class="hero-subtitle muted" *ngIf="!appDetails?.description">Tableau de bord du projet</p>
-      <div class="hero-meta">
-        <div class="meta-item" *ngIf="appDetails?.gitRepositoryUrl">
-          <span class="meta-icon">📦</span>
-          <a [href]="appDetails?.gitRepositoryUrl" target="_blank" rel="noopener" class="repo-link">
-            {{ getRepoDisplayName(appDetails?.gitRepositoryUrl) }}
-          </a>
+<div class="d2-hub" (click)="closeAllPickers()">
+
+  <!-- Toolbar sticky -->
+  <div id="d2-sticky-toolbar" class="d2-sticky-stack">
+    <div class="d2-sticky-top">
+      <nav class="d2-breadcrumb" aria-label="Fil d'Ariane">
+        <button type="button" class="d2-crumb" (click)="goToApplications(); $event.stopPropagation()">Mes applications</button>
+        <span class="d2-crumb-sep">/</span>
+        <span class="d2-crumb d2-crumb--current">{{ appName || 'Application' }}</span>
+      </nav>
+      <div class="d2-context-actions">
+        <button type="button" class="d2-btn-icon" (click)="refreshAll(); $event.stopPropagation()" [disabled]="overviewLoading || loading" title="Actualiser">
+          <span class="d2-btn-icon-inner">↻</span>
+        </button>
+        <button type="button" class="d2-btn-primary" (click)="deployOnSelectedBranch(); $event.stopPropagation()">
+          <span>🚀 Déployer</span>
+          <span class="d2-btn-branch" *ngIf="!isGlobalView">· {{ selectedBranch }}</span>
+        </button>
+      </div>
+    </div>
+
+    <nav class="d2-context-path" *ngIf="!overviewLoading" aria-label="Parcours applicatif" (click)="$event.stopPropagation()">
+      <div class="d2-path-seg-wrap">
+        <button type="button" class="d2-path-seg" [class.d2-path-seg--open]="openPicker === 'app'" (click)="toggleAppPicker($event)">
+          <span class="d2-path-icon">📱</span>
+          <span class="d2-path-text"><strong>Application</strong><span>{{ appName || '—' }}</span></span>
+          <span class="d2-path-chevron">▾</span>
+        </button>
+        <div class="d2-path-dropdown" *ngIf="openPicker === 'app'">
+          <p class="d2-path-dropdown-title">Changer d'application</p>
+          <div class="d2-path-dropdown-loading" *ngIf="appsLoading">Chargement…</div>
+          <button *ngFor="let app of myApplications" type="button" class="d2-path-dropdown-item"
+            [class.d2-path-dropdown-item--active]="app.id === appId" (click)="switchApplication(app)">
+            <span>{{ app.name }}</span><small>{{ getRepoDisplayName(app.gitRepositoryUrl) }}</small>
+          </button>
         </div>
-        <div class="meta-item" *ngIf="appDetails?.createdAt">
-  <span class="meta-icon">📅</span>
-  <span>
-    Créé le {{ getAppCreatedAt() }}
-   
-    par {{ appDetails?.createdByUsername }}
-  </span>
-</div>
       </div>
-  </div>
-  <div class="hero-actions">
-    <div class="env-switch" *ngIf="environmentsForApp && environmentsForApp.length > 0">
-      <label class="env-switch-label">Environnement</label>
-      <select class="env-switch-select"
-              [ngModel]="selectedEnvironmentId"
-              (ngModelChange)="onEnvironmentSelected($event)">
-        <option *ngFor="let e of environmentsForApp" [ngValue]="e.id">
-          {{ e.environmentName }} — {{ (e.status || '—') | uppercase }}
-        </option>
-      </select>
-    </div>
-    <button class="btn-cta" (click)="createNewEnvironment()">
-      <span class="btn-icon">+</span>
-      Nouvel environnement
-    </button>
-    <button class="btn-icon-only" (click)="refreshData()" [disabled]="loading || loadingSlow" title="Actualiser">
-      🔄
-    </button>
-  </div>
-</header>
-
-  <!-- Application details card -->
-  <section class="app-details-card" *ngIf="appDetails && !loading">
-    <h2 class="section-title">Détails de l'application</h2>
-    <div class="app-details-grid">
-      <div class="detail-item">
-        <span class="detail-label">Nom</span>
-        <span class="detail-value">{{ appDetails.name }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-label">Repository</span>
-        <a [href]="appDetails.gitRepositoryUrl" target="_blank" rel="noopener" class="detail-value link">
-          {{ getRepoDisplayName(appDetails.gitRepositoryUrl) }}
-        </a>
-      </div>
-      <div class="detail-item">
-        <span class="detail-label">Dockerfile</span>
-        <span class="detail-value">{{ appDetails.dockerfilePath || './Dockerfile' }}</span>
-      </div>
-      <div class="detail-item">
-  <span class="detail-label">Créé le</span>
-  <span class="detail-value">
-    {{ getAppCreatedAt() }}
-    
-  </span>
-</div>
-      <div class="detail-item">
-        <span class="detail-label">Créé par</span>
-        <span class="detail-value">{{ appDetails.createdByUsername }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-label">Token GitHub</span>
-        <span class="detail-value">{{ appDetails.hasGithubToken ? 'Configuré' : 'Non configuré' }}</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Stats KPI cards -->
-  <div class="stats-grid" *ngIf="!loading">
-    <div class="stat-card" *ngFor="let stat of stats">
-      <div class="stat-icon-wrapper" [style.background]="stat.iconBg">
-        <span class="stat-icon">{{ stat.icon }}</span>
-      </div>
-      <div class="stat-content">
-        <span class="stat-value">{{ stat.value }}</span>
-        <span class="stat-label">{{ stat.label }}</span>
-        <span class="stat-trend" *ngIf="stat.trend">{{ stat.trend }}</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Loading -->
-  <div *ngIf="loading" class="loading-skeleton">
-    <div class="skeleton-hero"></div>
-    <div class="skeleton-grid">
-      <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]"></div>
-    </div>
-    <div class="skeleton-chart"></div>
-  </div>
-
-  <!-- Error -->
-  <div *ngIf="error && !loading" class="error-state">
-    <span class="error-icon">⚠️</span>
-    <p>{{ error }}</p>
-    <button class="retry-btn" (click)="loadAppData()">Réessayer</button>
-  </div>
-
-  <!-- Main content -->
-  <div *ngIf="!loading && !error" class="dashboard-content">
-    <!-- Charts row -->
-    <div class="charts-row">
-      <section class="chart-card">
-        <h2 class="chart-title">Statut des déploiements</h2>
-        <div class="chart-body chart-body-loading" *ngIf="loadingSlow">
-          <p class="chart-loading-text">Chargement des déploiements…</p>
+      <span class="d2-path-arrow">›</span>
+      <div class="d2-path-seg-wrap">
+        <button type="button" class="d2-path-seg" [class.d2-path-seg--open]="openPicker === 'branch'" (click)="toggleBranchPicker($event)">
+          <span class="d2-path-icon">🌿</span>
+          <span class="d2-path-text"><strong>Branche</strong><span>{{ branchPathLabel }}</span></span>
+          <span class="d2-path-chevron">▾</span>
+        </button>
+        <div class="d2-path-dropdown" *ngIf="openPicker === 'branch'">
+          <p class="d2-path-dropdown-title">Filtrer par branche</p>
+          <button type="button" class="d2-path-dropdown-item" [class.d2-path-dropdown-item--active]="isGlobalView"
+            [disabled]="loading" (click)="selectBranchFromPicker(globalBranch)">
+            <span>🌐 Toutes les branches</span><small>Vue globale</small>
+          </button>
+          <button *ngFor="let b of branches" type="button" class="d2-path-dropdown-item"
+            [class.d2-path-dropdown-item--active]="selectedBranch === b" [disabled]="loading"
+            (click)="selectBranchFromPicker(b)">
+            <span>🌿 {{ b }}</span>
+          </button>
         </div>
-        <div class="chart-body" *ngIf="!loadingSlow && deploymentChartData.length > 0">
-          <div class="donut-chart">
-            <svg viewBox="0 0 100 100" class="donut-svg">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="var(--overview-card-border)" stroke-width="12"/>
-              <ng-container *ngFor="let seg of deploymentChartData; let i = index">
-                <circle cx="50" cy="50" r="40" fill="none" [attr.stroke]="seg.color" stroke-width="12"
-                  [attr.stroke-dasharray]="(seg.percent || 0) + ' ' + (100 - (seg.percent || 0))"
-                  [attr.stroke-dashoffset]="getDonutOffset(i)"/>
-              </ng-container>
-            </svg>
-            <div class="donut-center">
-              <span class="donut-total">{{ totalDeployments }}</span>
-              <span class="donut-label">Total</span>
-            </div>
+      </div>
+      <span class="d2-path-arrow">›</span>
+      <div class="d2-path-seg-wrap">
+        <button type="button" class="d2-path-seg"
+          [class.d2-path-seg--open]="openPicker === 'env'"
+          [class.d2-path-seg--active]="!!selectedEnvironmentId || activeEnvCount > 0"
+          (click)="toggleEnvPicker($event)">
+          <span class="d2-path-icon">🌍</span>
+          <span class="d2-path-text"><strong>Environnement</strong><span>{{ envPathLabel }}</span></span>
+          <span class="d2-path-chevron">▾</span>
+        </button>
+        <div class="d2-path-dropdown" *ngIf="openPicker === 'env'">
+          <p class="d2-path-dropdown-title">Filtrer par environnement</p>
+          <button type="button" class="d2-path-dropdown-item"
+            [class.d2-path-dropdown-item--active]="!selectedEnvironmentId"
+            (click)="selectAllEnvironmentsFilter()">
+            <span>🌐 Tous les environnements actifs</span>
+            <small *ngIf="isGlobalView">Toutes branches</small>
+            <small *ngIf="!isGlobalView">Branche {{ selectedBranch }}</small>
+          </button>
+          <button *ngFor="let env of allActiveEnvironmentCards" type="button" class="d2-path-dropdown-item"
+            [class.d2-path-dropdown-item--active]="selectedEnvironmentId === env.id"
+            (click)="selectEnvFromPath(env)">
+            <span>{{ env.name }}</span>
+            <small>🌿 {{ env.branch }} · ⏳ {{ env.timeRemaining }}</small>
+          </button>
+          <button *ngIf="allActiveEnvironmentCards.length === 0" type="button"
+            class="d2-path-dropdown-item d2-path-dropdown-item--cta"
+            (click)="deployOnSelectedBranch(); closeAllPickers()">
+            Lancer un déploiement
+          </button>
+          <button type="button" class="d2-path-dropdown-item d2-path-dropdown-item--link"
+            (click)="scrollToEnvironments()">
+            Voir la section environnements →
+          </button>
+        </div>
+      </div>
+      <span class="d2-path-arrow">›</span>
+      <button type="button" class="d2-path-seg" (click)="goToSecuritySection(); $event.stopPropagation()">
+        <span class="d2-path-icon">🛡️</span>
+        <span class="d2-path-text"><strong>Sécurité</strong><span>Analyse complète</span></span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="d2-content">
+
+    <!-- Hero style overview -->
+    <section class="d2-overview-hero d2-animate" [style.--i]="0" *ngIf="overviewLoading">
+      <div class="d2-skeleton d2-skeleton--hero-light"></div>
+    </section>
+<br>
+    <section class="d2-app-details d2-animate" [style.--i]="1" *ngIf="!overviewLoading && !overviewError">
+      <div class="d2-overview-hero-content">
+        <h1 class="d2-overview-title">
+          {{ appName || 'Application' }}
+          <span class="d2-overview-status" *ngIf="displayLatestDeployment?.pipelineStatus as st" [ngClass]="statusClass(st)">
+            <span class="status-dot"></span>
+            {{ st }}
+          </span>
+        </h1>
+        <p class="d2-overview-subtitle">Tableau de bord du projet</p>
+      </div>
+      <h2 class="d2-app-details-title"><span class="d2-app-details-icon">📋</span> Détails de l'application</h2>
+      <div class="d2-app-details-grid">
+        <div class="d2-detail-item">
+          <span class="d2-detail-label">Nom</span>
+          <span class="d2-detail-value">{{ appName || '—' }}</span>
+        </div>
+        <div class="d2-detail-item">
+          
+          <span class="d2-detail-label">Repository</span>
+          
+          <a *ngIf="appDetails?.gitRepositoryUrl" [href]="appDetails?.gitRepositoryUrl" target="_blank" rel="noopener"
+            class="d2-detail-value d2-detail-value--link">  <span class="d2-meta-icon">📦</span> {{ getRepoDisplayName(appDetails?.gitRepositoryUrl) }}</a>
+          <span class="d2-detail-value" *ngIf="!appDetails?.gitRepositoryUrl">—</span>
+        </div>
+        <div class="d2-detail-item">
+          <span class="d2-detail-label">Dockerfile</span>
+          <span class="d2-detail-value">{{ getDockerfileDisplay() }}</span>
+        </div>
+        <div class="d2-detail-item">
+          <span class="d2-detail-label">Créé le</span>
+          <span class="d2-detail-value"><span class="d2-meta-icon">📅</span> {{ getAppCreatedAt() }}</span>
+        </div>
+        <div class="d2-detail-item">
+          <span class="d2-detail-label">Créé par</span>
+          <span class="d2-detail-value">{{ appDetails?.createdByUsername || '—' }}</span>
+        </div>
+        <div class="d2-detail-item">
+          <span class="d2-detail-label">Token GitHub</span>
+          <span class="d2-detail-value">{{ getGithubTokenDisplay() }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="d2-stats-grid d2-animate" [style.--i]="2" *ngIf="!overviewLoading && !overviewError">
+      <article class="d2-stat-card" *ngFor="let stat of overviewStats">
+        <span class="d2-stat-icon-wrap" [style.background]="stat.iconBg">
+          <span [style.color]="stat.color">{{ stat.icon }}</span>
+        </span>
+        <div class="d2-stat-body">
+          <span class="d2-stat-value">{{ stat.value }}</span>
+          <span class="d2-stat-label">{{ stat.label }}</span>
+          <span class="d2-stat-trend" *ngIf="stat.trend">{{ stat.trend }}</span>
+        </div>
+      </article>
+    </section>
+
+    <div *ngIf="overviewError && !overviewLoading" class="d2-alert d2-alert--error">{{ overviewError }}</div>
+
+    <ng-container *ngIf="!overviewLoading && !overviewError">
+
+      <!-- ════════════════ SECTION 01 · DÉPLOIEMENT ════════════════ -->
+      <section class="d2-section d2-animate" [style.--i]="3">
+        <header class="d2-section-head">
+          <span class="d2-section-num">01</span>
+          <div class="d2-section-heading">
+            <h2 class="d2-section-name"><span class="d2-section-emoji">🚀</span> Déploiement</h2>
+            <p class="d2-section-desc">Vue d'ensemble des livraisons et de la dernière mise en ligne</p>
           </div>
-          <ul class="chart-legend">
-            <li *ngFor="let seg of deploymentChartData">
-              <span class="legend-dot" [style.background]="seg.color"></span>
-              <span>{{ seg.label }}</span>
-              <span class="legend-value">{{ seg.value }}</span>
-            </li>
-          </ul>
-        </div>
-        <div class="chart-empty" *ngIf="!loadingSlow && deploymentChartData.length === 0">
-          <p>Aucun déploiement pour l’instant</p>
-        </div>
-      </section>
-      <section class="chart-card">
-        <h2 class="chart-title">Vulnérabilités par sévérité</h2>
-        <div class="chart-body" *ngIf="vulnerabilityChartData.length > 0">
-          <div class="bar-chart">
-            <div *ngFor="let seg of vulnerabilityChartData" class="bar-row">
-              <span class="bar-label">{{ seg.label }}</span>
-              <div class="bar-track">
-                <div class="bar-fill" [style.width.%]="seg.percent" [style.background]="seg.color"></div>
-              </div>
-              <span class="bar-value">{{ seg.value }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="chart-empty" *ngIf="vulnerabilityChartData.length === 0">
-          <p>Aucune vulnérabilité détectée</p>
-        </div>
-      </section>
-    </div>
+        </header>
 
-    <!-- Last deployment -->
-    <section class="dashboard-section deployment-section" *ngIf="latestDeployment">
-      <h2 class="section-title">Dernier déploiement</h2>
-      <div class="deployment-card">
-        <!-- Aperçu type Vercel : clic = ouvrir l’URL publique -->
-        <div class="deployment-vercel">
-          <ng-container *ngIf="liveDeploymentUrl; else deployUrlMissing">
-            <div class="vercel-grid vercel-grid-live">
-              <div class="vercel-preview-column">
-                <div class="vercel-preview-toolbar">
-                  <span class="vercel-preview-badge">Aperçu</span>
-                  <div class="vercel-preview-toolbar-actions">
-                    <button type="button" class="btn-toolbar" (click)="openLiveDeployment()">Ouvrir dans un nouvel onglet</button>
-                    <button type="button" class="btn-toolbar btn-toolbar-primary" (click)="copyPreviewUrl()">
-                      {{ copied ? 'Copié' : 'Copier le lien' }}
+        <div class="d2-deploy-layout">
+          <!-- Dernier déploiement (gauche) -->
+          <article class="d2-card d2-card--latest-deploy" *ngIf="displayLatestDeployment as latestDeployment">
+            <header class="d2-card-head">
+              <h2 class="d2-card-title">Dernier déploiement</h2>
+              <p class="d2-card-sub">Aperçu et session éphémère en cours</p>
+            </header>
+
+            <div class="d2-latest-grid">
+              <!-- Aperçu live -->
+              <div class="d2-preview-pane">
+                <div class="d2-preview-toolbar">
+                  <span class="d2-preview-badge">Aperçu</span>
+                  <button type="button" class="d2-preview-copy" (click)="copyPreviewUrl()"
+                    [disabled]="!canOpenDeploymentPreview">{{ copied ? '✓ Copié' : '📋 Copier le lien' }}</button>
+                </div>
+                <div class="d2-preview-stage">
+                  <div class="vercel-preview-ready" *ngIf="canOpenDeploymentPreview">
+                    <div class="vercel-preview-ready-visual" aria-hidden="true">
+                      <span class="vercel-preview-ready-ring"></span>
+                      <span class="vercel-preview-ready-icon">🌐</span>
+                    </div>
+                    <p class="vercel-preview-ready-title">Application en ligne</p>
+                    <p class="vercel-preview-ready-sub">Votre déploiement est accessible. Ouvrez-le dans un nouvel onglet pour l'explorer.</p>
+                    <button type="button" class="vercel-preview-open-btn" (click)="openLiveDeployment()">
+                      Ouvrir l'application ↗
+                    </button>
+                  </div>
+
+                  <div class="vercel-preview-unavailable" *ngIf="!canOpenDeploymentPreview">
+                    <div class="vercel-preview-unavailable-visual" aria-hidden="true">
+                      <span class="vercel-preview-unavailable-icon">{{ isLatestEnvExpired ? '⏱️' : '🔗' }}</span>
+                    </div>
+                    <p class="vercel-preview-unavailable-title">
+                      {{ isLatestEnvExpired ? 'Session expirée' : 'Aperçu indisponible' }}
+                    </p>
+                    <p class="vercel-preview-unavailable-sub">
+                      {{ isLatestEnvExpired
+                        ? 'La session éphémère est terminée. Relancez un déploiement pour obtenir une nouvelle URL.'
+                        : 'Aucune URL de prévisualisation n\'a été publiée pour cet environnement.' }}
+                    </p>
+                    <button type="button" class="vercel-preview-relaunch-btn" (click)="deployOnSelectedBranch()">
+                      🚀 Relancer un déploiement
                     </button>
                   </div>
                 </div>
-                <div class="vercel-iframe-wrap">
-                  <iframe *ngIf="trustedEmbedUrl" class="vercel-iframe-full" [src]="trustedEmbedUrl" title="Aperçu déploiement"></iframe>
-                </div>
               </div>
-              <aside class="vercel-meta">
-                <div class="vercel-meta-head">
-                  <h3 class="vercel-title">Déploiement</h3>
-                  <span class="vercel-status-pill" [ngClass]="statusClass(latestDeployment.pipelineStatus || '')">
+
+              <!-- Métadonnées -->
+              <aside class="d2-deploy-meta">
+                <div class="d2-deploy-meta-head">
+                  <h3>Détails</h3>
+                  <span class="d2-deploy-status-pill" [ngClass]="statusClass(latestDeployment.pipelineStatus || '')">
                     {{ (latestDeployment.pipelineStatus || '—') | uppercase }}
                   </span>
                 </div>
-                <dl class="vercel-dl">
-                  <dt>Branche</dt>
-                  <dd>{{ latestDeployment.gitBranch }}</dd>
-                  <dt>Environnement</dt>
-                  <dd>{{ latestDeployment.environmentName }}</dd>
+                <dl class="d2-deploy-dl">
+                  <div><dt>Environnement</dt><dd>{{ latestDeployment.environmentName }}</dd></div>
+                  <div><dt>Branche</dt><dd>{{ latestDeployment.gitBranch }}</dd></div>
+                  <div><dt>Créé par</dt><dd>{{ latestDeployment.triggeredByUsername || '—' }}</dd></div>
+                  <div><dt>Il y a</dt><dd>{{ formatTimeAgo(latestDeployment.createdAt) }}</dd></div>
                 </dl>
-                <div class="vercel-actions">
-                  <button type="button" class="btn-visit" (click)="openLiveDeployment()">Visiter</button>
-                  <button type="button" class="btn-ghost" (click)="copyPreviewUrl()">{{ copied ? 'Copié' : 'Copier le lien' }}</button>
+
+                <div class="d2-ttl-box">
+                  <div class="d2-ttl-head">
+                    <span class="d2-ttl-label">⏳ Session éphémère</span>
+                    <span class="d2-ttl-value">{{ formatRemaining() }}</span>
+                  </div>
+                  <div class="d2-ttl-track">
+                    <div class="d2-ttl-bar" [style.width.%]="ttlProgressPercent()"></div>
+                  </div>
+                </div>
+
+                <div class="d2-deploy-meta-actions">
+                  <button type="button" class="d2-btn-orange d2-btn-orange--block" (click)="openLiveDeployment()"
+                    [disabled]="!canOpenDeploymentPreview">Visiter l'application</button>
+                  <button type="button" class="d2-ghost-sm d2-ghost-sm--block" (click)="viewPipeline(latestDeployment.environmentId)">
+                    Voir les détails du pipeline →
+                  </button>
                 </div>
               </aside>
             </div>
-          </ng-container>
-          <ng-template #deployUrlMissing>
-            <div class="vercel-missing-url">
-              <p><strong>Aucune URL d’aperçu pour cet environnement.</strong></p>
-              <p>
-                <strong>Option A — nip.io (recommandé en local)</strong> : dans
-                <code>application.properties</code> (ou variables d’environnement équivalentes), activez
-                <code>deployment.preview.nip.enabled=true</code>,
-                <code>deployment.preview.nip.master-ip</code> (ex. <code>192.168.130.138</code>),
-                <code>deployment.preview.nip.node-port</code> (ex. <code>30374</code>), puis redémarrez le backend.
-                L’URL affichée sera du type <code>https://app-&lt;uuid-env&gt;.&lt;master-ip&gt;.nip.io:&lt;port&gt;</code> (schéma : <code>deployment.preview.nip.scheme</code>).
+          </article>
+
+          <!-- Statut des déploiements (droite) -->
+          <article class="d2-card d2-card--deploy-stats">
+            <header class="d2-card-head">
+              <h2 class="d2-card-title">Statut des déploiements</h2>
+              <p class="d2-card-sub">{{ deploymentChartSubtitle }}</p>
+            </header>
+            <div class="d2-granularity-toolbar" *ngIf="!loadingSlow">
+              <span class="d2-granularity-label">Période :</span>
+              <button type="button" class="d2-granularity-btn"
+                [class.active]="deploymentPeriod === 'day'"
+                (click)="setDeploymentPeriod('day')">Jour</button>
+              <button type="button" class="d2-granularity-btn"
+                [class.active]="deploymentPeriod === 'week'"
+                (click)="setDeploymentPeriod('week')">Semaine</button>
+              <button type="button" class="d2-granularity-btn"
+                [class.active]="deploymentPeriod === 'month'"
+                (click)="setDeploymentPeriod('month')">Mois</button>
+            </div>
+            <div class="d2-deploy-chart-wrap" *ngIf="!loadingSlow; else deploySkel">
+              <div class="d2-donut-area">
+                <div class="d2-donut-canvas-wrap">
+                  <canvas #deployDonutCanvas></canvas>
+                  <div class="d2-donut-center">
+                    <span class="d2-donut-total">{{ chartDeploymentCounts.total }}</span>
+                    <span class="d2-donut-label">TOTAL</span>
+                  </div>
+                </div>
+                <ul class="d2-donut-legend">
+                  <li *ngFor="let item of deploymentDonutLegend">
+                    <span class="d2-legend-dot" [style.background]="item.color"></span>
+                    <span class="d2-legend-label">{{ item.label }}</span>
+                    <strong>{{ item.value }}</strong>
+                    <small>{{ item.pct }}%</small>
+                  </li>
+                </ul>
+              </div>
+              <div class="d2-week-bars">
+                <canvas #weekBarCanvas></canvas>
+              </div>
+            </div>
+            <ng-template #deploySkel><div class="d2-skeleton d2-skeleton--chart"></div></ng-template>
+          </article>
+        </div>
+
+        <!-- Pipeline (ligne complète) -->
+        <article class="d2-card d2-card--pipeline-full" *ngIf="displayLatestDeployment as latestDeployment">
+          <header class="d2-card-head d2-card-head--row">
+            <div>
+              <h2 class="d2-card-title">Dernier Pipeline</h2>
+              <p class="d2-card-sub">Étapes d'exécution du dernier déploiement</p>
+            </div>
+            <button type="button" class="d2-link-right" (click)="viewPipeline(latestDeployment.environmentId)">Détails →</button>
+          </header>
+          <div class="d2-pipeline-full-scroll" *ngIf="latestDeployment.jobs && latestDeployment.jobs.length > 0">
+            <ol class="d2-stepper d2-stepper--pipeline">
+              <li *ngFor="let stage of getPipelineStagesWithStatus()" class="d2-step" [ngClass]="stage.status">
+                <div class="d2-step-icon">
+                  <span *ngIf="stage.status === 'done'">✓</span>
+                  <span *ngIf="stage.status === 'active'">⏳</span>
+                  <span *ngIf="stage.status === 'pending'">○</span>
+                  <span *ngIf="stage.status === 'failed'">✗</span>
+                </div>
+                <span class="d2-step-label">{{ stage.name }}</span>
+              </li>
+            </ol>
+          </div>
+          <div *ngIf="loadingPipelineDetails" class="d2-deploy-pipeline-loading">
+            <span class="d2-spinner"></span><span>Chargement des stages…</span>
+          </div>
+          <p *ngIf="!loadingPipelineDetails && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)"
+            class="d2-empty-inline">Aucune information de pipeline disponible.</p>
+        </article>
+      </section>
+
+      <!-- ════════════════ SECTION 02 · SÉCURITÉ ════════════════ -->
+      <section id="d2-security-analytics" class="d2-section d2-animate" [style.--i]="4">
+        <header class="d2-section-head">
+          <span class="d2-section-num">02</span>
+          <div class="d2-section-heading">
+            <h2 class="d2-section-name"><span class="d2-section-emoji">🛡️</span> Sécurité</h2>
+            <p class="d2-section-desc">Posture de sécurité, scanners CI et analyse DefectDojo</p>
+          </div>
+          <button type="button" class="d2-section-link" (click)="viewSecurityDashboard()">Analyse complète →</button>
+        </header>
+
+        <div class="d2-alert d2-alert--error" *ngIf="error">{{ error }}</div>
+        <div class="d2-alert d2-alert--info" *ngIf="infoMessage && !error">{{ infoMessage }}</div>
+
+        <!-- Bandeau KPI sécurité -->
+        <div class="d2-sec-kpi-strip">
+          <article class="d2-sec-kpi" *ngFor="let kpi of securityKpis"
+            [style.--kpi-color]="kpi.color">
+            <span class="d2-sec-kpi-icon" [class.d2-sec-kpi-icon--dot]="kpi.icon === '●'">{{ kpi.icon }}</span>
+            <div class="d2-sec-kpi-body">
+              <span class="d2-sec-kpi-value">{{ kpi.value }}</span>
+              <span class="d2-sec-kpi-label">{{ kpi.label }}</span>
+              <span class="d2-sec-kpi-sub" *ngIf="kpi.sub">{{ kpi.sub }}</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="d2-sec-bento">
+          <!-- Graphique DefectDojo -->
+          <article class="d2-card d2-sec-chart-card">
+            <header class="d2-sec-chart-head">
+              <div class="d2-sec-chart-titles">
+                <h3 class="d2-sec-chart-title">Évolution par sévérité</h3>
+                <p class="d2-sec-chart-sub">
+                  {{ openSeverityChartSubtitle }}
+                  <span *ngIf="isGlobalView">· toutes les branches</span>
+                  <span *ngIf="!isGlobalView">· branche {{ selectedBranch }}</span>
+                </p>
+              </div>
+              <div class="d2-sec-chart-actions">
+                <div class="d2-granularity-toolbar d2-granularity-toolbar--inline" *ngIf="hasOpenSeverityChart && !loading">
+                  <span class="d2-granularity-label">Granularité :</span>
+                  <button type="button" class="d2-granularity-btn"
+                    [class.active]="openSeverityGranularity === 'hour'"
+                    (click)="setOpenSeverityGranularity('hour')">Heure</button>
+                  <button type="button" class="d2-granularity-btn"
+                    [class.active]="openSeverityGranularity === 'day'"
+                    (click)="setOpenSeverityGranularity('day')">Jour</button>
+                  <button type="button" class="d2-granularity-btn"
+                    [class.active]="openSeverityGranularity === 'week'"
+                    (click)="setOpenSeverityGranularity('week')">Semaine</button>
+                  <button type="button" class="d2-granularity-btn"
+                    [class.active]="openSeverityGranularity === 'month'"
+                    (click)="setOpenSeverityGranularity('month')">Mois</button>
+                </div>
+              </div>
+            </header>
+
+            <div class="d2-sec-legend" *ngIf="hasOpenSeverityChart && !loading">
+              <span class="d2-sec-legend-item" *ngFor="let sev of severities">
+                <span class="d2-sec-legend-dot" [style.background]="severityBarColor(sev)"></span>
+                {{ sev }}
+              </span>
+            </div>
+
+            <div class="d2-sec-chart-body">
+              <div class="d2-chart-loading" *ngIf="loading">
+                <span class="d2-spinner"></span> Chargement du graphique…
+              </div>
+              <div class="d2-chart-canvas-wrap d2-sec-chart-canvas"
+                   [class.d2-chart-canvas-wrap--hidden]="!hasOpenSeverityChart || loading">
+                <canvas #daySeverityCanvas></canvas>
+              </div>
+              <div class="d2-sec-chart-empty" *ngIf="!loading && !hasOpenSeverityChart">
+                <span class="d2-sec-chart-empty-icon">📊</span>
+                <p>Aucun scan DefectDojo</p>
+                <small>Lancez un pipeline pour alimenter l'engagement et visualiser l'évolution.</small>
+              </div>
+            </div>
+          </article>
+
+          <!-- Grille inférieure -->
+          <div class="d2-sec-bottom">
+            <!-- Vulnérabilités par sévérité -->
+            <article class="d2-card d2-sec-severity-card">
+              <header class="d2-sec-card-head">
+                <div>
+                  <h3 class="d2-sec-card-title">Répartition par sévérité</h3>
+                  <p class="d2-sec-card-sub">Dernière analyse · {{ deploymentScopeLabel }}</p>
+                </div>
+                <span class="d2-sec-total-pill" *ngIf="!loading">{{ totalSecurityOpen }} au total</span>
+              </header>
+
+              <div class="d2-sec-sev-list" *ngIf="!loading; else sevSkel">
+                <button type="button" class="d2-sec-sev-item" *ngFor="let sev of severities; let i = index"
+                  [class.d2-sec-sev-item--hover]="hoveredSeverity === sev"
+                  [style.--sev-color]="severityBarColor(sev)"
+                  [style.--sev-width]="severityBarWidth(sev) + '%'"
+                  [style.--sev-delay]="(i * 60) + 'ms'"
+                  (mouseenter)="hoveredSeverity = sev" (mouseleave)="hoveredSeverity = null"
+                  (click)="navigateToSeverity(sev)">
+                  <span class="d2-sec-sev-rank">{{ sev }}</span>
+                  <div class="d2-sec-sev-track">
+                    <div class="d2-sec-sev-fill"></div>
+                  </div>
+                  <span class="d2-sec-sev-count">{{ openSeverityCount(sev) }}</span>
+                </button>
+              </div>
+              <ng-template #sevSkel><div class="d2-skeleton d2-skeleton--bars"></div></ng-template>
+            </article>
+
+            <!-- Outils de détection -->
+            <article class="d2-card d2-sec-scanners-card">
+              <header class="d2-sec-card-head">
+                <div>
+                  <h3 class="d2-sec-card-title">Outils de détection</h3>
+                  <p class="d2-sec-card-sub">{{ activeScannerCount }} actif(s) sur {{ ciScannerSummary.length }}</p>
+                </div>
+                <span class="d2-sec-scanner-ratio"
+                  [class.d2-sec-scanner-ratio--full]="activeScannerCount === ciScannerSummary.length">
+                  {{ activeScannerCount }}/{{ ciScannerSummary.length }}
+                </span>
+              </header>
+
+              <ul class="d2-sec-scanner-list">
+                <li class="d2-sec-scanner-row" *ngFor="let scanner of ciScannerSummary"
+                  [class.d2-sec-scanner-row--active]="scanner.active"
+                  tabindex="0">
+                  <span class="d2-sec-scanner-icon">
+                    <img [src]="scanner.iconUrl" [alt]="" width="22" height="22" loading="lazy" />
+                  </span>
+                  <div class="d2-sec-scanner-body">
+                    <span class="d2-sec-scanner-type" [ngClass]="detectionTypeClass(scanner.type)">{{ scanner.type }}</span>
+                    <span class="d2-sec-scanner-name">{{ scanner.name }}</span>
+                  </div>
+                  <span class="d2-sec-scanner-status"
+                    [class.d2-sec-scanner-status--on]="scanner.active"
+                    [class.d2-sec-scanner-status--off]="!scanner.active">
+                    {{ scanner.active ? 'Actif' : 'Inactif' }}
+                  </span>
+                  <span class="d2-sec-scanner-tooltip" role="tooltip">{{ scanner.tooltip }}</span>
+                </li>
+              </ul>
+            </article>
+
+            <!-- Indice de maturité -->
+            <article class="d2-card d2-sec-maturity-card"
+              [class.d2-sec-maturity-card--open]="maturityPanelPinned"
+              tabindex="0"
+              aria-describedby="d2-maturity-tooltip"
+              (click)="$event.stopPropagation()">
+              <header class="d2-sec-card-head d2-sec-card-head--center">
+                <div>
+                  <h3 class="d2-sec-card-title">
+                    Indice de maturité
+                    <button type="button" class="d2-sec-maturity-hint"
+                      (click)="toggleMaturityPanel($event)"
+                      [attr.aria-expanded]="maturityPanelPinned"
+                      aria-controls="d2-maturity-tooltip"
+                      title="Cliquez pour ouvrir et faire défiler l'analyse">
+                      ⓘ
+                    </button>
+                  </h3>
+                  <p class="d2-sec-card-sub" *ngIf="isGlobalView">Toutes les branches</p>
+                  <p class="d2-sec-card-sub" *ngIf="!isGlobalView">Branche {{ selectedBranch }}</p>
+                </div>
+              </header>
+
+              <div class="d2-sec-score-wrap"
+                [style.--grade-color]="gradeColor(displaySecurityGrade !== '—' ? displaySecurityGrade : undefined)"
+                [style.--score-pct]="hasMaturityScore ? securityScorePercent : 0">
+                <div class="d2-sec-score-gauge" aria-hidden="true"></div>
+                <div class="d2-sec-score-inner">
+                  <span class="d2-sec-score-grade">{{ displaySecurityGrade }}</span>
+                  <span class="d2-sec-score-num">{{ displaySecurityScoreLabel }}</span>
+                </div>
+              </div>
+
+              <p class="d2-sec-score-scale" *ngIf="!hasMaturityScore">{{ maturityGradeScaleLabel }}</p>
+
+              <p class="d2-sec-score-summary">
+                {{ displaySecuritySummary }}
               </p>
-              <p *ngIf="(latestDeployment.pipelineStatus || '').toUpperCase() === 'SUCCESS'">
-                <strong>Option B — callback pipeline</strong> : à la fin du job K8s, appelez
-                <code>POST …/api/webhooks/deployment-published</code> avec l’en-tête <code>X-Deploy-Token</code>
-                (même secret que <code>DEPLOYMENT_CALLBACK_TOKEN</code> côté backend et GitLab CI).
-                Détails : <code>DevSecOpsPlatform_Backend/docs/pipeline.md</code>.
+
+              <p class="d2-sec-score-deploy" [ngClass]="maturityVerdictClass(maturityAnalysis.verdict)">
+                {{ maturityAnalysis.verdictTitle }}
               </p>
+
+              <div class="d2-sec-score-pills">
+                <span class="d2-sec-score-pill">
+                  <strong>{{ totalSecurityOpen }}</strong> ouvertes
+                </span>
+                <span class="d2-sec-score-pill">
+                  <strong>{{ dashboard?.totalClosed ?? 0 }}</strong> résolues
+                </span>
+                <span class="d2-sec-score-pill d2-sec-score-pill--danger">
+                  <strong>{{ openSeverityCount('Critical') }}</strong> critiques
+                </span>
+              </div>
+
+              <aside class="d2-sec-maturity-tooltip" id="d2-maturity-tooltip" role="tooltip"
+                (wheel)="onMaturityTooltipWheel($event)">
+                <button type="button" class="d2-sec-maturity-tooltip-close"
+                  *ngIf="maturityPanelPinned"
+                  (click)="toggleMaturityPanel($event)"
+                  aria-label="Fermer l'analyse">×</button>
+                <div class="d2-sec-maturity-verdict" [ngClass]="maturityVerdictClass(maturityAnalysis.verdict)">
+                  <strong>{{ maturityAnalysis.verdictTitle }}</strong>
+                  <p>{{ maturityAnalysis.verdictDetail }}</p>
+                </div>
+
+                <section class="d2-sec-maturity-tooltip-block" *ngIf="maturityAnalysis.findings.length">
+                  <h4 class="d2-sec-maturity-tooltip-heading">État actuel</h4>
+                  <ul>
+                    <li *ngFor="let finding of maturityAnalysis.findings">{{ finding }}</li>
+                  </ul>
+                </section>
+
+                <section class="d2-sec-maturity-tooltip-block">
+                  <h4 class="d2-sec-maturity-tooltip-heading">Analyse par scanner</h4>
+                  <div class="d2-sec-maturity-scans">
+                    <article class="d2-sec-maturity-scan"
+                      *ngFor="let scan of maturityAnalysis.scanAnalyses"
+                      [ngClass]="maturityScanStatusClass(scan.status)">
+                      <header class="d2-sec-maturity-scan-head">
+                        <span class="d2-sec-maturity-scan-name">{{ scan.name }}</span>
+                        <span class="d2-sec-maturity-scan-type" [ngClass]="detectionTypeClass(scan.type)">{{ scan.type }}</span>
+                      </header>
+                      <p class="d2-sec-maturity-scan-count">
+                        <ng-container *ngIf="scan.active">
+                          {{ scan.findingCount }} finding{{ scan.findingCount > 1 ? 's' : '' }} ouvert{{ scan.findingCount > 1 ? 's' : '' }}
+                        </ng-container>
+                        <span class="d2-sec-maturity-scan-badge" *ngIf="scan.status === 'ok'">OK</span>
+                        <span class="d2-sec-maturity-scan-badge d2-sec-maturity-scan-badge--warn" *ngIf="scan.status === 'warning'">Attention</span>
+                        <span class="d2-sec-maturity-scan-badge d2-sec-maturity-scan-badge--alert" *ngIf="scan.status === 'alert'">Critique</span>
+                        <span class="d2-sec-maturity-scan-badge d2-sec-maturity-scan-badge--off" *ngIf="scan.status === 'inactive'">Inactif</span>
+                      </p>
+                      <p class="d2-sec-maturity-scan-summary">{{ scan.summary }}</p>
+                      <p class="d2-sec-maturity-scan-rec">{{ scan.recommendation }}</p>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="d2-sec-maturity-tooltip-block d2-sec-maturity-tooltip-block--last"
+                  *ngIf="maturityAnalysis.actions.length">
+                  <h4 class="d2-sec-maturity-tooltip-heading">Actions recommandées</h4>
+                  <ul>
+                    <li *ngFor="let action of maturityAnalysis.actions">{{ action }}</li>
+                  </ul>
+                </section>
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════ SECTION 03 · ENVIRONNEMENTS ════════════════ -->
+      <section id="d2-environments" class="d2-section d2-animate" [style.--i]="5">
+        <header class="d2-section-head">
+          <span class="d2-section-num">03</span>
+          <div class="d2-section-heading">
+            <h2 class="d2-section-name"><span class="d2-section-emoji">🌍</span> Environnements actifs</h2>
+            <p class="d2-section-desc">Sessions éphémères en cours</p>
+          </div>
+          <button type="button" class="d2-section-link" (click)="viewAllEnvironments()">Historique →</button>
+        </header>
+
+        <div class="d2-card d2-card--full">
+          <div class="d2-env-bottom-grid" *ngIf="allActiveEnvironmentCards.length; else noEnv">
+            <article class="d2-env-bottom-card" *ngFor="let env of allActiveEnvironmentCards">
+              <code class="d2-mono-tag">{{ env.name }}</code>
+              <span class="d2-pipe-branch">{{ env.branch }}</span>
+              <span class="d2-env-timer">{{ env.timeRemaining }}</span>
+              <div class="d2-env-bottom-actions">
+                <button type="button" class="d2-ghost-sm" (click)="viewEnvironment(env.id)">Ouvrir</button>
+                <button type="button" class="d2-ghost-sm" (click)="viewEnvSecurityAnalysis({ id: env.id, branch: env.branch })">Voir les scans</button>
+              </div>
+            </article>
+          </div>
+          <ng-template #noEnv>
+            <div class="d2-empty-block">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <p>Aucun environnement actif</p>
+              <button type="button" class="d2-btn-orange" (click)="deployOnSelectedBranch()">Lancer un déploiement →</button>
             </div>
           </ng-template>
         </div>
+      </section>
 
-        <div class="deployment-main">
-          <div class="deployment-info">
-            <div class="info-row">
-              <span class="info-label">Environnement</span>
-              <span class="info-value">{{ latestDeployment.environmentName }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Branche</span>
-              <span class="info-value">{{ latestDeployment.gitBranch }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Statut</span>
-              <span class="status-badge" [ngClass]="statusClass(latestDeployment.pipelineStatus)">
-                {{ latestDeployment.pipelineStatus }}
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Créé par</span>
-              <span class="info-value">{{ latestDeployment.triggeredByUsername || '—' }}</span>
-            </div>
-            <div class="info-row">
-  <span class="info-label">Il y a</span>
-  <span class="info-value">{{ formatTimeAgo(latestDeployment.createdAt) }}</span>
-</div>
+      <!-- ════════════════ SECTION 04 · ACTIVITÉ & HISTORIQUE ════════════════ -->
+      <section id="d2-history" class="d2-section d2-animate" [style.--i]="6">
+        <header class="d2-section-head">
+          <span class="d2-section-num">04</span>
+          <div class="d2-section-heading">
+            <h2 class="d2-section-name"><span class="d2-section-emoji">📜</span> Activité &amp; historique</h2>
+            <p class="d2-section-desc">Derniers évènements, pipelines et vulnérabilités</p>
           </div>
-          <div class="deployment-preview" *ngIf="liveDeploymentUrl">
-            <div class="preview-header">
-              <span class="preview-label">Session éphémère</span>
-              <button type="button" class="copy-btn" (click)="copyPreviewUrl()" [attr.aria-label]="'Copier le lien de l’app'">
-                {{ copied ? '✓ Copié' : '📋 Copier le lien' }}
+        </header>
+
+        <div class="d2-history-stack">
+          <!-- Activité récente -->
+          <article class="d2-card d2-history-card">
+            <header class="d2-history-card-head">
+              <div>
+                <h2 class="d2-history-card-title">Activité récente</h2>
+                <p class="d2-history-card-sub">Derniers évènements du projet</p>
+              </div>
+              <button type="button" class="d2-history-link" (click)="viewAllPipelines()">Voir tout →</button>
+            </header>
+            <div class="d2-activity-panel" *ngIf="recentActivities.length; else noAct">
+              <div class="d2-activity-item" *ngFor="let act of recentActivities" (click)="navigateActivity(act)">
+                <span class="d2-act-icon" [ngClass]="activityIconClass(act.type)">{{ act.icon }}</span>
+                <div class="d2-act-body">
+                  <strong>{{ act.title }}</strong>
+                  <span>{{ act.description }}</span>
+                </div>
+                <div class="d2-act-meta">
+                  <span class="d2-act-badge" [ngClass]="statusClass(act.status)">{{ act.status }}</span>
+                  <span class="d2-act-time">{{ getActivityTimeAgo(act) }}</span>
+                </div>
+              </div>
+            </div>
+            <ng-template #noAct><p class="d2-history-empty">Aucune activité récente.</p></ng-template>
+          </article>
+
+          <!-- Pipelines récents -->
+          <article class="d2-card d2-history-card d2-history-card--pipes">
+            <header class="d2-history-card-head">
+              <div>
+                <h2 class="d2-history-card-title">Pipelines récents</h2>
+                <p class="d2-history-card-sub">{{ displayRecentPipelines.length }} exécution(s) récente(s)</p>
+              </div>
+              <button type="button" class="d2-history-link" (click)="viewAllPipelines()">Voir tout →</button>
+            </header>
+            <div class="d2-pipe-panel" *ngIf="displayRecentPipelines.length; else noPipe">
+              <div class="d2-pipe-row" *ngFor="let p of displayRecentPipelines" (click)="viewPipeline(p.environmentId)">
+                <div class="d2-pipe-row-start">
+                  <code class="d2-pipe-id">#{{ p.id }}</code>
+                  <span class="d2-pipe-branch"><span class="d2-pipe-branch-label">branche :</span> {{ p.branch }}</span>
+                </div>
+                <span class="d2-pipe-time">{{ getPipelineTimeAgo(p) }}</span>
+                <span class="d2-pipe-status-pill" [ngClass]="statusClass(p.status)">
+                  <span class="d2-pending-dot" *ngIf="p.status?.toUpperCase() === 'PENDING'"></span>
+                  {{ p.status }}
+                </span>
+              </div>
+            </div>
+            <ng-template #noPipe><p class="d2-history-empty">Aucun pipeline récent.</p></ng-template>
+          </article>
+
+          <!-- Vulnérabilités récentes -->
+          <article id="d2-security" class="d2-card d2-history-card d2-history-card--vulns">
+            <header class="d2-history-card-head">
+              <div>
+                <h2 class="d2-history-card-title">Vulnérabilités récentes</h2>
+                <p class="d2-history-card-sub">{{ displayRecentVulnerabilities.length }} finding(s) récent(s) · DefectDojo</p>
+              </div>
+              <button type="button" class="d2-history-link" (click)="viewSecurityDashboard()">Voir tout →</button>
+            </header>
+            <div class="d2-vuln-panel" *ngIf="displayRecentVulnerabilities.length && !recentFindingsLoading; else noVuln">
+              <button type="button" class="d2-vuln-row" *ngFor="let f of displayRecentVulnerabilities"
+                [class.d2-vuln-row--critical]="f.severity.toUpperCase() === 'CRITICAL'"
+                [style.--sev-accent]="findingSeverityColor(f.severity)"
+                (click)="openRecentFinding(f)">
+                <span class="d2-vuln-sev" [ngClass]="findingSeverityClass(f.severity)">{{ f.severity }}</span>
+                <span class="d2-vuln-row-body">
+                  <span class="d2-vuln-title">{{ f.title }}</span>
+                  <span class="d2-vuln-meta">
+                    <code class="d2-vuln-tool">{{ f.toolLabel }}</code>
+                  </span>
+                </span>
+                <span class="d2-vuln-arrow" aria-hidden="true">›</span>
               </button>
             </div>
-            <div class="ttl-container" *ngIf="environmentSummary && (totalSeconds != null && totalSeconds > 0)">
-              <div class="ttl-header">
-                <span class="ttl-label">Temps restant</span>
-                <span class="ttl-value">{{ formatRemaining() }}</span>
+            <ng-template #noVuln>
+              <div class="d2-history-empty-block" *ngIf="!recentFindingsLoading">
+                <span class="d2-empty-shield">🛡️</span>
+                <p>Aucune vulnérabilité détectée</p>
+                <small>Les résultats apparaîtront après le premier scan.</small>
               </div>
-              <div class="ttl-progress">
-                <div class="ttl-progress-bar" [style.width.%]="ttlProgressPercent()"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="pipeline-steps" *ngIf="latestDeployment.jobs && latestDeployment.jobs.length > 0">
-          <h3>Pipeline</h3>
-          <ol class="stepper">
-            <li *ngFor="let stage of getPipelineStagesWithStatus()" class="step" [ngClass]="stage.status">
-              <div class="step-icon">
-                <span *ngIf="stage.status === 'done'">✓</span>
-                <span *ngIf="stage.status === 'active'">⏳</span>
-                <span *ngIf="stage.status === 'pending'">○</span>
-                <span *ngIf="stage.status === 'failed'">✗</span>
-              </div>
-              <span class="step-label">{{ stage.name }}</span>
-            </li>
-          </ol>
-        </div>
-        <div *ngIf="loadingPipelineDetails" class="loading-stages">
-          <div class="spinner small"></div>
-          <span>Chargement des stages...</span>
-        </div>
-        <div *ngIf="!loadingPipelineDetails && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)" class="no-stages">
-          <p>Aucune information de pipeline disponible</p>
-        </div>
-        <div class="deployment-actions">
-          <button class="btn-cta" (click)="viewPipeline(latestDeployment.environmentId)">Voir les détails du pipeline</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Pending deployments -->
-    <section class="dashboard-section" *ngIf="pendingDeploymentsList.length > 0">
-      <div class="section-header">
-        <h2 class="section-title">Déploiements en attente</h2>
-        <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
-      </div>
-      <div class="pending-deployments-grid">
-        <div *ngFor="let deployment of pendingDeploymentsList" class="pending-card" (click)="viewPipeline(deployment.environmentId)">
-          <div class="pending-header">
-            <span class="pending-icon">⏳</span>
-            <div class="pending-info">
-              <h4>{{ deployment.environmentName }}</h4>
-              <p class="pending-branch">🌿 {{ deployment.gitBranch }}</p>
-            </div>
-            <span class="pending-time">{{ formatTimeAgo(deployment.createdAt) }}</span>
-          </div>
-          <div class="pending-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" [style.width.%]="deployment.progress || 30"></div>
-            </div>
-            <span class="progress-label">En file d'attente...</span>
-          </div>
-          <div class="pending-footer">
-            <span class="pending-trigger">par {{ deployment.triggeredByUsername || '—' }}</span>
-            <span class="pending-status">EN ATTENTE</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Two columns: Activity + Pipelines -->
-    <div class="dashboard-grid">
-      <section class="dashboard-section">
-        <div class="section-header">
-          <h2 class="section-title">Activité récente</h2>
-          <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
-        </div>
-        <div class="activity-list" *ngIf="!loadingSlow && recentActivities.length > 0">
-          <div *ngFor="let activity of recentActivities" class="activity-item">
-            <span class="activity-icon">{{ activity.icon }}</span>
-            <div class="activity-content">
-              <span class="activity-kind">{{ activityKindLabel(activity.type) }}</span>
-              <p class="activity-title">{{ activity.title }}</p>
-              <p class="activity-description">{{ activity.description }}</p>
-              <p class="activity-app-url" *ngIf="activity.previewUrl">
-                <a [href]="activity.previewUrl" target="_blank" rel="noopener noreferrer">Visiter l'application</a>
-              </p>
-              <span class="activity-time">{{ getActivityTimeAgo(activity) }}</span>
-            </div>
-            <span class="activity-status" [ngClass]="statusClass(activity.status)">{{ activity.status }}</span>
-          </div>
-        </div>
-        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
-          <p>Chargement de l’activité…</p>
-        </div>
-        <div *ngIf="!loadingSlow && recentActivities.length === 0" class="empty-list">
-          <p>Aucune activité récente</p>
+              <div class="d2-skeleton d2-skeleton--list" *ngIf="recentFindingsLoading"></div>
+            </ng-template>
+          </article>
         </div>
       </section>
-      <section class="dashboard-section">
-        <div class="section-header">
-          <h2 class="section-title">Pipelines récents</h2>
-          <a class="view-all" (click)="viewAllPipelines()">Voir tout →</a>
-        </div>
-        <div class="pipelines-list" *ngIf="!loadingSlow && recentPipelines.length > 0">
-          <div *ngFor="let pipeline of recentPipelines" class="pipeline-item" (click)="viewPipeline(pipeline.environmentId)">
-            <div class="pipeline-header">
-              <span class="pipeline-name">{{ pipeline.name }}</span>
-              <span class="pipeline-badge" [ngClass]="statusClass(pipeline.status)">{{ pipeline.status }}</span>
-            </div>
-            <div class="pipeline-details">
-              <span class="pipeline-branch">🌿 {{ pipeline.branch }}</span>
-              <span class="pipeline-time">{{ getPipelineTimeAgo(pipeline) }}</span>
-            </div>
-          </div>
-        </div>
-        <div *ngIf="loadingSlow" class="empty-list section-loading-hint">
-          <p>Chargement des pipelines…</p>
-        </div>
-        <div *ngIf="!loadingSlow && recentPipelines.length === 0" class="empty-list">
-          <p>Aucun pipeline récent</p>
-        </div>
-      </section>
-    </div>
 
-    <!-- Active environments -->
-    <section class="dashboard-section">
-      <div class="section-header">
-        <h2 class="section-title">Environnements actifs</h2>
-        <a class="view-all" (click)="viewAllEnvironments()">Voir tout →</a>
-      </div>
-      <div class="environments-grid" *ngIf="activeEnvironments.length > 0">
-        <div *ngFor="let env of activeEnvironments" class="environment-card" (click)="viewEnvironment(env.id)">
-          <div class="env-header">
-            <h3>{{ env.name }}</h3>
-            <span class="env-badge">ACTIF</span>
-          </div>
-          <p class="env-branch">🌿 {{ env.branch }}</p>
-          <div class="env-footer">
-            <span class="env-expiry">⏳ expire dans {{ env.timeRemaining }}</span>
-          </div>
-        </div>
-      </div>
-      <div *ngIf="activeEnvironments.length === 0" class="empty-list">
-        <p>Aucun environnement actif</p>
-        <button class="btn-link" (click)="createNewEnvironment()">Créer un environnement</button>
-      </div>
-    </section>
-
-    <!-- Recent vulnerabilities -->
-    <section class="dashboard-section">
-      <div class="section-header">
-        <h2 class="section-title">Vulnérabilités récentes</h2>
-        <a class="view-all" (click)="viewAllVulnerabilities()">Voir tout →</a>
-      </div>
-      <div class="vulnerabilities-list" *ngIf="recentVulnerabilities.length > 0">
-        <div *ngFor="let vuln of recentVulnerabilities" class="vulnerability-item">
-          <span class="vuln-severity" [ngClass]="getSeverityClass(vuln.severity)">{{ vuln.severity }}</span>
-          <div class="vuln-content">
-            <p class="vuln-title">{{ vuln.title }}</p>
-            <p class="vuln-component">{{ vuln.component }} {{ vuln.version }}</p>
-          </div>
-        </div>
-      </div>
-      <div *ngIf="recentVulnerabilities.length === 0" class="empty-list">
-        <p>Aucune vulnérabilité détectée</p>
-      </div>
-    </section>
+    </ng-container>
   </div>
+
+  <!-- Pipeline drawer -->
+  <div class="d2-drawer-backdrop" *ngIf="pipelineDrawerOpen" (click)="closePipelineDrawer()"></div>
+  <aside class="d2-drawer" [class.d2-drawer--open]="pipelineDrawerOpen">
+    <header class="d2-drawer-head">
+      <h3>Pipeline #{{ displayLatestDeployment?.pipelineId }}</h3>
+      <button type="button" class="d2-drawer-close" (click)="closePipelineDrawer()">✕</button>
+    </header>
+    <div class="d2-drawer-body">
+      <div class="d2-drawer-job" *ngFor="let job of displayLatestDeployment?.jobs || []">
+        <div class="d2-drawer-job-top">
+          <strong>{{ job.name }}</strong>
+          <span [ngClass]="statusClass(job.status)">{{ job.status }}</span>
+        </div>
+        <span class="d2-drawer-job-meta">{{ job.stage }} · {{ formatDuration(job.durationSeconds ?? job.duration) }}</span>
+      </div>
+      <button type="button" class="d2-btn-orange" (click)="viewPipeline(displayLatestDeployment!.environmentId); closePipelineDrawer()">
+        Ouvrir la page pipeline →
+      </button>
+    </div>
+  </aside>
+
+  <!-- Finding drawer -->
+  <div class="d2-drawer-backdrop" *ngIf="findingDrawerOpen" (click)="closeFindingDrawer()"></div>
+  <aside class="d2-drawer" [class.d2-drawer--open]="findingDrawerOpen">
+    <header class="d2-drawer-head">
+      <h3>Remédiation</h3>
+      <button type="button" class="d2-drawer-close" (click)="closeFindingDrawer()">✕</button>
+    </header>
+    <div class="d2-drawer-body" *ngIf="selectedFinding">
+      <span class="d2-vuln-sev" [ngClass]="findingSeverityClass(selectedFinding.severity)">{{ selectedFinding.severity }}</span>
+      <h4>{{ selectedFinding.title || selectedFinding.ruleId }}</h4>
+      <p class="d2-drawer-desc">{{ selectedFinding.description || 'Consultez l\'analyse complète pour la remédiation IA.' }}</p>
+      <code class="d2-mono-tag" *ngIf="selectedFinding.filePath">{{ selectedFinding.filePath }}</code>
+      <button type="button" class="d2-btn-orange" (click)="viewSecurityDashboard(); closeFindingDrawer()">
+        Voir l'analyse complète →
+      </button>
+    </div>
+  </aside>
 </div>

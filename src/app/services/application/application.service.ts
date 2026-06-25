@@ -154,11 +154,12 @@ export class ApplicationService {
     );
   }
 
-  getDeploymentMetrics(appId: string): Observable<DeploymentMetrics> {
-    return this.http.get<DeploymentMetrics>(
-      `${BASE}api/applications/${appId}/deployments/metrics`,
-      { headers: this.authHeaders() }
-    );
+  getDeploymentMetrics(appId: string, branch?: string): Observable<DeploymentMetrics> {
+    let url = `${BASE}api/applications/${appId}/deployments/metrics`;
+    if (branch) {
+      url += `?branch=${encodeURIComponent(branch)}`;
+    }
+    return this.http.get<DeploymentMetrics>(url, { headers: this.authHeaders() });
   }
 
   private convertDeploymentItem(item: any): DeploymentHistoryItem {
