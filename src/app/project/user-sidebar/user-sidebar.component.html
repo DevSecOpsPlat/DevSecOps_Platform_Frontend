@@ -231,6 +231,11 @@
         <span>🧪 Analyse code</span>
       </h3>
       <div class="nav-items">
+        <button class="nav-item" (click)="goToQualityGate()" [class.active]="isQualityGateRoute()">
+          <span class="nav-icon">🚦</span>
+          <span class="nav-text">Quality Gate</span>
+          <span class="nav-badge">deploy</span>
+        </button>
         <button class="nav-item" (click)="goToSonarqube()" [class.active]="isSonarqubeRoute()">
           <span class="nav-icon">🔎</span>
           <span class="nav-text">SonarQube</span>

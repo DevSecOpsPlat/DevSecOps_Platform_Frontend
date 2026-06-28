@@ -2777,6 +2777,12 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
+  viewQualityGate(): void {
+    if (!this.appId) return;
+    const queryParams = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    this.router.navigate(['/project', this.appId, 'quality-gate'], { queryParams });
+  }
+
   gradeColor(grade?: string): string {
     return GRADE_COLORS[grade ?? ''] ?? '#64748b';
   }

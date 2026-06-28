@@ -1,0 +1,360 @@
+<div class="qg-page">
+  <header class="qg-head">
+    <div>
+      <h1 class="qg-title">Quality Gate — Recommandation de déploiement</h1>
+      <p class="qg-sub">Score de posture, DefectDojo, SonarQube multi-branches et verdict CI</p>
+    </div>
+    <div class="qg-toolbar">
+      <label class="qg-branch-label">Branche</label>
+      <select class="qg-branch-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()">
+        <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
+      </select>
+      <label class="qg-branch-label">Environnement</label>
+      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedEnvironmentId" (change)="onEnvironmentChange()">
+        <option [ngValue]="null">Dernier pipeline (branche)</option>
+        <option *ngFor="let env of environments" [ngValue]="env.environmentId">
+          {{ env.environmentName }} · {{ env.branch }}
+          <ng-container *ngIf="env.pipelineId"> · #{{ env.pipelineId }}</ng-container>
+          <ng-container *ngIf="env.hasSnapshot"> · conservé</ng-container>
+          <ng-container *ngIf="!env.hasSnapshot"> · sans snapshot</ng-container>
+          <ng-container *ngIf="env.verdict"> · {{ env.verdict }}</ng-container>
+        </option>
+      </select>
+      <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading">Actualiser</button>
+      <span class="qg-polling" *ngIf="pipelinePolling" title="Pipeline en cours">● Live</span>
+    </div>
+  </header>
+
+  <div class="qg-alert qg-alert--info" *ngIf="!loading && result?.fromSnapshot && !selectedEnvironmentId">
+    Dernier snapshot en base pour la branche « {{ selectedBranch }} »
+    <span *ngIf="result?.pipelineId"> · pipeline #{{ result?.pipelineId }}</span>
+    <span *ngIf="result?.evaluatedAt"> · {{ result?.evaluatedAt | date:'short' }}</span>
+    <span class="qg-alert-note">Chargement instantané depuis la BDD — « Actualiser » interroge DefectDojo/Sonar live.</span>
+  </div>
+
+  <div class="qg-alert qg-alert--info" *ngIf="selectedEnvironmentId && result && result.verdictSource !== 'SNAPSHOT_MISSING'">
+    Snapshot conservé en base — données figées à la fin du pipeline
+    <span *ngIf="result.fromSnapshot"> (lecture table)</span>
+    <span *ngIf="result.pipelineId"> · pipeline #{{ result.pipelineId }}</span>
+    <span *ngIf="result.evaluatedAt"> · {{ result.evaluatedAt | date:'short' }}</span>
+    <span *ngIf="result.snapshotRecordSource"> · {{ result.snapshotRecordSource }}</span>
+    <span class="qg-alert-note">DefectDojo et SonarQube live peuvent différer après un nouveau scan sur la branche.</span>
+  </div>
+
+  <div class="qg-loading" *ngIf="loading">
+    <div class="qg-skeleton qg-skeleton--hero"></div>
+    <div class="qg-skeleton-row">
+      <div class="qg-skeleton qg-skeleton--kpi" *ngFor="let _ of [1,2,3,4,5]"></div>
+    </div>
+    <div class="qg-skeleton qg-skeleton--section"></div>
+    <div class="qg-skeleton qg-skeleton--section qg-skeleton--short"></div>
+    <p class="qg-loading-label"><span class="qg-spinner"></span> Chargement du quality gate…</p>
+  </div>
+
+  <div class="qg-alert qg-alert--warn" *ngIf="!loading && !error && result?.verdictSource === 'SNAPSHOT_MISSING'">
+    {{ result?.summary }}
+    <button type="button" class="qg-link-btn qg-alert-link" (click)="refreshData()">Créer le snapshot maintenant</button>
+  </div>
+
+  <ng-container *ngIf="!loading && result && result.verdictSource !== 'SNAPSHOT_MISSING'">
+    <!-- Bandeau verdict + jauge -->
+    <section class="qg-hero" [ngClass]="verdictClass(result.verdict)">
+      <div class="qg-hero-verdict">
+        <span class="qg-verdict-emoji">{{ verdictEmoji(result.verdict) }}</span>
+        <div>
+          <h2 class="qg-verdict-badge">{{ verdictLabel(result.verdict) }}</h2>
+          <p class="qg-verdict-deploy" *ngIf="result.verdict === 'NOT_RECOMMENDED'">DÉPLOIEMENT BLOQUÉ</p>
+          <p class="qg-verdict-source" *ngIf="result.verdictSource">
+            Source verdict : {{ result.verdictSource }}
+            <span *ngIf="result.ciVerdict"> · CI : {{ verdictLabel(result.ciVerdict) }}</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="qg-score-gauge" *ngIf="result.securityScore">
+        <svg viewBox="0 0 120 120" class="qg-gauge-svg" aria-label="Score de posture">
+          <circle cx="60" cy="60" r="54" class="qg-gauge-track" />
+          <circle cx="60" cy="60" r="54" class="qg-gauge-fill"
+            [attr.stroke]="scoreArcColor"
+            [attr.stroke-dasharray]="339.292"
+            [attr.stroke-dashoffset]="scoreArcOffset" />
+        </svg>
+        <div class="qg-gauge-center">
+          <span class="qg-gauge-score">{{ animatedScore }}</span>
+          <span class="qg-gauge-grade" [ngClass]="ratingClass(scoreGrade)">{{ scoreGrade }}</span>
+        </div>
+      </div>
+
+      <div class="qg-hero-meta">
+        <p class="qg-verdict-summary">{{ result.summary }}</p>
+        <p class="qg-verdict-trend" *ngIf="result.trendNote">{{ result.trendNote }}</p>
+        <div class="qg-verdict-meta">
+          <span *ngIf="result.pipelineId">Pipeline #{{ result.pipelineId }}</span>
+          <span *ngIf="result.evaluatedAt"> · {{ result.evaluatedAt | date:'short' }}</span>
+          <a *ngIf="result.pipelineWebUrl" [href]="result.pipelineWebUrl" target="_blank" rel="noopener">GitLab →</a>
+        </div>
+        <button type="button" class="qg-link-btn" (click)="toggleScoringMethod()">
+          {{ showScoringMethod ? 'Masquer' : 'Méthode de notation' }} ▸
+        </button>
+        <p class="qg-scoring-note" *ngIf="showScoringMethod && result.scoringNote">{{ result.scoringNote }}</p>
+      </div>
+    </section>
+
+    <!-- Sonar indisponible / fallback branche -->
+    <div class="qg-alert qg-alert--warn" *ngIf="result.sonarAvailability?.message">
+      {{ result.sonarAvailability?.message }}
+      <a *ngIf="result.sonarAvailability?.dashboardUrl" [href]="result.sonarAvailability?.dashboardUrl"
+        target="_blank" rel="noopener" class="qg-alert-link">Ouvrir SonarQube</a>
+    </div>
+
+    <!-- Décomposition du score -->
+    <section class="qg-section" *ngIf="result.securityScore?.breakdown?.length">
+      <h3 class="qg-section-title">Décomposition du score</h3>
+      <ul class="qg-breakdown">
+        <li *ngFor="let item of result.securityScore?.breakdown" class="qg-breakdown-item">
+          <span class="qg-breakdown-label">{{ item.label }}</span>
+          <span class="qg-breakdown-impact" [class.qg-breakdown-impact--cap]="item.capScore != null">
+            {{ breakdownImpactLabel(item) }}
+          </span>
+          <span class="qg-breakdown-detail" *ngIf="item.detail">{{ item.detail }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- KPIs DefectDojo -->
+    <section class="qg-kpis">
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ result.metrics.totalVulnerabilities ?? 0 }}</span>
+        <span class="qg-kpi-lbl">Ouvertes (DD)</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val qg-kpi-val--crit">{{ criticalCount }}</span>
+        <span class="qg-kpi-lbl">Critiques</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val qg-kpi-val--high">{{ highCount }}</span>
+        <span class="qg-kpi-lbl">Élevées</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ mediumCount }}</span>
+        <span class="qg-kpi-lbl">Moyennes</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ lowCount }}</span>
+        <span class="qg-kpi-lbl">Faibles</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val qg-kpi-val--fail">{{ blockingStages }}</span>
+        <span class="qg-kpi-lbl">Stages bloquants</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val qg-kpi-val--warn">{{ result.metrics.warningStages ?? 0 }}</span>
+        <span class="qg-kpi-lbl">Avertissements</span>
+      </article>
+    </section>
+
+    <!-- Cartes outils -->
+    <section class="qg-section" *ngIf="result.toolMetrics?.length">
+      <h3 class="qg-section-title">Outils de détection</h3>
+      <div class="qg-tools-grid">
+        <article class="qg-tool-card" *ngFor="let tool of result.toolMetrics" [ngClass]="toolStatusClass(tool)"
+          (click)="openStageForTool(tool)" [class.qg-tool-card--linked]="stageForTool(tool)">
+          <header class="qg-tool-head">
+            <span class="qg-tool-name">{{ tool.label }}</span>
+            <span class="qg-tool-badge">{{ toolStatusLabel(tool) }}</span>
+          </header>
+          <span class="qg-tool-type">{{ tool.type }}</span>
+          <p class="qg-tool-stage" *ngIf="toolStageLine(tool) as line">Stage : {{ line }}</p>
+          <div class="qg-tool-counts">
+            <span *ngIf="showToolTotal(tool)" class="qg-tool-total">{{ tool.total }} issue(s)</span>
+            <span *ngIf="tool.critical" class="qg-tool-sev qg-tool-sev--crit">{{ tool.critical }} blocker/crit.</span>
+            <span *ngIf="tool.high" class="qg-tool-sev qg-tool-sev--high">{{ tool.high }} high/crit.</span>
+            <span *ngIf="tool.medium" class="qg-tool-sev qg-tool-sev--med">{{ tool.medium }} major/moy.</span>
+            <span *ngIf="tool.low" class="qg-tool-sev">{{ tool.low }} minor</span>
+            <span *ngIf="!showToolTotal(tool) && !tool.critical && !tool.high && !tool.medium && !tool.low && tool.total > 0" class="qg-tool-total">{{ tool.total }}</span>
+            <span *ngIf="!tool.critical && !tool.high && !tool.medium && !tool.low && !tool.total" class="qg-tool-ok">0</span>
+          </div>
+          <footer class="qg-tool-src">{{ tool.source }}</footer>
+        </article>
+      </div>
+    </section>
+
+    <!-- Software Quality -->
+    <section class="qg-section" *ngIf="showSoftwareQualitySection">
+      <div class="qg-section-head">
+        <h3 class="qg-section-title">Software Quality (SonarQube 10+)</h3>
+        <span class="qg-branch-chip" *ngIf="sonarBranchLabel">{{ sonarBranchLabel }}</span>
+      </div>
+      <p class="qg-empty" *ngIf="!result.softwareQuality?.length">
+        Aucune donnée Software Quality pour cette branche — vérifiez que le scan Sonar a bien tourné.
+      </p>
+      <ng-container *ngIf="result.softwareQuality?.length">
+      <div class="qg-sq-layout">
+        <div class="qg-sq-cards">
+          <article class="qg-sq-card" *ngFor="let dim of result.softwareQuality">
+            <h4>{{ sqLabel(dim.dimension) }}</h4>
+            <div class="qg-sq-rating" [ngClass]="ratingClass(dim.rating)">{{ dim.rating || '—' }}</div>
+            <p class="qg-sq-issues">{{ dim.issues }} issue(s)</p>
+            <div class="qg-sq-sev" *ngIf="dim.bySeverity">
+              <span *ngIf="dim.bySeverity['high']">H: {{ dim.bySeverity['high'] }}</span>
+              <span *ngIf="dim.bySeverity['medium']">M: {{ dim.bySeverity['medium'] }}</span>
+              <span *ngIf="dim.bySeverity['low']">L: {{ dim.bySeverity['low'] }}</span>
+            </div>
+          </article>
+        </div>
+        <svg viewBox="0 0 120 120" class="qg-radar" aria-hidden="true">
+          <polygon points="60,18 102,81 18,81" class="qg-radar-grid" />
+          <polygon [attr.points]="radarPoints(result.softwareQuality!)" class="qg-radar-fill" />
+          <text x="60" y="12" class="qg-radar-label">S</text>
+          <text x="108" y="88" class="qg-radar-label">R</text>
+          <text x="8" y="88" class="qg-radar-label">M</text>
+        </svg>
+      </div>
+      <p class="qg-sq-global" *ngIf="result.softwareQualitySeverity as gsq">
+        Global H/M/L :
+        <span *ngIf="gsq['high']">{{ gsq['high'] }} high</span>
+        <span *ngIf="gsq['medium']"> · {{ gsq['medium'] }} medium</span>
+        <span *ngIf="gsq['low']"> · {{ gsq['low'] }} low</span>
+      </p>
+      </ng-container>
+    </section>
+
+    <!-- Sonar classique -->
+    <section class="qg-section" [class.qg-section--muted]="!result.sonarAvailability?.available">
+      <div class="qg-section-head">
+        <h3 class="qg-section-title">SonarQube — métriques classiques</h3>
+        <span class="qg-branch-chip" *ngIf="sonarBranchLabel">{{ sonarBranchLabel }}</span>
+        <a *ngIf="result.sonarAvailability?.dashboardUrl" [href]="result.sonarAvailability?.dashboardUrl"
+          target="_blank" rel="noopener" class="qg-sonar-link">Dashboard →</a>
+      </div>
+      <p class="qg-empty" *ngIf="!result.sonarAvailability?.available">
+        SonarQube indisponible pour cette application ou branche.
+      </p>
+      <div class="qg-alert qg-alert--info" *ngIf="sonarQgPassedWithIssues">
+        Quality Gate Sonar en OK mais des issues ouvertes subsistent — le score peut rester élevé sans bloquer le déploiement CI.
+      </div>
+      <ng-container *ngIf="sonarMetrics && result.sonarAvailability?.available">
+        <div class="qg-sonar-ratings" *ngIf="sonarMetrics.securityRating || sonarMetrics.reliabilityRating || sonarMetrics.maintainabilityRating">
+          <span class="qg-rating-pill" [ngClass]="ratingClass(sonarMetrics.securityRating)">
+            S {{ sonarMetrics.securityRating || '—' }}
+          </span>
+          <span class="qg-rating-pill" [ngClass]="ratingClass(sonarMetrics.reliabilityRating)">
+            R {{ sonarMetrics.reliabilityRating || '—' }}
+          </span>
+          <span class="qg-rating-pill" [ngClass]="ratingClass(sonarMetrics.maintainabilityRating)">
+            M {{ sonarMetrics.maintainabilityRating || '—' }}
+          </span>
+        </div>
+        <div class="qg-sonar-grid">
+          <div><strong>Bugs</strong><span>{{ sonarMetrics.bugs ?? 0 }}</span></div>
+          <div><strong>Vulnérabilités</strong><span>{{ sonarMetrics.vulnerabilities ?? 0 }}</span></div>
+          <div><strong>Code smells</strong><span>{{ sonarMetrics.codeSmells ?? 0 }}</span></div>
+          <div><strong>Hotspots</strong><span>{{ sonarMetrics.hotspots ?? 0 }}</span></div>
+          <div><strong>Couverture</strong><span>{{ sonarMetrics.coverage ?? 0 }}%</span></div>
+          <div><strong>Duplications</strong><span>{{ sonarMetrics.duplications ?? 0 }}%</span></div>
+          <div><strong>LoC</strong><span>{{ sonarMetrics.ncloc ?? 0 }}</span></div>
+          <div><strong>Quality Gate</strong><span>{{ sonarQgLabel }}</span></div>
+        </div>
+        <div class="qg-sonar-sev" *ngIf="sonarMetrics.bySeverity as bs">
+          <span>Blocker: {{ severityCount(bs, 'blocker') }}</span>
+          <span>Critical: {{ severityCount(bs, 'critical') }}</span>
+          <span>Major: {{ severityCount(bs, 'major') }}</span>
+          <span>Minor: {{ severityCount(bs, 'minor') }}</span>
+        </div>
+        <ul class="qg-sonar-conditions" *ngIf="sonarFailedConditions.length">
+          <li *ngFor="let c of sonarFailedConditions">{{ c }}</li>
+        </ul>
+      </ng-container>
+    </section>
+
+    <!-- Stages -->
+    <section class="qg-section" id="qg-stages">
+      <h3 class="qg-section-title">Timeline des stages pipeline</h3>
+      <div class="qg-table-wrap" *ngIf="result.stages.length">
+        <table class="qg-table">
+          <thead>
+            <tr>
+              <th>Étape</th>
+              <th>Statut</th>
+              <th>Bloquant</th>
+              <th>Détail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let stage of result.stages" [id]="'qg-stage-' + stage.name"
+              [ngClass]="stageRowClass(stage)" (click)="openStage(stage)">
+              <td class="qg-td-step">{{ stage.toolLabel || stage.name }}</td>
+              <td class="qg-td-status">
+                <span class="qg-stage-icon">{{ stageIcon(stage.status) }}</span>
+                {{ stage.statusLabel || stage.status }}
+              </td>
+              <td class="qg-td-blocking" [class.qg-td-blocking--yes]="stage.blocking && stage.status === 'FAIL'">
+                {{ blockingLabel(stage) }}
+              </td>
+              <td class="qg-td-detail">{{ stage.message || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="qg-empty" *ngIf="!result.stages.length">Aucune étape enregistrée.</p>
+    </section>
+
+    <section class="qg-section" *ngIf="result.verdictExplanation?.length">
+      <h3 class="qg-section-title">Pourquoi ce verdict ?</h3>
+      <ul class="qg-explain-list">
+        <li *ngFor="let line of result.verdictExplanation">{{ line }}</li>
+      </ul>
+    </section>
+
+    <section class="qg-section">
+      <div class="qg-section-head">
+        <h3 class="qg-section-title">Conseils pratiques</h3>
+        <button type="button" class="qg-ai-btn" (click)="loadAiInsight()" [disabled]="aiLoading">
+          {{ aiLoading ? 'Analyse IA…' : 'Conseils personnalisés (IA)' }}
+        </button>
+      </div>
+      <ul class="qg-rec-list">
+        <li *ngFor="let rec of result.practicalAdvice || result.detailedRecommendations">{{ rec }}</li>
+      </ul>
+      <div class="qg-ai-box" *ngIf="aiInsight">
+        <h4>Analyse personnalisée (IA)</h4>
+        <p class="qg-ai-text">{{ aiInsight }}</p>
+      </div>
+      <p class="qg-ai-hint" *ngIf="aiError">{{ aiError }}</p>
+    </section>
+  </ng-container>
+
+  <aside class="qg-drawer" *ngIf="selectedStage" (click)="closeStage()">
+    <div class="qg-drawer-panel" (click)="$event.stopPropagation()">
+      <header class="qg-drawer-head">
+        <div>
+          <h3>{{ selectedStage.toolLabel || selectedStage.name }}</h3>
+          <p class="qg-drawer-sub">{{ selectedStage.name }}</p>
+        </div>
+        <button type="button" class="qg-drawer-close" (click)="closeStage()" aria-label="Fermer">×</button>
+      </header>
+      <div class="qg-drawer-badges">
+        <span class="qg-drawer-badge" [ngClass]="stageClass(selectedStage.status)">
+          {{ stageIcon(selectedStage.status) }} {{ selectedStage.statusLabel || selectedStage.status }}
+        </span>
+        <span class="qg-drawer-badge qg-drawer-badge--block" *ngIf="selectedStage.blocking">
+          Bloquant
+        </span>
+      </div>
+      <p class="qg-drawer-msg" *ngIf="selectedStage.message">{{ selectedStage.message }}</p>
+      <section class="qg-drawer-block" *ngIf="selectedStage.metrics">
+        <h4>Métriques stage</h4>
+        <dl class="qg-drawer-dl">
+          <ng-container *ngFor="let kv of selectedStage.metrics | keyvalue">
+            <dt>{{ kv.key }}</dt>
+            <dd>{{ kv.value }}</dd>
+          </ng-container>
+        </dl>
+      </section>
+      <section class="qg-drawer-block" *ngIf="selectedStage.details">
+        <h4>Détails</h4>
+        <pre class="qg-drawer-pre">{{ selectedStage.details | json }}</pre>
+      </section>
+    </div>
+  </aside>
+</div>

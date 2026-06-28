@@ -61,6 +61,7 @@ const routes: Routes = [
       { path: 'pipelines', component: PipelinesListComponent },
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
+      { path: 'quality-gate', loadComponent: () => import('./project/quality-gate/quality-gate.component').then(m => m.QualityGateComponent) },
       { path: 'monitoring', component: MonitoringComponent },
       { path: 'security-dashboard', component: SecurityDashboardComponent },
       { path: 'security-dashboard/finding/:findingId', component: DefectDojoFindingDetailsComponent },

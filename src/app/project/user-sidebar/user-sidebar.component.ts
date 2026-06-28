@@ -319,6 +319,20 @@ export class UserSidebarComponent implements OnInit {
     }
   }
 
+  goToQualityGate(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'quality-gate']);
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isQualityGateRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/quality-gate$/.test(path);
+  }
+
   isSonarqubeRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
     return /\/project\/[^/]+\/sonarqube$/.test(path);
