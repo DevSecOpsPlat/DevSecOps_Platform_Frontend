@@ -6,6 +6,13 @@ import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;
 
+export interface HardGateViolation {
+  id: string;
+  label: string;
+  message: string;
+  status: 'VIOLATED' | 'INDETERMINATE' | string;
+}
+
 export interface QualityGateStage {
   name: string;
   toolLabel?: string;
@@ -118,6 +125,7 @@ export interface QualityGateResult {
   toolMetrics?: QualityGateToolMetric[];
   metrics: {
     totalVulnerabilities?: number;
+    ncloc?: number;
     bySeverity?: Record<string, number>;
     failedStages?: number;
     blockingStages?: number;
@@ -126,9 +134,15 @@ export interface QualityGateResult {
     sonarQube?: SonarQubeMetrics;
   };
   thresholds?: Record<string, unknown>;
-  verdict: 'RECOMMENDED' | 'WITH_WARNINGS' | 'NOT_RECOMMENDED' | 'UNKNOWN' | string;
+  verdict: 'RECOMMENDED' | 'WITH_WARNINGS' | 'NOT_RECOMMENDED' | 'INDETERMINE' | 'UNKNOWN' | string;
   ciVerdict?: string;
   verdictSource?: string;
+  hardGateViolations?: HardGateViolation[];
+  hardGateIndeterminate?: HardGateViolation[];
+  hardGateSummary?: string | null;
+  defectDojoAvailable?: boolean;
+  indeterminateSources?: string[];
+  incompleteRecommendationMessage?: string | null;
   securityScore?: SecurityScore;
   softwareQuality?: SoftwareQualityDimension[];
   softwareQualitySeverity?: Record<string, number>;
@@ -144,6 +158,8 @@ export interface QualityGateResult {
   snapshotId?: string | null;
   snapshotRecordSource?: string | null;
   fromSnapshot?: boolean;
+  ncloc?: number | null;
+  nclocSource?: string | null;
   aiInsight?: string | null;
 }
 

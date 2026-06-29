@@ -6,6 +6,8 @@ import { FormsModule } from '@angular/forms';
 
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { trigger, transition, style, animate } from '@angular/animations';
+
 import { Subject, interval } from 'rxjs';
 
 import { switchMap, takeUntil, catchError } from 'rxjs/operators';
@@ -28,7 +30,13 @@ import {
 
 } from '../../services/quality-gate/quality-gate.service';
 
-
+export interface DeploymentCondition {
+  id: string;
+  label: string;
+  rule: string;
+  status: 'ok' | 'violated' | 'indeterminate';
+  detail?: string;
+}
 
 @Component({
 
@@ -40,7 +48,17 @@ import {
 
   templateUrl: './quality-gate.component.html',
 
-  styleUrls: ['./quality-gate.component.css']
+  styleUrls: ['./quality-gate.component.css'],
+
+  animations: [
+    trigger('verdictPop', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'scale(0.85)' }),
+        animate('260ms cubic-bezier(0.34,1.56,0.64,1)',
+          style({ opacity: 1, transform: 'scale(1)' }))
+      ])
+    ])
+  ]
 
 })
 
@@ -95,6 +113,16 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   animatedScore = 0;
 
   showScoringMethod = false;
+
+  nclocInfoOpen = false;
+
+  readonly gradeScale: Array<{ grade: string; min: number; label: string }> = [
+    { grade: 'A', min: 90, label: 'Excellent' },
+    { grade: 'B', min: 75, label: 'Bon' },
+    { grade: 'C', min: 60, label: 'Moyen' },
+    { grade: 'D', min: 40, label: 'Faible' },
+    { grade: 'E', min: 0, label: 'Critique' }
+  ];
 
   /** Évite boucle infinie auto-capture SNAPSHOT_MISSING → refresh → load */
   private autoCaptureAttemptedForEnv: string | null = null;
@@ -162,13 +190,15 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   loadEnvironments(): void {
     if (!this.appId) return;
-    // Tous les environnements (sans filtre branche) pour voir chaque nouveau test.
-    this.qualityGateService.listEnvironments(this.appId).pipe(
+    this.qualityGateService.listEnvironments(this.appId, this.selectedBranch).pipe(
       catchError(() => of([] as QualityGateEnvironmentOption[]))
     ).subscribe(envs => {
       this.environments = envs;
       if (this.selectedEnvironmentId && !envs.some(e => e.environmentId === this.selectedEnvironmentId)) {
-        this.selectedEnvironmentId = null;
+        this.selectedEnvironmentId = envs.length ? envs[0].environmentId : null;
+      }
+      if (!this.selectedEnvironmentId && envs.length) {
+        this.selectedEnvironmentId = envs[0].environmentId;
       }
     });
   }
@@ -282,6 +312,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   onBranchChange(): void {
     this.selectedEnvironmentId = null;
+    this.autoCaptureAttemptedForEnv = null;
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { branch: this.selectedBranch, environmentId: null },
@@ -292,38 +323,27 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   refreshData(): void {
-    if (!this.appId) return;
-    if (this.selectedEnvironmentId) {
-      this.loading = true;
-      this.error = null;
-      this.qualityGateService.refreshSnapshot(this.appId, this.selectedEnvironmentId).pipe(
-        catchError(err => {
-          const msg = err?.error?.message || err?.error?.detail || 'Capture du snapshot impossible';
-          this.error = msg;
-          return of(null);
-        })
-      ).subscribe(res => {
-        if (res) {
-          this.result = this.normalizeResult(res);
-          this.loadEnvironments();
-          this.animateScoreTo(this.scoreValue);
-        } else if (!this.error) {
-          this.load(false);
-        }
-        this.loading = false;
-      });
+    if (!this.appId || !this.selectedEnvironmentId) {
+      this.error = 'Sélectionnez un environnement pour actualiser.';
       return;
     }
     this.loading = true;
     this.error = null;
-    this.qualityGateService.backfillSnapshots(this.appId).pipe(
+    this.qualityGateService.refreshSnapshot(this.appId, this.selectedEnvironmentId).pipe(
       catchError(err => {
-        this.error = err?.error?.message || 'Backfill snapshots impossible';
-        return of({ status: 'error', created: 0 });
+        const msg = err?.error?.message || err?.error?.detail || 'Capture du snapshot impossible';
+        this.error = msg;
+        return of(null);
       })
-    ).subscribe(() => {
-      this.loadEnvironments();
-      this.load(false);
+    ).subscribe(res => {
+      if (res) {
+        this.result = this.normalizeResult(res);
+        this.loadEnvironments();
+        this.animateScoreTo(this.scoreValue);
+      } else if (!this.error) {
+        this.load(false);
+      }
+      this.loading = false;
     });
   }
 
@@ -393,56 +413,189 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
-  verdictClass(verdict?: string): string {
-
-    switch (verdict) {
-
-      case 'RECOMMENDED': return 'qg-verdict--ok';
-
-      case 'WITH_WARNINGS': return 'qg-verdict--warn';
-
-      case 'NOT_RECOMMENDED': return 'qg-verdict--fail';
-
-      default: return 'qg-verdict--unknown';
-
+  get deduplicatedStages(): QualityGateStage[] {
+    if (!this.result?.stages?.length) return [];
+    const seen = new Map<string, QualityGateStage>();
+    for (const stage of this.result.stages) {
+      const key = this.stageDedupKey(stage);
+      if (!seen.has(key)) {
+        seen.set(key, stage);
+      }
     }
-
+    return Array.from(seen.values());
   }
 
+  get hasHardGateViolations(): boolean {
+    return (this.result?.hardGateViolations?.length ?? 0) > 0;
+  }
 
+  get showIncompleteBanner(): boolean {
+    if (this.result?.verdict === 'INDETERMINE') {
+      return true;
+    }
+    const sources = this.result?.indeterminateSources ?? [];
+    if (!sources.length) {
+      return false;
+    }
+    // Ne pas afficher « Sonar indisponible » si les hard gates Sonar sont déjà évalués (OK ou violés).
+    const sonarOnly = sources.length === 1 && sources[0] === 'SonarQube';
+    const sonarEvaluated = this.deploymentConditions
+      .filter(c => c.id === 'sonar_blocker' || c.id === 'sonar_qg')
+      .every(c => c.status !== 'indeterminate');
+    if (sonarOnly && sonarEvaluated) {
+      return false;
+    }
+    return sources.length > 0;
+  }
+
+  get vulnCentralizationLabel(): string {
+    return 'Centralisation des vulnérabilités';
+  }
+
+  get deploymentConditions(): DeploymentCondition[] {
+    const violations = this.result?.hardGateViolations ?? [];
+    const indeterminate = this.result?.hardGateIndeterminate ?? [];
+
+    const statusOf = (id: string): DeploymentCondition['status'] => {
+      if (violations.some(v => v.id === id)) return 'violated';
+      if (indeterminate.some(v => v.id === id)) return 'indeterminate';
+      return 'ok';
+    };
+    const detailOf = (id: string): string | undefined =>
+      (violations.find(v => v.id === id) ?? indeterminate.find(v => v.id === id))?.message;
+
+    return [
+      {
+        id: 'secrets',
+        label: 'Aucun secret exposé',
+        rule: 'Gitleaks = 0',
+        status: statusOf('secrets'),
+        detail: detailOf('secrets')
+      },
+      {
+        id: 'dd_critical',
+        label: 'Aucune vulnérabilité critique',
+        rule: 'Centralisation vuln. · Critical = 0',
+        status: statusOf('dd_critical'),
+        detail: detailOf('dd_critical')
+      },
+      {
+        id: 'sonar_blocker',
+        label: 'Aucune issue Blocker',
+        rule: 'SonarQube · Blocker = 0',
+        status: statusOf('sonar_blocker'),
+        detail: detailOf('sonar_blocker')
+      },
+      {
+        id: 'sonar_qg',
+        label: 'Quality Gate SonarQube validé',
+        rule: 'QG ≠ ERROR',
+        status: statusOf('sonar_qg'),
+        detail: detailOf('sonar_qg')
+      }
+    ];
+  }
+
+  get conditionsOkCount(): number {
+    return this.deploymentConditions.filter(c => c.status === 'ok').length;
+  }
+
+  get hasConfirmedViolations(): boolean {
+    return (this.result?.hardGateViolations?.length ?? 0) > 0;
+  }
+
+  conditionIcon(status: DeploymentCondition['status']): string {
+    switch (status) {
+      case 'ok': return '✓';
+      case 'violated': return '✕';
+      case 'indeterminate': return '⊘';
+    }
+  }
+
+  conditionClass(status: DeploymentCondition['status']): string {
+    return `qg-cond--${status}`;
+  }
+
+  toggleNclocInfo(): void {
+    this.nclocInfoOpen = !this.nclocInfoOpen;
+  }
+
+  nclocSourceLabel(): string {
+    switch (this.result?.nclocSource) {
+      case 'SONAR_LIVE': return 'SonarQube (mesure live)';
+      case 'SUMMARY': return 'summary.json du pipeline';
+      case 'PIPELINE_GATE': return 'rapport CI (sonar_ncloc)';
+      case 'SNAPSHOT': return 'snapshot enregistré';
+      default: return 'inconnue';
+    }
+  }
+
+  get usesDensity(): boolean {
+    return this.displayNcloc >= 100;
+  }
+
+  isCurrentGrade(grade: string): boolean {
+    return (this.result?.securityScore?.grade ?? '') === grade;
+  }
+
+  get scaleMarkerLeft(): number {
+    return Math.max(0, Math.min(100, this.animatedScore));
+  }
+
+  stripLeadingNumber(text: string): string {
+    return (text ?? '').replace(/^\s*\d+\.\s*/, '');
+  }
+
+  private stageDedupKey(stage: QualityGateStage): string {
+    const details = stage.details as Record<string, unknown> | undefined;
+    const jobId = details?.['jobId'] ?? details?.['id'];
+    if (jobId != null && String(jobId).trim()) {
+      return String(jobId);
+    }
+    const name = (stage.name || '').toLowerCase();
+    if (name === 'sca' || name === 'sca-trivy') return 'group:sca';
+    if (name === 'secrets' || name === 'secrets-iac') return 'group:secrets';
+    return name || 'unknown';
+  }
+
+  verdictClass(verdict?: string): string {
+    switch (verdict) {
+      case 'RECOMMENDED': return 'qg-verdict--ok';
+      case 'WITH_WARNINGS': return 'qg-verdict--warn';
+      case 'NOT_RECOMMENDED': return 'qg-verdict--fail';
+      case 'INDETERMINE': return 'qg-verdict--indeterminate';
+      default: return 'qg-verdict--unknown';
+    }
+  }
 
   verdictLabel(verdict?: string): string {
-
     switch (verdict) {
-
-      case 'RECOMMENDED': return 'RECOMMANDÉ';
-
-      case 'WITH_WARNINGS': return 'AVEC AVERTISSEMENTS';
-
-      case 'NOT_RECOMMENDED': return 'NON RECOMMANDÉ';
-
-      default: return 'INCONNU';
-
+      case 'RECOMMENDED': return 'Déployable';
+      case 'WITH_WARNINGS': return 'Déployable avec surveillance';
+      case 'NOT_RECOMMENDED': return 'Déploiement bloqué — corriger les findings';
+      case 'INDETERMINE': return 'Vérification incomplète';
+      default: return 'Inconnu';
     }
-
   }
 
-
-
   verdictEmoji(verdict?: string): string {
-
     switch (verdict) {
-
-      case 'RECOMMENDED': return '🟢';
-
-      case 'WITH_WARNINGS': return '🟡';
-
-      case 'NOT_RECOMMENDED': return '🔴';
-
-      default: return '⚪';
-
+      case 'RECOMMENDED': return '✓';
+      case 'WITH_WARNINGS': return '⚠';
+      case 'NOT_RECOMMENDED': return '✕';
+      case 'INDETERMINE': return '⊘';
+      default: return '○';
     }
+  }
 
+  indeterminateInfraMessage(): string {
+    const sources = this.result?.indeterminateSources ?? [];
+    if (!sources.length) {
+      return this.result?.incompleteRecommendationMessage
+        || 'Impossible de garantir l\'absence de vulnérabilité critique. Relancez les services et actualisez.';
+    }
+    return `Impossible de garantir l'absence de vulnérabilité critique : ${sources.join(', ')} n'a/ont pas répondu. `
+      + 'Relancez le service et actualisez. Ce n\'est pas un problème de votre code.';
   }
 
 
@@ -638,7 +791,9 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   blockingLabel(stage: QualityGateStage): string {
     if (!stage.blocking) return '—';
-    return stage.status === 'FAIL' ? 'Oui' : 'Seuil';
+    if (stage.status === 'FAIL') return 'Seuil dépassé';
+    if (stage.status === 'WARN') return 'Alerte seuil';
+    return 'Seuil';
   }
 
   openStage(stage: QualityGateStage): void {
@@ -660,9 +815,15 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
   get sonarMetrics(): QualityGateResult['metrics']['sonarQube'] | undefined {
-
     return this.result?.metrics?.sonarQube;
+  }
 
+  /** ncloc : racine DTO → metrics → sonarQube (snapshot BDD). */
+  get displayNcloc(): number {
+    return this.result?.ncloc
+      ?? this.result?.metrics?.ncloc
+      ?? this.sonarMetrics?.ncloc
+      ?? 0;
   }
 
 
@@ -744,14 +905,9 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     return map[key] ?? 0;
   }
 
-  breakdownImpactLabel(item: { impact: number; capScore?: number | null }): string {
-
-    if (item.capScore != null) return `plafond ${item.capScore}`;
-
+  breakdownImpactLabel(item: { impact: number }): string {
     if (item.impact < 0) return String(item.impact);
-
     return '';
-
   }
 
 
@@ -761,6 +917,12 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     return {
 
       ...res,
+
+      hardGateViolations: res.hardGateViolations ?? [],
+
+      hardGateIndeterminate: res.hardGateIndeterminate ?? [],
+
+      indeterminateSources: res.indeterminateSources ?? [],
 
       stages: res.stages ?? [],
 
