@@ -16,7 +16,7 @@ export interface HardGateViolation {
 export interface QualityGateStage {
   name: string;
   toolLabel?: string;
-  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIPPED' | string;
+  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIPPED' | 'RUNNING' | string;
   statusLabel?: string;
   message?: string;
   blocking?: boolean;
@@ -37,6 +37,8 @@ export interface QualityGateToolMetric {
   stageStatus?: string;
   stageName?: string;
   stageLabel?: string;
+  /** false si le job GitLab n'a pas produit de rapport fiable. */
+  evaluable?: boolean;
 }
 
 export interface QualityGateEnvironmentOption {
@@ -132,6 +134,18 @@ export interface QualityGateResult {
     warningStages?: number;
     secrets?: number;
     sonarQube?: SonarQubeMetrics;
+    defectDojoAvailable?: boolean;
+    metricsFromSecurityValidation?: boolean;
+    pipelineFinished?: boolean;
+    sonarJobFailed?: boolean;
+    securityValidationFailed?: boolean;
+    securityValidationGitlabFailed?: boolean;
+    securityValidationSucceeded?: boolean;
+    recommendationReliable?: boolean;
+    failedScanJobs?: string[];
+    ddCritical?: number;
+    sonarCritical?: number;
+    combinedCritical?: number;
   };
   thresholds?: Record<string, unknown>;
   verdict: 'RECOMMENDED' | 'WITH_WARNINGS' | 'NOT_RECOMMENDED' | 'INDETERMINE' | 'UNKNOWN' | string;
@@ -141,8 +155,13 @@ export interface QualityGateResult {
   hardGateIndeterminate?: HardGateViolation[];
   hardGateSummary?: string | null;
   defectDojoAvailable?: boolean;
+  metricsFromSecurityValidation?: boolean;
+  pipelineFinished?: boolean;
   indeterminateSources?: string[];
   incompleteRecommendationMessage?: string | null;
+  recommendationReliable?: boolean;
+  reliabilityMessage?: string | null;
+  failedScanJobs?: string[];
   securityScore?: SecurityScore;
   softwareQuality?: SoftwareQualityDimension[];
   softwareQualitySeverity?: Record<string, number>;
@@ -158,6 +177,7 @@ export interface QualityGateResult {
   snapshotId?: string | null;
   snapshotRecordSource?: string | null;
   fromSnapshot?: boolean;
+  canCaptureSnapshot?: boolean;
   ncloc?: number | null;
   nclocSource?: string | null;
   aiInsight?: string | null;
@@ -234,10 +254,17 @@ export class QualityGateService {
     );
   }
 
-  generateAiInsight(applicationId: string, branch?: string | null): Observable<{ insight: string; message?: string }> {
+  generateAiInsight(
+    applicationId: string,
+    branch?: string | null,
+    environmentId?: string | null
+  ): Observable<{ insight: string; message?: string }> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch && branch !== '__global__') {
       params = params.set('branch', branch);
+    }
+    if (environmentId) {
+      params = params.set('environmentId', environmentId);
     }
     return this.http.post<{ insight: string; message?: string }>(
       BASE + 'api/quality-gate/ai-insight',

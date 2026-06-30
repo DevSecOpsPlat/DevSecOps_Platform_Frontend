@@ -273,7 +273,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     if (ps === 'RUNNING' || ps === 'PENDING') return;
     if (this.autoCaptureAttemptedForEnv === this.selectedEnvironmentId) return;
     this.autoCaptureAttemptedForEnv = this.selectedEnvironmentId;
-    this.refreshData();
+    this.captureSnapshot();
   }
 
 
@@ -286,7 +286,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
     this.aiError = null;
 
-    this.qualityGateService.generateAiInsight(this.appId, this.selectedBranch).pipe(
+    this.qualityGateService.generateAiInsight(this.appId, this.selectedBranch, this.selectedEnvironmentId).pipe(
 
       catchError(() => of({ insight: '', message: 'Erreur lors de l\'appel IA' }))
 
@@ -313,23 +313,76 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   onBranchChange(): void {
     this.selectedEnvironmentId = null;
     this.autoCaptureAttemptedForEnv = null;
+    this.result = null;
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { branch: this.selectedBranch, environmentId: null },
       queryParamsHandling: 'merge'
     });
-    this.loadEnvironments();
-    this.load();
+    this.loadEnvironmentsAndRefresh();
   }
 
+  /** Après changement de branche : sélectionne le 1er env puis recharge le snapshot BDD. */
+  private loadEnvironmentsAndRefresh(): void {
+    if (!this.appId) return;
+    this.qualityGateService.listEnvironments(this.appId, this.selectedBranch).pipe(
+      catchError(() => of([] as QualityGateEnvironmentOption[]))
+    ).subscribe(envs => {
+      this.environments = envs;
+      if (this.selectedEnvironmentId && !envs.some(e => e.environmentId === this.selectedEnvironmentId)) {
+        this.selectedEnvironmentId = envs.length ? envs[0].environmentId : null;
+      }
+      if (!this.selectedEnvironmentId && envs.length) {
+        this.selectedEnvironmentId = envs[0].environmentId;
+      }
+      if (this.selectedEnvironmentId) {
+        this.load(false);
+      } else {
+        this.loading = false;
+        this.result = null;
+      }
+    });
+  }
+
+  /** Recharge le snapshot enregistré (quality_gate_snapshots) et synchronise le statut GitLab. */
   refreshData(): void {
-    if (!this.appId || !this.selectedEnvironmentId) {
+    const appId = this.appId;
+    const environmentId = this.selectedEnvironmentId;
+    if (!appId || !environmentId) {
       this.error = 'Sélectionnez un environnement pour actualiser.';
       return;
     }
     this.loading = true;
     this.error = null;
-    this.qualityGateService.refreshSnapshot(this.appId, this.selectedEnvironmentId).pipe(
+    this.qualityGateService.getQualityGate(
+      appId, this.selectedBranch, environmentId, false
+    ).pipe(
+      catchError(err => {
+        const msg = err?.error?.message || err?.error?.detail || 'Actualisation impossible';
+        this.error = msg;
+        return of(null);
+      })
+    ).subscribe(res => {
+      if (res) {
+        this.result = this.normalizeResult(res);
+        this.animateScoreTo(this.scoreValue);
+      }
+      this.loadEnvironments();
+      this.loading = false;
+    });
+  }
+
+  /** Recapture live (DefectDojo + Sonar) et persiste un nouveau snapshot en BDD. */
+  captureSnapshot(): void {
+    const appId = this.appId;
+    const environmentId = this.selectedEnvironmentId;
+    if (!appId || !environmentId) {
+      this.error = 'Sélectionnez un environnement.';
+      return;
+    }
+    this.loading = true;
+    this.error = null;
+    this.qualityGateService.refreshSnapshot(appId, environmentId).pipe(
       catchError(err => {
         const msg = err?.error?.message || err?.error?.detail || 'Capture du snapshot impossible';
         this.error = msg;
@@ -338,23 +391,22 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     ).subscribe(res => {
       if (res) {
         this.result = this.normalizeResult(res);
-        this.loadEnvironments();
         this.animateScoreTo(this.scoreValue);
-      } else if (!this.error) {
-        this.load(false);
       }
+      this.loadEnvironments();
       this.loading = false;
     });
   }
 
   onEnvironmentChange(): void {
     this.autoCaptureAttemptedForEnv = null;
+    this.result = null;
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { environmentId: this.selectedEnvironmentId || null },
       queryParamsHandling: 'merge'
     });
-    this.load();
+    this.load(false);
   }
 
 
@@ -430,6 +482,12 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   get showIncompleteBanner(): boolean {
+    if (this.usesPipelineVulnFallback()) {
+      return false;
+    }
+    if (this.result?.verdictSource === 'PIPELINE_IN_PROGRESS') {
+      return false;
+    }
     if (this.result?.verdict === 'INDETERMINE') {
       return true;
     }
@@ -449,14 +507,466 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   get vulnCentralizationLabel(): string {
+    if (this.metricsFromSecurityValidation && this.result?.defectDojoAvailable === false) {
+      return 'Rapport security-validation';
+    }
     return 'Centralisation des vulnérabilités';
   }
 
+  get canCaptureSnapshot(): boolean {
+    return this.result?.canCaptureSnapshot === true;
+  }
+
+  get refreshButtonTitle(): string {
+    return 'Recharger le snapshot enregistré pour cet environnement et synchroniser le statut GitLab';
+  }
+
+  /** Données issues de quality_gate_snapshots (pas un recalcul live DefectDojo/Sonar). */
+  get isViewingFrozenSnapshot(): boolean {
+    const r = this.result;
+    return !!(r && (r.fromSnapshot === true || r.snapshotId));
+  }
+
+  /** Job security-validation en échec sur GitLab (pas le verdict NON_RECOMMANDÉ). */
+  get securityValidationFailed(): boolean {
+    const r = this.result;
+    if (!r) return false;
+    if (r.verdictSource === 'SECURITY_VALIDATION_FAILED') return true;
+    if (r.metrics?.securityValidationFailed === true) return true;
+    if (r.metrics?.securityValidationGitlabFailed === true) return true;
+    return false;
+  }
+
+  get showToolsAndMetricsDetail(): boolean {
+    return this.showPipelineDetail && !this.securityValidationFailed;
+  }
+
+  get showTimeline(): boolean {
+    if (this.securityValidationFailed) {
+      return this.deduplicatedStages.length > 0;
+    }
+    return this.showPipelineDetail;
+  }
+
+  get pipelineInProgress(): boolean {
+    if (this.hasFrozenQualityGateDisplay()) return false;
+    const ps = this.result?.pipelineStatus?.toLowerCase();
+    if (ps === 'running' || ps === 'pending' || ps === 'created') return true;
+    return this.result?.verdictSource === 'PIPELINE_IN_PROGRESS';
+  }
+
+  /** Snapshot ou security-validation déjà figés : ne pas masquer le détail ni rebasculer les conditions. */
+  private hasFrozenQualityGateDisplay(): boolean {
+    const r = this.result;
+    if (!r) return false;
+    if (this.securityValidationFailed) return false;
+    if (r.metricsFromSecurityValidation || r.metrics?.metricsFromSecurityValidation) return true;
+    if (r.fromSnapshot && r.verdict && r.verdict !== 'INDETERMINE') return true;
+    const hasTools = (r.toolMetrics?.length ?? 0) > 0;
+    const hasStages = (r.stages?.length ?? 0) > 0;
+    const hasSq = (r.softwareQuality?.length ?? 0) > 0;
+    if ((hasTools || hasStages || hasSq) && r.verdictSource !== 'PIPELINE_IN_PROGRESS') return true;
+    return false;
+  }
+
+  /** Pipeline GitLab terminé — l'état d'avancement vient de pipelineStatus (rafraîchi
+   *  à chaque lecture), jamais de la valeur figée dans le snapshot. */
+  get pipelineFinished(): boolean {
+    const ps = this.result?.pipelineStatus?.toLowerCase();
+    if (ps === 'success' || ps === 'failed' || ps === 'canceled' || ps === 'cancelled') {
+      return true;
+    }
+    if (ps === 'running' || ps === 'pending' || ps === 'created') {
+      return false;
+    }
+    // pipelineStatus absent : on retombe sur la valeur figée
+    return this.result?.pipelineFinished === true;
+  }
+
+  get showPipelineDetail(): boolean {
+    if (this.hasDisplayablePipelineDetail()) return true;
+    if (this.pipelineInProgress) return false;
+    return this.pipelineFinished || this.result?.pipelineFinished === true;
+  }
+
+  private hasDisplayablePipelineDetail(): boolean {
+    const r = this.result;
+    if (!r) return false;
+    const hasTools = (r.toolMetrics?.length ?? 0) > 0;
+    const hasStages = (r.stages?.length ?? 0) > 0;
+    if (hasTools || hasStages) return true;
+    if (this.metricsFromSecurityValidation || r.fromSnapshot) {
+      return hasTools
+        || hasStages
+        || (r.softwareQuality?.length ?? 0) > 0
+        || this.sonarResultsAvailable;
+    }
+    return false;
+  }
+
+  get practicalAdviceList(): string[] {
+    return this.result?.practicalAdvice?.length
+      ? this.result.practicalAdvice
+      : (this.result?.detailedRecommendations ?? []);
+  }
+
+  trackAdvice(_index: number, rec: string): string {
+    return rec;
+  }
+
+  trackCondition(_index: number, c: DeploymentCondition): string {
+    return c.id;
+  }
+
+  /** Agrège les sévérités depuis les cartes outils (fallback security-validation). */
+  private severityFromTools(): Record<string, number> {
+    const tools = this.result?.toolMetrics ?? [];
+    const out = { critical: 0, high: 0, medium: 0, low: 0 };
+    for (const t of tools) {
+      out.critical += t.critical ?? 0;
+      out.high += t.high ?? 0;
+      out.medium += t.medium ?? 0;
+      out.low += t.low ?? 0;
+    }
+    return out;
+  }
+
+  private preferToolSeverity(key: 'critical' | 'high' | 'medium' | 'low'): number {
+    const fromMetrics = this.result?.metrics?.bySeverity?.[key] ?? 0;
+    if (this.result?.defectDojoAvailable && !this.metricsFromSecurityValidation) {
+      return fromMetrics;
+    }
+    if (fromMetrics > 0) {
+      return fromMetrics;
+    }
+    return this.severityFromTools()[key];
+  }
+
+  get sonarJobFailed(): boolean {
+    return this.result?.metrics?.sonarJobFailed === true;
+  }
+
+  get sonarResultsAvailable(): boolean {
+    if (this.result?.metrics?.sonarJobFailed) return false;
+    if (this.result?.sonarAvailability?.available) return true;
+    const sq = this.result?.metrics?.sonarQube;
+    if (sq && (sq.bugs != null || sq.vulnerabilities != null || sq.status != null || sq.hotspots != null)) {
+      return true;
+    }
+    return (this.result?.softwareQuality?.length ?? 0) > 0;
+  }
+
+  get metricsFromSecurityValidation(): boolean {
+    return this.result?.metricsFromSecurityValidation === true
+      || this.result?.metrics?.metricsFromSecurityValidation === true;
+  }
+
+  get totalVulnCount(): number {
+    return this.openVulnCount();
+  }
+
+  /** Somme crit+high+med+low — critiques ⊂ ouvertes. */
+  private openVulnCount(): number {
+    const sev = this.result?.metrics?.bySeverity;
+    if (sev) {
+      const sum = (sev['critical'] ?? 0) + (sev['high'] ?? 0) + (sev['medium'] ?? 0) + (sev['low'] ?? 0);
+      if (sum > 0) {
+        return sum;
+      }
+    }
+    const fromTools = this.severityFromTools();
+    const toolSum = fromTools['critical'] + fromTools['high'] + fromTools['medium'] + fromTools['low'];
+    if (toolSum > 0) {
+      return toolSum;
+    }
+    return this.result?.metrics?.totalVulnerabilities ?? 0;
+  }
+
+  get vulnMetricsAvailable(): boolean {
+    if (this.securityValidationFailed) return false;
+    return this.result?.defectDojoAvailable !== false || this.metricsFromSecurityValidation;
+  }
+
+  get noScoreMessage(): string {
+    if (this.securityValidationFailed) {
+      return 'Score de posture non calculable — le pipeline ne s\'est pas terminé avec succès (security-validation en échec).';
+    }
+    if (this.result?.verdict === 'INDETERMINE') {
+      return 'Score de posture non calculable — source indisponible.';
+    }
+    const sonarQgOk = this.sonarQgStatusOk;
+    const base = 'Score de posture non calculé — hard gate(s) violé(s) (secrets, critiques, blockers…).';
+    if (sonarQgOk) {
+      return base + ' Le Quality Gate SonarQube est OK (indépendant du score).';
+    }
+    return base;
+  }
+
+  get sonarQgStatusOk(): boolean {
+    const s = (this.sonarMetrics?.status ?? '').toUpperCase();
+    return s === 'OK' || s === 'PASSED' || s === 'PASS';
+  }
+
+  get sonarBlockerCount(): number {
+    return this.result?.metrics?.sonarQube?.bySeverity?.['blocker'] ?? 0;
+  }
+
+  get sonarCriticalCount(): number {
+    const fromMetrics = this.result?.metrics?.sonarCritical;
+    if (fromMetrics != null) {
+      return fromMetrics;
+    }
+    const sev = this.sonarMetrics?.bySeverity;
+    if (sev?.['critical'] != null) {
+      return Number(sev['critical']);
+    }
+    const sonarTool = this.result?.toolMetrics?.find(t => t.id === 'sonarqube');
+    return sonarTool?.high ?? 0;
+  }
+
+  get ddCentralCriticalCount(): number {
+    const fromMetrics = this.result?.metrics?.ddCritical;
+    if (fromMetrics != null) {
+      return fromMetrics;
+    }
+    return this.result?.metrics?.bySeverity?.['critical'] ?? this.severityFromTools()['critical'];
+  }
+
+  get pipelineCriticalCount(): number {
+    const combined = this.result?.metrics?.combinedCritical;
+    if (combined != null) {
+      return combined;
+    }
+    return this.ddCentralCriticalCount + this.sonarCriticalCount;
+  }
+
+  criticalRuleLabel(): string {
+    const total = this.pipelineCriticalCount;
+    const dd = this.ddCentralCriticalCount;
+    const sonar = this.sonarCriticalCount;
+    if (this.metricsFromSecurityValidation) {
+      return sonar > 0
+        ? `Pipeline · Critical = ${total} (Sonar ${sonar})`
+        : `Pipeline (SCA+Container) · Critical = ${total}`;
+    }
+    if (sonar > 0 && dd > 0) {
+      return `Critical = ${total} (central. ${dd} + Sonar ${sonar})`;
+    }
+    if (sonar > 0) {
+      return `Critical = ${total} (SonarQube ${sonar})`;
+    }
+    return `Centralisation vuln. · Critical = ${total}`;
+  }
+
+  get failedScanJobLabels(): string[] {
+    const fromApi = this.result?.failedScanJobs ?? this.result?.metrics?.failedScanJobs;
+    if (fromApi && fromApi.length > 0) {
+      return fromApi;
+    }
+    if (this.result?.reliabilityMessage) {
+      return [];
+    }
+    return this.fallbackUnreliableJobsFromStages();
+  }
+
+  get recommendationReliable(): boolean {
+    const r = this.result;
+    if (!r || this.securityValidationFailed) {
+      return false;
+    }
+    if (this.failedScanJobLabels.length > 0) {
+      return false;
+    }
+    if (r.recommendationReliable === false || r.metrics?.recommendationReliable === false) {
+      return false;
+    }
+    return true;
+  }
+
+  get reliabilityMessage(): string {
+    if (this.result?.reliabilityMessage) {
+      return this.result.reliabilityMessage;
+    }
+    const labels = this.failedScanJobLabels;
+    if (labels.length === 0) {
+      return '';
+    }
+    return `Recommandation peu fiable — ${labels.join(', ')} : vérifiez le job dans le pipeline GitLab, corrigez l'erreur puis relancez le job security-validation.`;
+  }
+
+  get showReliabilityBanner(): boolean {
+    return !this.loading
+      && !this.securityValidationFailed
+      && !this.recommendationReliable
+      && this.failedScanJobLabels.length > 0;
+  }
+
+  /**
+   * Jobs GitLab en échec ou non exécutés — exclut les FAIL « seuil dépassé » (secrets, vulns…).
+   */
+  get unsuccessfulStages(): QualityGateStage[] {
+    return this.deduplicatedStages.filter(s => this.isGitlabJobProblem(s));
+  }
+
+  private fallbackUnreliableJobsFromStages(): string[] {
+    const labels: string[] = [];
+    for (const s of this.unsuccessfulStages) {
+      const base = s.toolLabel || s.name;
+      if (!base) {
+        continue;
+      }
+      const st = (s.status || '').toUpperCase();
+      const entry = st === 'SKIPPED' || st === 'RUNNING'
+        ? `${base} (non exécuté)`
+        : base;
+      if (!labels.includes(entry)) {
+        labels.push(entry);
+      }
+    }
+    return labels;
+  }
+
+  /** true seulement si le job GitLab a échoué ou n'a pas tourné — pas un dépassement de seuil. */
+  private isGitlabJobProblem(stage: QualityGateStage): boolean {
+    if (this.isSecurityValidationStageName(stage.name) && !this.securityValidationFailed) {
+      return false;
+    }
+    const tool = this.findToolMetricForStage(stage);
+    if (tool?.evaluable !== false && tool?.stageStatus === 'PASS') {
+      return false;
+    }
+    const st = (stage.status || '').toUpperCase();
+    const msg = (stage.message || '').toLowerCase();
+
+    if (msg.includes('job échoué dans gitlab') || msg.includes('échoué sur gitlab')) {
+      return true;
+    }
+    if (msg.includes('secret(s) détecté') || msg.includes('0 secret détecté')) {
+      return false;
+    }
+    if (st === 'FAIL' && (
+      msg.includes('critique(s)') || msg.includes('élevée(s)') || msg.includes('moyenne(s)')
+      || msg.includes('blocker') || msg.includes('qg sonar') || msg.includes('seuil')
+    )) {
+      return false;
+    }
+    if (st === 'SKIPPED' || st === 'RUNNING') {
+      return true;
+    }
+    if (st === 'FAIL' && tool?.evaluable === false) {
+      return true;
+    }
+    const name = (stage.name || '').toLowerCase().replace(/_/g, '-');
+    if (name.includes('secret') || name.includes('gitleaks')) {
+      return tool?.evaluable === false;
+    }
+    return false;
+  }
+
+  private findToolMetricForStage(stage: QualityGateStage): QualityGateToolMetric | undefined {
+    const tools = this.result?.toolMetrics ?? [];
+    const stageName = (stage.name || '').toLowerCase();
+    return tools.find(t =>
+      (t.stageName && t.stageName.toLowerCase() === stageName)
+      || (t.stageLabel && t.stageLabel === stage.toolLabel)
+    );
+  }
+
+  private isSecurityValidationStageName(name?: string | null): boolean {
+    if (!name) return false;
+    return name.toLowerCase().replace(/_/g, '-').includes('security-validation');
+  }
+
+  /** Conditions indéterminées parce que le pipeline est incomplet (pas une panne DefectDojo/Sonar seule). */
+  get showUnsuccessfulStagesWarning(): boolean {
+    return this.showReliabilityBanner;
+  }
+
+  get unsuccessfulStagesWarningText(): string {
+    const labels = this.failedScanJobLabels.join(', ');
+    const hasRecommendation = ['RECOMMENDED', 'WITH_WARNINGS', 'NOT_RECOMMENDED']
+      .includes((this.result?.verdict || '').toUpperCase());
+    const verdictNote = hasRecommendation
+      ? ' Le pipeline GitLab comporte des jobs en échec ou non exécutés — corrigez-les avant de vous fier à la recommandation.'
+      : ' Cette recommandation ne peut pas être considérée comme fiable.';
+    if (this.result?.reliabilityMessage) {
+      return `Important : ${this.result.reliabilityMessage}${verdictNote}`;
+    }
+    return `Important : le ou les jobs GitLab suivants ne se sont pas terminés avec succès : ${labels}.${verdictNote} `
+      + 'Corrigez les jobs en échec dans GitLab puis relancez le pipeline.';
+  }
+
+  /** Conditions indéterminées parce que le pipeline est incomplet (pas une panne DefectDojo/Sonar seule). */
+  get pipelineRelatedIndeterminateConditions(): DeploymentCondition[] {
+    return this.deploymentConditions.filter(
+      c => c.status === 'indeterminate' && this.isPipelineRelatedIndeterminate(c)
+    );
+  }
+
+  get showPipelineIndeterminateConditionsWarning(): boolean {
+    if (this.securityValidationFailed) return true;
+    return this.pipelineRelatedIndeterminateConditions.length > 0;
+  }
+
+  get pipelineIndeterminateConditionsMessage(): string {
+    if (this.securityValidationFailed) {
+      return 'Toutes les conditions sont indéterminées car le stage security-validation a échoué. '
+        + 'Ne considérez pas cette recommandation comme valide — vérifiez les erreurs dans le pipeline GitLab.';
+    }
+    const labels = this.pipelineRelatedIndeterminateConditions
+      .map(c => c.label)
+      .join(', ');
+    return `Conditions indéterminées à cause du pipeline (${labels}) : jobs non terminés, en échec ou scans non exécutés. `
+      + 'Vous ne pouvez pas retenir cette recommandation comme un succès tant que ces vérifications ne sont pas complètes.';
+  }
+
+  private isPipelineRelatedIndeterminate(c: DeploymentCondition): boolean {
+    if (c.status !== 'indeterminate') return false;
+    if (this.securityValidationFailed || this.pipelineInProgress) return true;
+    const d = (c.detail || '').toLowerCase();
+    if (!d) return false;
+    if (d.includes('indisponible') && d.includes('état inconnu')) {
+      return false;
+    }
+    const pipelineHints = [
+      'pipeline', 'non encore vérifiée', 'non évaluée', 'security-validation',
+      'scan non exécuté', 'pas exécuté', 'en cours', 'condition non'
+    ];
+    return pipelineHints.some(h => d.includes(h));
+  }
+
   get deploymentConditions(): DeploymentCondition[] {
+    const pendingMsg = 'Pipeline en cours — condition non encore vérifiée';
+    const failedMsg = 'Security-validation en échec — condition non évaluée';
+    if (this.securityValidationFailed) {
+      return [
+        { id: 'secrets', label: 'Aucun secret exposé', rule: 'Gitleaks = —', status: 'indeterminate', detail: failedMsg },
+        { id: 'dd_critical', label: 'Aucune vulnérabilité critique', rule: 'Centralisation vuln. · Critical = —', status: 'indeterminate', detail: failedMsg },
+        { id: 'sonar_blocker', label: 'Aucune issue Blocker', rule: 'SonarQube · Blocker = —', status: 'indeterminate', detail: failedMsg },
+        { id: 'sonar_qg', label: 'Quality Gate SonarQube validé', rule: 'QG ≠ ERROR', status: 'indeterminate', detail: failedMsg }
+      ];
+    }
+    if (this.pipelineInProgress && this.result?.fromSnapshot !== false) {
+      return [
+        { id: 'secrets', label: 'Aucun secret exposé', rule: 'Gitleaks = 0', status: 'indeterminate', detail: pendingMsg },
+        { id: 'dd_critical', label: 'Aucune vulnérabilité critique', rule: 'Centralisation vuln. · Critical = 0', status: 'indeterminate', detail: pendingMsg },
+        { id: 'sonar_blocker', label: 'Aucune issue Blocker', rule: 'SonarQube · Blocker = 0', status: 'indeterminate', detail: pendingMsg },
+        { id: 'sonar_qg', label: 'Quality Gate SonarQube validé', rule: 'QG ≠ ERROR', status: 'indeterminate', detail: pendingMsg }
+      ];
+    }
+
     const violations = this.result?.hardGateViolations ?? [];
     const indeterminate = this.result?.hardGateIndeterminate ?? [];
 
     const statusOf = (id: string): DeploymentCondition['status'] => {
+      if (id === 'dd_critical') {
+        if (this.pipelineCriticalCount > 0) {
+          return 'violated';
+        }
+        if (this.usesPipelineVulnFallback()) {
+          return violations.some(v => v.id === id) ? 'violated' : 'ok';
+        }
+      }
       if (violations.some(v => v.id === id)) return 'violated';
       if (indeterminate.some(v => v.id === id)) return 'indeterminate';
       return 'ok';
@@ -464,32 +974,36 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     const detailOf = (id: string): string | undefined =>
       (violations.find(v => v.id === id) ?? indeterminate.find(v => v.id === id))?.message;
 
+    const secretsCount = this.result?.metrics?.secrets ?? 0;
+    const criticalCount = this.pipelineCriticalCount;
+    const blockerCount = this.sonarBlockerCount;
+
     return [
       {
         id: 'secrets',
         label: 'Aucun secret exposé',
-        rule: 'Gitleaks = 0',
+        rule: `Gitleaks = ${secretsCount}`,
         status: statusOf('secrets'),
         detail: detailOf('secrets')
       },
       {
         id: 'dd_critical',
         label: 'Aucune vulnérabilité critique',
-        rule: 'Centralisation vuln. · Critical = 0',
+        rule: this.criticalRuleLabel(),
         status: statusOf('dd_critical'),
         detail: detailOf('dd_critical')
       },
       {
         id: 'sonar_blocker',
         label: 'Aucune issue Blocker',
-        rule: 'SonarQube · Blocker = 0',
+        rule: `SonarQube · Blocker = ${blockerCount}`,
         status: statusOf('sonar_blocker'),
         detail: detailOf('sonar_blocker')
       },
       {
         id: 'sonar_qg',
         label: 'Quality Gate SonarQube validé',
-        rule: 'QG ≠ ERROR',
+        rule: this.sonarQgStatusOk ? `QG OK (${this.sonarQgLabel})` : 'QG ≠ ERROR',
         status: statusOf('sonar_qg'),
         detail: detailOf('sonar_qg')
       }
@@ -498,6 +1012,30 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   get conditionsOkCount(): number {
     return this.deploymentConditions.filter(c => c.status === 'ok').length;
+  }
+
+  get conditionsSummaryLabel(): string {
+    if (this.securityValidationFailed) {
+      return 'Non évaluées — pipeline incomplet';
+    }
+    if (this.pipelineInProgress && this.result?.fromSnapshot !== false) {
+      return 'Vérification en cours — 0/4 confirmées';
+    }
+    return `${this.conditionsOkCount}/4 respectées`;
+  }
+
+  conditionStateLabel(status: DeploymentCondition['status']): string {
+    if (this.securityValidationFailed) {
+      return 'Non évaluée';
+    }
+    if (this.pipelineInProgress && this.result?.fromSnapshot !== false) {
+      return 'Non vérifiée';
+    }
+    switch (status) {
+      case 'ok': return 'Respectée';
+      case 'violated': return 'Violée';
+      case 'indeterminate': return 'Indéterminée';
+    }
   }
 
   get hasConfirmedViolations(): boolean {
@@ -572,7 +1110,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     switch (verdict) {
       case 'RECOMMENDED': return 'Déployable';
       case 'WITH_WARNINGS': return 'Déployable avec surveillance';
-      case 'NOT_RECOMMENDED': return 'Déploiement bloqué — corriger les findings';
+      case 'NOT_RECOMMENDED': return 'Déploiement non recommandé';
       case 'INDETERMINE': return 'Vérification incomplète';
       default: return 'Inconnu';
     }
@@ -589,13 +1127,39 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   indeterminateInfraMessage(): string {
-    const sources = this.result?.indeterminateSources ?? [];
-    if (!sources.length) {
-      return this.result?.incompleteRecommendationMessage
-        || 'Impossible de garantir l\'absence de vulnérabilité critique. Relancez les services et actualisez.';
+    if (this.usesPipelineVulnFallback()) {
+      return '';
     }
-    return `Impossible de garantir l'absence de vulnérabilité critique : ${sources.join(', ')} n'a/ont pas répondu. `
-      + 'Relancez le service et actualisez. Ce n\'est pas un problème de votre code.';
+    const sources = (this.result?.indeterminateSources ?? [])
+      .filter(s => !this.isCentralizationOnlyIndeterminate(s));
+    if (this.result?.incompleteRecommendationMessage) {
+      return this.result.incompleteRecommendationMessage;
+    }
+    if (!sources.length) {
+      return 'Impossible de garantir l\'absence de vulnérabilité critique. Vérifiez les erreurs dans le pipeline GitLab, corrigez les jobs en échec puis actualisez.';
+    }
+    return `Recommandation incomplète — ${sources.join(', ')} indisponible(s), métriques non prises en compte. `
+      + 'Vérifiez les erreurs dans le pipeline GitLab puis relancez les stages concernés.';
+  }
+
+  /** DefectDojo inaccessible mais métriques pipeline / snapshot disponibles. */
+  private usesPipelineVulnFallback(): boolean {
+    const r = this.result;
+    if (!r || this.securityValidationFailed) {
+      return false;
+    }
+    if (this.metricsFromSecurityValidation && r.defectDojoAvailable === false) {
+      return true;
+    }
+    return r.defectDojoAvailable === false
+      && (this.isViewingFrozenSnapshot || this.hasDisplayablePipelineDetail())
+      && (r.verdict !== 'INDETERMINE'
+          || this.metricsFromSecurityValidation
+          || (r.hardGateViolations?.length ?? 0) > 0);
+  }
+
+  private isCentralizationOnlyIndeterminate(source: string): boolean {
+    return !!source && source.toLowerCase().includes('centralisation') && this.usesPipelineVulnFallback();
   }
 
 
@@ -610,12 +1174,19 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
       case 'FAIL': return '❌';
 
+      case 'RUNNING': return '🔄';
+
       case 'SKIPPED': return '⏭️';
 
       default: return '○';
 
     }
 
+  }
+
+  stageDisplayLabel(stage: QualityGateStage): string {
+    if (stage.status === 'WARN') return 'Warning';
+    return stage.statusLabel || stage.status;
   }
 
 
@@ -628,20 +1199,50 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
+  sonarToolSeverityLines(tool: QualityGateToolMetric): { count: number; label: string; cssClass: string }[] {
+    const sev = this.sonarMetrics?.bySeverity ?? {};
+    const blocker = Number(sev['blocker'] ?? tool.critical ?? 0);
+    const critical = Number(sev['critical'] ?? tool.high ?? 0);
+    const major = Number(sev['major'] ?? tool.medium ?? 0);
+    const minor = Number(sev['minor'] ?? tool.low ?? 0);
+    const lines: { count: number; label: string; cssClass: string }[] = [];
+    if (blocker > 0) {
+      lines.push({ count: blocker, label: 'blocker', cssClass: 'qg-tool-sev--crit' });
+    }
+    if (critical > 0) {
+      lines.push({ count: critical, label: 'crit.', cssClass: 'qg-tool-sev--crit' });
+    }
+    if (major > 0) {
+      lines.push({ count: major, label: 'high', cssClass: 'qg-tool-sev--high' });
+    }
+    if (minor > 0) {
+      lines.push({ count: minor, label: 'moy.', cssClass: 'qg-tool-sev--med' });
+    }
+    return lines;
+  }
+
+  hasSonarToolSeverityLines(tool: QualityGateToolMetric): boolean {
+    return this.sonarToolSeverityLines(tool).length > 0;
+  }
+
   toolStatusClass(tool: QualityGateToolMetric): string {
     const status = tool.stageStatus || this.stageForTool(tool)?.status;
     if (status) {
       if (status === 'FAIL') return 'qg-tool-card--fail';
       if (status === 'WARN') return 'qg-tool-card--warn';
-      if (status === 'SKIPPED') return 'qg-tool-card--skipped';
+      if (status === 'SKIPPED' || status === 'RUNNING') return 'qg-tool-card--skipped';
       if (status === 'PASS') return 'qg-tool-card--pass';
     }
     return 'qg-tool-card--pass';
   }
 
   toolStatusLabel(tool: QualityGateToolMetric): string {
+    const raw = tool.stageStatus || this.stageForTool(tool)?.status;
+    if (raw === 'WARN') return 'Warning';
     if (tool.stageStatus) return tool.stageStatus;
     const stage = this.stageForTool(tool);
+    if (stage?.status === 'WARN') return 'Warning';
+    if (stage?.statusLabel) return stage.statusLabel;
     if (stage?.status) return stage.status;
     return 'PASS';
   }
@@ -766,7 +1367,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   get showSoftwareQualitySection(): boolean {
-    return !!this.result?.sonarAvailability?.available;
+    return this.sonarResultsAvailable;
   }
 
   get sonarBranchLabel(): string {
@@ -861,25 +1462,23 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
   get criticalCount(): number {
-
-    return this.result?.metrics.bySeverity?.['critical'] ?? 0;
-
+    return this.pipelineCriticalCount;
   }
-
-
 
   get highCount(): number {
-
-    return this.result?.metrics.bySeverity?.['high'] ?? 0;
-
+    const fromSev = this.result?.metrics?.bySeverity?.['high'];
+    if (fromSev != null) {
+      return fromSev;
+    }
+    return this.severityFromTools()['high'];
   }
 
-
-
   get mediumCount(): number {
-
-    return this.result?.metrics.bySeverity?.['medium'] ?? 0;
-
+    const fromSev = this.result?.metrics?.bySeverity?.['medium'];
+    if (fromSev != null) {
+      return fromSev;
+    }
+    return this.severityFromTools()['medium'];
   }
 
 
@@ -912,11 +1511,23 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
+  private normalizeEvaluatedAt(raw: unknown): string | null {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'string') return raw;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      const ms = raw > 1e12 ? raw : raw * 1000;
+      return new Date(ms).toISOString();
+    }
+    return null;
+  }
+
   private normalizeResult(res: QualityGateResult): QualityGateResult {
 
     return {
 
       ...res,
+
+      evaluatedAt: this.normalizeEvaluatedAt(res.evaluatedAt) ?? res.evaluatedAt ?? null,
 
       hardGateViolations: res.hardGateViolations ?? [],
 
@@ -935,6 +1546,12 @@ export class QualityGateComponent implements OnInit, OnDestroy {
       practicalAdvice: res.practicalAdvice ?? res.detailedRecommendations ?? [],
 
       verdictExplanation: res.verdictExplanation ?? [],
+
+      recommendationReliable: res.recommendationReliable ?? res.metrics?.recommendationReliable,
+
+      reliabilityMessage: res.reliabilityMessage ?? null,
+
+      failedScanJobs: res.failedScanJobs ?? res.metrics?.failedScanJobs ?? [],
 
       securityScore: res.securityScore
 
@@ -1018,7 +1635,9 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
         if (!this.pipelinePolling) return of(null);
 
-        return this.qualityGateService.getQualityGate(this.appId, this.selectedBranch, this.selectedEnvironmentId).pipe(
+        return this.qualityGateService.getQualityGate(
+          this.appId, this.selectedBranch, this.selectedEnvironmentId, false
+        ).pipe(
 
           catchError(() => of(null))
 

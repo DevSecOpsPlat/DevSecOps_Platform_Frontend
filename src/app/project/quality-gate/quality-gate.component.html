@@ -15,7 +15,7 @@
           {{ env.environmentName }} · {{ env.branch }}<ng-container *ngIf="env.pipelineId"> · #{{ env.pipelineId }}</ng-container><ng-container *ngIf="env.verdict"> · {{ env.verdict }}</ng-container>
         </option>
       </select>
-      <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading">Actualiser</button>
+      <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading" [title]="refreshButtonTitle">Actualiser</button>
       <span class="qg-polling" *ngIf="pipelinePolling" title="Pipeline en cours">● Live</span>
     </div>
   </header>
@@ -37,12 +37,20 @@
     <button type="button" class="qg-banner-link" (click)="refreshData()">Actualiser</button>
   </div>
 
-  <div class="qg-banner qg-banner--snapshot" *ngIf="selectedEnvironmentId && result && result.verdictSource !== 'SNAPSHOT_MISSING' && !loading">
-    <span class="qg-banner-ico">📌</span>
-    <span>
-      Snapshot figé à la fin du pipeline<span *ngIf="result.pipelineId"> · #{{ result.pipelineId }}</span><span *ngIf="result.evaluatedAt"> · {{ result.evaluatedAt | date:'short' }}</span>.
-      Les données live peuvent différer après un nouveau scan.
-    </span>
+  <div class="qg-banner qg-banner--info" *ngIf="!loading && result?.verdictSource === 'PIPELINE_IN_PROGRESS'">
+    <span class="qg-banner-ico">●</span>
+    <span>{{ result?.summary || 'Pipeline en cours — le détail des stages et outils sera disponible à la fin du pipeline.' }}</span>
+  </div>
+
+  <div class="qg-banner qg-banner--warn" *ngIf="!loading && pipelineFinished && sonarJobFailed && !securityValidationFailed">
+    <span class="qg-banner-ico">⚠</span>
+    <span>{{ result?.sonarAvailability?.message || result?.incompleteRecommendationMessage || 'Le stage SonarQube ne s\'est pas terminé avec succès — recommandation incomplète.' }}</span>
+  </div>
+
+  <div class="qg-banner qg-banner--warn" *ngIf="!loading && securityValidationFailed">
+    <span class="qg-banner-ico">⚠</span>
+    <span>{{ result?.incompleteRecommendationMessage || 'Le stage security-validation a échoué — recommandation indisponible.' }}</span>
+    <a *ngIf="result?.pipelineWebUrl" [href]="result?.pipelineWebUrl" target="_blank" rel="noopener" class="qg-banner-link">Voir le pipeline GitLab</a>
   </div>
 
   <!-- Loading -->
@@ -55,7 +63,7 @@
 
   <div class="qg-banner qg-banner--warn" *ngIf="!loading && !error && result?.verdictSource === 'SNAPSHOT_MISSING'">
     <span>{{ result?.summary }}</span>
-    <button type="button" class="qg-banner-link" (click)="refreshData()">Créer le snapshot</button>
+    <button type="button" class="qg-banner-link" (click)="captureSnapshot()" *ngIf="result?.pipelineStatus !== 'running' && result?.pipelineStatus !== 'pending'">Créer le snapshot</button>
   </div>
 
   <ng-container *ngIf="!loading && !error && result && result.verdictSource !== 'SNAPSHOT_MISSING'">
@@ -97,13 +105,18 @@
         <div class="qg-vh-right qg-vh-right--noscore">
           <span class="qg-noscore-ico">{{ verdictEmoji(result.verdict) }}</span>
           <p class="qg-noscore-txt">
-            {{ result.verdict === 'INDETERMINE'
-              ? 'Score non calculable — source indisponible.'
-              : 'Score non calculé — une condition bloquante est violée.' }}
+            {{ noScoreMessage }}
           </p>
         </div>
       </ng-template>
     </section>
+
+    <!-- Avertissement : stages pipeline non réussis -->
+    <div class="qg-banner qg-banner--warn qg-banner--strong" *ngIf="showUnsuccessfulStagesWarning">
+      <span class="qg-banner-ico">⚠</span>
+      <span>{{ unsuccessfulStagesWarningText }}</span>
+      <a *ngIf="result.pipelineWebUrl" [href]="result.pipelineWebUrl!" target="_blank" rel="noopener" class="qg-banner-link">Pipeline GitLab</a>
+    </div>
 
     <!-- Barème A→E avec curseur -->
     <section class="qg-scale-card" *ngIf="result.securityScore">
@@ -133,41 +146,42 @@
       <div class="qg-cond-head">
         <h3 class="qg-cond-title">Conditions de déploiement</h3>
         <span class="qg-cond-tag">Tolérance zéro — une seule suffit à bloquer</span>
-        <span class="qg-cond-count">{{ conditionsOkCount }}/4 respectées</span>
+        <span class="qg-cond-count" [class.qg-cond-count--pending]="pipelineInProgress">{{ conditionsSummaryLabel }}</span>
       </div>
       <ul class="qg-cond-list">
-        <li *ngFor="let c of deploymentConditions; let i = index"
-            class="qg-cond-item" [ngClass]="conditionClass(c.status)"
-            [style.animation-delay.ms]="i * 80">
+        <li *ngFor="let c of deploymentConditions; trackBy: trackCondition"
+            class="qg-cond-item" [ngClass]="conditionClass(c.status)">
           <span class="qg-cond-ico">{{ conditionIcon(c.status) }}</span>
           <div class="qg-cond-body">
             <span class="qg-cond-label">{{ c.label }}</span>
             <code class="qg-cond-rule">{{ c.rule }}</code>
             <span class="qg-cond-detail" *ngIf="c.detail">{{ c.detail }}</span>
           </div>
-          <span class="qg-cond-state">
-            {{ c.status === 'ok' ? 'Respectée' : c.status === 'violated' ? 'Violée' : 'Indéterminée' }}
-          </span>
+          <span class="qg-cond-state">{{ conditionStateLabel(c.status) }}</span>
         </li>
       </ul>
+      <div class="qg-cond-alert" *ngIf="showPipelineIndeterminateConditionsWarning">
+        <span class="qg-cond-alert-ico">⚠</span>
+        <p>{{ pipelineIndeterminateConditionsMessage }}</p>
+      </div>
     </section>
 
     <!-- KPIs -->
     <section class="qg-kpis">
       <article class="qg-kpi">
-        <span class="qg-kpi-val">{{ result.defectDojoAvailable === false ? '—' : (result.metrics.totalVulnerabilities ?? 0) }}</span>
+        <span class="qg-kpi-val">{{ vulnMetricsAvailable ? totalVulnCount : '—' }}</span>
         <span class="qg-kpi-lbl">Ouvertes ({{ vulnCentralizationLabel }})</span>
       </article>
       <article class="qg-kpi qg-kpi--crit">
-        <span class="qg-kpi-val">{{ result.defectDojoAvailable === false ? '?' : criticalCount }}</span>
+        <span class="qg-kpi-val">{{ vulnMetricsAvailable ? criticalCount : '—' }}</span>
         <span class="qg-kpi-lbl">Critiques</span>
       </article>
       <article class="qg-kpi qg-kpi--high">
-        <span class="qg-kpi-val">{{ result.defectDojoAvailable === false ? '?' : highCount }}</span>
+        <span class="qg-kpi-val">{{ vulnMetricsAvailable ? highCount : '—' }}</span>
         <span class="qg-kpi-lbl">Élevées</span>
       </article>
       <article class="qg-kpi">
-        <span class="qg-kpi-val">{{ result.defectDojoAvailable === false ? '?' : mediumCount }}</span>
+        <span class="qg-kpi-val">{{ vulnMetricsAvailable ? mediumCount : '—' }}</span>
         <span class="qg-kpi-lbl">Moyennes</span>
       </article>
       <article class="qg-kpi">
@@ -218,13 +232,16 @@
           <span class="qg-ai-spark">✦</span>{{ aiLoading ? 'Analyse IA…' : 'Conseils personnalisés (IA)' }}
         </button>
       </div>
-      <ol class="qg-advice-list">
-        <li *ngFor="let rec of result.practicalAdvice || result.detailedRecommendations; let i = index"
-            class="qg-advice-item" [style.animation-delay.ms]="i * 50">
+      <ol class="qg-advice-list" *ngIf="practicalAdviceList.length; else noAdvice">
+        <li *ngFor="let rec of practicalAdviceList; let i = index; trackBy: trackAdvice"
+            class="qg-advice-item">
           <span class="qg-advice-num">{{ i + 1 }}</span>
           <span class="qg-advice-txt">{{ stripLeadingNumber(rec) }}</span>
         </li>
       </ol>
+      <ng-template #noAdvice>
+        <p class="qg-card-hint">Aucun conseil automatique pour ce verdict — utilisez « Conseils personnalisés (IA) » ou corrigez les hard gates signalés ci-dessus.</p>
+      </ng-template>
       <div class="qg-ai-box" *ngIf="aiInsight" [@verdictPop]>
         <h4><span class="qg-ai-spark">✦</span> Analyse personnalisée (IA)</h4>
         <p class="qg-ai-text">{{ aiInsight }}</p>
@@ -240,8 +257,8 @@
       <p class="qg-method-note" *ngIf="showScoringMethod && result.scoringNote">{{ result.scoringNote }}</p>
     </section>
 
-    <!-- ════ DÉTAIL (outils / sonar / timeline) ═══════════════════════════ -->
-    <section class="qg-card" *ngIf="result.toolMetrics?.length">
+    <!-- ════ DÉTAIL (outils / sonar / timeline) — uniquement pipeline terminé ═══ -->
+    <section class="qg-card" *ngIf="showToolsAndMetricsDetail && result.toolMetrics?.length">
       <h3 class="qg-card-title">Outils de détection</h3>
       <div class="qg-tools-grid">
         <article class="qg-tool-card" *ngFor="let tool of result.toolMetrics" [ngClass]="toolStatusClass(tool)"
@@ -252,18 +269,24 @@
           </header>
           <span class="qg-tool-type">{{ tool.type }}</span>
           <div class="qg-tool-counts">
-            <span *ngIf="tool.critical" class="qg-tool-sev qg-tool-sev--crit">{{ tool.critical }} crit.</span>
-            <span *ngIf="tool.high" class="qg-tool-sev qg-tool-sev--high">{{ tool.high }} high</span>
-            <span *ngIf="tool.medium" class="qg-tool-sev qg-tool-sev--med">{{ tool.medium }} moy.</span>
-            <span *ngIf="tool.low" class="qg-tool-sev">{{ tool.low }} faible</span>
-            <span *ngIf="!tool.critical && !tool.high && !tool.medium && !tool.low" class="qg-tool-ok">0</span>
+            <ng-container *ngIf="tool.id === 'sonarqube'; else genericToolCounts">
+              <span *ngFor="let line of sonarToolSeverityLines(tool)"
+                class="qg-tool-sev" [ngClass]="line.cssClass">{{ line.count }} {{ line.label }}</span>
+              <span *ngIf="!hasSonarToolSeverityLines(tool)" class="qg-tool-ok">0</span>
+            </ng-container>
+            <ng-template #genericToolCounts>
+              <span *ngIf="tool.critical" class="qg-tool-sev qg-tool-sev--crit">{{ tool.critical }} crit.</span>
+              <span *ngIf="tool.high" class="qg-tool-sev qg-tool-sev--high">{{ tool.high }} high</span>
+              <span *ngIf="tool.medium" class="qg-tool-sev qg-tool-sev--med">{{ tool.medium }} moy.</span>
+              <span *ngIf="tool.low" class="qg-tool-sev">{{ tool.low }} faible</span>
+              <span *ngIf="!tool.critical && !tool.high && !tool.medium && !tool.low" class="qg-tool-ok">0</span>
+            </ng-template>
           </div>
-          <footer class="qg-tool-src">{{ tool.source }}</footer>
         </article>
       </div>
     </section>
 
-    <section class="qg-card" *ngIf="showSoftwareQualitySection && result.softwareQuality?.length">
+    <section class="qg-card" *ngIf="showToolsAndMetricsDetail && showSoftwareQualitySection && result.softwareQuality?.length">
       <div class="qg-card-head">
         <h3 class="qg-card-title">Software Quality (SonarQube 10+)</h3>
         <span class="qg-branch-chip" *ngIf="sonarBranchLabel">{{ sonarBranchLabel }}</span>
@@ -277,7 +300,7 @@
       </div>
     </section>
 
-    <section class="qg-card" *ngIf="sonarMetrics && result.sonarAvailability?.available">
+    <section class="qg-card" *ngIf="showToolsAndMetricsDetail && sonarResultsAvailable && sonarMetrics">
       <div class="qg-card-head">
         <h3 class="qg-card-title">SonarQube — métriques classiques</h3>
         <a *ngIf="result.sonarAvailability?.dashboardUrl" [href]="result.sonarAvailability?.dashboardUrl"
@@ -294,8 +317,9 @@
       </div>
     </section>
 
-    <section class="qg-card" id="qg-stages">
+    <section class="qg-card" id="qg-stages" *ngIf="showTimeline">
       <h3 class="qg-card-title">Timeline des stages pipeline</h3>
+      <p class="qg-card-hint" *ngIf="!deduplicatedStages.length">Aucun stage enregistré dans le snapshot — actualisez après la fin du pipeline.</p>
       <div class="qg-table-wrap" *ngIf="deduplicatedStages.length">
         <table class="qg-table">
           <thead>
@@ -308,7 +332,7 @@
                 <span class="qg-stage-label">{{ stage.toolLabel || stage.name }}</span>
                 <span class="qg-stage-job">{{ stage.name }}</span>
               </td>
-              <td class="qg-td-status"><span class="qg-stage-icon">{{ stageIcon(stage.status) }}</span> {{ stage.statusLabel || stage.status }}</td>
+              <td class="qg-td-status"><span class="qg-stage-icon">{{ stageIcon(stage.status) }}</span> {{ stageDisplayLabel(stage) }}</td>
               <td class="qg-td-blocking" [class.qg-td-blocking--yes]="stage.blocking && stage.status === 'FAIL'">{{ blockingLabel(stage) }}</td>
               <td class="qg-td-detail">{{ stage.message || '—' }}</td>
             </tr>
