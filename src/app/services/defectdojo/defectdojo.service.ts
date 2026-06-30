@@ -210,11 +210,28 @@ export class DefectDojoService {
     });
   }
 
-  getDashboard(applicationId: string, branch?: string, tags?: string): Observable<DefectDojoDashboardResponse> {
+  getDashboard(
+    applicationId: string,
+    branch?: string,
+    tags?: string,
+    includeCharts = true
+  ): Observable<DefectDojoDashboardResponse> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch?.trim()) params = params.set('branch', branch.trim());
     if (tags?.trim()) params = params.set('tags', tags.trim());
+    if (!includeCharts) params = params.set('includeCharts', 'false');
     return this.http.get<DefectDojoDashboardResponse>(BASE + 'api/defectdojo/dashboard', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  /** Graphiques du centre de sécurité — chargement différé après le résumé KPI. */
+  getDashboardCharts(applicationId: string, branch?: string, tags?: string): Observable<DefectDojoDashboardCharts> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    if (tags?.trim()) params = params.set('tags', tags.trim());
+    return this.http.get<DefectDojoDashboardCharts>(BASE + 'api/defectdojo/dashboard/charts', {
       headers: this.authHeaders(),
       params
     });

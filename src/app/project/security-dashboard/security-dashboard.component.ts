@@ -104,6 +104,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   environments: EnvironmentSummaryResponse[] = [];
 
   loading = false;
+  chartsLoading = false;
   listLoading = false;
   error: string | null = null;
   dashboard: DefectDojoDashboardResponse | null = null;
@@ -137,6 +138,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.dashboardReload$.pipe(
       switchMap(({ appId, branch, tags }) => {
         this.loading = true;
+        this.chartsLoading = false;
         this.error = null;
         this.destroyCharts();
         return this.defectDojoService.getDashboard(appId, branch, tags).pipe(
@@ -154,6 +156,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       next: d => {
         this.dashboard = d;
         this.loading = false;
+        this.chartsLoading = false;
         if (d.engagementId) {
           if (this.showFindingsTable) this.loadFindings();
           setTimeout(() => this.renderCharts(), 80);
@@ -163,6 +166,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.dashboard = null;
         this.error = err.message || 'Impossible de charger le dashboard sécurité.';
         this.loading = false;
+        this.chartsLoading = false;
       }
     });
 
@@ -224,6 +228,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         if (!this.selectedBranch) {
           this.selectedBranch = this.branches[0];
           this.syncQueryParams();
+          this.triggerDashboardReload();
         }
       },
       error: () => {
@@ -231,6 +236,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         if (!this.selectedBranch) {
           this.selectedBranch = 'main';
           this.syncQueryParams();
+          this.triggerDashboardReload();
         }
       }
     });
@@ -245,12 +251,23 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   onBranchChange(): void {
     this.page = 0;
+    const envStillValid = this.environmentsForBranch.some(e => e.id === this.selectedEnvironmentId);
+    if (!envStillValid) {
+      this.selectedEnvironmentId = '';
+    }
     this.syncQueryParams();
+    this.triggerDashboardReload();
   }
 
   onEnvironmentChange(): void {
     this.page = 0;
     this.syncQueryParams();
+    this.triggerDashboardReload();
+  }
+
+  private triggerDashboardReload(): void {
+    if (!this.appId || !this.selectedBranch) return;
+    this.requestDashboardReload(this.appId, this.selectedBranch);
   }
 
   backToProject(): void {
@@ -307,8 +324,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   reload(): void {
-    if (!this.appId || !this.selectedBranch) return;
-    this.requestDashboardReload(this.appId, this.selectedBranch);
+    this.triggerDashboardReload();
   }
 
   loadFindings(): void {
@@ -395,7 +411,22 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   severityCount(sev: string): number {
-    return this.charts?.bySeverity?.[sev] || 0;
+    return this.charts?.bySeverity?.[sev]
+      ?? this.dashboard?.bySeverity?.[sev]
+      ?? 0;
+  }
+
+  get resolutionOpenCount(): number {
+    return this.charts?.openCount ?? this.dashboard?.totalActive ?? 0;
+  }
+
+  get resolutionClosedCount(): number {
+    return this.charts?.closedCount ?? this.dashboard?.totalMitigated ?? 0;
+  }
+
+  get resolutionTotalCount(): number {
+    return this.charts?.totalCount
+      ?? ((this.dashboard?.totalActive ?? 0) + (this.dashboard?.totalMitigated ?? 0));
   }
 
   envCountForBranch(branch: string): number {

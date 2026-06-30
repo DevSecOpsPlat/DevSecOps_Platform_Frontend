@@ -48,20 +48,11 @@
     <div *ngIf="error" class="vuln-alert vuln-alert-error"><span class="vuln-alert-icon">⚠️</span><span>{{ error }}</span></div>
     <div *ngIf="!loading && dashboard && !dashboard.configured" class="vuln-alert vuln-alert-warning">{{ dashboard.message }}</div>
     <div *ngIf="!loading && dashboard?.message && !dashboard!.engagementId" class="vuln-alert vuln-alert-info">{{ dashboard!.message }}</div>
-    <div *ngIf="dashboard?.deployRecommendation" class="vuln-alert"
-      [class.vuln-alert-success]="dashboard!.deployRecommendation!.deployRecommended"
-      [class.vuln-alert-error]="!dashboard!.deployRecommendation!.deployRecommended">
-      <span class="vuln-alert-icon">{{ dashboard!.deployRecommendation!.deployRecommended ? '✅' : '⛔' }}</span>
-      <div class="vuln-alert-body">
-        <strong>{{ dashboard!.deployRecommendation!.deployRecommended ? 'Déploiement recommandé' : 'Déploiement NON recommandé' }}</strong>
-        — {{ dashboard!.deployRecommendation!.reason }}
-      </div>
-    </div>
   </div>
 
   <div *ngIf="loading" class="dd-loading">Chargement des métriques DefectDojo…</div>
 
-  <ng-container *ngIf="!loading && dashboard?.engagementId && charts">
+  <ng-container *ngIf="!loading && dashboard?.engagementId">
 
     <!-- Barre sévérité (style DefectDojo, thème bleu foncé / orange) -->
     <section class="dd-metrics-block">
@@ -107,15 +98,15 @@
       </div>
       <div class="dd-metrics-bar dd-metrics-bar--resolution">
         <div class="dd-metric-cell res-open">
-          <span class="dd-metric-cell-value">{{ charts!.openCount }}</span>
+          <span class="dd-metric-cell-value">{{ resolutionOpenCount }}</span>
           <span class="dd-metric-cell-label">Non résolues</span>
         </div>
         <div class="dd-metric-cell res-closed">
-          <span class="dd-metric-cell-value">{{ charts!.closedCount }}</span>
+          <span class="dd-metric-cell-value">{{ resolutionClosedCount }}</span>
           <span class="dd-metric-cell-label">Résolues</span>
         </div>
         <div class="dd-metric-cell res-total">
-          <span class="dd-metric-cell-value">{{ charts!.totalCount }}</span>
+          <span class="dd-metric-cell-value">{{ resolutionTotalCount }}</span>
           <span class="dd-metric-cell-label">Total</span>
         </div>
       </div>
@@ -145,12 +136,14 @@
       </button>
     </div>
 
+    <div *ngIf="chartsLoading" class="dd-loading dd-loading--charts">Chargement des graphiques…</div>
+
     <!-- Detailed Metrics (DefectDojo) -->
-    <div class="dd-section-head dd-section-head--detailed">
+    <div class="dd-section-head dd-section-head--detailed" *ngIf="!chartsLoading && charts?.detailedMetrics">
       <h2>Detailed Metrics</h2>
       <p>Évolution par scan, âge des findings, activité et CWE</p>
     </div>
-    <div class="dd-charts-grid" *ngIf="charts!.detailedMetrics">
+    <div class="dd-charts-grid" *ngIf="!chartsLoading && charts?.detailedMetrics">
       <section class="dd-chart-panel dd-chart-panel--wide dd-chart-panel--defectdojo">
         <div class="dd-chart-panel-head">
           <span class="dd-chart-panel-title">Open by Severity (par scan)</span>
@@ -230,7 +223,7 @@
     </div>
 
     <!-- Grille analytics -->
-    <div class="dd-charts-grid">
+    <div class="dd-charts-grid" *ngIf="!chartsLoading && charts">
       <section class="dd-chart-panel">
         <h3 class="dd-chart-title">Répartition par sévérité</h3>
         <p class="dd-chart-sub">Findings ouverts uniquement</p>
