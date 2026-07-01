@@ -201,12 +201,11 @@
         <button
           type="button"
           class="nav-item"
-          (click)="navigateSecurityDashboard()"
-          [class.active]="isSecurityDashboardRoute()"
+          (click)="goToLegacySecurityDashboard()"
+          [class.active]="isLegacySecurityDashboardRoute()"
         >
-          <span class="nav-dot" style="background: #8b5cf6;"></span>
-          <span class="nav-text">Dashboard sécurité</span>
-          <span class="nav-badge">DefectDojo</span>
+          <span class="nav-dot" style="background: #94a3b8;"></span>
+          <span class="nav-text">Centre de sécurité</span>
         </button>
         <button
           type="button"
@@ -232,6 +231,11 @@
         <span>🧪 Analyse code</span>
       </h3>
       <div class="nav-items">
+        <button class="nav-item" (click)="goToQualityGate()" [class.active]="isQualityGateRoute()">
+          <span class="nav-icon">🚦</span>
+          <span class="nav-text">Quality Gate</span>
+          <span class="nav-badge">deploy</span>
+        </button>
         <button class="nav-item" (click)="goToSonarqube()" [class.active]="isSonarqubeRoute()">
           <span class="nav-icon">🔎</span>
           <span class="nav-text">SonarQube</span>

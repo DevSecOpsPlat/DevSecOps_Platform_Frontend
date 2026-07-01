@@ -136,6 +136,47 @@ export interface DefectDojoDashboardCharts {
   lastScanDate?: string;
 }
 
+export interface DefectDojoDashboard2Response {
+  configured: boolean;
+  message?: string;
+  scope: 'global' | 'branch';
+  applicationName?: string;
+  productName?: string;
+  productId?: number;
+  productUrl?: string;
+  selectedBranch?: string | null;
+  engagementId?: number;
+  engagementName?: string;
+  bySeverity?: Record<string, number>;
+  byTool?: Record<string, number>;
+  byStatus?: Record<string, number>;
+  totalOpen?: number;
+  totalClosed?: number;
+  securityScore?: {
+    grade: string;
+    score: number;
+    summary: string;
+  };
+  topRecurrent?: {
+    identifier: string;
+    label: string;
+    count: number;
+    severity: string;
+    type: string;
+  }[];
+  trendPoints?: {
+    label: string;
+    date?: string;
+    openStock: number;
+    newFindings: number;
+    resolved: number;
+  }[];
+  branches?: string[];
+  engagements?: { id?: number; name?: string; branchTag?: string; activeFindings?: number }[];
+  charts?: DefectDojoDashboardCharts;
+  defectDojoBaseUrl?: string;
+}
+
 export interface DefectDojoDashboardResponse {
   configured: boolean;
   message?: string;
@@ -169,34 +210,98 @@ export class DefectDojoService {
     });
   }
 
-  getDashboard(applicationId: string, branch?: string): Observable<DefectDojoDashboardResponse> {
+  getDashboard(
+    applicationId: string,
+    branch?: string,
+    tags?: string,
+    includeCharts = true
+  ): Observable<DefectDojoDashboardResponse> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch?.trim()) params = params.set('branch', branch.trim());
+    if (tags?.trim()) params = params.set('tags', tags.trim());
+    if (!includeCharts) params = params.set('includeCharts', 'false');
     return this.http.get<DefectDojoDashboardResponse>(BASE + 'api/defectdojo/dashboard', {
       headers: this.authHeaders(),
       params
     });
   }
 
+  /** Graphiques du centre de sécurité — chargement différé après le résumé KPI. */
+  getDashboardCharts(applicationId: string, branch?: string, tags?: string): Observable<DefectDojoDashboardCharts> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    if (tags?.trim()) params = params.set('tags', tags.trim());
+    return this.http.get<DefectDojoDashboardCharts>(BASE + 'api/defectdojo/dashboard/charts', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  /** Dashboard sécurité v2 — vue globale si branch omis ou __all__. */
+  getDashboard2(applicationId: string, branch?: string): Observable<DefectDojoDashboard2Response> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    const b = this.normalizeDashboardBranch(branch);
+    if (b) params = params.set('branch', b);
+    return this.http.get<DefectDojoDashboard2Response>(BASE + 'api/defectdojo/dashboard2', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  /** Graphiques dashboard2 — optionnel (inclus dans getDashboard2). */
+  getDashboard2Charts(applicationId: string, branch?: string): Observable<DefectDojoDashboardCharts> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    const b = this.normalizeDashboardBranch(branch);
+    if (b) {
+      params = params.set('branch', b);
+    }
+    return this.http.get<DefectDojoDashboardCharts>(BASE + 'api/defectdojo/dashboard2/charts', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  private normalizeDashboardBranch(branch?: string): string | undefined {
+    const b = branch?.trim();
+    if (!b || b === '__all__' || b.toLowerCase() === 'all' || b === '*' || b.toLowerCase() === 'global') {
+      return undefined;
+    }
+    return b;
+  }
+
   getFindings(
     applicationId: string,
-    branch: string,
+    branch: string | undefined,
     category: DefectDojoMetricCategory,
     page = 0,
     size = 25,
-    severity?: string
+    severity?: string,
+    tags?: string
   ): Observable<DefectDojoFindingsPage> {
     let params = new HttpParams()
       .set('applicationId', applicationId)
-      .set('branch', branch)
       .set('category', category)
       .set('page', String(page))
       .set('size', String(size));
+    if (branch?.trim()) params = params.set('branch', branch.trim());
     if (severity?.trim()) params = params.set('severity', severity.trim());
+    if (tags?.trim()) params = params.set('tags', tags.trim());
     return this.http.get<DefectDojoFindingsPage>(BASE + 'api/defectdojo/findings', {
       headers: this.authHeaders(),
       params
     });
+  }
+
+  getEnvironmentOpenCounts(applicationId: string): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>(BASE + 'api/defectdojo/environment-counts', {
+      headers: this.authHeaders(),
+      params: { applicationId }
+    });
+  }
+
+  /** Tag DefectDojo pour filtrer par environnement. */
+  environmentTag(environmentId: string): string {
+    return `env-${environmentId}`;
   }
 
   getFindingDetail(applicationId: string, findingId: number, branch?: string): Observable<DefectDojoFindingDetail> {

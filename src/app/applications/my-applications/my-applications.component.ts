@@ -40,7 +40,7 @@ export class MyApplicationsComponent implements OnInit {
   }
 
   openProject(app: ApplicationResponse): void {
-    this.router.navigate(['/project', app.id, 'overview']);
+    this.router.navigate(['/project', app.id, 'security-center']);
   }
 }
 

@@ -237,8 +237,7 @@ export class UserSidebarComponent implements OnInit {
     );
   }
 
-  /** Dashboard DefectDojo : /project/:appId/security-dashboard */
-  navigateSecurityDashboard(): void {
+  goToLegacySecurityDashboard(): void {
     const appId = this.lastKnownApplicationId();
     if (appId) {
       this.router.navigate(['/project', appId, 'security-dashboard']);
@@ -247,9 +246,9 @@ export class UserSidebarComponent implements OnInit {
     }
   }
 
-  isSecurityDashboardRoute(): boolean {
+  isLegacySecurityDashboardRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
-    return /\/project\/[^/]+\/security-dashboard$/.test(path);
+    return /\/project\/[^/]+\/security-dashboard(\/|$)/.test(path);
   }
 
   /** Même layout que le projet : /project/:appId/vulnerabilities */
@@ -318,6 +317,20 @@ export class UserSidebarComponent implements OnInit {
     } else {
       this.router.navigate(['/my-applications']);
     }
+  }
+
+  goToQualityGate(): void {
+    const appId = this.lastKnownApplicationId();
+    if (appId) {
+      this.router.navigate(['/project', appId, 'quality-gate']);
+    } else {
+      this.router.navigate(['/my-applications']);
+    }
+  }
+
+  isQualityGateRoute(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return /\/project\/[^/]+\/quality-gate$/.test(path);
   }
 
   isSonarqubeRoute(): boolean {

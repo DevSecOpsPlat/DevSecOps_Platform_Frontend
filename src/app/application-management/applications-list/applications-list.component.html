@@ -1,0 +1,39 @@
+<div class="am-page">
+  <header class="am-header">
+    <div>
+      <h1 class="am-title">Applications managées</h1>
+      <p class="am-subtitle">Composez une application de services et de bases, puis déployez-la sur Kubernetes.</p>
+    </div>
+    <button class="am-btn am-btn-primary" (click)="create()">
+      <span class="am-btn-icon">+</span> Créer une application
+    </button>
+  </header>
+
+  <div *ngIf="loading" class="am-empty">Chargement…</div>
+  <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
+
+  <div *ngIf="!loading && !error && apps.length === 0" class="am-empty-card">
+    <p>Aucune application managée pour le moment.</p>
+    <button class="am-btn am-btn-primary" (click)="create()">Créer ma première application</button>
+  </div>
+
+  <div class="am-cards" *ngIf="!loading && apps.length > 0">
+    <div class="am-card" *ngFor="let app of apps" (click)="open(app)">
+      <div class="am-card-head">
+        <h3 class="am-card-title">{{ app.name }}</h3>
+        <span class="am-badge" [ngClass]="statusClass(app)">
+          {{ app.lastDeployment?.status || 'Non déployée' }}
+        </span>
+      </div>
+      <p class="am-card-desc">{{ app.description || 'Sans description' }}</p>
+      <div class="am-card-meta">
+        <span class="am-chip">{{ app.services.length }} service(s)</span>
+        <span class="am-chip">{{ app.databases.length }} base(s)</span>
+      </div>
+      <div class="am-card-foot">
+        <code class="am-slug">{{ app.slug }}</code>
+        <span class="am-open">Ouvrir →</span>
+      </div>
+    </div>
+  </div>
+</div>

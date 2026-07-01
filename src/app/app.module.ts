@@ -1,5 +1,6 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientModule } from '@angular/common/http';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -70,7 +71,6 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     AdminSidebarComponent,
     ToastContainerComponent,
     ProjectLayoutComponent,
-    ProjectOverviewComponent,
     ProjectDeploymentsComponent,
     ProjectLogsComponent,
     ProjectSecurityComponent,
@@ -92,6 +92,7 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
   ],
   imports: [
     BrowserModule,
+    BrowserAnimationsModule,
     AppRoutingModule,
     HttpClientModule,
     ReactiveFormsModule,
@@ -99,6 +100,7 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     VulnerabilitiesDashboardComponent,
     VulnerabilityDetailsComponent,
     SecurityDashboardComponent,
+    ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent
   ],
   providers: [],

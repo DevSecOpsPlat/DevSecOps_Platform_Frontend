@@ -1,0 +1,35 @@
+<div class="am-page">
+  <div class="am-breadcrumb" (click)="back()">← Applications managées</div>
+  <header class="am-header">
+    <div>
+      <h1 class="am-title">Créer une application</h1>
+      <p class="am-subtitle">Un conteneur logique (namespace) qui regroupera vos services et bases de données.</p>
+    </div>
+  </header>
+
+  <div class="am-section" style="max-width: 640px;">
+    <form class="am-form" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="am-field">
+        <label class="am-label">Nom *</label>
+        <input class="am-input" formControlName="name" placeholder="Ex. Boutique en ligne" />
+        <span class="am-error" *ngIf="form.get('name')?.touched && form.get('name')?.invalid">
+          Le nom est obligatoire.
+        </span>
+      </div>
+
+      <div class="am-field">
+        <label class="am-label">Description</label>
+        <textarea class="am-textarea" formControlName="description" placeholder="Optionnel"></textarea>
+      </div>
+
+      <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+      <div class="am-form-actions">
+        <button type="button" class="am-btn am-btn-secondary" (click)="back()">Annuler</button>
+        <button type="submit" class="am-btn am-btn-primary" [disabled]="submitting">
+          {{ submitting ? 'Création…' : 'Créer' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

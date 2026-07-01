@@ -1,0 +1,67 @@
+<div *ngIf="dep">
+  <div class="am-section-head">
+    <div>
+      <h3 class="am-section-title">Déploiement</h3>
+      <span class="am-mono" style="color:#64748b;">namespace : {{ dep.namespace }}</span>
+    </div>
+    <span class="am-badge" [ngClass]="'status-' + (dep.status || '').toLowerCase()">
+      {{ dep.status }}
+    </span>
+  </div>
+
+  <div class="am-alert am-alert-info" *ngIf="dep.status === 'DEPLOYING' || dep.status === 'PENDING'">
+    Déploiement en cours… actualisation automatique toutes les 5&nbsp;secondes.
+  </div>
+
+  <div class="am-list" *ngIf="serviceEntries.length">
+    <h4 class="am-label">Services</h4>
+    <div class="am-list-item" *ngFor="let s of serviceEntries">
+      <div class="am-list-item-main">
+        <div class="am-list-item-title">
+          {{ s.name }}
+          <span class="am-badge" [ngClass]="statusClass(s.status)">{{ s.status }}</span>
+        </div>
+        <div class="am-list-item-sub am-mono">vague {{ s.wave }} · {{ s.internalHost }}</div>
+        <div class="am-list-item-sub" *ngIf="s.externalUrl">
+          URL externe :
+          <a [href]="s.externalUrl" target="_blank" rel="noopener" style="color:#f36c21;">{{ s.externalUrl }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-list" *ngIf="databaseEntries.length" style="margin-top:1rem;">
+    <h4 class="am-label">Bases de données</h4>
+    <div class="am-list-item" *ngFor="let d of databaseEntries">
+      <div class="am-list-item-main">
+        <div class="am-list-item-title">
+          {{ d.name }}
+          <span class="am-badge" [ngClass]="statusClass(d.status)">{{ d.status }}</span>
+        </div>
+        <div class="am-list-item-sub am-mono">vague {{ d.wave }} · {{ d.internalHost }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- URL de connexion générée (lecture seule, mot de passe masqué + révéler) -->
+  <div style="margin-top:1.25rem;" *ngIf="dep.databases?.length">
+    <h4 class="am-label">URL de connexion générée</h4>
+    <div *ngFor="let db of dep.databases" style="margin-bottom:.75rem;">
+      <div class="am-list-item-sub" style="margin-bottom:.3rem;">{{ db.name }}</div>
+      <div class="am-url-box" *ngIf="db.generatedConnectionUrl">
+        <span>{{ displayUrl(db) }}</span>
+        <span style="display:flex; gap:.5rem; white-space:nowrap;">
+          <button class="am-btn am-btn-ghost am-btn-sm" style="color:#e2e8f0;"
+                  *ngIf="isRevealable(db)" (click)="toggleReveal(db)">
+            {{ db.id && revealed[db.id] ? 'Masquer' : (db.id && revealing[db.id] ? '…' : 'Révéler') }}
+          </button>
+          <button class="am-btn am-btn-ghost am-btn-sm" style="color:#e2e8f0;"
+                  (click)="copy(displayUrl(db))">Copier</button>
+        </span>
+      </div>
+      <div class="am-list-item-sub" *ngIf="!db.generatedConnectionUrl">
+        URL générée après le déploiement.
+      </div>
+    </div>
+  </div>
+</div>

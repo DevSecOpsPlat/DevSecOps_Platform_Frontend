@@ -52,12 +52,16 @@ const routes: Routes = [
     children: [
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
       { path: 'overview', component: ProjectOverviewComponent },
+      { path: 'overview/finding/:findingId', component: DefectDojoFindingDetailsComponent },
+      { path: 'security-center', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'security-center/finding/:findingId', redirectTo: 'overview/finding/:findingId' },
       { path: 'deployments', component: ProjectDeploymentsComponent },
       { path: 'logs', component: ProjectLogsComponent },
       { path: 'security', component: ProjectSecurityComponent },
       { path: 'pipelines', component: PipelinesListComponent },
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
+      { path: 'quality-gate', loadComponent: () => import('./project/quality-gate/quality-gate.component').then(m => m.QualityGateComponent) },
       { path: 'monitoring', component: MonitoringComponent },
       { path: 'security-dashboard', component: SecurityDashboardComponent },
       { path: 'security-dashboard/finding/:findingId', component: DefectDojoFindingDetailsComponent },
@@ -87,6 +91,33 @@ const routes: Routes = [
   },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
+
+  // Gestion des applications managées (services + bases + déploiement K8s multi-services).
+  // Nouvelles routes standalone lazy-loaded — n'altèrent aucune route existante.
+  {
+    path: 'app-management',
+    canActivate: [AuthGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./application-management/applications-list/applications-list.component')
+            .then(m => m.ApplicationsListComponent)
+      },
+      {
+        path: 'create',
+        loadComponent: () =>
+          import('./application-management/application-create/application-create.component')
+            .then(m => m.ApplicationCreateComponent)
+      },
+      {
+        path: ':id',
+        loadComponent: () =>
+          import('./application-management/application-detail/application-detail.component')
+            .then(m => m.ApplicationDetailComponent)
+      }
+    ]
+  },
 
   // Anciennes URLs (sans app dans le chemin) → choisir une application
   { path: 'security/vulnerabilities', redirectTo: 'my-applications', pathMatch: 'full' },

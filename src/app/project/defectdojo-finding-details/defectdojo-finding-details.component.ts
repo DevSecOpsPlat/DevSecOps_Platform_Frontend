@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ChatMarkdownPipe } from '../../pipes/chat-markdown.pipe';
 import { Subject, combineLatest } from 'rxjs';
 import { distinctUntilChanged, finalize, map, takeUntil } from 'rxjs/operators';
@@ -48,6 +48,7 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private defectDojoService: DefectDojoService,
     private userService: UserService
   ) {}
@@ -119,7 +120,11 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
   }
 
   backLink(): string[] {
-    return this.appId ? ['/project', this.appId, 'security-dashboard'] : ['/my-applications'];
+    if (!this.appId) return ['/my-applications'];
+    const fromOverview = /\/(overview|security-center)\//.test(this.router.url);
+    return fromOverview
+      ? ['/project', this.appId, 'overview']
+      : ['/project', this.appId, 'security-dashboard'];
   }
 
   backQueryParams(): Record<string, string> {

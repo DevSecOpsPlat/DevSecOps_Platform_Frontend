@@ -286,18 +286,18 @@
                 width="200"
                 height="200" />
               <p class="field-note">Secret manuel : <code>{{ twoFactorSetup.secret }}</code></p>
-              <form (ngSubmit)="enableTotp()" class="secure-form">
+              <div class="secure-form">
                 <div class="field">
                   <label for="enable-totp-code">Code à 6 chiffres (application)</label>
                   <input id="enable-totp-code" type="text" maxlength="6" formControlName="code" inputmode="numeric" autocomplete="one-time-code" />
                 </div>
                 <footer class="form-actions">
                   <button type="button" class="btn ghost" (click)="setupView = 'choose'">Retour</button>
-                  <button type="submit" class="btn primary" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
+                  <button type="button" class="btn primary" (click)="enableTotp()" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
                     {{ twoFactorSaving ? 'Activation…' : 'Activer' }}
                   </button>
                 </footer>
-              </form>
+              </div>
             </div>
           </div>
 
@@ -315,17 +315,17 @@
             </button>
             <button type="button" class="btn ghost" (click)="setupView = 'choose'">Retour</button>
             <p *ngIf="emailSetupMessage && emailCodeSent" class="field-note">{{ emailSetupMessage }}</p>
-            <form *ngIf="emailCodeSent" (ngSubmit)="enableEmail()" class="secure-form">
+            <div *ngIf="emailCodeSent" class="secure-form">
               <div class="field">
                 <label for="enable-email-code">Code reçu par e-mail (6 chiffres)</label>
                 <input id="enable-email-code" type="text" maxlength="6" formControlName="code" inputmode="numeric" autocomplete="one-time-code" />
               </div>
               <footer class="form-actions">
-                <button type="submit" class="btn primary" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
+                <button type="button" class="btn primary" (click)="enableEmail()" [disabled]="twoFactorSaving || twoFactorEnableForm.get('code')?.invalid">
                   {{ twoFactorSaving ? 'Activation…' : 'Activer' }}
                 </button>
               </footer>
-            </form>
+            </div>
           </div>
         </section>
       </main>
