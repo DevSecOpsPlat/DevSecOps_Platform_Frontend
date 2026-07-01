@@ -1,0 +1,67 @@
+<form class="am-form" [formGroup]="form" (ngSubmit)="onSubmit()">
+  <div class="am-field">
+    <label class="am-label">Nom de la base *</label>
+    <input class="am-input" formControlName="name" placeholder="Ex. main-db" />
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Famille *</label>
+      <select class="am-select" formControlName="dbFamily">
+        <option value="SQL">SQL</option>
+        <option value="NOSQL">NoSQL</option>
+      </select>
+    </div>
+    <div class="am-field">
+      <label class="am-label">Moteur *</label>
+      <select class="am-select" formControlName="engine">
+        <option *ngFor="let e of availableEngines" [value]="e">{{ e }}</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Version *</label>
+      <input class="am-input" formControlName="version" placeholder="Ex. 16, 10.11" />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Nom de la base (db) *</label>
+      <input class="am-input" formControlName="dbName" placeholder="Ex. appdb" />
+    </div>
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Utilisateur root *</label>
+      <input class="am-input" formControlName="rootUser" />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Mot de passe root</label>
+      <input class="am-input" type="password" formControlName="rootPassword"
+             placeholder="{{ isEdit ? 'Laisser masqué pour conserver' : '' }}" />
+      <span class="am-hint">Chiffré au repos, jamais renvoyé en clair.</span>
+    </div>
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Port exposé *</label>
+      <input class="am-input" type="number" formControlName="exposedPort" />
+      <span class="am-hint">Pré-rempli selon le moteur, modifiable.</span>
+    </div>
+    <div class="am-field">
+      <label class="am-label">Taille du volume (PVC) *</label>
+      <input class="am-input" formControlName="storageSize" placeholder="Ex. 1Gi" />
+    </div>
+  </div>
+
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+  <div class="am-form-actions">
+    <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()">Annuler</button>
+    <button type="submit" class="am-btn am-btn-primary" [disabled]="saving">
+      {{ saving ? 'Enregistrement…' : (isEdit ? 'Enregistrer' : 'Ajouter la base') }}
+    </button>
+  </div>
+</form>

@@ -92,6 +92,33 @@ const routes: Routes = [
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
+  // Gestion des applications managées (services + bases + déploiement K8s multi-services).
+  // Nouvelles routes standalone lazy-loaded — n'altèrent aucune route existante.
+  {
+    path: 'app-management',
+    canActivate: [AuthGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./application-management/applications-list/applications-list.component')
+            .then(m => m.ApplicationsListComponent)
+      },
+      {
+        path: 'create',
+        loadComponent: () =>
+          import('./application-management/application-create/application-create.component')
+            .then(m => m.ApplicationCreateComponent)
+      },
+      {
+        path: ':id',
+        loadComponent: () =>
+          import('./application-management/application-detail/application-detail.component')
+            .then(m => m.ApplicationDetailComponent)
+      }
+    ]
+  },
+
   // Anciennes URLs (sans app dans le chemin) → choisir une application
   { path: 'security/vulnerabilities', redirectTo: 'my-applications', pathMatch: 'full' },
   { path: 'security/fixes', redirectTo: 'my-applications', pathMatch: 'full' },

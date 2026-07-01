@@ -1,0 +1,129 @@
+<form class="am-form" [formGroup]="form" (ngSubmit)="onSubmit()">
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Nom du service *</label>
+      <input class="am-input" formControlName="name" placeholder="Ex. frontend, api" />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Rôle *</label>
+      <select class="am-select" formControlName="role">
+        <option *ngFor="let r of roles" [value]="r">{{ r }}</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="am-field">
+    <label class="am-label">URL du repository Git *</label>
+    <input class="am-input" formControlName="gitRepositoryUrl" placeholder="https://github.com/org/repo" />
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Token Git</label>
+      <input class="am-input" type="password" formControlName="gitToken"
+             placeholder="{{ isEdit ? 'Laisser masqué pour conserver' : 'ghp_… (repo privé)' }}" />
+      <span class="am-hint">Chiffré au repos, jamais renvoyé en clair.</span>
+    </div>
+    <div class="am-field">
+      <label class="am-label">Branche</label>
+      <input class="am-input" formControlName="gitBranch" placeholder="main" />
+    </div>
+  </div>
+
+  <div class="am-grid-3">
+    <div class="am-field">
+      <label class="am-label">Dockerfile</label>
+      <input class="am-input" formControlName="dockerfilePath" placeholder="Dockerfile" />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Contexte de build</label>
+      <input class="am-input" formControlName="buildContext" placeholder="." />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Port exposé *</label>
+      <input class="am-input" type="number" formControlName="exposedPort" placeholder="8080" />
+    </div>
+  </div>
+
+  <!-- Dépendance base de données -->
+  <div class="am-field">
+    <label class="am-label">Base de données liée</label>
+    <select class="am-select" formControlName="dependsOnDatabaseId">
+      <option value="">Aucune</option>
+      <option *ngFor="let db of databases" [value]="db.id">{{ db.name }} ({{ db.engine }})</option>
+    </select>
+  </div>
+
+  <div class="am-field" *ngIf="hasLinkedDatabase">
+    <label class="am-label">Nom variable d'injection</label>
+    <input class="am-input" formControlName="dbUrlEnvVar" placeholder="DATABASE_URL" />
+    <span class="am-hint">L'URL de connexion générée sera injectée sous ce nom via un Secret K8s.</span>
+  </div>
+
+  <div class="am-alert am-alert-warn" *ngIf="showBackendWarning">
+    Un backend a généralement besoin d'une base. Continuer sans&nbsp;?
+  </div>
+
+  <!-- Dépendance service -->
+  <div class="am-field">
+    <label class="am-label">Dépend du service</label>
+    <select class="am-select" formControlName="dependsOnServiceId">
+      <option value="">Aucun</option>
+      <option *ngFor="let s of selectableServices" [value]="s.id">{{ s.name }}</option>
+    </select>
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">Réplicas</label>
+      <input class="am-input" type="number" formControlName="replicas" />
+    </div>
+    <div class="am-field">
+      <label class="am-label">Health check path</label>
+      <input class="am-input" formControlName="healthCheckPath" placeholder="/health (optionnel)" />
+    </div>
+  </div>
+
+  <div class="am-grid-2">
+    <div class="am-field">
+      <label class="am-label">CPU (request / limit)</label>
+      <div class="am-grid-2">
+        <input class="am-input" formControlName="cpuRequest" placeholder="100m" />
+        <input class="am-input" formControlName="cpuLimit" placeholder="500m" />
+      </div>
+    </div>
+    <div class="am-field">
+      <label class="am-label">Mémoire (request / limit)</label>
+      <div class="am-grid-2">
+        <input class="am-input" formControlName="memoryRequest" placeholder="128Mi" />
+        <input class="am-input" formControlName="memoryLimit" placeholder="512Mi" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Variables d'environnement -->
+  <div class="am-field">
+    <div class="am-section-head" style="margin-bottom:.5rem;">
+      <label class="am-label" style="margin:0;">Variables d'environnement (optionnel)</label>
+      <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="addEnvVar()">+ Ajouter</button>
+    </div>
+    <div formArrayName="envVars" class="am-list">
+      <div class="am-envrow" *ngFor="let row of envVars.controls; let i = index" [formGroupName]="i">
+        <input class="am-input" formControlName="varKey" placeholder="CLÉ" />
+        <input class="am-input" [type]="row.get('isSecret')?.value ? 'password' : 'text'"
+               formControlName="varValue" placeholder="valeur" />
+        <label class="am-check"><input type="checkbox" formControlName="isSecret" /> secret</label>
+        <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="removeEnvVar(i)">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+  <div class="am-form-actions">
+    <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()">Annuler</button>
+    <button type="submit" class="am-btn am-btn-primary" [disabled]="saving">
+      {{ saving ? 'Enregistrement…' : (isEdit ? 'Enregistrer' : 'Ajouter le service') }}
+    </button>
+  </div>
+</form>

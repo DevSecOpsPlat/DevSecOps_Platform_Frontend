@@ -1,0 +1,131 @@
+<div class="am-page">
+  <div class="am-breadcrumb" (click)="back()">← Applications managées</div>
+
+  <div *ngIf="loading" class="am-empty">Chargement…</div>
+  <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
+
+  <ng-container *ngIf="app && !loading">
+    <header class="am-header">
+      <div>
+        <h1 class="am-title">{{ app.name }}</h1>
+        <p class="am-subtitle">{{ app.description || 'Sans description' }} · <code class="am-slug">{{ app.slug }}</code></p>
+      </div>
+      <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
+        <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
+          {{ deploying ? 'Déploiement…' : 'Déployer' }}
+        </button>
+        <button class="am-btn am-btn-danger" (click)="deleteApp()">Supprimer l'application</button>
+      </div>
+    </header>
+
+    <div class="am-alert am-alert-error" *ngIf="deployError">{{ deployError }}</div>
+
+    <div class="am-alert am-alert-warn" *ngFor="let w of app.warnings">{{ w }}</div>
+
+    <!-- État du dernier déploiement -->
+    <div class="am-section" *ngIf="app.lastDeployment">
+      <app-managed-deployment-status [appId]="appId" [deployment]="app.lastDeployment"></app-managed-deployment-status>
+      <div class="am-form-actions" *ngIf="app.lastDeployment.status !== 'STOPPED'">
+        <button class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">Supprimer le déploiement (teardown)</button>
+      </div>
+    </div>
+
+    <!-- Onglets -->
+    <div class="am-tabs">
+      <div class="am-tab" [class.active]="activeTab === 'services'" (click)="activeTab = 'services'">
+        Services ({{ app.services.length }})
+      </div>
+      <div class="am-tab" [class.active]="activeTab === 'databases'" (click)="activeTab = 'databases'">
+        Bases de données ({{ app.databases.length }})
+      </div>
+    </div>
+
+    <!-- Services -->
+    <div class="am-section" *ngIf="activeTab === 'services'">
+      <div class="am-section-head">
+        <h3 class="am-section-title">Services</h3>
+        <button class="am-btn am-btn-secondary" (click)="openAddService()">+ Ajouter un service</button>
+      </div>
+
+      <div class="am-empty" *ngIf="app.services.length === 0">Aucun service.</div>
+
+      <div class="am-list">
+        <div class="am-list-item" *ngFor="let s of app.services">
+          <div class="am-list-item-main">
+            <div class="am-list-item-title">
+              {{ s.name }}
+              <span class="am-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
+            </div>
+            <div class="am-list-item-sub am-mono">port {{ s.exposedPort }} · {{ s.gitRepositoryUrl }}</div>
+            <div class="am-list-item-sub" *ngIf="s.dependsOnDatabaseId">
+              BD liée : {{ databaseName(s.dependsOnDatabaseId) }} → {{ s.dbUrlEnvVar }}
+            </div>
+            <div class="am-list-item-sub" *ngIf="s.dependsOnServiceId">
+              Dépend de : {{ serviceName(s.dependsOnServiceId) }}
+            </div>
+          </div>
+          <div class="am-list-actions">
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
+            <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Databases -->
+    <div class="am-section" *ngIf="activeTab === 'databases'">
+      <div class="am-section-head">
+        <h3 class="am-section-title">Bases de données</h3>
+        <button class="am-btn am-btn-secondary" (click)="openAddDatabase()">+ Ajouter une base</button>
+      </div>
+
+      <div class="am-empty" *ngIf="app.databases.length === 0">Aucune base de données.</div>
+
+      <div class="am-list">
+        <div class="am-list-item" *ngFor="let d of app.databases">
+          <div class="am-list-item-main">
+            <div class="am-list-item-title">
+              {{ d.name }}
+              <span class="am-chip">{{ d.engine }} {{ d.version }}</span>
+            </div>
+            <div class="am-list-item-sub am-mono">db {{ d.dbName }} · port {{ d.exposedPort }} · {{ d.storageSize }}</div>
+          </div>
+          <div class="am-list-actions">
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditDatabase(d)">Éditer</button>
+            <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteDatabase(d)">Supprimer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+</div>
+
+<!-- Modal : service form -->
+<div class="am-modal-backdrop" *ngIf="showServiceForm">
+  <div class="am-modal">
+    <h3 class="am-modal-title">{{ editingService ? 'Modifier le service' : 'Ajouter un service' }}</h3>
+    <app-managed-service-form
+      [service]="editingService"
+      [databases]="app?.databases || []"
+      [services]="app?.services || []"
+      [saving]="saving"
+      [error]="formError"
+      (save)="saveService($event)"
+      (cancel)="showServiceForm = false">
+    </app-managed-service-form>
+  </div>
+</div>
+
+<!-- Modal : database form -->
+<div class="am-modal-backdrop" *ngIf="showDatabaseForm">
+  <div class="am-modal">
+    <h3 class="am-modal-title">{{ editingDatabase ? 'Modifier la base' : 'Ajouter une base' }}</h3>
+    <app-managed-database-form
+      [database]="editingDatabase"
+      [saving]="saving"
+      [error]="formError"
+      (save)="saveDatabase($event)"
+      (cancel)="showDatabaseForm = false">
+    </app-managed-database-form>
+  </div>
+</div>
