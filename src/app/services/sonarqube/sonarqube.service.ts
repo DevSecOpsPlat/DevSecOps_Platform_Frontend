@@ -31,10 +31,25 @@ export class SonarQubeService {
     });
   }
 
-  getResultsForBranch(branch: string): Observable<any> {
+  getResultsForBranch(branch: string, serviceId?: string): Observable<any> {
+    const params: any = { branch };
+    if (serviceId) {
+      params.serviceId = serviceId;
+    }
     return this.http.get(BASE + 'api/sonarqube/results-by-branch', {
       headers: this.authHeaders(),
-      params: { branch }
+      params
+    });
+  }
+
+  getBranches(serviceId?: string): Observable<string[]> {
+    const params: any = {};
+    if (serviceId) {
+      params.serviceId = serviceId;
+    }
+    return this.http.get<string[]>(BASE + 'api/sonarqube/branches', {
+      headers: this.authHeaders(),
+      params
     });
   }
 

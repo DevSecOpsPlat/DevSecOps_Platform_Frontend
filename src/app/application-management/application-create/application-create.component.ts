@@ -23,7 +23,7 @@ export class ApplicationCreateComponent {
   constructor(private api: ApplicationManagementService, private router: Router) {}
 
   back(): void {
-    this.router.navigate(['/app-management']);
+    this.router.navigate(['/projects']);
   }
 
   submit(): void {
@@ -37,7 +37,7 @@ export class ApplicationCreateComponent {
       name: this.form.value.name!,
       description: this.form.value.description || undefined
     }).subscribe({
-      next: (app) => this.router.navigate(['/app-management', app.id]),
+      next: (app) => this.router.navigate(['/projects', app.id]),
       error: (e) => {
         this.error = e?.error?.message || 'Création impossible.';
         this.submitting = false;

@@ -13,6 +13,7 @@ import {
 
 const BASE = environment.BASE_URL;
 const API = BASE + 'api/managed-applications';
+const SCAN_API = BASE + 'api/applications';
 
 /**
  * Appels API du module de gestion des applications managées.
@@ -103,6 +104,64 @@ export class ApplicationManagementService {
 
   deploy(appId: string): Observable<AppDeployment> {
     return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, {}, { headers: this.headers() });
+  }
+
+  /** Déploie un seul service (avec sa base dépendante si déclarée). */
+  deployService(appId: string, serviceId: string): Observable<AppDeployment> {
+    return this.http.post<AppDeployment>(
+      `${API}/${appId}/services/${serviceId}/deploy`,
+      {},
+      { headers: this.headers() }
+    );
+  }
+
+  /**
+   * Liste des services "orphelins" (sans projet parent) — filet de migration pour
+   * les apps legacy scannées avant l'introduction des projets.
+   */
+  listOrphanServices(): Observable<Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    gitRepositoryUrl: string | null;
+  }>> {
+    return this.http.get<any>(`${SCAN_API}/orphans`, { headers: this.headers() });
+  }
+
+  /**
+   * Retourne le projet parent d'un service (ou null si orphelin), utilisé par l'UI pour
+   * afficher ou non un bouton "Déployer ce service" (ex : dashboard vulnérabilités).
+   */
+  getDeployContext(applicationId: string): Observable<{
+    applicationId: string;
+    managedApplicationId: string | null;
+    canDeploySingle: boolean;
+    serviceName: string;
+  }> {
+    return this.http.get<any>(`${SCAN_API}/${applicationId}/deploy-context`, { headers: this.headers() });
+  }
+
+  /**
+   * Déclenche un scan sur un service — repo/token lus côté serveur depuis l'entité,
+   * aucune ressaisie. {@code applicationId} = `applications.id` (id du service).
+   */
+  scanService(
+    applicationId: string,
+    body?: { sessionDurationHours?: number; branch?: string }
+  ): Observable<{
+    environmentId: string;
+    applicationId: string;
+    environmentName: string;
+    gitlabPipelineId: number | null;
+    pipelineStatus: string;
+    pipelineWebUrl: string;
+    message: string;
+  }> {
+    return this.http.post<any>(
+      `${SCAN_API}/${applicationId}/scan`,
+      body ?? {},
+      { headers: this.headers() }
+    );
   }
 
   listDeployments(appId: string): Observable<AppDeployment[]> {

@@ -1,5 +1,5 @@
 <div class="am-page">
-  <div class="am-breadcrumb" (click)="back()">← Applications managées</div>
+  <div class="am-breadcrumb" (click)="back()">← Projets</div>
 
   <div *ngIf="loading" class="am-empty">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
@@ -51,7 +51,7 @@
 
       <div class="am-list">
         <div class="am-list-item" *ngFor="let s of app.services">
-          <div class="am-list-item-main">
+          <div class="am-list-item-main" style="cursor:pointer" (click)="viewServiceVulnerabilities(s)">
             <div class="am-list-item-title">
               {{ s.name }}
               <span class="am-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
@@ -65,6 +65,15 @@
             </div>
           </div>
           <div class="am-list-actions">
+            <button class="am-btn am-btn-primary am-btn-sm" (click)="openScanService(s)" title="Scanner ce service">
+              Scanner
+            </button>
+            <button class="am-btn am-btn-primary am-btn-sm" (click)="openDeployService(s)" title="Déployer ce service (+ BD dépendante)">
+              Déployer
+            </button>
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="viewServiceVulnerabilities(s)" title="Voir les vulnérabilités">
+              Vulnérabilités
+            </button>
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
             <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>
           </div>
@@ -129,3 +138,20 @@
     </app-managed-database-form>
   </div>
 </div>
+
+<!-- Modal : action ciblée sur un service (scan ou déploiement) -->
+<app-deploy-run-modal
+  *ngIf="serviceActionTarget && serviceActionKind"
+  [title]="serviceActionKind === 'scan' ? 'Scanner ' + serviceActionTarget.name : 'Déployer ' + serviceActionTarget.name"
+  [subtitle]="serviceActionKind === 'scan'
+    ? 'Le repo et le token sont pris directement sur le service — vous pouvez juste ajuster la branche.'
+    : 'Déploiement ciblé de ce service (la base dépendante sera aussi déployée dans un nouveau namespace).'"
+  [actionLabel]="serviceActionKind === 'scan' ? 'Lancer le scan' : 'Lancer le déploiement'"
+  [defaultBranch]="serviceActionTarget.gitBranch || 'main'"
+  [defaultTtlHours]="4"
+  [showTtl]="serviceActionKind === 'scan'"
+  [running]="serviceActionRunning"
+  [error]="serviceActionError"
+  (cancel)="cancelServiceAction()"
+  (confirm)="confirmServiceAction($event)">
+</app-deploy-run-modal>

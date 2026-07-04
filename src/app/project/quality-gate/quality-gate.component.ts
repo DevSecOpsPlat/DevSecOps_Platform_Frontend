@@ -265,7 +265,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   }
 
-  /** Sans webhook : tente une capture API une fois si snapshot absent et pipeline terminé. */
+  /** Sans webhook : tente un refresh API une fois si snapshot absent et pipeline terminé. */
   private maybeAutoCaptureMissingSnapshot(): void {
     if (!this.appId || !this.selectedEnvironmentId || !this.result) return;
     if (this.result.verdictSource !== 'SNAPSHOT_MISSING') return;
@@ -273,7 +273,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     if (ps === 'RUNNING' || ps === 'PENDING') return;
     if (this.autoCaptureAttemptedForEnv === this.selectedEnvironmentId) return;
     this.autoCaptureAttemptedForEnv = this.selectedEnvironmentId;
-    this.captureSnapshot();
+    this.refreshData();
   }
 
 

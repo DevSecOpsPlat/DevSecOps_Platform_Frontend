@@ -1,0 +1,29 @@
+<div class="am-modal-backdrop">
+  <div class="am-modal">
+    <h3 class="am-modal-title">{{ title }}</h3>
+    <p class="am-subtitle" *ngIf="subtitle">{{ subtitle }}</p>
+
+    <div class="am-form-grid">
+      <label class="am-field">
+        <span class="am-field-label">Branche</span>
+        <input class="am-input" type="text" [(ngModel)]="branch" [placeholder]="defaultBranch" />
+      </label>
+
+      <label class="am-field" *ngIf="showTtl">
+        <span class="am-field-label">Durée de session (heures)</span>
+        <input class="am-input" type="number" min="1" max="72" [(ngModel)]="ttl" />
+      </label>
+    </div>
+
+    <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+    <div class="am-form-actions">
+      <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()" [disabled]="running">
+        Annuler
+      </button>
+      <button type="button" class="am-btn am-btn-primary" (click)="onConfirm()" [disabled]="running">
+        {{ running ? 'En cours…' : actionLabel }}
+      </button>
+    </div>
+  </div>
+</div>

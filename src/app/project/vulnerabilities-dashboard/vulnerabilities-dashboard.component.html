@@ -66,6 +66,17 @@
             </svg>
             {{ ingesting ? 'Import en cours...' : 'Importer les données' }}
           </button>
+          <button
+            *ngIf="canDeploySingle"
+            class="vuln-btn vuln-btn-primary"
+            (click)="openDeployModal()"
+            [attr.title]="'Déployer ' + (serviceName || 'ce service') + ' (avec sa base dépendante, si déclarée)'"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            Déployer ce service
+          </button>
         </div>
         </div>
       </div>
@@ -517,3 +528,17 @@
     </div>
   </div>
 </div>
+
+<!-- Modale : déploiement ciblé du service courant -->
+<app-deploy-run-modal
+  *ngIf="showDeployModal"
+  [title]="'Déployer ' + (serviceName || 'ce service')"
+  subtitle="Déploiement ciblé de ce service uniquement. Sa base de données dépendante, si déclarée, sera aussi déployée dans un nouveau namespace."
+  actionLabel="Lancer le déploiement"
+  [defaultBranch]="'main'"
+  [showTtl]="false"
+  [running]="deployRunning"
+  [error]="deployRunError"
+  (cancel)="cancelDeployModal()"
+  (confirm)="confirmDeployRun($event)">
+</app-deploy-run-modal>

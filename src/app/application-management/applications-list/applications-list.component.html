@@ -1,20 +1,20 @@
 <div class="am-page">
   <header class="am-header">
     <div>
-      <h1 class="am-title">Applications managées</h1>
-      <p class="am-subtitle">Composez une application de services et de bases, puis déployez-la sur Kubernetes.</p>
+      <h1 class="am-title">Projets</h1>
+      <p class="am-subtitle">Un projet regroupe des services et des bases de données. Depuis chaque projet, scanez et déployez vos services sur Kubernetes.</p>
     </div>
     <button class="am-btn am-btn-primary" (click)="create()">
-      <span class="am-btn-icon">+</span> Créer une application
+      <span class="am-btn-icon">+</span> Créer un projet
     </button>
   </header>
 
   <div *ngIf="loading" class="am-empty">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
-  <div *ngIf="!loading && !error && apps.length === 0" class="am-empty-card">
-    <p>Aucune application managée pour le moment.</p>
-    <button class="am-btn am-btn-primary" (click)="create()">Créer ma première application</button>
+  <div *ngIf="!loading && !error && apps.length === 0 && orphanServices.length === 0" class="am-empty-card">
+    <p>Aucun projet pour le moment.</p>
+    <button class="am-btn am-btn-primary" (click)="create()">Créer mon premier projet</button>
   </div>
 
   <div class="am-cards" *ngIf="!loading && apps.length > 0">
@@ -22,7 +22,7 @@
       <div class="am-card-head">
         <h3 class="am-card-title">{{ app.name }}</h3>
         <span class="am-badge" [ngClass]="statusClass(app)">
-          {{ app.lastDeployment?.status || 'Non déployée' }}
+          {{ app.lastDeployment?.status || 'Non déployé' }}
         </span>
       </div>
       <p class="am-card-desc">{{ app.description || 'Sans description' }}</p>
@@ -36,4 +36,28 @@
       </div>
     </div>
   </div>
+
+  <!-- Filet de migration : services legacy (créés avant l'introduction des projets). -->
+  <section class="am-section" *ngIf="!loading && orphanServices.length > 0" style="margin-top: 2rem;">
+    <div class="am-section-head">
+      <h3 class="am-section-title">Services orphelins ({{ orphanServices.length }})</h3>
+      <span class="am-subtitle" style="margin: 0;">
+        Ces services n'appartiennent à aucun projet — vestige d'anciens scans. Vous pouvez consulter leurs vulnérabilités.
+      </span>
+    </div>
+    <div class="am-list">
+      <div class="am-list-item" *ngFor="let s of orphanServices">
+        <div class="am-list-item-main">
+          <div class="am-list-item-title">{{ s.name }}</div>
+          <div class="am-list-item-sub am-mono">{{ s.gitRepositoryUrl || 'Sans repo' }}</div>
+          <div class="am-list-item-sub" *ngIf="s.description">{{ s.description }}</div>
+        </div>
+        <div class="am-list-actions">
+          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanVulnerabilities(s.id)">
+            Vulnérabilités
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>

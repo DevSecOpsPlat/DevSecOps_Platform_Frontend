@@ -18,11 +18,13 @@ import { UserService } from 'src/app/services/user/user.service';
 import { PipelineService } from 'src/app/services/pipeline/pipeline.service';
 import { PipelineScanResponse } from 'src/app/models/pipeline/pipeline-scan-response';
 import { VulnerabilityReportsService } from 'src/app/services/reports/vulnerability-reports.service';
+import { ApplicationManagementService } from 'src/app/services/application-management/application-management.service';
+import { DeployRunModalComponent, DeployRunParams } from 'src/app/application-management/deploy-run-modal/deploy-run-modal.component';
 
 @Component({
   selector: 'app-vulnerabilities-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DeployRunModalComponent],
   templateUrl: './vulnerabilities-dashboard.component.html',
   styleUrls: ['./vulnerabilities-dashboard.component.css']
 })
@@ -107,6 +109,14 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
   reportExporting = false;
   reportError: string | null = null;
 
+  // --- Deploy this service (contexte : appId de la route = applications.id) ---
+  managedApplicationId: string | null = null;
+  canDeploySingle = false;
+  serviceName: string | null = null;
+  showDeployModal = false;
+  deployRunning = false;
+  deployRunError: string | null = null;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -114,7 +124,8 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
     private findingsService: FindingsService,
     private userService: UserService,
     private pipelineService: PipelineService,
-    private reportsService: VulnerabilityReportsService
+    private reportsService: VulnerabilityReportsService,
+    private appManagement: ApplicationManagementService
   ) {}
 
   ngOnInit(): void {
@@ -160,6 +171,19 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
       this.appId = id;
       this.page = 0;
       if (!this.appId) return;
+
+      // Charger le contexte de déploiement pour ce service (savoir s'il appartient à un projet)
+      this.appManagement.getDeployContext(this.appId).pipe(take(1)).subscribe({
+        next: (ctx) => {
+          this.managedApplicationId = ctx?.managedApplicationId ?? null;
+          this.canDeploySingle = !!ctx?.canDeploySingle;
+          this.serviceName = ctx?.serviceName ?? null;
+        },
+        error: () => {
+          this.managedApplicationId = null;
+          this.canDeploySingle = false;
+        }
+      });
 
       this.environmentService.getMyEnvironments(this.appId).pipe(take(1)).subscribe({
         next: (envs) => {
@@ -717,5 +741,37 @@ export class VulnerabilitiesDashboardComponent implements OnInit, OnDestroy {
       if (f.scanType?.trim()) set.add(f.scanType);
     }
     return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }
+
+  // ------------------- Déploiement ciblé (single service) -------------------
+
+  openDeployModal(): void {
+    if (!this.canDeploySingle) return;
+    this.showDeployModal = true;
+    this.deployRunError = null;
+  }
+
+  cancelDeployModal(): void {
+    if (this.deployRunning) return;
+    this.showDeployModal = false;
+    this.deployRunError = null;
+  }
+
+  confirmDeployRun(_params: DeployRunParams): void {
+    if (!this.managedApplicationId || !this.appId) return;
+    this.deployRunning = true;
+    this.deployRunError = null;
+    this.appManagement.deployService(this.managedApplicationId, this.appId).subscribe({
+      next: () => {
+        this.deployRunning = false;
+        this.showDeployModal = false;
+        // Rediriger vers le détail projet pour suivre le déploiement.
+        this.router.navigate(['/projects', this.managedApplicationId]);
+      },
+      error: (e) => {
+        this.deployRunError = e?.error?.message || 'Déploiement du service impossible.';
+        this.deployRunning = false;
+      }
+    });
   }
 }

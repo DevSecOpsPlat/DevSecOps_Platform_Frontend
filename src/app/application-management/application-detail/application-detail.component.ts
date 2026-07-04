@@ -10,11 +10,12 @@ import {
 import { ServiceFormComponent } from '../service-form/service-form.component';
 import { DatabaseFormComponent } from '../database-form/database-form.component';
 import { DeploymentStatusComponent } from '../deployment-status/deployment-status.component';
+import { DeployRunModalComponent, DeployRunParams } from '../deploy-run-modal/deploy-run-modal.component';
 
 @Component({
   selector: 'app-managed-application-detail',
   standalone: true,
-  imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeploymentStatusComponent],
+  imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeploymentStatusComponent, DeployRunModalComponent],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css']
 })
@@ -34,6 +35,12 @@ export class ApplicationDetailComponent implements OnInit {
   formError: string | null = null;
   deploying = false;
   deployError: string | null = null;
+
+  // --- Actions par service (scan / déploiement ciblé) ---
+  serviceActionTarget: AppServiceModel | null = null;
+  serviceActionKind: 'scan' | 'deploy' | null = null;
+  serviceActionRunning = false;
+  serviceActionError: string | null = null;
 
   constructor(
     private api: ApplicationManagementService,
@@ -61,7 +68,7 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   back(): void {
-    this.router.navigate(['/app-management']);
+    this.router.navigate(['/projects']);
   }
 
   // ---------- Services ----------
@@ -100,6 +107,74 @@ export class ApplicationDetailComponent implements OnInit {
   deleteService(svc: AppServiceModel): void {
     if (!svc.id || !confirm(`Supprimer le service « ${svc.name} » ?`)) return;
     this.api.deleteService(this.appId, svc.id).subscribe({ next: () => this.load() });
+  }
+
+  // ---------- Actions par service (scan / deploy ciblé / voir vulns) ----------
+
+  openScanService(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.serviceActionTarget = svc;
+    this.serviceActionKind = 'scan';
+    this.serviceActionError = null;
+  }
+
+  openDeployService(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.serviceActionTarget = svc;
+    this.serviceActionKind = 'deploy';
+    this.serviceActionError = null;
+  }
+
+  cancelServiceAction(): void {
+    if (this.serviceActionRunning) return;
+    this.serviceActionTarget = null;
+    this.serviceActionKind = null;
+    this.serviceActionError = null;
+  }
+
+  confirmServiceAction(params: DeployRunParams): void {
+    const svc = this.serviceActionTarget;
+    if (!svc?.id || !this.serviceActionKind) return;
+    this.serviceActionRunning = true;
+    this.serviceActionError = null;
+
+    if (this.serviceActionKind === 'scan') {
+      this.api.scanService(svc.id, {
+        branch: params.branch,
+        sessionDurationHours: params.sessionDurationHours
+      }).subscribe({
+        next: (resp) => {
+          this.serviceActionRunning = false;
+          this.serviceActionTarget = null;
+          this.serviceActionKind = null;
+          this.router.navigate(['/pipeline', resp.environmentId]);
+        },
+        error: (e) => {
+          this.serviceActionError = e?.error?.message || 'Scan impossible.';
+          this.serviceActionRunning = false;
+        }
+      });
+      return;
+    }
+
+    // deploy single service
+    this.api.deployService(this.appId, svc.id).subscribe({
+      next: () => {
+        this.serviceActionRunning = false;
+        this.serviceActionTarget = null;
+        this.serviceActionKind = null;
+        this.load();
+      },
+      error: (e) => {
+        this.serviceActionError = e?.error?.message || 'Déploiement du service impossible.';
+        this.serviceActionRunning = false;
+      }
+    });
+  }
+
+  viewServiceVulnerabilities(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.router.navigate(['/project', svc.id, 'vulnerabilities']);
   }
 
   // ---------- Databases ----------

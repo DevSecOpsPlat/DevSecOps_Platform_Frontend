@@ -13,6 +13,7 @@ import { ManagedApp } from '../../models/application-management/application-mana
 })
 export class ApplicationsListComponent implements OnInit {
   apps: ManagedApp[] = [];
+  orphanServices: Array<{ id: string; name: string; description: string | null; gitRepositoryUrl: string | null }> = [];
   loading = true;
   error: string | null = null;
 
@@ -31,18 +32,28 @@ export class ApplicationsListComponent implements OnInit {
         this.loading = false;
       },
       error: () => {
-        this.error = 'Impossible de charger les applications.';
+        this.error = 'Impossible de charger les projets.';
         this.loading = false;
       }
+    });
+    // Filet de migration : les services legacy scannés avant l'introduction des projets.
+    // En régime nominal, cette liste est vide (toute création passe par un projet).
+    this.api.listOrphanServices().subscribe({
+      next: (list) => (this.orphanServices = list ?? []),
+      error: () => (this.orphanServices = [])
     });
   }
 
   open(app: ManagedApp): void {
-    this.router.navigate(['/app-management', app.id]);
+    this.router.navigate(['/projects', app.id]);
   }
 
   create(): void {
-    this.router.navigate(['/app-management/create']);
+    this.router.navigate(['/projects/create']);
+  }
+
+  openOrphanVulnerabilities(svcId: string): void {
+    this.router.navigate(['/project', svcId, 'vulnerabilities']);
   }
 
   statusClass(app: ManagedApp): string {

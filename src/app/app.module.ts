@@ -28,13 +28,10 @@ import { ProjectSecurityComponent } from './project/security/project-security.co
 import { DeploySuccessModalComponent } from './project/deploy-success-modal/deploy-success-modal.component';
 import { AdminSidebarComponent } from './admin/admin-sidebar/admin-sidebar.component';
 import { UserSidebarComponent } from './project/user-sidebar/user-sidebar.component';
-import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
-import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
-import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
 import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
@@ -55,12 +52,10 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     NavbarComponent,
     HomeComponent,
     SignInComponent,
-    EnvironmentCreateComponent,
     ProfileComponent,
     AdminUsersComponent,
     AdminCreateUserComponent,
     AdminUserDetailComponent,
-    MyApplicationsComponent,
     PipelineDetailsComponent,
     PipelinesListComponent,
     AdminLayoutComponent,
@@ -76,7 +71,6 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     ProjectSecurityComponent,
     DeploySuccessModalComponent,
     UserSidebarComponent,
-    ApplicationsActiveComponent,
     EnvironmentDetailsComponent,
     TimeAgoPipe,
     RecentActivityComponent,

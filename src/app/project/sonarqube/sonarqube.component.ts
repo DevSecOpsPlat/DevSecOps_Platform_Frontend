@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import Chart from 'chart.js/auto';
 import { SonarQubeService } from 'src/app/services/sonarqube/sonarqube.service';
@@ -78,8 +79,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   topCodeAttributes: { key: string; count: number }[] = [];
 
   // Branches
-  branches: string[] = ['master'];
-  currentBranch: string = 'master';
+  branches: string[] = ['main'];
+  currentBranch: string = 'main';
   qualityGateConditions: any[] = [];
 
   // Coverage
@@ -109,6 +110,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   // Misc
   sonarHostUrl: string | null = null;
   sonarProjectKey: string | null = null;
+  serviceId: string | null = null;
   issueUpdatingKey: string | null = null;
   issueUpdateError: Record<string, string> = {};
 
@@ -131,11 +133,28 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private sonarService: SonarQubeService,
-    private userService: UserService
+    private userService: UserService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    this.serviceId = this.route.parent?.snapshot.paramMap.get('appId') || null;
+    this.loadBranches();
     this.load();
+  }
+
+  private loadBranches(): void {
+    this.sonarService.getBranches(this.serviceId || undefined).subscribe({
+      next: (branches) => {
+        if (branches && branches.length > 0) {
+          this.branches = branches;
+          if (!this.branches.includes(this.currentBranch)) {
+            this.currentBranch = this.branches[0];
+          }
+        }
+      },
+      error: () => {}
+    });
   }
 
   ngAfterViewInit(): void {
@@ -155,7 +174,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.error = null;
 
     // Charger selon la branche sélectionnée pour aligner avec SonarCloud (Issues/mesures par branche)
-    this.sonarService.getResultsForBranch(this.currentBranch).subscribe({
+    this.sonarService.getResultsForBranch(this.currentBranch, this.serviceId || undefined).subscribe({
       next: (res) => {
         try {
           this.metrics = res.metrics || {};
