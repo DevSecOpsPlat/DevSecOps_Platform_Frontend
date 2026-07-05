@@ -70,6 +70,7 @@ export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   productName?: string;
   codeSnippet?: string;
   codeContextSource?: string;
+  codeContextHint?: string;
   applicationId?: string;
 }
 

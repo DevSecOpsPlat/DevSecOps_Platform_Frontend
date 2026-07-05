@@ -112,6 +112,55 @@
       </div>
     </section>
 
+    <!-- Évolution par sévérité (même graphique que l'overview, filtré par branche) -->
+    <article class="dd-evolution-chart-card">
+      <header class="dd-evolution-chart-head">
+        <div class="dd-evolution-chart-titles">
+          <h2 class="dd-evolution-chart-title">Évolution par sévérité</h2>
+          <p class="dd-evolution-chart-sub">
+            {{ openSeverityChartSubtitle }}
+            <span *ngIf="selectedBranch">· branche {{ selectedBranch }}</span>
+          </p>
+        </div>
+        <div class="dd-evolution-chart-actions" *ngIf="hasOpenSeverityChart && !loading">
+          <div class="dd-granularity-toolbar dd-granularity-toolbar--inline">
+            <span class="dd-granularity-label">Granularité :</span>
+            <button type="button" class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'hour'"
+              (click)="setOpenSeverityGranularity('hour')">Heure</button>
+            <button type="button" class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'day'"
+              (click)="setOpenSeverityGranularity('day')">Jour</button>
+            <button type="button" class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'week'"
+              (click)="setOpenSeverityGranularity('week')">Semaine</button>
+            <button type="button" class="dd-granularity-btn"
+              [class.active]="openSeverityGranularity === 'month'"
+              (click)="setOpenSeverityGranularity('month')">Mois</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="dd-evolution-legend" *ngIf="hasOpenSeverityChart && !loading">
+        <span class="dd-evolution-legend-item" *ngFor="let sev of severities">
+          <span class="dd-evolution-legend-dot" [style.background]="severityBarColor(sev)"></span>
+          {{ sev }}
+        </span>
+      </div>
+
+      <div class="dd-evolution-chart-body">
+        <div class="dd-evolution-chart-empty" *ngIf="!loading && !hasOpenSeverityChart">
+          <span class="dd-evolution-chart-empty-icon">📊</span>
+          <p>Aucun scan DefectDojo</p>
+          <small>Lancez un pipeline sur la branche {{ selectedBranch || '—' }} pour alimenter l'engagement.</small>
+        </div>
+        <div class="dd-chart-canvas dd-chart-canvas--evolution"
+             [class.dd-chart-canvas--hidden]="!hasOpenSeverityChart || loading">
+          <canvas #evolutionSeverityCanvas></canvas>
+        </div>
+      </div>
+    </article>
+
     <!-- Metrics Overview (DefectDojo) -->
     <div class="dd-section-head">
       <h2>Metrics Overview</h2>
@@ -144,37 +193,6 @@
       <p>Évolution par scan, âge des findings, activité et CWE</p>
     </div>
     <div class="dd-charts-grid" *ngIf="!chartsLoading && charts?.detailedMetrics">
-      <section class="dd-chart-panel dd-chart-panel--wide dd-chart-panel--defectdojo">
-        <div class="dd-chart-panel-head">
-          <span class="dd-chart-panel-title">Open by Severity (par scan)</span>
-          <span class="dd-chart-panel-info" title="Un point par import de test DefectDojo — vulnérabilités ouvertes par sévérité">ⓘ</span>
-        </div>
-        <div class="dd-chart-panel-body">
-          <div class="dd-granularity-toolbar">
-            <span class="dd-granularity-label">Granularité :</span>
-            <button
-              type="button"
-              class="dd-granularity-btn"
-              [class.active]="openSeverityGranularity === 'hour'"
-              (click)="setOpenSeverityGranularity('hour')">
-              Heure
-            </button>
-            <button
-              type="button"
-              class="dd-granularity-btn"
-              [class.active]="openSeverityGranularity === 'day'"
-              (click)="setOpenSeverityGranularity('day')">
-              Jour
-            </button>
-          </div>
-          <div class="dd-chart-canvas dd-chart-canvas--medium">
-            <canvas #daySeverityCanvas></canvas>
-          </div>
-          <p class="dd-chart-footnote">
-            Un point par import de scan — dates basées sur les tests DefectDojo (/api/v2/tests/)
-          </p>
-        </div>
-      </section>
       <section class="dd-chart-panel dd-chart-panel--wide">
         <h3 class="dd-chart-title">Évolution entre analyses</h3>
         <p class="dd-chart-sub">Stock ouvert, nouvelles et résolues entre imports successifs</p>

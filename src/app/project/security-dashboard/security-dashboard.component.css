@@ -457,3 +457,114 @@
   .dd-metric-cell { flex: 1 1 50%; }
   .dd-metrics-bar-meta { display: none; }
 }
+
+/* ── Évolution par sévérité (aligné overview) ── */
+.dd-evolution-chart-card {
+  margin-bottom: 1.25rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  background: #fff;
+}
+
+.dd-evolution-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.dd-evolution-chart-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--dd-navy);
+}
+
+.dd-evolution-chart-sub {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.dd-evolution-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 10px 22px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dd-evolution-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.dd-evolution-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dd-evolution-chart-body {
+  padding: 8px 12px 16px;
+}
+
+.dd-chart-canvas--evolution {
+  min-height: 300px;
+}
+
+.dd-chart-canvas--evolution canvas {
+  height: 300px !important;
+}
+
+.dd-chart-canvas--hidden {
+  visibility: hidden;
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.dd-evolution-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 2rem;
+  text-align: center;
+  color: var(--vuln-text-muted, #64748b);
+}
+
+.dd-evolution-chart-empty-icon {
+  font-size: 2rem;
+  opacity: 0.6;
+}
+
+.dd-evolution-chart-empty p {
+  margin: 0;
+  font-weight: 700;
+  color: var(--dd-navy);
+}
+
+.dd-evolution-chart-empty small {
+  font-size: 0.8rem;
+  max-width: 360px;
+}
+
+@media (max-width: 900px) {
+  .dd-evolution-chart-head {
+    flex-direction: column;
+  }
+}

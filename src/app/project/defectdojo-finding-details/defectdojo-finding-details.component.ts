@@ -4,13 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ChatMarkdownPipe } from '../../pipes/chat-markdown.pipe';
 import { Subject, combineLatest } from 'rxjs';
-import { distinctUntilChanged, finalize, map, takeUntil } from 'rxjs/operators';
+import { distinctUntilChanged, finalize, map, takeUntil, timeout } from 'rxjs/operators';
 import {
   DefectDojoFindingDetail,
   DefectDojoService
 } from '../../services/defectdojo/defectdojo.service';
 import { FindingAiRemediationResponse } from '../../services/findings/findings.service';
 import { UserService } from '../../services/user/user.service';
+
+const AI_REQUEST_TIMEOUT_MS = 120_000;
 
 @Component({
   selector: 'app-defectdojo-finding-details',
@@ -39,6 +41,18 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
   aiLoading = false;
   aiResult: FindingAiRemediationResponse | null = null;
   aiError: string | null = null;
+
+  get rawIsJson(): boolean {
+    const raw = this.aiResult?.rawModelOutput;
+    if (!raw) return false;
+    try { JSON.parse(raw); return true; } catch { return false; }
+  }
+
+  get rawPrettyJson(): string | null {
+    const raw = this.aiResult?.rawModelOutput;
+    if (!raw) return null;
+    try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return null; }
+  }
 
   chatMessages: { role: 'user' | 'assistant'; content: string }[] = [];
   chatInput = '';
@@ -154,11 +168,16 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
         this.branch,
         snippet ? { codeSnippet: snippet } : undefined
       )
-      .pipe(finalize(() => (this.aiLoading = false)))
+      .pipe(
+        timeout(AI_REQUEST_TIMEOUT_MS),
+        finalize(() => (this.aiLoading = false))
+      )
       .subscribe({
         next: r => (this.aiResult = r),
         error: err => {
-          const msg = err?.error?.problemSummary || err?.error?.message || err?.message;
+          const msg = err?.name === 'TimeoutError'
+            ? 'Analyse IA trop longue (120 s) — vérifiez Groq/Ollama ou réessayez.'
+            : (err?.error?.problemSummary || err?.error?.message || err?.message);
           this.aiError = msg ? String(msg) : 'Erreur appel IA.';
         }
       });
@@ -215,9 +234,15 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
     const s = (src || 'NONE').toUpperCase();
     if (s === 'GITHUB') return 'Dépôt GitHub';
     if (s === 'GITLAB') return 'Dépôt GitLab';
+    if (s === 'DOCKERFILE') return 'Dockerfile (dépôt)';
     if (s === 'MANUAL') return 'Saisie manuelle';
     if (s === 'REPO') return 'Dépôt (branche)';
     return 'Non disponible';
+  }
+
+  isContainerImagePath(): boolean {
+    const p = this.detail?.filePath?.trim() ?? '';
+    return p.startsWith('/lib/') || p.startsWith('/usr/') || p.includes('/apk/');
   }
 
   private remediationSummaryForChat(): string | undefined {
@@ -234,6 +259,6 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
           .join('\n')
       : '';
     if (!r) return header || undefined;
-    return [header, r.problemSummary, r.impact, ...(r.remediationSteps ?? [])].filter(Boolean).join('\n');
+    return [header, r.problemSummary, r.rootCause, r.impact, r.businessRisk, ...(r.remediationSteps ?? [])].filter(Boolean).join('\n');
   }
 }

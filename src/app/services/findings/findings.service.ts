@@ -84,16 +84,22 @@ export interface FindingDetailResponse extends FindingItem {
 
 export interface FindingAiRemediationResponse {
   problemSummary?: string;
+  rootCause?: string;
   impact?: string;
+  businessRisk?: string;
   location?: string;
+  reproduction?: string;
   remediationSteps?: string[];
   suggestedPatch?: string;
+  secureCodeBefore?: string;
+  secureCodeAfter?: string;
   fullFileRewrite?: string;
+  bestPractices?: string[];
+  references?: { type: string; id: string; url: string }[];
   verificationHints?: string[];
-  /** Commandes shell / outil pour valider après correctif */
   verificationCommands?: string[];
+  confidence?: string;
   rawModelOutput?: string;
-  /** MANUAL | GITHUB | GITLAB | NONE */
   codeContextSource?: string;
 
   /** Infos d’observabilité : provider/modèle réellement utilisé + fallback quota éventuel */

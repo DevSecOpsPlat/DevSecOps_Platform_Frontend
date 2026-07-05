@@ -19,3 +19,50 @@
   font-family: ui-monospace, monospace;
   font-size: 0.82rem;
 }
+
+.vuln-beforeafter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+@media (max-width: 900px) { .vuln-beforeafter-grid { grid-template-columns: 1fr; } }
+.vuln-beforeafter-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.35rem; }
+.vuln-beforeafter-label--bad { color: #ef4444; }
+.vuln-beforeafter-label--good { color: #22c55e; }
+.vuln-beforeafter-col--before .vuln-code-patch { border-left: 3px solid #ef4444; }
+.vuln-beforeafter-col--after  .vuln-code-patch { border-left: 3px solid #22c55e; }
+
+.vuln-refs-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.vuln-ref-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.65rem; border-radius: 999px;
+  border: 1px solid var(--vuln-border, #e2e8f0);
+  font-size: 0.8rem; text-decoration: none; color: inherit;
+  transition: background 0.15s;
+}
+.vuln-ref-chip:hover { background: rgba(100, 116, 139, 0.08); }
+.vuln-ref-type { font-weight: 700; font-size: 0.7rem; letter-spacing: 0.03em; }
+
+.vuln-hero-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.vuln-file-path--muted {
+  opacity: 0.85;
+}
+
+.vuln-path-note {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--vuln-text-muted, #64748b);
+}
+.vuln-ref-type[data-type="CWE"]   { color: #7c3aed; }
+.vuln-ref-type[data-type="CVE"]   { color: #dc2626; }
+.vuln-ref-type[data-type="OWASP"] { color: #0891b2; }
+.vuln-ref-type[data-type="DOC"]   { color: #64748b; }
+
+.vuln-confidence-badge {
+  font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.55rem; border-radius: 999px;
+  margin-left: 0.5rem;
+}
+.vuln-confidence-badge[data-level="HIGH"]   { background: #dcfce7; color: #166534; }
+.vuln-confidence-badge[data-level="MEDIUM"] { background: #fef9c3; color: #854d0e; }
+.vuln-confidence-badge[data-level="LOW"]    { background: #fee2e2; color: #991b1b; }

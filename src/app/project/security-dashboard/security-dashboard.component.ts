@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
+import { Component, ElementRef, NgZone, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import Chart from 'chart.js/auto';
@@ -14,6 +14,13 @@ import {
   DefectDojoService,
   DefectDojoTimeSeriesPoint
 } from '../../services/defectdojo/defectdojo.service';
+import {
+  hasOpenSeverityChartData,
+  OPEN_SEV_BAR_COLORS,
+  openSeverityChartSubtitle,
+  OpenSeverityGranularity,
+  renderOpenSeverityEvolutionChart
+} from '../../services/defectdojo/open-severity-evolution-chart.helper';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 
@@ -49,15 +56,6 @@ const SEV_COLORS: Record<string, string> = {
   Info: THEME.navyLight
 };
 
-/** Couleurs DefectDojo pour le graphique Open Day/Hour to Day by Severity. */
-const DD_SEV_LINE_COLORS: Record<string, string> = {
-  Critical: '#dc3545',
-  High: '#fd7e14',
-  Medium: '#ffc107',
-  Low: '#28a745',
-  Info: '#17a2b8'
-};
-
 const SECURITY_REQUEST_TIMEOUT_MS = 120_000;
 
 @Component({
@@ -76,14 +74,15 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private chartInstances: Chart[] = [];
   private openSeverityChart?: Chart;
   private trendChart?: Chart;
+  private chartRenderTimer?: ReturnType<typeof setTimeout>;
 
+  @ViewChild('evolutionSeverityCanvas') evolutionSeverityCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('severityCanvas') severityCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('resolutionCanvas') resolutionCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('toolsCanvas') toolsCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('analysisCanvas') analysisCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('statusCanvas') statusCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('scanCanvas') scanCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('daySeverityCanvas') daySeverityCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('trendCanvas') trendCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('weekStatusCanvas') weekStatusCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('weekSeverityCanvas') weekSeverityCanvas?: ElementRef<HTMLCanvasElement>;
@@ -118,7 +117,8 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   filterSeverity = '';
   searchQuery = '';
   showFindingsTable = false;
-  openSeverityGranularity: 'day' | 'hour' = 'day';
+  hasOpenSeverityChart = false;
+  openSeverityGranularity: OpenSeverityGranularity = 'day';
 
   readonly severities = ['Critical', 'High', 'Medium', 'Low', 'Info'];
 
@@ -126,7 +126,8 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private defectDojoService: DefectDojoService,
-    private environmentService: EnvironmentService
+    private environmentService: EnvironmentService,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit(): void {
@@ -157,9 +158,12 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.dashboard = d;
         this.loading = false;
         this.chartsLoading = false;
+        this.hasOpenSeverityChart = hasOpenSeverityChartData(d.charts);
         if (d.engagementId) {
           if (this.showFindingsTable) this.loadFindings();
           setTimeout(() => this.renderCharts(), 80);
+        } else {
+          this.hasOpenSeverityChart = false;
         }
       },
       error: err => {
@@ -317,10 +321,18 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     return SEV_COLORS[sev] ?? '#64748b';
   }
 
-  setOpenSeverityGranularity(granularity: 'day' | 'hour'): void {
+  severityBarColor(sev: string): string {
+    return OPEN_SEV_BAR_COLORS[sev] ?? '#64748b';
+  }
+
+  get openSeverityChartSubtitle(): string {
+    return openSeverityChartSubtitle(this.openSeverityGranularity);
+  }
+
+  setOpenSeverityGranularity(granularity: OpenSeverityGranularity): void {
     if (this.openSeverityGranularity === granularity) return;
     this.openSeverityGranularity = granularity;
-    this.renderOpenSeverityChart();
+    this.ngZone.runOutsideAngular(() => this.renderOpenSeverityChart());
   }
 
   reload(): void {
@@ -454,8 +466,14 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   private destroyCharts(): void {
+    if (this.chartRenderTimer) {
+      clearTimeout(this.chartRenderTimer);
+      this.chartRenderTimer = undefined;
+    }
     this.openSeverityChart?.destroy();
     this.openSeverityChart = undefined;
+    const evolutionCanvas = this.evolutionSeverityCanvas?.nativeElement;
+    if (evolutionCanvas) Chart.getChart(evolutionCanvas)?.destroy();
     this.trendChart?.destroy();
     this.trendChart = undefined;
     this.chartInstances.forEach(c => c.destroy());
@@ -468,6 +486,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     if (!c) return;
 
     this.renderOverviewCharts();
+    this.scheduleOpenSeverityChartRender();
     this.renderDetailedCharts(c.detailedMetrics);
     this.renderSeverityChart(c);
     this.renderResolutionChart(c);
@@ -510,7 +529,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private renderDetailedCharts(dm?: DefectDojoDetailedMetrics): void {
     if (!dm) return;
 
-    this.renderOpenSeverityChart();
     this.renderTrendChart();
     this.renderWeekStatusChart(dm);
     this.renderMultiSeverityLine(this.weekSeverityCanvas?.nativeElement, dm.weekToWeekBySeverity);
@@ -523,73 +541,23 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.renderCweChart(this.totalCweCanvas?.nativeElement, dm.totalCwe, 'CWE total');
   }
 
+  private scheduleOpenSeverityChartRender(): void {
+    if (this.chartRenderTimer) clearTimeout(this.chartRenderTimer);
+    this.chartRenderTimer = setTimeout(() => {
+      this.ngZone.runOutsideAngular(() => this.renderOpenSeverityChart());
+    }, 120);
+  }
+
   private renderOpenSeverityChart(): void {
-    const canvas = this.daySeverityCanvas?.nativeElement;
-    const snapshots = this.charts?.scanSnapshots;
-    if (!canvas || !snapshots?.length) return;
-
-    this.openSeverityChart?.destroy();
-    this.openSeverityChart = undefined;
-
-    const sorted = [...snapshots].sort((a, b) =>
-      (a.timestamp || a.date || '').localeCompare(b.timestamp || b.date || '')
+    const canvas = this.evolutionSeverityCanvas?.nativeElement;
+    if (!canvas || !this.hasOpenSeverityChart || this.loading) return;
+    this.openSeverityChart = renderOpenSeverityEvolutionChart(
+      canvas,
+      this.dashboard?.charts,
+      this.openSeverityGranularity,
+      this.severities,
+      this.openSeverityChart
     );
-
-    const isHour = this.openSeverityGranularity === 'hour';
-    const labels = sorted.map(s => {
-      if (isHour && s.timestamp) {
-        const hour = s.timestamp.length >= 13 ? s.timestamp.substring(0, 13) : s.timestamp;
-        return `${s.scanType} · ${this.formatHourLabel(hour)}`;
-      }
-      return s.label || (s.date ? `${s.scanType} · ${this.formatDayLabel(s.date)}` : `${s.scanType} #${s.testId}`);
-    });
-
-    const chart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: this.severities.map(sev => ({
-          label: sev,
-          data: sorted.map(s => s.bySeverity?.[sev] || 0),
-          borderColor: DD_SEV_LINE_COLORS[sev] ?? '#64748b',
-          backgroundColor: DD_SEV_LINE_COLORS[sev] ?? '#64748b',
-          tension: 0.1,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          borderWidth: 2,
-          fill: false
-        }))
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            position: 'top',
-            align: 'start',
-            labels: { boxWidth: 12, padding: 12, font: { size: 11 } }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              maxRotation: 45,
-              autoSkip: true,
-              maxTicksLimit: isHour ? 24 : 12,
-              font: { size: 10 }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            ticks: { stepSize: 1, font: { size: 10 } },
-            grid: { color: 'rgba(15,23,42,0.08)' }
-          }
-        }
-      }
-    });
-    this.openSeverityChart = chart;
   }
 
   private renderTrendChart(): void {
@@ -829,19 +797,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       }
     });
     this.chartInstances.push(chart);
-  }
-
-  private formatDayLabel(isoDay: string): string {
-    const p = isoDay.split('-');
-    return p.length === 3 ? `${p[0]}/${p[1]}/${p[2]}` : isoDay;
-  }
-
-  private formatHourLabel(isoHour: string): string {
-    const [datePart, hourPart] = isoHour.split('T');
-    if (!datePart || hourPart == null) return isoHour;
-    const p = datePart.split('-');
-    if (p.length !== 3) return isoHour;
-    return `${p[0]}/${p[1]}/${p[2]} ${hourPart}:00`;
   }
 
   private renderSeverityChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
