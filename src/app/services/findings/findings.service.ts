@@ -108,6 +108,10 @@ export interface FindingAiRemediationResponse {
   quotaFallbackUsed?: boolean | null;
   /** DEFAULT | HIGH */
   aiModelTier?: string | null;
+  /** CACHE | STATIC | GROQ | OPENROUTER | OLLAMA */
+  responseSource?: string | null;
+  status?: 'PENDING' | 'COMPLETE' | 'FAILED' | string | null;
+  jobId?: string | null;
 }
 
 export interface PageResponse<T> {

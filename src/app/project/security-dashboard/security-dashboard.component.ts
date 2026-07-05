@@ -3,16 +3,16 @@ import { Component, ElementRef, NgZone, OnDestroy, OnInit, QueryList, ViewChild,
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import Chart from 'chart.js/auto';
-import { Subject, combineLatest } from 'rxjs';
-import { catchError, distinctUntilChanged, finalize, map, switchMap, takeUntil, timeout } from 'rxjs/operators';
+import { Subject, combineLatest, from, of } from 'rxjs';
+import { catchError, concatMap, distinctUntilChanged, finalize, map, switchMap, takeUntil, timeout, toArray } from 'rxjs/operators';
 import {
   DefectDojoDashboardResponse,
   DefectDojoDetailedMetrics,
   DefectDojoFindingItem,
+  DefectDojoFindingStatusAction,
   DefectDojoMetricCard,
   DefectDojoMetricCategory,
-  DefectDojoService,
-  DefectDojoTimeSeriesPoint
+  DefectDojoService
 } from '../../services/defectdojo/defectdojo.service';
 import {
   hasOpenSeverityChartData,
@@ -56,7 +56,13 @@ const SEV_COLORS: Record<string, string> = {
   Info: THEME.navyLight
 };
 
-const SECURITY_REQUEST_TIMEOUT_MS = 120_000;
+const SECURITY_REQUEST_TIMEOUT_MS = 180_000;
+
+interface FindingRowAction {
+  action: DefectDojoFindingStatusAction;
+  label: string;
+  confirm?: string;
+}
 
 @Component({
   selector: 'app-security-dashboard',
@@ -77,22 +83,11 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private chartRenderTimer?: ReturnType<typeof setTimeout>;
 
   @ViewChild('evolutionSeverityCanvas') evolutionSeverityCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('severityCanvas') severityCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('resolutionCanvas') resolutionCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('toolsCanvas') toolsCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('analysisCanvas') analysisCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('statusCanvas') statusCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('scanCanvas') scanCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('trendCanvas') trendCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('weekStatusCanvas') weekStatusCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('weekSeverityCanvas') weekSeverityCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('criticalWeekCanvas') criticalWeekCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('highWeekCanvas') highWeekCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('mediumWeekCanvas') mediumWeekCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('findingAgeCanvas') findingAgeCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('weeklyActivityCanvas') weeklyActivityCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('openCweCanvas') openCweCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('totalCweCanvas') totalCweCanvas?: ElementRef<HTMLCanvasElement>;
 
   @ViewChildren('overviewChart') overviewCharts!: QueryList<ElementRef<HTMLCanvasElement>>;
 
@@ -115,8 +110,34 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   totalElements = 0;
 
   filterSeverity = '';
+  filterDateFrom = '';
+  filterDateTo = '';
+  filterTestId: number | null = null;
   searchQuery = '';
   showFindingsTable = false;
+  scanToolFilterOptions: { testId: number; label: string }[] = [];
+  filteredFindings: DefectDojoFindingItem[] = [];
+  selectedFindingIds = new Set<number>();
+  editTargetIds: number[] = [];
+  bulkEditOpen = false;
+  rowMenuOpenId: number | null = null;
+  bulkActionLoading = false;
+  bulkActionError: string | null = null;
+  bulkActionMessage: string | null = null;
+
+  readonly statusGroupActions: FindingRowAction[] = [
+    { action: 'REACTIVATE', label: 'Active', confirm: 'Remettre ce finding en actif ?' },
+    { action: 'VERIFY', label: 'Verified' },
+    { action: 'FALSE_POSITIVE', label: 'False Positive', confirm: 'Marquer comme faux positif ?' },
+    { action: 'OUT_OF_SCOPE', label: 'Out of scope', confirm: 'Marquer hors périmètre ?' },
+    { action: 'CLOSE', label: 'Mitigated', confirm: 'Marquer comme corrigé / mitigé ?' },
+    { action: 'UNDER_REVIEW', label: 'Under Review' }
+  ];
+
+  readonly riskGroupActions: FindingRowAction[] = [
+    { action: 'ACCEPT_RISK', label: 'Accept', confirm: 'Accepter le risque pour ce finding ?' },
+    { action: 'UNACCEPT_RISK', label: 'Unaccept', confirm: 'Retirer l\'acceptation de risque ?' }
+  ];
   hasOpenSeverityChart = false;
   openSeverityGranularity: OpenSeverityGranularity = 'day';
 
@@ -146,7 +167,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
             const msg = err?.name === 'TimeoutError'
-              ? 'Chargement trop long — vérifiez DefectDojo / ngrok.'
+              ? 'Chargement trop long — le backend interroge DefectDojo (tunnel Cloudflare). Réessayez dans 1 min ou vérifiez DEFECTDOJO_URL.'
               : (err.error?.message || 'Impossible de charger le dashboard sécurité.');
             throw { message: msg };
           })
@@ -159,6 +180,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.loading = false;
         this.chartsLoading = false;
         this.hasOpenSeverityChart = hasOpenSeverityChartData(d.charts);
+        this.refreshScanToolOptions();
         if (d.engagementId) {
           if (this.showFindingsTable) this.loadFindings();
           setTimeout(() => this.renderCharts(), 80);
@@ -295,11 +317,39 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   selectCategory(card: DefectDojoMetricCard): void {
+    if (this.selectedCategory === card.key && this.showFindingsTable) {
+      this.scrollToFindings();
+      return;
+    }
     this.selectedCategory = card.key;
     this.page = 0;
     this.showFindingsTable = true;
     this.syncQueryParams();
+    setTimeout(() => this.loadFindings(), 0);
+    this.scrollToFindings();
+  }
+
+  filterBySeverity(severity: string): void {
+    this.selectedCategory = 'open';
+    this.filterSeverity = severity;
+    this.page = 0;
+    this.showFindingsTable = true;
+    this.syncQueryParams();
     this.loadFindings();
+    this.scrollToFindings();
+  }
+
+  filterByTool(testId: number): void {
+    this.selectedCategory = 'open';
+    this.filterTestId = testId;
+    this.page = 0;
+    this.showFindingsTable = true;
+    this.syncQueryParams();
+    this.loadFindings();
+    this.scrollToFindings();
+  }
+
+  private scrollToFindings(): void {
     setTimeout(() => document.getElementById('dd-findings-table')?.scrollIntoView({ behavior: 'smooth' }), 100);
   }
 
@@ -350,19 +400,64 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.page,
         this.size,
         this.filterSeverity || undefined,
-        this.selectedEnvironmentTag || undefined
+        this.selectedEnvironmentTag || undefined,
+        this.filterDateFrom || undefined,
+        this.filterDateTo || undefined,
+        this.filterTestId ?? undefined
       )
-      .pipe(finalize(() => (this.listLoading = false)))
+      .pipe(
+        timeout(60_000),
+        finalize(() => (this.listLoading = false))
+      )
       .subscribe({
         next: p => {
           this.findings = p.content ?? [];
           this.totalElements = p.totalElements ?? 0;
+          this.refreshFilteredFindings();
         },
         error: () => {
           this.findings = [];
+          this.filteredFindings = [];
           this.totalElements = 0;
         }
       });
+  }
+
+  onSearchQueryChanged(): void {
+    this.refreshFilteredFindings();
+  }
+
+  private refreshScanToolOptions(): void {
+    const seen = new Set<number>();
+    this.scanToolFilterOptions = (this.dashboard?.charts?.scanSnapshots ?? [])
+      .filter(s => s.testId > 0 && !seen.has(s.testId) && seen.add(s.testId))
+      .map(s => ({
+        testId: s.testId,
+        label: s.label || s.scanType || `Test #${s.testId}`
+      }));
+  }
+
+  private refreshFilteredFindings(): void {
+    const q = this.searchQuery.trim().toLowerCase();
+    if (!q) {
+      this.filteredFindings = [...this.findings];
+      return;
+    }
+    this.filteredFindings = this.findings.filter(f => {
+      const blob = [f.title, f.description, f.cve, f.cwe, f.filePath, f.componentName, f.scanType]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }
+
+  trackFindingRow(_index: number, f: DefectDojoFindingItem): string {
+    return `${f.id}-${f.status}-${f.active}-${f.verified}-${f.mitigated}-${f.riskAccepted}`;
+  }
+
+  trackScanToolOption(_index: number, t: { testId: number }): number {
+    return t.testId;
   }
 
   onListFiltersChanged(): void {
@@ -372,8 +467,12 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     this.filterSeverity = '';
+    this.filterDateFrom = '';
+    this.filterDateTo = '';
+    this.filterTestId = null;
     this.searchQuery = '';
     this.page = 0;
+    this.refreshFilteredFindings();
     this.loadFindings();
   }
 
@@ -396,14 +495,256 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  get displayedFindings(): DefectDojoFindingItem[] {
-    const q = this.searchQuery.trim().toLowerCase();
-    if (!q) return this.findings;
-    return this.findings.filter(f => {
-      const blob = [f.title, f.description, f.cve, f.cwe, f.filePath, f.componentName, f.scanType]
-        .filter(Boolean).join(' ').toLowerCase();
-      return blob.includes(q);
-    });
+  get hasSelection(): boolean {
+    return this.selectedFindingIds.size > 0;
+  }
+
+  get selectedCount(): number {
+    return this.selectedFindingIds.size;
+  }
+
+  get showingFrom(): number {
+    if (this.totalElements === 0) return 0;
+    return this.page * this.size + 1;
+  }
+
+  get showingTo(): number {
+    return Math.min((this.page + 1) * this.size, this.totalElements);
+  }
+
+  get isAllPageSelected(): boolean {
+    return (
+      this.filteredFindings.length > 0 &&
+      this.filteredFindings.every(f => f.id != null && this.selectedFindingIds.has(f.id))
+    );
+  }
+
+  get activeEditIds(): number[] {
+    return this.editTargetIds.length > 0 ? this.editTargetIds : [...this.selectedFindingIds];
+  }
+
+  isFindingChecked(f: DefectDojoFindingItem): boolean {
+    return f.id != null && this.selectedFindingIds.has(f.id);
+  }
+
+  toggleFindingSelection(f: DefectDojoFindingItem, event: Event): void {
+    event.stopPropagation();
+    if (f.id == null) return;
+    if (this.selectedFindingIds.has(f.id)) {
+      this.selectedFindingIds.delete(f.id);
+    } else {
+      this.selectedFindingIds.add(f.id);
+    }
+    this.editTargetIds = [];
+    this.bulkActionError = null;
+    this.bulkActionMessage = null;
+  }
+
+  toggleSelectAllPage(event: Event): void {
+    event.stopPropagation();
+    if (this.isAllPageSelected) {
+      for (const f of this.filteredFindings) {
+        if (f.id != null) this.selectedFindingIds.delete(f.id);
+      }
+    } else {
+      for (const f of this.filteredFindings) {
+        if (f.id != null) this.selectedFindingIds.add(f.id);
+      }
+    }
+    this.editTargetIds = [];
+  }
+
+  toggleBulkEditMenu(): void {
+    if (!this.hasSelection && this.editTargetIds.length === 0) return;
+    this.bulkEditOpen = !this.bulkEditOpen;
+    this.rowMenuOpenId = null;
+    if (!this.bulkEditOpen) {
+      this.editTargetIds = [];
+    }
+  }
+
+  toggleRowMenu(findingId: number, event: Event): void {
+    event.stopPropagation();
+    this.rowMenuOpenId = this.rowMenuOpenId === findingId ? null : findingId;
+    this.bulkEditOpen = false;
+  }
+
+  openRowEdit(f: DefectDojoFindingItem): void {
+    if (f.id == null) return;
+    this.editTargetIds = [f.id];
+    this.bulkEditOpen = true;
+    this.rowMenuOpenId = null;
+    this.bulkActionError = null;
+    this.bulkActionMessage = null;
+  }
+
+  toolLabel(f: DefectDojoFindingItem): string {
+    return f.toolName || f.scanType || '—';
+  }
+
+  importLabel(f: DefectDojoFindingItem): string {
+    if (f.testId) {
+      return `Import #${f.testId}`;
+    }
+    return '—';
+  }
+
+  applyBulkAction(btn: FindingRowAction): void {
+    const ids = this.activeEditIds;
+    if (!this.appId || ids.length === 0 || this.bulkActionLoading) return;
+    if (btn.confirm && !window.confirm(btn.confirm)) return;
+
+    this.bulkActionLoading = true;
+    this.bulkActionError = null;
+    this.bulkActionMessage = null;
+
+    from(ids)
+      .pipe(
+        concatMap(id => {
+          const finding = this.findings.find(x => x.id === id);
+          let action = btn.action;
+          if (action === 'REACTIVATE' && finding?.mitigated) {
+            action = 'REOPEN';
+          }
+          return this.defectDojoService
+            .updateFindingStatus(this.appId!, id, action, this.selectedBranch)
+            .pipe(
+              map(d => ({ ok: true as const, data: d })),
+              catchError(err => of({ ok: false as const, id, err }))
+            );
+        }),
+        toArray(),
+        finalize(() => (this.bulkActionLoading = false))
+      )
+      .subscribe({
+        next: results => {
+          const errors = results.filter(r => !r.ok);
+          const successes = results.filter((r): r is { ok: true; data: DefectDojoFindingItem } => r.ok);
+          for (const { data: d } of successes) {
+            this.patchFindingInList(d);
+            this.selectedFindingIds.delete(d.id);
+          }
+          this.editTargetIds = [];
+          this.bulkEditOpen = false;
+
+          if (errors.length > 0) {
+            const failed = errors[0] as { ok: false; id: number; err: { error?: { message?: string } } };
+            this.bulkActionError =
+              failed?.err?.error?.message ||
+              `${errors.length} mise(s) à jour en échec sur ${ids.length}.`;
+          } else {
+            this.bulkActionMessage = `${successes.length} finding(s) mis à jour dans DefectDojo.`;
+          }
+
+          if (
+            this.selectedCategory === 'open' &&
+            successes.some(
+              ({ data: d }) =>
+                d.falsePositive || d.outOfScope || d.mitigated || d.riskAccepted || !d.active
+            )
+          ) {
+            this.loadFindings();
+          }
+        },
+        error: () => {
+          this.bulkActionError = 'Échec de la mise à jour DefectDojo.';
+        }
+      });
+  }
+
+  deleteSelected(): void {
+    this.deleteFindings([...this.selectedFindingIds]);
+  }
+
+  deleteSingleFinding(f: DefectDojoFindingItem): void {
+    if (f.id == null) return;
+    this.rowMenuOpenId = null;
+    this.deleteFindings([f.id]);
+  }
+
+  private deleteFindings(ids: number[]): void {
+    if (!this.appId || ids.length === 0 || this.bulkActionLoading) return;
+    const label = ids.length === 1 ? 'ce finding' : `${ids.length} findings`;
+    if (!window.confirm(`Supprimer définitivement ${label} dans DefectDojo ?`)) return;
+
+    this.bulkActionLoading = true;
+    this.bulkActionError = null;
+    this.bulkActionMessage = null;
+
+    from(ids)
+      .pipe(
+        concatMap(id =>
+          this.defectDojoService.deleteFinding(this.appId!, id, this.selectedBranch).pipe(
+            map(() => ({ ok: true as const, id })),
+            catchError(() => of({ ok: false as const, id }))
+          )
+        ),
+        toArray(),
+        finalize(() => (this.bulkActionLoading = false))
+      )
+      .subscribe({
+        next: results => {
+          const deleted = results.filter((r): r is { ok: true; id: number } => r.ok).map(r => r.id);
+          const failed = results.filter(r => !r.ok).length;
+          for (const id of deleted) {
+            this.removeFindingFromList(id);
+            this.selectedFindingIds.delete(id);
+          }
+          this.editTargetIds = [];
+          this.bulkEditOpen = false;
+
+          if (failed > 0) {
+            this.bulkActionError = `${failed} suppression(s) en échec sur ${ids.length}.`;
+          } else {
+            this.bulkActionMessage = `${deleted.length} finding(s) supprimé(s).`;
+          }
+        },
+        error: () => {
+          this.bulkActionError = 'Échec de la suppression DefectDojo.';
+        }
+      });
+  }
+
+  private patchFindingInList(d: {
+    id: number;
+    status: string;
+    active: boolean;
+    verified: boolean;
+    mitigated: boolean;
+    falsePositive?: boolean;
+    outOfScope?: boolean;
+    riskAccepted?: boolean;
+    underReview?: boolean;
+    scanType?: string;
+    toolName?: string;
+    testId?: number;
+  }): void {
+    const idx = this.findings.findIndex(x => x.id === d.id);
+    if (idx < 0) return;
+    const updated: DefectDojoFindingItem = {
+      ...this.findings[idx],
+      status: d.status,
+      active: d.active,
+      verified: d.verified,
+      mitigated: d.mitigated,
+      falsePositive: d.falsePositive,
+      outOfScope: d.outOfScope,
+      riskAccepted: d.riskAccepted,
+      scanType: d.scanType ?? this.findings[idx].scanType,
+      toolName: d.toolName ?? this.findings[idx].toolName
+    };
+    this.findings = [
+      ...this.findings.slice(0, idx),
+      updated,
+      ...this.findings.slice(idx + 1)
+    ];
+    this.refreshFilteredFindings();
+  }
+
+  private removeFindingFromList(id: number): void {
+    this.findings = this.findings.filter(x => x.id !== id);
+    this.totalElements = Math.max(0, this.totalElements - 1);
+    this.refreshFilteredFindings();
   }
 
   get selectedCategoryLabel(): string {
@@ -420,6 +761,31 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   get scanTestCount(): number {
     return this.charts?.scanSnapshots?.length ?? 0;
+  }
+
+  get openFindingsSubtitle(): string {
+    return `${this.resolutionOpenCount} finding(s) ouvert(s) — branche ${this.selectedBranch || '—'}`;
+  }
+
+  get scanSnapshotsSubtitle(): string {
+    const n = this.charts?.scanSnapshots?.length ?? 0;
+    return `${n} import(s) DefectDojo`;
+  }
+
+  get findingAgeSubtitle(): string {
+    const n = this.charts?.detailedMetrics?.openFindingsForAge ?? 0;
+    return `${n} finding(s) ouvert(s) analysés`;
+  }
+
+  get openCweSubtitle(): string {
+    const total = Object.values(this.charts?.detailedMetrics?.openCwe ?? {}).reduce((a, b) => a + b, 0);
+    return `${total} occurrence(s) CWE sur findings ouverts`;
+  }
+
+  get scanToolStackSubtitle(): string {
+    const snaps = this.charts?.scanSnapshots ?? [];
+    const total = snaps.reduce((sum, s) => sum + (s.totalOpen ?? 0), 0);
+    return `${snaps.length} outil(s) · ${total} finding(s) ouvert(s) répartis`;
   }
 
   severityCount(sev: string): number {
@@ -488,11 +854,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.renderOverviewCharts();
     this.scheduleOpenSeverityChartRender();
     this.renderDetailedCharts(c.detailedMetrics);
-    this.renderSeverityChart(c);
-    this.renderResolutionChart(c);
-    this.renderToolsChart(c);
-    this.renderAnalysisChart(c);
-    this.renderStatusChart(c);
     this.renderScanChart(c);
   }
 
@@ -513,7 +874,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
           }]
         },
         options: {
-          responsive: true,
+          responsive: false,
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
@@ -531,14 +892,8 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
     this.renderTrendChart();
     this.renderWeekStatusChart(dm);
-    this.renderMultiSeverityLine(this.weekSeverityCanvas?.nativeElement, dm.weekToWeekBySeverity);
-    this.renderSingleSeverityWeekLine(this.criticalWeekCanvas?.nativeElement, dm.weekToWeekBySeverity, 'Critical');
-    this.renderSingleSeverityWeekLine(this.highWeekCanvas?.nativeElement, dm.weekToWeekBySeverity, 'High');
-    this.renderSingleSeverityWeekLine(this.mediumWeekCanvas?.nativeElement, dm.weekToWeekBySeverity, 'Medium');
     this.renderFindingAgeChart(dm);
-    this.renderWeeklyActivityChart(dm);
     this.renderCweChart(this.openCweCanvas?.nativeElement, dm.openCwe, 'CWE ouverts');
-    this.renderCweChart(this.totalCweCanvas?.nativeElement, dm.totalCwe, 'CWE total');
   }
 
   private scheduleOpenSeverityChartRender(): void {
@@ -632,72 +987,18 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
           y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        },
+        onClick: (_evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          const snap = sorted[idx];
+          if (snap?.testId) {
+            this.ngZone.run(() => this.filterByTool(snap.testId));
+          }
         }
       }
     });
     this.trendChart = chart;
-  }
-
-  private renderMultiSeverityLine(
-    canvas: HTMLCanvasElement | undefined,
-    points: DefectDojoTimeSeriesPoint[] | undefined,
-    formatLabel?: (period: string) => string
-  ): void {
-    if (!canvas || !points?.length) return;
-    const labels = points.map(p => (formatLabel ? formatLabel(p.period) : p.period));
-    const chart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: this.severities.map(sev => ({
-          label: sev,
-          data: points.map(p => p.bySeverity?.[sev] || 0),
-          borderColor: this.severityColor(sev),
-          backgroundColor: this.severityColor(sev),
-          tension: 0.25,
-          pointRadius: 4,
-          borderWidth: 2
-        }))
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
-        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderSingleSeverityWeekLine(
-    canvas: HTMLCanvasElement | undefined,
-    points: DefectDojoTimeSeriesPoint[] | undefined,
-    severity: string
-  ): void {
-    if (!canvas || !points?.length) return;
-    const color = this.severityColor(severity);
-    const chart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: points.map(p => p.period),
-        datasets: [{
-          label: severity,
-          data: points.map(p => p.bySeverity?.[severity] || 0),
-          borderColor: color,
-          backgroundColor: color,
-          tension: 0.25,
-          pointRadius: 4,
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-      }
-    });
-    this.chartInstances.push(chart);
   }
 
   private renderWeekStatusChart(dm: DefectDojoDetailedMetrics): void {
@@ -750,28 +1051,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.chartInstances.push(chart);
   }
 
-  private renderWeeklyActivityChart(dm: DefectDojoDetailedMetrics): void {
-    if (!this.weeklyActivityCanvas?.nativeElement || !dm.weeklyActivity?.length) return;
-    const weeks = [...new Set(dm.weeklyActivity.map(a => a.week))];
-    const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-    const datasets = dayLabels.map((label, dow) => ({
-      label,
-      data: weeks.map(w => dm.weeklyActivity.find(a => a.week === w && a.dayOfWeek === dow)?.count || 0),
-      backgroundColor: dow === 0 || dow === 6 ? THEME.slate : THEME.orange
-    }));
-    const chart = new Chart(this.weeklyActivityCanvas.nativeElement, {
-      type: 'bar',
-      data: { labels: weeks, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
   private renderCweChart(canvas: HTMLCanvasElement | undefined, data: Record<string, number> | undefined, title: string): void {
     if (!canvas || !data) return;
     const entries = this.mapEntries(data);
@@ -793,112 +1072,20 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } },
+        onClick: (_evt, elements) => {
+          if (!elements.length) return;
+          const cwe = entries[elements[0].index]?.key;
+          if (cwe) {
+            this.ngZone.run(() => {
+              this.selectedCategory = 'open';
+              this.searchQuery = cwe;
+              this.showFindingsTable = true;
+              this.scrollToFindings();
+            });
+          }
+        }
       }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderSeverityChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.severityCanvas?.nativeElement) return;
-    const entries = this.severities.map(s => ({ s, v: c.bySeverity?.[s] || 0 })).filter(x => x.v > 0);
-    if (!entries.length) return;
-    const chart = new Chart(this.severityCanvas.nativeElement, {
-      type: 'doughnut',
-      data: {
-        labels: entries.map(e => e.s),
-        datasets: [{ data: entries.map(e => e.v), backgroundColor: entries.map(e => this.severityColor(e.s)) }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderResolutionChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.resolutionCanvas?.nativeElement) return;
-    const chart = new Chart(this.resolutionCanvas.nativeElement, {
-      type: 'doughnut',
-      data: {
-        labels: ['Non résolues', 'Résolues'],
-        datasets: [{
-          data: [c.openCount, c.closedCount],
-          backgroundColor: [THEME.orange, THEME.navyMid],
-          borderColor: '#fff',
-          borderWidth: 2
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderToolsChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.toolsCanvas?.nativeElement) return;
-    const entries = this.mapEntries(c.byTool).slice(0, 8);
-    if (!entries.length) return;
-    const palette = [THEME.orange, THEME.orangeDark, THEME.orangeSoft, THEME.navyLight, THEME.navyMid, THEME.slate];
-    const chart = new Chart(this.toolsCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels: entries.map(e => e.key),
-        datasets: [{
-          label: 'Findings',
-          data: entries.map(e => e.value),
-          backgroundColor: entries.map((_, i) => palette[i % palette.length])
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true } }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderAnalysisChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.analysisCanvas?.nativeElement) return;
-    const entries = this.mapEntries(c.byAnalysisType);
-    if (!entries.length) return;
-    const chart = new Chart(this.analysisCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels: entries.map(e => e.key),
-        datasets: [{
-          label: 'Findings',
-          data: entries.map(e => e.value),
-          backgroundColor: THEME.navyMid,
-          borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderStatusChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.statusCanvas?.nativeElement || !c.byStatus) return;
-    const labels = ['Actives', 'Mitigées', 'Vérifiées', 'Faux positifs', 'Doublons'];
-    const keys = ['active', 'mitigated', 'verified', 'falsePositive', 'duplicate'];
-    const data = keys.map(k => c.byStatus[k] || 0);
-    if (data.every(v => v === 0)) return;
-    const chart = new Chart(this.statusCanvas.nativeElement, {
-      type: 'pie',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: [THEME.orange, THEME.green, THEME.navyLight, THEME.slate, THEME.orangeSoft]
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
     this.chartInstances.push(chart);
   }
@@ -920,7 +1107,15 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { position: 'bottom' } },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        onClick: (_evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          const snap = snapshots[idx];
+          if (snap?.testId) {
+            this.ngZone.run(() => this.filterByTool(snap.testId));
+          }
+        }
       }
     });
     this.chartInstances.push(chart);

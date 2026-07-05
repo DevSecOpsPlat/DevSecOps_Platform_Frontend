@@ -44,6 +44,34 @@
         </div>
       </div>
 
+      <section class="dd-finding-actions" *ngIf="branch">
+        <div class="dd-finding-actions-head">
+          <h4>Cycle de vie DefectDojo</h4>
+          <p>Les actions sont synchronisées avec votre instance DefectDojo (branche {{ branch }}).</p>
+        </div>
+        <div class="vuln-alert vuln-alert-error" *ngIf="statusError">{{ statusError }}</div>
+        <div class="vuln-alert vuln-alert-info" *ngIf="statusMessage && !statusError">{{ statusMessage }}</div>
+        <div class="dd-finding-actions-bar">
+          <button
+            type="button"
+            *ngFor="let btn of availableStatusActions"
+            class="dd-action-btn"
+            [class.dd-action-btn--primary]="btn.tone === 'primary'"
+            [class.dd-action-btn--secondary]="btn.tone === 'secondary'"
+            [class.dd-action-btn--danger]="btn.tone === 'danger'"
+            [class.dd-action-btn--neutral]="btn.tone === 'neutral'"
+            [disabled]="statusLoading"
+            (click)="applyStatusAction(btn)"
+          >
+            {{ btn.label }}
+          </button>
+          <span class="dd-action-loading" *ngIf="statusLoading">Mise à jour…</span>
+        </div>
+      </section>
+      <div class="vuln-alert vuln-alert-warning" *ngIf="!branch">
+        Sélectionnez une branche depuis le dashboard pour modifier le statut du finding.
+      </div>
+
       <section class="vuln-remediation-hero">
         <div class="vuln-hero-head">
           <div>
@@ -91,7 +119,15 @@
         <div class="vuln-snippet-refine">
           <label>Affiner l'analyse (extrait optionnel)</label>
           <textarea [(ngModel)]="codeSnippetInput" rows="4" placeholder="Coller du code…"></textarea>
-          <button type="button" class="vuln-btn vuln-btn-primary" (click)="runAiRemediation()" [disabled]="aiLoading">Regénérer l'analyse IA</button>
+          <div class="vuln-snippet-actions">
+            <button type="button" class="vuln-btn vuln-btn-primary" (click)="runAiRemediation(false)" [disabled]="aiLoading">
+              Regénérer l'analyse
+            </button>
+            <button type="button" class="vuln-btn vuln-btn-secondary" (click)="runAiRemediation(true)" [disabled]="aiLoading"
+                    title="Ignore le template statique et appelle Groq/OpenRouter/Ollama avec un prompt complet">
+              Analyse approfondie par IA
+            </button>
+          </div>
         </div>
       </section>
 
@@ -111,7 +147,8 @@
             <span class="vuln-section-icon">🤖</span>
             <h4>Analyse &amp; remédiation détaillée</h4>
           </div>
-          <span class="vuln-ai-auto-hint">générée au chargement (vous pouvez regénérer après avoir modifié l'extrait)</span>
+          <span class="vuln-ai-auto-hint">recommandation instantanée (cache / OWASP) ou IA cloud ; approfondie = Groq complet</span>
+          <span class="vuln-ai-source-badge" *ngIf="responseSourceLabel()">{{ responseSourceLabel() }}</span>
           <span class="vuln-confidence-badge" *ngIf="aiResult?.confidence"
                 [attr.data-level]="aiResult?.confidence">
             Confiance {{ aiResult?.confidence === 'HIGH' ? 'élevée' : aiResult?.confidence === 'LOW' ? 'faible' : 'moyenne' }}
@@ -120,8 +157,9 @@
 
         <div class="vuln-ai-loading-panel" *ngIf="aiLoading">
           <div class="vuln-ai-loading-bar"></div>
-          <p><strong>Analyse IA en cours…</strong></p>
-          <p class="vuln-muted">Problème, impact, plan d'action, commandes de vérification et proposition de correctif adaptés à ce finding et à l'extrait.</p>
+          <p><strong *ngIf="!aiPolling">Analyse en cours…</strong><strong *ngIf="aiPolling">Ollama local (async)…</strong></p>
+          <p class="vuln-muted" *ngIf="!aiPolling">Cache → recommandation OWASP → Groq/OpenRouter si nécessaire.</p>
+          <p class="vuln-muted" *ngIf="aiPolling">Le modèle local peut prendre plusieurs minutes — cette page se met à jour automatiquement.</p>
         </div>
 
         <div class="vuln-alert vuln-alert-error" *ngIf="aiError && !aiLoading">{{ aiError }}</div>

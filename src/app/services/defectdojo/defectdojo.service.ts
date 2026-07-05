@@ -43,6 +43,10 @@ export interface DefectDojoFindingItem {
   active: boolean;
   verified: boolean;
   mitigated: boolean;
+  falsePositive?: boolean;
+  outOfScope?: boolean;
+  riskAccepted?: boolean;
+  underReview?: boolean;
   cwe?: string;
   cvssScore?: number;
   cve?: string;
@@ -50,6 +54,7 @@ export interface DefectDojoFindingItem {
   line?: number;
   componentName?: string;
   scanType?: string;
+  testId?: number;
   testTitle?: string;
   toolName?: string;
   mitigation?: string;
@@ -57,6 +62,18 @@ export interface DefectDojoFindingItem {
   mitigatedDate?: string;
   url?: string;
 }
+
+export type DefectDojoFindingStatusAction =
+  | 'VERIFY'
+  | 'UNVERIFY'
+  | 'FALSE_POSITIVE'
+  | 'OUT_OF_SCOPE'
+  | 'UNDER_REVIEW'
+  | 'REACTIVATE'
+  | 'CLOSE'
+  | 'REOPEN'
+  | 'ACCEPT_RISK'
+  | 'UNACCEPT_RISK';
 
 export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   falsePositive?: boolean;
@@ -277,7 +294,10 @@ export class DefectDojoService {
     page = 0,
     size = 25,
     severity?: string,
-    tags?: string
+    tags?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    testId?: number
   ): Observable<DefectDojoFindingsPage> {
     let params = new HttpParams()
       .set('applicationId', applicationId)
@@ -287,7 +307,34 @@ export class DefectDojoService {
     if (branch?.trim()) params = params.set('branch', branch.trim());
     if (severity?.trim()) params = params.set('severity', severity.trim());
     if (tags?.trim()) params = params.set('tags', tags.trim());
+    if (dateFrom?.trim()) params = params.set('dateFrom', dateFrom.trim());
+    if (dateTo?.trim()) params = params.set('dateTo', dateTo.trim());
+    if (testId != null) params = params.set('testId', String(testId));
     return this.http.get<DefectDojoFindingsPage>(BASE + 'api/defectdojo/findings', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  updateFindingStatus(
+    applicationId: string,
+    findingId: number,
+    action: DefectDojoFindingStatusAction,
+    branch?: string
+  ): Observable<DefectDojoFindingDetail> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    return this.http.post<DefectDojoFindingDetail>(
+      BASE + `api/defectdojo/findings/${findingId}/status`,
+      { action },
+      { headers: this.authHeaders(), params }
+    );
+  }
+
+  deleteFinding(applicationId: string, findingId: number, branch?: string): Observable<void> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    return this.http.delete<void>(BASE + `api/defectdojo/findings/${findingId}`, {
       headers: this.authHeaders(),
       params
     });
@@ -318,7 +365,7 @@ export class DefectDojoService {
     applicationId: string,
     findingId: number,
     branch: string | undefined,
-    body?: { codeSnippet?: string }
+    body?: { codeSnippet?: string; deepAnalysis?: boolean }
   ): Observable<FindingAiRemediationResponse> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch?.trim()) params = params.set('branch', branch.trim());
@@ -326,6 +373,13 @@ export class DefectDojoService {
       BASE + `api/defectdojo/findings/${findingId}/ai-remediation`,
       body ?? {},
       { headers: this.authHeaders(), params }
+    );
+  }
+
+  pollAiRemediationJob(jobId: string): Observable<FindingAiRemediationResponse> {
+    return this.http.get<FindingAiRemediationResponse>(
+      BASE + `api/defectdojo/ai-remediation/jobs/${encodeURIComponent(jobId)}`,
+      { headers: this.authHeaders() }
     );
   }
 
