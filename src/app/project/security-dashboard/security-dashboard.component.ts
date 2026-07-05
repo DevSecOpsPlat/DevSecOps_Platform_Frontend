@@ -21,6 +21,13 @@ import {
   OpenSeverityGranularity,
   renderOpenSeverityEvolutionChart
 } from '../../services/defectdojo/open-severity-evolution-chart.helper';
+import {
+  FluxGranularity,
+  fluxChartSubtitle,
+  hasFluxChartData,
+  renderTreatmentFluxChart
+} from '../../services/defectdojo/treatment-flux-chart.helper';
+import { cweDisplayLabel } from '../../services/defectdojo/cwe-labels';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 
@@ -79,13 +86,12 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private readonly dashboardReload$ = new Subject<{ appId: string; branch: string; tags?: string }>();
   private chartInstances: Chart[] = [];
   private openSeverityChart?: Chart;
-  private trendChart?: Chart;
+  private fluxChart?: Chart;
   private chartRenderTimer?: ReturnType<typeof setTimeout>;
 
   @ViewChild('evolutionSeverityCanvas') evolutionSeverityCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('scanCanvas') scanCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('trendCanvas') trendCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('weekStatusCanvas') weekStatusCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('fluxCanvas') fluxCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('findingAgeCanvas') findingAgeCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('openCweCanvas') openCweCanvas?: ElementRef<HTMLCanvasElement>;
 
@@ -140,6 +146,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   ];
   hasOpenSeverityChart = false;
   openSeverityGranularity: OpenSeverityGranularity = 'day';
+  fluxGranularity: FluxGranularity = 'day';
 
   readonly severities = ['Critical', 'High', 'Medium', 'Low', 'Info'];
 
@@ -383,6 +390,33 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     if (this.openSeverityGranularity === granularity) return;
     this.openSeverityGranularity = granularity;
     this.ngZone.runOutsideAngular(() => this.renderOpenSeverityChart());
+  }
+
+  get fluxSubtitle(): string {
+    return fluxChartSubtitle(this.fluxGranularity, this.fluxBucketCountEstimate);
+  }
+
+  private get fluxBucketCountEstimate(): number {
+    return this.charts?.detailedMetrics?.openDayToDayBySeverity?.length
+      ?? this.charts?.scanSnapshots?.length
+      ?? 0;
+  }
+
+  get hasFluxChart(): boolean {
+    return hasFluxChartData(this.charts);
+  }
+
+  setFluxGranularity(g: FluxGranularity): void {
+    if (this.fluxGranularity === g) return;
+    this.fluxGranularity = g;
+    this.ngZone.runOutsideAngular(() => this.renderFluxChart());
+  }
+
+  get lastScanLabel(): string {
+    const raw = this.charts?.lastScanDate;
+    if (!raw) return '—';
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? raw : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
   }
 
   reload(): void {
@@ -840,8 +874,8 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.openSeverityChart = undefined;
     const evolutionCanvas = this.evolutionSeverityCanvas?.nativeElement;
     if (evolutionCanvas) Chart.getChart(evolutionCanvas)?.destroy();
-    this.trendChart?.destroy();
-    this.trendChart = undefined;
+    this.fluxChart?.destroy();
+    this.fluxChart = undefined;
     this.chartInstances.forEach(c => c.destroy());
     this.chartInstances = [];
   }
@@ -888,12 +922,16 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   private renderDetailedCharts(dm?: DefectDojoDetailedMetrics): void {
+    this.renderFluxChart();
     if (!dm) return;
-
-    this.renderTrendChart();
-    this.renderWeekStatusChart(dm);
     this.renderFindingAgeChart(dm);
     this.renderCweChart(this.openCweCanvas?.nativeElement, dm.openCwe, 'CWE ouverts');
+  }
+
+  private renderFluxChart(): void {
+    const canvas = this.fluxCanvas?.nativeElement;
+    if (!canvas || !this.hasFluxChart || this.loading) return;
+    this.fluxChart = renderTreatmentFluxChart(canvas, this.charts, this.fluxGranularity, this.fluxChart);
   }
 
   private scheduleOpenSeverityChartRender(): void {
@@ -915,126 +953,19 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     );
   }
 
-  private renderTrendChart(): void {
-    const canvas = this.trendCanvas?.nativeElement;
-    const snapshots = this.charts?.scanSnapshots;
-    if (!canvas || !snapshots?.length) return;
-
-    this.trendChart?.destroy();
-    this.trendChart = undefined;
-
-    const sorted = [...snapshots].sort((a, b) =>
-      (a.timestamp || a.date || '').localeCompare(b.timestamp || b.date || '')
-    );
-    const labels = sorted.map(s =>
-      s.label || s.date || `Scan #${s.testId}`
-    );
-    const openData = sorted.map(s => s.totalOpen);
-    const newData = sorted.map((s, i) => {
-      if (i === 0) return 0;
-      const diff = s.totalOpen - sorted[i - 1].totalOpen;
-      return Math.max(0, diff);
-    });
-    const resolvedData = sorted.map((s, i) => {
-      if (i === 0) return 0;
-      const diff = sorted[i - 1].totalOpen - s.totalOpen;
-      return Math.max(0, diff);
-    });
-
-    const chart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Ouvertes (stock)',
-            data: openData,
-            borderColor: THEME.orange,
-            backgroundColor: 'rgba(243,108,33,0.1)',
-            fill: true,
-            tension: 0.1,
-            pointRadius: 5,
-            borderWidth: 2
-          },
-          {
-            label: 'Nouvelles (période)',
-            data: newData,
-            borderColor: '#dc2626',
-            backgroundColor: 'rgba(220,38,38,0.1)',
-            fill: true,
-            tension: 0.1,
-            borderDash: [5, 5],
-            pointRadius: 4,
-            borderWidth: 2
-          },
-          {
-            label: 'Résolues (période)',
-            data: resolvedData,
-            borderColor: '#059669',
-            backgroundColor: 'rgba(5,150,105,0.1)',
-            fill: true,
-            tension: 0.1,
-            borderDash: [5, 5],
-            pointRadius: 4,
-            borderWidth: 2
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
-        scales: {
-          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
-          y: { beginAtZero: true, ticks: { stepSize: 1 } }
-        },
-        onClick: (_evt, elements) => {
-          if (!elements.length) return;
-          const idx = elements[0].index;
-          const snap = sorted[idx];
-          if (snap?.testId) {
-            this.ngZone.run(() => this.filterByTool(snap.testId));
-          }
-        }
-      }
-    });
-    this.trendChart = chart;
-  }
-
-  private renderWeekStatusChart(dm: DefectDojoDetailedMetrics): void {
-    if (!this.weekStatusCanvas?.nativeElement || !dm.weekToWeekStatus?.length) return;
-    const points = dm.weekToWeekStatus;
-    const chart = new Chart(this.weekStatusCanvas.nativeElement, {
-      type: 'line',
-      data: {
-        labels: points.map(p => p.week),
-        datasets: [
-          { label: 'Ouvertes', data: points.map(p => p.opened), borderColor: THEME.orangeDark, tension: 0.25, pointRadius: 4 },
-          { label: 'Fermées', data: points.map(p => p.closed), borderColor: THEME.orangeSoft, tension: 0.25, pointRadius: 4 },
-          { label: 'Risk accepted', data: points.map(p => p.riskAccepted), borderColor: THEME.navyLight, tension: 0.25, pointRadius: 4 }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
-        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
   private renderFindingAgeChart(dm: DefectDojoDetailedMetrics): void {
     if (!this.findingAgeCanvas?.nativeElement || !dm.findingAgeBuckets) return;
     const entries = Object.entries(dm.findingAgeBuckets);
     if (!entries.some(([, v]) => v > 0)) return;
+    const total = dm.openFindingsForAge || entries.reduce((s, [, v]) => s + v, 0);
+    const ageColors = ['#94a3b8', '#f59e0b', '#ea580c', '#b91c1c'];
     const chart = new Chart(this.findingAgeCanvas.nativeElement, {
       type: 'bar',
       data: {
         labels: entries.map(e => e[0]),
         datasets: [{
           data: entries.map(e => e[1]),
-          backgroundColor: THEME.navyMid,
+          backgroundColor: entries.map((_, i) => ageColors[Math.min(i, ageColors.length - 1)]),
           borderRadius: 4
         }]
       },
@@ -1043,9 +974,26 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          title: { display: true, text: `Âge de ${dm.openFindingsForAge} finding(s) ouvert(s)`, font: { size: 11 } }
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const y = ctx.parsed.y ?? 0;
+                return ` ${y} finding(s) — ${Math.round((y / Math.max(total, 1)) * 100)} %`;
+              }
+            }
+          }
         },
-        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        scales: {
+          x: {
+            title: { display: true, text: "Ancienneté du finding (depuis sa détection)", font: { size: 11, weight: 'bold' } },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Nombre de findings ouverts', font: { size: 11, weight: 'bold' } },
+            ticks: { stepSize: 1, precision: 0 }
+          }
+        }
       }
     });
     this.chartInstances.push(chart);
@@ -1058,21 +1006,43 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     const chart = new Chart(canvas, {
       type: 'bar',
       data: {
-        labels: entries.map(e => e.key),
+        labels: entries.map(e => cweDisplayLabel(e.key)),
         datasets: [{
           label: title,
           data: entries.map(e => e.value),
           backgroundColor: THEME.orangeSoft,
           borderColor: THEME.orangeDark,
-          borderWidth: 1
+          borderWidth: 1,
+          borderRadius: 3
         }]
       },
       options: {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const totalOcc = entries.reduce((s, e) => s + e.value, 0);
+                const v = ctx.parsed.x ?? 0;
+                return ` ${v} finding(s) — ${Math.round((v / totalOcc) * 100)} % des occurrences`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            title: { display: true, text: 'Findings ouverts', font: { size: 11, weight: 'bold' } },
+            ticks: { stepSize: 1, precision: 0 }
+          },
+          y: {
+            title: { display: true, text: 'Famille de faiblesse (CWE)', font: { size: 11, weight: 'bold' } },
+            ticks: { font: { size: 10 } }
+          }
+        },
         onClick: (_evt, elements) => {
           if (!elements.length) return;
           const cwe = entries[elements[0].index]?.key;
@@ -1081,6 +1051,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
               this.selectedCategory = 'open';
               this.searchQuery = cwe;
               this.showFindingsTable = true;
+              this.loadFindings();
               this.scrollToFindings();
             });
           }
@@ -1092,11 +1063,20 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   private renderScanChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
     if (!this.scanCanvas?.nativeElement || !c.scanSnapshots?.length) return;
-    const snapshots = c.scanSnapshots;
+    const latestByTool = new Map<string, typeof c.scanSnapshots[number]>();
+    for (const s of c.scanSnapshots) {
+      const key = s.scanType || String(s.testId);
+      const prev = latestByTool.get(key);
+      if (!prev || (s.timestamp || s.date || '') > (prev.timestamp || prev.date || '')) {
+        latestByTool.set(key, s);
+      }
+    }
+    const snapshots = [...latestByTool.values()].sort((a, b) => (b.totalOpen || 0) - (a.totalOpen || 0));
+
     const chart = new Chart(this.scanCanvas.nativeElement, {
       type: 'bar',
       data: {
-        labels: snapshots.map(s => s.label),
+        labels: snapshots.map(s => s.scanType || s.label || `Test #${s.testId}`),
         datasets: this.severities.map(sev => ({
           label: sev,
           data: snapshots.map(s => s.bySeverity?.[sev] || 0),
@@ -1106,15 +1086,34 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              title: items => {
+                const s = snapshots[items[0].dataIndex];
+                return `${s.scanType || s.label} — import du ${s.timestamp || s.date || '?'}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            title: { display: true, text: 'Outil de scan (dernier import)', font: { size: 11, weight: 'bold' } },
+            ticks: { font: { size: 10 } }
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            title: { display: true, text: 'Findings ouverts par sévérité', font: { size: 11, weight: 'bold' } },
+            ticks: { precision: 0 }
+          }
+        },
         onClick: (_evt, elements) => {
           if (!elements.length) return;
-          const idx = elements[0].index;
-          const snap = snapshots[idx];
-          if (snap?.testId) {
-            this.ngZone.run(() => this.filterByTool(snap.testId));
-          }
+          const snap = snapshots[elements[0].index];
+          if (snap?.testId) this.ngZone.run(() => this.filterByTool(snap.testId));
         }
       }
     });

@@ -180,6 +180,19 @@
   margin-bottom: 0.65rem;
 }
 
+.dd-panel-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.dd-panel-head-row .dd-granularity-toolbar {
+  margin-bottom: 0;
+}
+
 .dd-granularity-label {
   font-size: 0.78rem;
   color: var(--vuln-text-muted, #64748b);

@@ -123,6 +123,30 @@
     </div>
 
     <div *ngIf="chartsLoading" class="dd-loading dd-loading--charts">Chargement des graphiques…</div>
+
+    <!-- ③ TENDANCES -->
+    <div class="dd-section-head dd-section-head--detailed" *ngIf="!chartsLoading && hasFluxChart">
+      <h2>Tendances</h2>
+      <p>Le stock s'améliore-t-il ? Flux de traitement et évolution par sévérité.</p>
+    </div>
+
+    <section class="dd-chart-panel dd-chart-panel--wide" *ngIf="!chartsLoading && hasFluxChart">
+      <div class="dd-panel-head-row">
+        <div>
+          <h3 class="dd-chart-title">Flux de traitement</h3>
+          <p class="dd-chart-sub">{{ fluxSubtitle }}</p>
+        </div>
+        <div class="dd-granularity-toolbar">
+          <span class="dd-granularity-label">Vue :</span>
+          <button type="button" class="dd-granularity-btn" [class.active]="fluxGranularity === 'run'" (click)="setFluxGranularity('run')">Run</button>
+          <button type="button" class="dd-granularity-btn" [class.active]="fluxGranularity === 'day'" (click)="setFluxGranularity('day')">Jour</button>
+          <button type="button" class="dd-granularity-btn" [class.active]="fluxGranularity === 'week'" (click)="setFluxGranularity('week')">Semaine</button>
+          <button type="button" class="dd-granularity-btn" [class.active]="fluxGranularity === 'month'" (click)="setFluxGranularity('month')">Mois</button>
+        </div>
+      </div>
+      <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #fluxCanvas></canvas></div>
+    </section>
+
     <!-- Évolution par sévérité -->
     <article class="dd-evolution-chart-card">
       <header class="dd-evolution-chart-head">
@@ -171,38 +195,28 @@
         </div>
       </div>
     </article>
-    <!-- Detailed Metrics (DefectDojo) -->
+
+    <!-- ④ RÉPARTITION -->
     <div class="dd-section-head dd-section-head--detailed" *ngIf="!chartsLoading && charts?.detailedMetrics">
-      <h2>Detailed Metrics</h2>
-      <p>Évolution par scan, âge des findings, activité et CWE</p>
+      <h2>Répartition</h2>
+      <p>État instantané au dernier import — {{ lastScanLabel }}. Cliquez un élément pour filtrer la liste.</p>
     </div>
+
     <div class="dd-charts-grid" *ngIf="!chartsLoading && charts?.detailedMetrics">
       <section class="dd-chart-panel dd-chart-panel--wide">
-        <h3 class="dd-chart-title">Évolution entre analyses</h3>
-        <p class="dd-chart-sub">{{ scanSnapshotsSubtitle }} — cliquez un point pour filtrer par import</p>
-        <div class="dd-chart-canvas dd-chart-canvas--medium">
-          <canvas #trendCanvas></canvas>
-        </div>
+        <h3 class="dd-chart-title">Par outil de scan</h3>
+        <p class="dd-chart-sub">{{ scanToolStackSubtitle }} — état au {{ lastScanLabel }}</p>
+        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #scanCanvas></canvas></div>
       </section>
       <section class="dd-chart-panel">
-        <h3 class="dd-chart-title">Open, Closed &amp; Risk Accepted Week to Week</h3>
-        <p class="dd-chart-sub">Flux de traitement hebdomadaire</p>
-        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #weekStatusCanvas></canvas></div>
-      </section>
-      <section class="dd-chart-panel">
-        <h3 class="dd-chart-title">Finding Age</h3>
-        <p class="dd-chart-sub">{{ findingAgeSubtitle }}</p>
-        <div class="dd-chart-canvas"><canvas #findingAgeCanvas></canvas></div>
-      </section>
-      <section class="dd-chart-panel">
-        <h3 class="dd-chart-title">Open CWE Vulnerabilities</h3>
-        <p class="dd-chart-sub">{{ openCweSubtitle }}</p>
+        <h3 class="dd-chart-title">Top CWE ouverts</h3>
+        <p class="dd-chart-sub">{{ openCweSubtitle }} — état au {{ lastScanLabel }}</p>
         <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #openCweCanvas></canvas></div>
       </section>
-      <section class="dd-chart-panel dd-chart-panel--wide">
-        <h3 class="dd-chart-title">Par outil de scan (stack sévérité)</h3>
-        <p class="dd-chart-sub">{{ scanToolStackSubtitle }} — cliquez une barre pour filtrer par outil</p>
-        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #scanCanvas></canvas></div>
+      <section class="dd-chart-panel">
+        <h3 class="dd-chart-title">Âge des findings ouverts</h3>
+        <p class="dd-chart-sub">{{ findingAgeSubtitle }} — état au {{ lastScanLabel }}</p>
+        <div class="dd-chart-canvas"><canvas #findingAgeCanvas></canvas></div>
       </section>
     </div>
 
