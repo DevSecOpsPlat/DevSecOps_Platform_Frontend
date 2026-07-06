@@ -88,15 +88,18 @@
           <div class="card-body">
 
             <!-- Empty -->
-            <div *ngIf="!data.jobs || data.jobs.length === 0" class="empty-state">
+            <div *ngIf="jobsList.length === 0" class="empty-state">
               <p>Aucun job disponible.</p>
               <p *ngIf="!data.pipelineId || data.pipelineId <= 0" class="empty-hint">
                 Les jobs ne peuvent pas être récupérés car le pipeline n'a pas d'ID GitLab valide.
               </p>
+              <p *ngIf="(data.pipelineId ?? 0) > 0 && loading" class="empty-hint">
+                Synchronisation avec GitLab en cours…
+              </p>
             </div>
 
             <!-- Stages -->
-            <div class="stages-container" *ngIf="data.jobs && data.jobs.length > 0">
+            <div class="stages-container" *ngIf="jobsList.length > 0">
               <div *ngFor="let stage of getStages()" class="stage-group">
 
                 <h3 class="stage-title">
@@ -209,7 +212,7 @@
                   <span class="section-icon">📄</span>
                   <h4>Logs</h4>
                 </div>
-                <pre>{{ selectedJobLogs }}</pre>
+                <div class="logs-console" [innerHTML]="formatLogsForDisplay(selectedJobLogs)"></div>
               </div>
               <div *ngIf="selectedJob && !loadingJob && !selectedJobLogs && jobLogsError" class="logs-unavailable">
                 <span class="logs-unavailable-icon">📄</span>

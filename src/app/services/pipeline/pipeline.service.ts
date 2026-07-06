@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { SecuritySummaryResponse } from '../../models/pipeline/security-summary-response';
@@ -84,8 +85,11 @@ getLatestPipeline(): Observable<any> {
 
   getScanResults(jobId: number): Observable<any> {
     return this.http.get(BASE + `api/pipelines/jobs/${jobId}/scan`, {
-      headers: this.authHeaders()
-    });
+      headers: this.authHeaders(),
+      observe: 'response'
+    }).pipe(
+      map(res => (res.status === 204 || res.body == null) ? null : res.body)
+    );
   }
 
   // Dans pipeline.service.ts

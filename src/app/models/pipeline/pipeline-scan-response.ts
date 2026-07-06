@@ -24,5 +24,7 @@ export interface PipelineScanResponse {
   ref?: string;
   triggeredBy?: string;
   durationSeconds?: number;
+  /** Alias GitLab (secondes) — certains endpoints renvoient duration */
+  duration?: number;
 }
 

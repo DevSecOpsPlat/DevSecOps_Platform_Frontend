@@ -663,7 +663,39 @@
   scrollbar-width: thin;
   scrollbar-color: #334155 transparent;
 }
+
+.logs-console {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.73rem;
+  line-height: 1.65;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ::ng-deep requis : le HTML des logs est injecté via innerHTML */
+:host ::ng-deep .logs-console .log-line { display: block; }
+:host ::ng-deep .logs-console .log-time { color: #64748b; }
+:host ::ng-deep .logs-console .log-line-default { color: #e2e8f0; }
+:host ::ng-deep .logs-console .log-line-accent { color: #fb923c !important; }
+:host ::ng-deep .logs-console .log-line-accent-bold { color: #f97316 !important; font-weight: 600; }
+:host ::ng-deep .logs-console .log-line-info { color: #94a3b8 !important; }
+:host ::ng-deep .logs-console .log-line-warn { color: #fbbf24 !important; }
+:host ::ng-deep .logs-console .log-line-error { color: #f87171 !important; }
+:host ::ng-deep .logs-console .log-line-success { color: #4ade80 !important; font-weight: 600; }
+
+.logs-console::-webkit-scrollbar,
 .logs-section pre::-webkit-scrollbar { width: 5px; height: 5px; }
+.logs-console::-webkit-scrollbar-thumb,
 .logs-section pre::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
 /* ── Scan results ── */
