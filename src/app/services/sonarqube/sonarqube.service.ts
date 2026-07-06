@@ -12,11 +12,12 @@ export class SonarQubeService {
   constructor(private http: HttpClient, private userService: UserService) {}
 
   private authHeaders(): HttpHeaders {
+    let headers = new HttpHeaders({ 'Content-Type': 'application/json' });
     const token = this.userService.getToken();
-    return new HttpHeaders({
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    });
+    if (token?.trim()) {
+      headers = headers.set('Authorization', `Bearer ${token.trim()}`);
+    }
+    return headers;
   }
 
   getSonarQubeResults(): Observable<any> {
@@ -88,6 +89,24 @@ export class SonarQubeService {
     return this.http.post(BASE + 'api/sonarqube/issues/assign/unassign', null, {
       headers: this.authHeaders(),
       params: { issueKey }
+    });
+  }
+
+  getIssueDetails(issueKey: string, branch?: string): Observable<any> {
+    const params: any = { issueKey };
+    if (branch) params.branch = branch;
+    return this.http.get(BASE + 'api/sonarqube/issues/detail', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  getActivityHistory(branch: string, serviceId?: string): Observable<any> {
+    const params: any = { branch };
+    if (serviceId) params.serviceId = serviceId;
+    return this.http.get(BASE + 'api/sonarqube/activity', {
+      headers: this.authHeaders(),
+      params
     });
   }
 }

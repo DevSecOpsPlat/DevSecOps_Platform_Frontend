@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app/app.component';
@@ -43,6 +43,7 @@ import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.componen
 import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
 import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
 import { PasswordRequirementsComponent } from './shared/password/password-requirements.component';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 
 @NgModule({
   declarations: [
@@ -93,7 +94,9 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent
   ],
-  providers: [],
+  providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }
