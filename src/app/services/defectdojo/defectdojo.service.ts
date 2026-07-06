@@ -3,7 +3,7 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
-import { FindingAiRemediationResponse } from '../findings/findings.service';
+import { FindingAiRemediationResponse } from '../../models/finding/finding-ai-remediation.model';
 
 const BASE = environment.BASE_URL;
 

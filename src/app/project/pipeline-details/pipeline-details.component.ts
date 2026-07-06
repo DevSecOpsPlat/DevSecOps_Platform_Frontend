@@ -215,15 +215,13 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  openVulnerabilitiesDashboard(): void {
+  openSecurityDashboard(): void {
     if (!this.envId) return;
     const appId =
       this.route.snapshot.queryParamMap.get('appId') ||
       localStorage.getItem('envirotest-last-project-app-id');
     if (appId) {
-      this.router.navigate(['/project', appId, 'vulnerabilities'], {
-        queryParams: { envId: this.envId }
-      });
+      this.router.navigate(['/project', appId, 'security-dashboard']);
     } else {
       this.router.navigate(['/my-applications']);
     }

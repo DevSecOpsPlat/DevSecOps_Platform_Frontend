@@ -172,9 +172,9 @@ export class ApplicationDetailComponent implements OnInit {
     });
   }
 
-  viewServiceVulnerabilities(svc: AppServiceModel): void {
+  viewServiceSecurityDashboard(svc: AppServiceModel): void {
     if (!svc.id) return;
-    this.router.navigate(['/project', svc.id, 'vulnerabilities']);
+    this.router.navigate(['/project', svc.id, 'security-dashboard']);
   }
 
   // ---------- Databases ----------

@@ -51,7 +51,7 @@
 
       <div class="am-list">
         <div class="am-list-item" *ngFor="let s of app.services">
-          <div class="am-list-item-main" style="cursor:pointer" (click)="viewServiceVulnerabilities(s)">
+          <div class="am-list-item-main" style="cursor:pointer" (click)="viewServiceSecurityDashboard(s)">
             <div class="am-list-item-title">
               {{ s.name }}
               <span class="am-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
@@ -71,8 +71,8 @@
             <button class="am-btn am-btn-primary am-btn-sm" (click)="openDeployService(s)" title="Déployer ce service (+ BD dépendante)">
               Déployer
             </button>
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="viewServiceVulnerabilities(s)" title="Voir les vulnérabilités">
-              Vulnérabilités
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="viewServiceSecurityDashboard(s)" title="Dashboard sécurité DefectDojo">
+              Sécurité
             </button>
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
             <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>

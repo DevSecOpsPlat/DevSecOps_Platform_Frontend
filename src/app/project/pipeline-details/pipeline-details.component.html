@@ -46,8 +46,8 @@
           <div *ngIf="isRunning()" class="spinner"></div>
           <button class="btn-vuln"
                   type="button"
-                  (click)="openVulnerabilitiesDashboard()">
-            Vulnérabilités (tous stages)
+                  (click)="openSecurityDashboard()">
+            Dashboard sécurité
           </button>
           <a *ngIf="data.webUrl"
              [href]="data.webUrl"

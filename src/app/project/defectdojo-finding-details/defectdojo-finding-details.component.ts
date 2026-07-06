@@ -10,7 +10,7 @@ import {
   DefectDojoFindingStatusAction,
   DefectDojoService
 } from '../../services/defectdojo/defectdojo.service';
-import { FindingAiRemediationResponse } from '../../services/findings/findings.service';
+import { FindingAiRemediationResponse } from '../../models/finding/finding-ai-remediation.model';
 import { UserService } from '../../services/user/user.service';
 
 const AI_REQUEST_TIMEOUT_MS = 90_000;
@@ -30,7 +30,7 @@ interface FindingActionButton {
   imports: [CommonModule, FormsModule, RouterLink, ChatMarkdownPipe],
   templateUrl: './defectdojo-finding-details.component.html',
   styleUrls: [
-    '../vulnerability-details/vulnerability-details.component.css',
+    '../shared/finding-detail.styles.css',
     './defectdojo-finding-details.component.css'
   ]
 })

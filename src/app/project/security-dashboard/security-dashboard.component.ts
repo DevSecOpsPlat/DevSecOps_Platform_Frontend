@@ -77,7 +77,7 @@ interface FindingRowAction {
   imports: [CommonModule, FormsModule],
   templateUrl: './security-dashboard.component.html',
   styleUrls: [
-    '../vulnerabilities-dashboard/vulnerabilities-dashboard.component.css',
+    '../shared/security-list.styles.css',
     './security-dashboard.component.css'
   ]
 })

@@ -33,10 +33,8 @@ import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
-import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
-import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
@@ -91,8 +89,6 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     HttpClientModule,
     ReactiveFormsModule,
     FormsModule,
-    VulnerabilitiesDashboardComponent,
-    VulnerabilityDetailsComponent,
     SecurityDashboardComponent,
     ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent

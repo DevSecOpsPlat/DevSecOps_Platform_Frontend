@@ -223,20 +223,6 @@ export class UserSidebarComponent implements OnInit {
     this.router.navigate([path]);
   }
 
-  /**
-   * Environnement à utiliser pour vulnérabilités / correctifs IA.
-   * Priorité : dernier env global (API latest) — cohérent avec les pages qui appellent getLatestEnvironment().
-   * Éviter de mettre en premier lastDeploymentEnvId : l’historique des déploiements peut référencer un env plus ancien
-   * que le « dernier environnement » réel.
-   */
-  private preferredSecurityEnvId(): string | null {
-    return (
-      this.lastEnvironmentId ||
-      this.lastPipelineEnvId ||
-      this.lastDeploymentEnvId
-    );
-  }
-
   goToLegacySecurityDashboard(): void {
     const appId = this.lastKnownApplicationId();
     if (appId) {
@@ -249,23 +235,6 @@ export class UserSidebarComponent implements OnInit {
   isLegacySecurityDashboardRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
     return /\/project\/[^/]+\/security-dashboard(\/|$)/.test(path);
-  }
-
-  /** Même layout que le projet : /project/:appId/vulnerabilities */
-  navigateSecurityVulnerabilities(): void {
-    const appId = this.lastKnownApplicationId();
-    const envId = this.preferredSecurityEnvId();
-    const qp = envId ? { envId } : {};
-    if (appId) {
-      this.router.navigate(['/project', appId, 'vulnerabilities'], { queryParams: qp });
-    } else {
-      this.router.navigate(['/my-applications']);
-    }
-  }
-
-  isSecurityVulnerabilitiesRoute(): boolean {
-    const path = this.router.url.split(/[?#]/)[0];
-    return /\/project\/[^/]+\/vulnerabilities(\/[^/]+)?$/.test(path);
   }
 
   goToProjectOverview(): void {
