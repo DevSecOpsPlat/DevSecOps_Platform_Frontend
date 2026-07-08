@@ -20,18 +20,12 @@ import { ProjectOverviewComponent } from './project/overview/project-overview.co
 import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
 import { ProjectLogsComponent } from './project/logs/project-logs.component';
 import { ProjectSecurityComponent } from './project/security/project-security.component';
-import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
-import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
-import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
-
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
-import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
-import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
 import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
@@ -65,24 +59,18 @@ const routes: Routes = [
       { path: 'monitoring', component: MonitoringComponent },
       { path: 'security-dashboard', component: SecurityDashboardComponent },
       { path: 'security-dashboard/finding/:findingId', component: DefectDojoFindingDetailsComponent },
-      { path: 'vulnerabilities/:findingId', component: VulnerabilityDetailsComponent },
-      { path: 'vulnerabilities', component: VulnerabilitiesDashboardComponent }
+      { path: 'vulnerabilities/:findingId', redirectTo: 'security-dashboard', pathMatch: 'full' },
+      { path: 'vulnerabilities', redirectTo: 'security-dashboard', pathMatch: 'full' }
     ]
   },
 
   // Utilisateur connecté
-  { path: 'environment-create', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
-  { path: 'environments', component: EnvironmentCreateComponent, canActivate: [AuthGuard] },
   { path: 'environment/:envId', component: EnvironmentDetailsComponent, canActivate: [AuthGuard] },
-  {
-    path: 'applications',
-    canActivate: [AuthGuard],
-    children: [
-      { path: '', component: MyApplicationsComponent },
-      { path: 'active', component: ApplicationsActiveComponent }
-    ]
-  },
-  { path: 'my-applications', component: MyApplicationsComponent, canActivate: [AuthGuard] },
+  // Anciennes URLs → nouvelle page projets unifiée
+  { path: 'environment-create', redirectTo: 'projects', pathMatch: 'full' },
+  { path: 'environments', redirectTo: 'projects', pathMatch: 'full' },
+  { path: 'applications', redirectTo: 'projects', pathMatch: 'prefix' },
+  { path: 'my-applications', redirectTo: 'projects', pathMatch: 'full' },
   {
     path: 'reclamations',
     component: UserAccountLayoutComponent,
@@ -91,11 +79,12 @@ const routes: Routes = [
   },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
+  { path: 'pipeline/id/:pipelineId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
-  // Gestion des applications managées (services + bases + déploiement K8s multi-services).
-  // Nouvelles routes standalone lazy-loaded — n'altèrent aucune route existante.
+  // Projets = liste unifiée (services + bases + scan/deploy).
+  // Route canonique : /projects. L'ancien alias /app-management redirige vers /projects.
   {
-    path: 'app-management',
+    path: 'projects',
     canActivate: [AuthGuard],
     children: [
       {
@@ -118,10 +107,13 @@ const routes: Routes = [
       }
     ]
   },
+  { path: 'app-management', redirectTo: 'projects', pathMatch: 'full' },
+  { path: 'app-management/create', redirectTo: 'projects/create', pathMatch: 'full' },
+  { path: 'app-management/:id', redirectTo: 'projects/:id' },
 
-  // Anciennes URLs (sans app dans le chemin) → choisir une application
-  { path: 'security/vulnerabilities', redirectTo: 'my-applications', pathMatch: 'full' },
-  { path: 'security/fixes', redirectTo: 'my-applications', pathMatch: 'full' },
+  // Anciennes URLs (sans app dans le chemin) → nouvelle liste projets
+  { path: 'security/vulnerabilities', redirectTo: 'projects', pathMatch: 'full' },
+  { path: 'security/fixes', redirectTo: 'projects', pathMatch: 'full' },
 
   // Administration (app isolée : /admin/*, même coque que le layout projet, sans routes métier)
   {

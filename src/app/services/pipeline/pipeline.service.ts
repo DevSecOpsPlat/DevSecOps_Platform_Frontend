@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { SecuritySummaryResponse } from '../../models/pipeline/security-summary-response';
@@ -24,11 +25,23 @@ export class PipelineService {
     });
   }
 
-  listPipelines(page: number = 0, size: number = 10): Observable<any> {
-  return this.http.get(`${BASE}api/pipelines?page=${page}&size=${size}`, {
-    headers: this.authHeaders()
-  });
-}
+  listPipelines(
+    page: number = 0,
+    size: number = 100,
+    applicationId?: string | null,
+    executionKind?: 'SCAN' | 'DEPLOY' | null
+  ): Observable<PipelineListItem[]> {
+    let url = `${BASE}api/pipelines?page=${page}&size=${size}`;
+    if (applicationId) {
+      url += `&applicationId=${encodeURIComponent(applicationId)}`;
+    }
+    if (executionKind) {
+      url += `&executionKind=${encodeURIComponent(executionKind)}`;
+    }
+    return this.http.get<PipelineListItem[]>(url, {
+      headers: this.authHeaders()
+    });
+  }
 
   getPipelineAndScan(envId: string): Observable<PipelineScanResponse> {
     // BDD-first côté backend (reports non inclus par défaut)
@@ -49,6 +62,14 @@ export class PipelineService {
     return this.http.get<SecuritySummaryResponse>(BASE + `api/environments/${envId}/security-summary`, {
       headers: this.authHeaders()
     });
+  }
+
+  getPipelineAndScanLiveById(pipelineId: number, applicationId?: string): Observable<PipelineScanResponse> {
+    const appQuery = applicationId ? `&applicationId=${encodeURIComponent(applicationId)}` : '';
+    return this.http.get<PipelineScanResponse>(
+      BASE + `api/pipelines/by-id/${pipelineId}?includeReports=false&refresh=true${appQuery}`,
+      { headers: this.authHeaders() }
+    );
   }
 
   getPipelineById(pipelineId: number): Observable<PipelineScanResponse> {
@@ -84,8 +105,11 @@ getLatestPipeline(): Observable<any> {
 
   getScanResults(jobId: number): Observable<any> {
     return this.http.get(BASE + `api/pipelines/jobs/${jobId}/scan`, {
-      headers: this.authHeaders()
-    });
+      headers: this.authHeaders(),
+      observe: 'response'
+    }).pipe(
+      map(res => (res.status === 204 || res.body == null) ? null : res.body)
+    );
   }
 
   // Dans pipeline.service.ts

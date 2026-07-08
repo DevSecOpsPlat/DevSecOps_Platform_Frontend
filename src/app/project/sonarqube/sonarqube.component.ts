@@ -1,8 +1,20 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import Chart from 'chart.js/auto';
 import { SonarQubeService } from 'src/app/services/sonarqube/sonarqube.service';
 import { UserService } from 'src/app/services/user/user.service';
+import {
+  translateSonarMessage,
+  translateSonarSeverity,
+  translateSonarIssueType,
+  translateSonarImpactSeverity,
+  translateSonarCodeAttribute,
+  translateSonarSecurityCategory,
+  translateSonarTag,
+  translateSonarVulnerabilityProbability,
+  translateSonarQgStatus,
+} from './sonarqube-message-i18n';
 
 @Component({
   selector: 'app-sonarqube',
@@ -16,11 +28,13 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('donutCanvas') donutCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild('coverageBarCanvas') coverageBarCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild('severityBarCanvas') severityBarCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('activityCanvas') activityCanvas?: ElementRef<HTMLCanvasElement>;
 
   loading = true;
   error: string | null = null;
 
   metrics: any = null;
+  softwareQualityDimensions: any[] = [];
   totalIssues = 0;
   totalHotspots = 0;
   issues: any[] = [];
@@ -78,8 +92,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   topCodeAttributes: { key: string; count: number }[] = [];
 
   // Branches
-  branches: string[] = ['master'];
-  currentBranch: string = 'master';
+  branches: string[] = ['main'];
+  currentBranch: string = 'main';
   qualityGateConditions: any[] = [];
 
   // Coverage
@@ -106,19 +120,33 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedHotspotDetails: any | null = null;
   hotspotDetailTab: 'where' | 'risk' | 'fix' | 'access' = 'where';
 
+  // Activity (historique analyses)
+  activityLoading = false;
+  activityHistory: any = null;
+  activityAnalyses: any[] = [];
+  activityGraphType: 'issues' | 'coverage' | 'duplications' = 'issues';
+
+  // Issue detail (master-detail)
+  selectedIssue: any | null = null;
+  selectedIssueDetails: any | null = null;
+  issueViewMode: 'list' | 'detail' = 'list';
+  issueDetailTab: 'where' | 'why' | 'fix' | 'more' = 'where';
+  issueDetailLoading = false;
+
   // Misc
   sonarHostUrl: string | null = null;
   sonarProjectKey: string | null = null;
+  serviceId: string | null = null;
   issueUpdatingKey: string | null = null;
   issueUpdateError: Record<string, string> = {};
 
   readonly issueTransitions = [
     { value: 'confirm', label: 'Confirmer' },
     { value: 'unconfirm', label: 'Annuler confirmation' },
-    { value: 'resolve', label: 'Résoudre (Fixed)' },
+    { value: 'resolve', label: 'Résoudre (corrigé)' },
     { value: 'reopen', label: 'Rouvrir' },
     { value: 'falsepositive', label: 'Faux positif' },
-    { value: 'wontfix', label: "Ne pas corriger (Won't fix)" },
+    { value: 'wontfix', label: 'Ne pas corriger (accepté)' },
     { value: 'accept', label: 'Accepter' }
   ];
 
@@ -128,14 +156,42 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   private donutChart: Chart | null = null;
   private coverageBarChart: Chart | null = null;
   private severityBarChart: Chart | null = null;
+  private activityChart: Chart | null = null;
 
   constructor(
     private sonarService: SonarQubeService,
-    private userService: UserService
+    private userService: UserService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    this.serviceId = this.route.parent?.snapshot.paramMap.get('appId') || null;
+    this.loadBranches();
     this.load();
+  }
+
+  private loadBranches(): void {
+    const preserve = [...this.branches];
+    this.sonarService.getBranches(this.serviceId || undefined).subscribe({
+      next: (branches) => {
+        const merged = new Set<string>([
+          ...preserve,
+          ...(branches || []),
+          this.currentBranch,
+          'main',
+          'test'
+        ].filter((b): b is string => !!b && String(b).trim() !== ''));
+        this.branches = Array.from(merged);
+        if (!this.branches.includes(this.currentBranch)) {
+          this.currentBranch = this.branches[0] || 'main';
+        }
+      },
+      error: () => {
+        if (!this.branches.length) {
+          this.branches = ['main', 'test'];
+        }
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -146,6 +202,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.donutChart?.destroy();
     this.coverageBarChart?.destroy();
     this.severityBarChart?.destroy();
+    this.activityChart?.destroy();
   }
 
   // ─── Data Loading ───────────────────────────────────────────────────────────
@@ -155,10 +212,13 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.error = null;
 
     // Charger selon la branche sélectionnée pour aligner avec SonarCloud (Issues/mesures par branche)
-    this.sonarService.getResultsForBranch(this.currentBranch).subscribe({
+    this.sonarService.getResultsForBranch(this.currentBranch, this.serviceId || undefined).subscribe({
       next: (res) => {
         try {
           this.metrics = res.metrics || {};
+          this.softwareQualityDimensions = res.software_quality_dimensions
+            || res.metrics?.software_quality_dimensions
+            || [];
 
           const rawIssues = (res.issues || []) as any[];
           this.allIssues = rawIssues;
@@ -185,6 +245,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
           this.qualityGate = res.quality_gate || null;
           this.qualityGateConditions = this.qualityGate?.conditions || [];
+          this.syncRatingsFromQualityGate();
+          this.syncRatingsFromSoftwareQualityDimensions();
+          this.syncRatingsFromOpenIssues();
 
           this.sonarHostUrl = res.sonar_host_url || null;
           this.sonarProjectKey = res.sonar_project_key || null;
@@ -203,6 +266,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
           this.applyHotspotStatusFilter();
           this.selectFirstHotspotIfNeeded();
           this.selectFirstDuplicationIfNeeded();
+          this.loadActivityHistory();
         } catch (e) {
           // eslint-disable-next-line no-console
           console.error('[Sonar] Erreur traitement réponse', e);
@@ -269,6 +333,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     if (tab === 'overview') {
       this.initDonutChart();
       this.initSeverityBarChart();
+      if (this.activityAnalyses?.length) {
+        setTimeout(() => this.initActivityChart(), 80);
+      }
     }
     if (tab === 'quality') {
       this.initCoverageBarChart();
@@ -288,7 +355,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.donutChart = new Chart(this.donutCanvas.nativeElement, {
       type: 'doughnut',
       data: {
-        labels: ['Bugs', 'Vulnerabilities', 'Code Smells'],
+        labels: ['Bugs', 'Vulnérabilités', 'Code smells'],
         datasets: [{
           data: [bugsCount, vulnCount, smellCount],
           backgroundColor: ['#f87171', '#c4b5fd', '#1b3661'],
@@ -323,14 +390,14 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
         labels,
         datasets: [
           {
-            label: 'Covered',
+            label: 'Couvert',
             data: covered,
             backgroundColor: '#16a34a',
             borderRadius: 4,
             stack: 'stack'
           },
           {
-            label: 'Uncovered',
+            label: 'Non couvert',
             data: uncovered,
             backgroundColor: 'rgba(185,28,28,0.15)',
             borderRadius: 4,
@@ -376,7 +443,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
       data: {
         labels,
         datasets: [{
-          label: 'Issues',
+          label: 'Problèmes',
           data,
           backgroundColor: colors,
           borderRadius: 4,
@@ -428,18 +495,207 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     return 'qg-unknown';
   }
 
-  getCoveragePercent(): number {
-    const v = this.metrics?.coverage;
-    if (v === undefined || v === null) return 0;
-    const n = parseFloat(String(v));
-    return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
+  getCoveragePercent(): number | null {
+    if (!this.isCoverageComputed()) return null;
+    const n = parseFloat(String(this.metrics.coverage));
+    return isNaN(n) ? null : Math.min(100, Math.max(0, n));
   }
 
-  getDuplicationPercent(): number {
+  getDuplicationPercent(): number | null {
+    if (!this.isDuplicationComputed()) return null;
+    const n = parseFloat(String(this.metrics.duplicated_lines_density));
+    return isNaN(n) ? null : Math.min(100, Math.max(0, n));
+  }
+
+  isCoverageComputed(): boolean {
+    const v = this.metrics?.coverage;
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  }
+
+  isDuplicationComputed(): boolean {
     const v = this.metrics?.duplicated_lines_density;
-    if (v === undefined || v === null) return 0;
-    const n = parseFloat(String(v));
-    return isNaN(n) ? 0 : Math.min(100, Math.max(0, n));
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  }
+
+  formatCoverageDisplay(): string {
+    const p = this.getCoveragePercent();
+    return p === null ? 'Non calculé' : `${p.toFixed(1)}%`;
+  }
+
+  formatDuplicationDisplay(): string {
+    const p = this.getDuplicationPercent();
+    return p === null ? 'Non calculé' : `${p.toFixed(1)}%`;
+  }
+
+  getDimensionRatingLetter(metricKey: 'reliability_rating' | 'security_rating' | 'maintainability_rating'): string {
+    return this.resolveDimensionRating(metricKey).letter;
+  }
+
+  getDimensionRatingClass(metricKey: 'reliability_rating' | 'security_rating' | 'maintainability_rating'): string {
+    const letter = this.resolveDimensionRating(metricKey).letter;
+    if (letter === '—') return 'rating-unknown';
+    const map: Record<string, string> = { A: 'rating-a', B: 'rating-b', C: 'rating-c', D: 'rating-d', E: 'rating-e' };
+    return map[letter] || 'rating-unknown';
+  }
+
+  private resolveDimensionRating(metricKey: 'reliability_rating' | 'security_rating' | 'maintainability_rating'): { letter: string } {
+    const m = this.metrics || {};
+    const sqKeyMap: Record<string, string> = {
+      reliability_rating: 'software_quality_reliability_rating',
+      security_rating: 'software_quality_security_rating',
+      maintainability_rating: 'software_quality_maintainability_rating'
+    };
+    const sqKey = sqKeyMap[metricKey];
+    const letterCandidates = [
+      m[`${metricKey}_letter`],
+      sqKey ? m[`${sqKey}_letter`] : null,
+      metricKey === 'maintainability_rating' ? m.sqale_rating_letter : null
+    ];
+    for (const c of letterCandidates) {
+      if (c) {
+        const s = String(c).trim().toUpperCase();
+        if (s.length === 1 && s >= 'A' && s <= 'E') return { letter: s };
+      }
+    }
+
+    const rawCandidates = [
+      m[metricKey],
+      sqKey ? m[sqKey] : null,
+      metricKey === 'maintainability_rating' ? (m.maintainability_rating ?? m.sqale_rating) : null
+    ];
+    for (const raw of rawCandidates) {
+      const label = this.getRatingLabel(raw);
+      if (label !== '—') return { letter: label };
+    }
+
+    const dimName = metricKey === 'reliability_rating' ? 'RELIABILITY'
+      : metricKey === 'security_rating' ? 'SECURITY' : 'MAINTAINABILITY';
+    const dim = (this.softwareQualityDimensions || []).find(
+      (d: any) => String(d?.dimension || '').toUpperCase() === dimName
+    );
+    if (dim?.rating) {
+      const label = this.getRatingLabel(dim.rating);
+      if (label !== '—') return { letter: label };
+    }
+
+    return { letter: '—' };
+  }
+
+  /** Complète les notes A–E depuis les conditions Quality Gate si measures est vide. */
+  private syncRatingsFromQualityGate(): void {
+    if (!this.metrics || !this.qualityGateConditions?.length) return;
+    const map: Record<string, string[]> = {
+      security_rating: ['security_rating', 'new_security_rating', 'software_quality_security_rating'],
+      reliability_rating: ['reliability_rating', 'new_reliability_rating', 'software_quality_reliability_rating'],
+      maintainability_rating: ['sqale_rating', 'maintainability_rating', 'new_maintainability_rating', 'software_quality_maintainability_rating']
+    };
+    for (const cond of this.qualityGateConditions) {
+      const mk = String(cond?.metricKey || cond?.metric || '').toLowerCase();
+      const val = cond?.actualValue ?? cond?.actual;
+      if (!mk || val === undefined || val === null || String(val).trim() === '') continue;
+      for (const [target, keys] of Object.entries(map)) {
+        if (!keys.includes(mk)) continue;
+        if (!this.metrics[target] && !this.metrics[`${target}_letter`]) {
+          this.metrics[target] = val;
+          const letter = this.getRatingLabel(val);
+          if (letter !== '—') this.metrics[`${target}_letter`] = letter;
+        }
+      }
+    }
+  }
+
+  /** Complète les notes depuis software_quality_dimensions (Sonar 10+). */
+  private syncRatingsFromSoftwareQualityDimensions(): void {
+    if (!this.metrics) return;
+    const dimToMetric: Record<string, string> = {
+      SECURITY: 'security_rating',
+      RELIABILITY: 'reliability_rating',
+      MAINTAINABILITY: 'maintainability_rating'
+    };
+    for (const dim of this.softwareQualityDimensions || []) {
+      const name = String(dim?.dimension || '').toUpperCase();
+      const target = dimToMetric[name];
+      if (!target || !dim?.rating) continue;
+      const letter = this.getRatingLabel(dim.rating);
+      if (letter === '—') continue;
+      if (!this.metrics[`${target}_letter`]) {
+        this.metrics[`${target}_letter`] = letter;
+      }
+      if (!this.metrics[target]) {
+        this.metrics[target] = dim.ratingValue ?? dim.rating;
+      }
+    }
+  }
+
+  /** Dérive A–E depuis les issues ouvertes si les métriques Sonar sont absentes. */
+  private syncRatingsFromOpenIssues(): void {
+    if (!this.metrics) return;
+    const open = (this.issues || []).filter(i =>
+      ['OPEN', 'CONFIRMED', 'REOPENED'].includes(String(i?.status || 'OPEN').toUpperCase())
+    );
+    const apply = (metricKey: string, type: string, emptyRating: number) => {
+      if (this.metrics[`${metricKey}_letter`] || this.getRatingLabel(this.metrics[metricKey]) !== '—') return;
+      const rating = this.worstSeverityRatingForType(open, type, emptyRating);
+      if (rating < 1 || rating > 5) return;
+      this.metrics[metricKey] = rating;
+      this.metrics[`${metricKey}_letter`] = this.getRatingLabel(rating);
+    };
+    apply('security_rating', 'VULNERABILITY', 1);
+    apply('reliability_rating', 'BUG', 1);
+    apply('maintainability_rating', 'CODE_SMELL', 1);
+    if (!this.metrics.sqale_rating_letter && this.metrics.maintainability_rating_letter) {
+      this.metrics.sqale_rating = this.metrics.maintainability_rating;
+      this.metrics.sqale_rating_letter = this.metrics.maintainability_rating_letter;
+    }
+  }
+
+  private worstSeverityRatingForType(issues: any[], type: string, whenEmpty: number): number {
+    const ofType = issues.filter(i => String(i?.type || '').toUpperCase() === type);
+    if (!ofType.length) return whenEmpty;
+    const map: Record<string, number> = { BLOCKER: 5, CRITICAL: 4, MAJOR: 3, MINOR: 2, INFO: 2 };
+    return ofType.reduce((worst, i) => {
+      const r = map[String(i?.severity || '').toUpperCase()] ?? 2;
+      return Math.max(worst, r);
+    }, whenEmpty);
+  }
+
+  translateIssueMessage(message: string | undefined | null): string {
+    return translateSonarMessage(message);
+  }
+
+  getSeverityLabel(severity: string | undefined | null): string {
+    return translateSonarSeverity(severity);
+  }
+
+  getIssueTypeLabel(type: string | undefined | null): string {
+    return translateSonarIssueType(type);
+  }
+
+  translateSecurityCategory(key: string | undefined | null): string {
+    return translateSonarSecurityCategory(key);
+  }
+
+  translateTag(tag: string | undefined | null): string {
+    return translateSonarTag(tag);
+  }
+
+  translateVulnerabilityProbability(prob: string | undefined | null): string {
+    return translateSonarVulnerabilityProbability(prob);
+  }
+
+  translateQgStatus(status: string | undefined | null): string {
+    return translateSonarQgStatus(status);
+  }
+
+  translateCodeAttribute(attr: string | undefined | null): string {
+    return translateSonarCodeAttribute(attr);
+  }
+
+  closeIssueDetail(): void {
+    this.issueViewMode = 'list';
+    this.selectedIssue = null;
+    this.selectedIssueDetails = null;
+    this.issueDetailLoading = false;
   }
 
   getSeverityCount(sev: string): number {
@@ -452,19 +708,26 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getRatingLabel(value: string | number | undefined): string {
-    if (value === undefined || value === null) return '—';
+    if (value === undefined || value === null || String(value).trim() === '') return '—';
+    const s = String(value).trim().toUpperCase();
+    if (s.length === 1 && s >= 'A' && s <= 'E') return s;
     const n = typeof value === 'string' ? parseInt(value, 10) : value;
-    if (isNaN(n) || n < 1 || n > 5) return String(value);
-    return ['A', 'B', 'C', 'D', 'E'][n - 1];
+    if (isNaN(n as number) || (n as number) < 1 || (n as number) > 5) return String(value);
+    return ['A', 'B', 'C', 'D', 'E'][(n as number) - 1];
   }
 
   getRatingClass(value: string | number | undefined): string {
-    if (value === undefined || value === null) return 'rating-unknown';
+    if (value === undefined || value === null || String(value).trim() === '') return 'rating-unknown';
+    const s = String(value).trim().toUpperCase();
+    if (s.length === 1 && s >= 'A' && s <= 'E') {
+      return `rating-${s.toLowerCase()}`;
+    }
     const n = typeof value === 'string' ? parseInt(value, 10) : value;
-    return ['', 'rating-a', 'rating-b', 'rating-c', 'rating-d', 'rating-e'][n] || 'rating-unknown';
+    return ['', 'rating-a', 'rating-b', 'rating-c', 'rating-d', 'rating-e'][n as number] || 'rating-unknown';
   }
 
-  getCoverageColor(coverage: number): string {
+  getCoverageColor(coverage: number | null): string {
+    if (coverage === null) return 'var(--c-muted)';
     if (coverage >= 80) return 'var(--c-ok)';
     if (coverage >= 50) return 'var(--c-warn)';
     return 'var(--c-err)';
@@ -599,18 +862,14 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     if (s === 'OPEN_GROUP' || s === 'ALL') {
       return (this.allIssues || []).filter(i => defaultStatuses.has(String(i?.status || 'OPEN').toUpperCase()));
     }
-    if (s === 'FIXED') {
-      return (this.allIssues || []).filter(i => {
-        const st = String(i?.status || '').toUpperCase();
-        const resolution = String(i?.resolution || '').toUpperCase();
-        return (st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'));
-      });
-    }
     if (s === 'FALSE_POSITIVE') {
-      return (this.allIssues || []).filter(i => String(i?.resolution || '').toUpperCase().includes('FALSE'));
+      return (this.allIssues || []).filter(i => this.isFalsePositiveIssue(i));
     }
     if (s === 'ACCEPTED') {
-      return (this.allIssues || []).filter(i => String(i?.resolution || '').toUpperCase().includes('ACCEPT'));
+      return (this.allIssues || []).filter(i => this.isAcceptedIssue(i));
+    }
+    if (s === 'FIXED') {
+      return (this.allIssues || []).filter(i => this.isFixedIssue(i));
     }
     // OPEN / CONFIRMED / REOPENED / RESOLVED / CLOSED
     return (this.allIssues || []).filter(i => String(i?.status || '').toUpperCase() === s);
@@ -713,11 +972,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.statusCounts = this.countBy(allNoStatus, (i) => String(i?.status || 'OPEN').toUpperCase());
     const resCounts: Record<string, number> = { FIXED: 0, FALSE_POSITIVE: 0, ACCEPTED: 0 };
     for (const i of allNoStatus) {
-      const st = String(i?.status || '').toUpperCase();
-      const resolution = String(i?.resolution || '').toUpperCase();
-      if ((st === 'RESOLVED' || st === 'CLOSED') && (!resolution || resolution.includes('FIXED'))) resCounts['FIXED']++;
-      if (resolution.includes('FALSE')) resCounts['FALSE_POSITIVE']++;
-      if (resolution.includes('ACCEPT')) resCounts['ACCEPTED']++;
+      if (this.isFixedIssue(i)) resCounts['FIXED']++;
+      if (this.isFalsePositiveIssue(i)) resCounts['FALSE_POSITIVE']++;
+      if (this.isAcceptedIssue(i)) resCounts['ACCEPTED']++;
     }
     this.statusResolutionCounts = resCounts;
 
@@ -795,20 +1052,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private formatImpactSeverityForUi(sev: string): string {
-    const u = String(sev || '').toUpperCase();
-    const map: Record<string, string> = {
-      BLOCKER: 'Blocker',
-      CRITICAL: 'High',
-      MAJOR: 'Medium',
-      MINOR: 'Low',
-      INFO: 'Info',
-      HIGH: 'High',
-      MEDIUM: 'Medium',
-      LOW: 'Low'
-    };
-    if (map[u]) return map[u];
-    if (!sev) return '—';
-    return sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
+    return translateSonarImpactSeverity(sev);
   }
 
   private buildIssueImpactsUi(issue: any): { quality: string; impactSev: string }[] {
@@ -819,12 +1063,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     for (const imp of impacts.slice(0, 2)) {
       const qRaw = String(imp?.softwareQuality || imp?.software_quality || '').toUpperCase();
       if (qRaw !== 'SECURITY' && qRaw !== 'RELIABILITY' && qRaw !== 'MAINTAINABILITY') continue;
-      const q =
-        qRaw === 'SECURITY'
-          ? 'Security'
-          : qRaw === 'RELIABILITY'
-            ? 'Reliability'
-            : 'Maintainability';
+      const q = this.getSoftwareQualityLabel(qRaw as 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY');
       const impSev = imp?.severity ?? imp?.impactSeverity ?? issue?.severity;
       out.push({
         quality: q,
@@ -848,9 +1087,10 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const row = { ...issue };
     const tags: string[] = Array.isArray(issue?.tags) ? issue.tags.map((x: any) => String(x)) : [];
     (row as any)._displayPath = this.getDisplayPath(issue?.component);
+    (row as any)._translatedMessage = this.translateIssueMessage(issue?.message);
     (row as any)._impactsUi = this.buildIssueImpactsUi(issue);
-    (row as any)._codeAttr = this.getCodeAttributeKey(issue) || '';
-    (row as any)._tags = tags.slice(0, 3);
+    (row as any)._codeAttr = this.translateCodeAttribute(this.getCodeAttributeKey(issue) || '');
+    (row as any)._tags = tags.slice(0, 3).map(t => this.translateTag(t));
     return row;
   }
 
@@ -1035,9 +1275,9 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getSoftwareQualityLabel(key: 'SECURITY' | 'RELIABILITY' | 'MAINTAINABILITY'): string {
-    if (key === 'SECURITY') return 'Security';
-    if (key === 'RELIABILITY') return 'Reliability';
-    return 'Maintainability';
+    if (key === 'SECURITY') return 'Sécurité';
+    if (key === 'RELIABILITY') return 'Fiabilité';
+    return 'Maintenabilité';
   }
 
   private guessLanguageFromComponent(component: string): string {
@@ -1060,13 +1300,43 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   getIssueStatusLabel(status: string): string {
     const s = (status || '').toUpperCase();
     const map: Record<string, string> = {
-      OPEN: 'Ouvert', CONFIRMED: 'Confirmé', RESOLVED: 'Résolu', REOPENED: 'Rouvert', CLOSED: 'Fermé'
+      OPEN: 'Ouvert', CONFIRMED: 'Confirmé', RESOLVED: 'Résolu', REOPENED: 'Rouvert', CLOSED: 'Fermé', ACCEPTED: 'Accepté'
     };
     return map[s] || status || '–';
   }
 
+  private getIssueResolution(issue: any): string {
+    return String(issue?.resolution || '').toUpperCase().replace(/-/g, '_');
+  }
+
+  isFalsePositiveIssue(issue: any): boolean {
+    return this.getIssueResolution(issue).includes('FALSE');
+  }
+
+  isAcceptedIssue(issue: any): boolean {
+    const r = this.getIssueResolution(issue);
+    if (r.includes('ACCEPT')) return true;
+    if (r.includes('WONTFIX') || r.includes('WONT_FIX')) return true;
+    return String(issue?.status || '').toUpperCase() === 'ACCEPTED';
+  }
+
+  isFixedIssue(issue: any): boolean {
+    if (this.isFalsePositiveIssue(issue) || this.isAcceptedIssue(issue)) return false;
+    const st = String(issue?.status || '').toUpperCase();
+    const r = this.getIssueResolution(issue);
+    return (st === 'RESOLVED' || st === 'CLOSED') && (!r || r.includes('FIXED'));
+  }
+
+  getIssueDisplayStatus(issue: any): string {
+    if (!issue) return '–';
+    if (this.isFalsePositiveIssue(issue)) return 'Faux positif';
+    if (this.isAcceptedIssue(issue)) return 'Accepté';
+    if (this.isFixedIssue(issue)) return 'Corrigé';
+    return this.getIssueStatusLabel(issue.status);
+  }
+
   getIssueAssigneeLabel(assignee: string | undefined | null): string {
-    if (!assignee) return 'Not assigned';
+    if (!assignee) return 'Non assigné';
     if (this.issueAssigneeMatchesCurrentUser(assignee)) {
       const user = this.userService.getUser();
       return user?.username ? `Moi (${user.username})` : 'Moi';
@@ -1095,7 +1365,21 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.issueUpdatingKey = key;
     delete this.issueUpdateError[key];
     this.sonarService.issueTransition(key, transition).subscribe({
-      next: () => { this.issueUpdatingKey = null; this.load(); },
+      next: () => {
+        this.issueUpdatingKey = null;
+        const filterByTransition: Record<string, string> = {
+          confirm: 'CONFIRMED',
+          unconfirm: 'OPEN',
+          falsepositive: 'FALSE_POSITIVE',
+          accept: 'ACCEPTED',
+          wontfix: 'ACCEPTED',
+          resolve: 'FIXED',
+          reopen: 'REOPENED'
+        };
+        const nextFilter = filterByTransition[transition.toLowerCase()];
+        if (nextFilter) this.statusFilter = nextFilter;
+        this.load();
+      },
       error: (err) => {
         this.issueUpdatingKey = null;
         this.issueUpdateError[key] = err?.error?.message || 'Transition refusée par SonarCloud.';
@@ -1184,11 +1468,16 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!h?.key) return;
     this.selectedHotspot = h;
     this.selectedHotspotDetails = null;
+    this.hotspotDetailTab = 'where';
     this.sonarService.getHotspotDetails(h.key).subscribe({
       next: (res) => {
-        const normalizedRes: any = { ...res };
-        if (res.hotspot?.rule && !res.rule) normalizedRes.rule = res.hotspot.rule;
-        this.selectedHotspotDetails = normalizedRes;
+        this.selectedHotspotDetails = {
+          ...res,
+          rule: res.rule ?? res.hotspot?.rule ?? null,
+        };
+        setTimeout(() => {
+          document.getElementById('hotspot-highlight-line')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 80);
       },
       error: () => { this.selectedHotspotDetails = { error: true }; }
     });
@@ -1210,43 +1499,79 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     return '';
   }
 
+  /** Contenu de règle déjà traduit côté backend — pas de retraduction frontend. */
+  private presentRuleHtml(html: string | undefined | null): string {
+    return this.sanitizeRuleHtml(html || '');
+  }
+
   getRuleRiskContent(): string {
     const rule: any = this.selectedHotspotDetails?.rule;
     if (!rule) return '';
-    if (rule.riskDescription?.trim()) return this.sanitizeRuleHtml(rule.riskDescription);
-    if (rule.vulnerabilityDescription?.trim()) return this.sanitizeRuleHtml(rule.vulnerabilityDescription);
-    const sections = rule.descriptionSections as any[] | undefined;
-    if (sections?.length) {
-      for (const key of ['risk', 'vulnerability', 'risk_description', 'what_is_the_risk']) {
-        const s = sections.find(s => (s.key || '').toLowerCase().includes(key));
-        if (s?.htmlContent) return this.sanitizeRuleHtml(s.htmlContent);
-        if (s?.content) return this.sanitizeRuleHtml(s.content);
-      }
-    }
-    return this.sanitizeRuleHtml(rule.htmlDesc || rule.mdDesc || '');
+    return this.presentRuleHtml(this.getRuleWhySectionsContent(rule));
   }
 
   getRuleFixContent(): string {
     const rule: any = this.selectedHotspotDetails?.rule;
     if (!rule) return '';
-    if (rule.fixRecommendations?.trim()) return this.sanitizeRuleHtml(rule.fixRecommendations);
-    const sections = rule.descriptionSections as any[] | undefined;
-    if (sections?.length) {
-      for (const key of ['fix', 'how_to_fix', 'remediation', 'fix_recommendation']) {
-        const s = sections.find(s => (s.key || '').toLowerCase().includes(key));
-        if (s?.htmlContent) return this.sanitizeRuleHtml(s.htmlContent);
-        if (s?.content) return this.sanitizeRuleHtml(s.content);
-      }
+    const raw = this.getRuleFixSectionsContent(rule);
+    if (raw) return this.presentRuleHtml(raw);
+    if (rule.fixRecommendations?.trim()) {
+      return this.presentRuleHtml(rule.fixRecommendations);
     }
-    return this.sanitizeRuleHtml(rule.htmlDesc || rule.mdDesc || '');
+    return '';
+  }
+
+  hasRuleMoreInfo(): boolean {
+    return this.hasRuleMoreInfoData(this.selectedHotspotDetails?.rule);
+  }
+
+  getRuleMoreInfoContent(): string {
+    const rule: any = this.selectedHotspotDetails?.rule;
+    if (!rule) return '';
+    return this.buildRuleMoreInfoContent(rule);
   }
 
   getRuleAccessContent(): string {
     const rule: any = this.selectedHotspotDetails?.rule;
-    if (!rule) return 'Aucune description du risque disponible.';
-    if (rule.vulnerabilityDescription?.trim()) return this.sanitizeRuleHtml(rule.vulnerabilityDescription);
-    if (rule.riskDescription?.trim()) return this.sanitizeRuleHtml(rule.riskDescription);
-    return 'Aucune description du risque disponible.';
+    if (!rule) return 'Aucune description d\'accès disponible.';
+    const raw = this.getRuleAccessSectionsContent(rule);
+    if (raw) return this.presentRuleHtml(raw);
+    return 'Aucune description d\'accès disponible.';
+  }
+
+  getHotspotHighlightLineNumber(lineIndex: number): number {
+    const nums = this.selectedHotspotDetails?.sourceLineNumbers as number[] | undefined;
+    if (nums?.length && nums[lineIndex] != null) return nums[lineIndex];
+    return (this.selectedHotspotDetails?.sourceLineFrom || 1) + lineIndex;
+  }
+
+  isHotspotHighlightLine(lineIndex: number): boolean {
+    const highlight = this.selectedHotspotDetails?.highlightLine;
+    if (!highlight) return false;
+    return this.getHotspotHighlightLineNumber(lineIndex) === highlight;
+  }
+
+  getHotspotInlineMessage(): string {
+    const h = this.selectedHotspotDetails?.hotspot || this.selectedHotspot;
+    return String(h?.message || '').trim();
+  }
+
+  getHotspotLineParts(lineIndex: number, lineText: string): { before: string; highlight: string; after: string } {
+    const text = lineText ?? '';
+    if (!this.isHotspotHighlightLine(lineIndex)) {
+      return { before: text, highlight: '', after: '' };
+    }
+    const h = this.selectedHotspotDetails?.hotspot || this.selectedHotspot;
+    const tr = h?.textRange;
+    const lineNo = this.getHotspotHighlightLineNumber(lineIndex);
+    if (tr && Number(tr.startLine) === lineNo) {
+      const start = Math.max(0, Number(tr.startOffset) || 0);
+      const end = Math.min(text.length, Number(tr.endOffset) || text.length);
+      if (end > start) {
+        return { before: text.slice(0, start), highlight: text.slice(start, end), after: text.slice(end) };
+      }
+    }
+    return { before: '', highlight: text, after: '' };
   }
 
   /** Empêche l'exécution de <script> dans les contenus de règles tout en les affichant comme texte. */
@@ -1255,6 +1580,166 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     return String(html)
       .replace(/<script/gi, '&lt;script')
       .replace(/<\/script>/gi, '&lt;/script&gt;');
+  }
+
+  /** Sections SonarCloud (clés exactes : root_cause, how_to_fix, resources, …). */
+  private getRuleSectionContent(rule: any, ...sectionKeys: string[]): string {
+    const sections = rule?.descriptionSections as any[] | undefined;
+    if (!sections?.length) return '';
+    for (const want of sectionKeys) {
+      const w = want.toLowerCase();
+      const match = sections.find((sec: any) => String(sec?.key || '').toLowerCase() === w);
+      if (match?.htmlContent?.trim()) return this.sanitizeRuleHtml(match.htmlContent);
+      if (match?.content?.trim()) return this.sanitizeRuleHtml(match.content);
+    }
+    return '';
+  }
+
+  /** Concatène toutes les sections correspondantes (ex. plusieurs blocs resources). */
+  private getRuleSectionsContent(rule: any, ...sectionKeys: string[]): string {
+    const sections = rule?.descriptionSections as any[] | undefined;
+    if (!sections?.length) return '';
+    const want = new Set(sectionKeys.map(k => k.toLowerCase()));
+    const chunks: string[] = [];
+    for (const sec of sections) {
+      const key = String(sec?.key || '').toLowerCase();
+      if (!want.has(key)) continue;
+      const html = sec?.htmlContent?.trim() || sec?.content?.trim();
+      if (html) chunks.push(this.sanitizeRuleHtml(html));
+    }
+    return chunks.join('<hr class="rule-section-sep" />');
+  }
+
+  private getRuleWhySectionsContent(rule: any): string {
+    const fromSections = this.getRuleSectionsContent(rule, 'root_cause', 'introduction', 'assess_the_problem');
+    if (fromSections) return fromSections;
+    const fromHtml = this.extractRuleHtmlDescSection(rule, 'why');
+    if (fromHtml) return fromHtml;
+    if (rule.riskDescription?.trim()) return this.sanitizeRuleHtml(rule.riskDescription);
+    if (rule.vulnerabilityDescription?.trim()) return this.sanitizeRuleHtml(rule.vulnerabilityDescription);
+    if (rule.htmlDesc?.trim() && !this.isShortRuleText(rule, rule.htmlDesc)) {
+      return this.sanitizeRuleHtml(rule.htmlDesc);
+    }
+    return this.sanitizeRuleHtml(rule.mdDesc || '');
+  }
+
+  private getRuleFixSectionsContent(rule: any): string {
+    const fromSection = this.getRuleSectionsContent(rule, 'how_to_fix');
+    if (fromSection) return fromSection;
+    return this.extractRuleHtmlDescSection(rule, 'fix');
+  }
+
+  private getRuleAccessSectionsContent(rule: any): string {
+    const parts: string[] = [];
+    const assess = this.getRuleSectionsContent(rule, 'assess_the_problem');
+    if (assess) parts.push(assess);
+    if (rule.vulnerabilityDescription?.trim()) {
+      parts.push(this.sanitizeRuleHtml(rule.vulnerabilityDescription));
+    }
+    if (rule.riskDescription?.trim()) {
+      parts.push(this.sanitizeRuleHtml(rule.riskDescription));
+    }
+    const riskBlock = this.extractRuleHtmlDescSection(rule, 'risk');
+    if (riskBlock) parts.push(riskBlock);
+    const askBlock = this.extractRuleHtmlDescSection(rule, 'ask');
+    if (askBlock) parts.push(askBlock);
+    return parts.join('<hr class="rule-section-sep" />');
+  }
+
+  /** Extrait une section du htmlDesc Sonar (format legacy). */
+  private extractRuleHtmlDescSection(rule: any, kind: 'why' | 'fix' | 'more' | 'risk' | 'ask'): string {
+    const html = String(rule?.htmlDesc || rule?.mdDesc || '');
+    if (!html.trim()) return '';
+    const patterns: Record<string, RegExp[]> = {
+      why: [
+        /<h2>\s*Why is this an issue\??\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*Root [Cc]ause\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      ],
+      risk: [
+        /<h2>\s*What is the risk\??\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*What's the risk\??\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      ],
+      ask: [
+        /<h2>\s*Ask [Yy]ourself [Ww]hether\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*Ask [Yy]ourself\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      ],
+      fix: [
+        /<h2>\s*How can I fix it\??\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*Recommended Secure Coding Practices\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*How to fix\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      ],
+      more: [
+        /<h2>\s*Resources\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*More info\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+        /<h2>\s*See\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      ],
+    };
+    for (const re of patterns[kind] || []) {
+      const m = html.match(re);
+      if (m?.[1]?.trim()) return this.sanitizeRuleHtml(m[1].trim());
+    }
+    return '';
+  }
+
+  private buildRuleMoreInfoContent(rule: any): string {
+    const parts: string[] = [];
+    const resources = this.getRuleSectionsContent(rule, 'resources');
+    if (resources) parts.push(this.presentRuleHtml(resources));
+
+    const seeSection = this.extractRuleDocumentationSection(rule);
+    if (seeSection) parts.push(seeSection);
+
+    if (rule?.htmlNote?.trim()) {
+      parts.push(this.sanitizeRuleHtml(rule.htmlNote));
+    }
+
+    const principles = rule?.educationPrinciples;
+    if (Array.isArray(principles) && principles.length) {
+      const items = principles
+        .map((p: any) => `<li>${this.sanitizeRuleHtml(String(p))}</li>`)
+        .join('');
+      parts.push(`<h4>Principes</h4><ul class="rule-principles">${items}</ul>`);
+    }
+
+    return parts.join('');
+  }
+
+  /** Extrait la section Documentation / See / Resources du htmlDesc Sonar. */
+  private extractRuleDocumentationSection(rule: any): string {
+    const html = String(rule?.htmlDesc || rule?.mdDesc || '');
+    if (!html.trim()) return '';
+    const patterns = [
+      /<h2>\s*Resources\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      /<h2>\s*More info\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      /<h2>\s*See\s*<\/h2>([\s\S]*?)(?=<h2>|$)/i,
+      /<h3>\s*Resources\s*<\/h3>([\s\S]*?)(?=<h[23]>|$)/i,
+    ];
+    for (const re of patterns) {
+      const m = html.match(re);
+      if (m?.[1]?.trim()) {
+        return this.presentRuleHtml(`<div class="rule-resources-block">${m[1].trim()}</div>`);
+      }
+    }
+    return '';
+  }
+
+  private hasRuleMoreInfoData(rule: any): boolean {
+    if (!rule) return false;
+    if (this.getRuleSectionsContent(rule, 'resources')) return true;
+    if (this.extractRuleDocumentationSection(rule)) return true;
+    if (rule.htmlNote?.trim()) return true;
+    return Array.isArray(rule.educationPrinciples) && rule.educationPrinciples.length > 0;
+  }
+
+  private getSonarRuleDocumentationUrl(_rule: any): string | null {
+    return null;
+  }
+
+  private isShortRuleText(rule: any, text: string | undefined | null): boolean {
+    if (!text?.trim()) return true;
+    const t = text.trim();
+    const name = String(rule?.name || '').trim();
+    return t === name || t.length < 80;
   }
 
   // ─── Duplication ─────────────────────────────────────────────────────────────
@@ -1286,16 +1771,19 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
    * Libellés proches de l’UI SonarQube : les métriques *_rating sont des notes 1–5 (1=A … 5=E),
    * pas un nombre de bugs. « Fiabilité » seule prêtait à confusion avec le nombre d’issues.
    */
-  formatConditionMetric(metric: string | undefined): string {
+  formatConditionMetric(metric: string | undefined, cond?: any): string {
+    if (cond?.metricLabel) return cond.metricLabel;
     if (!metric) return '';
     const key = metric.toLowerCase();
-    if (key.includes('coverage')) return 'Coverage';
-    if (key.includes('security_hotspots_reviewed')) return 'Security Hotspots Reviewed';
+    if (key.includes('coverage')) return key.includes('new') ? 'Couverture sur le nouveau code' : 'Couverture';
+    if (key.includes('security_hotspots')) return 'Points sensibles revus';
     if (key.includes('reliability_rating')) return 'Note de fiabilité';
     if (key.includes('security_rating')) return 'Note de sécurité';
-    if (key.includes('maintainability_rating')) return 'Note de maintenabilité';
-    if (key.includes('sqale_rating')) return 'Note de maintenabilité';
-    if (key.includes('duplicated_lines')) return 'Duplication';
+    if (key.includes('maintainability_rating') || key.includes('sqale_rating')) return 'Note de maintenabilité';
+    if (key.includes('duplicated')) return 'Duplication';
+    if (key.includes('vulnerabilit')) return 'Vulnérabilités';
+    if (key.includes('bugs')) return 'Bugs';
+    if (key.includes('code_smell')) return 'Code smells';
     return metric;
   }
 
@@ -1320,6 +1808,10 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** Valeur affichée (lettre pour les notes, % pour couverture / hotspots / duplication). */
   formatQgPrimaryValue(cond: any): string {
+    const raw = cond?.actualValue;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return 'Non calculé';
+    }
     const m = (cond?.metric || cond?.metricKey || '').toLowerCase();
     if (this.isRatingMetric(m)) {
       return this.sonarRatingNumberToLetter(cond?.actualValue);
@@ -1360,13 +1852,13 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const t = this.formatQgThresholdFormatted(cond);
 
     if (m.includes('reliability_rating')) {
-      return `Note requise : ${t} (Reliability Rating côté SonarQube)`;
+      return `Note requise : ${t} (fiabilité)`;
     }
     if (m.includes('security_rating')) {
-      return `Note requise : ${t} (Security Rating)`;
+      return `Note requise : ${t} (sécurité)`;
     }
     if (m.includes('maintainability_rating') || m.includes('sqale_rating')) {
-      return `Note requise : ${t} (Maintainability Rating)`;
+      return `Note requise : ${t} (maintenabilité)`;
     }
     if (this.isCoverageCondition(cond) || m.includes('security_hotspots_reviewed')) {
       if (comp === 'LT') {
@@ -1441,7 +1933,263 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   onBranchChange(branch: string): void {
     if (!branch || branch === this.currentBranch) return;
     this.currentBranch = branch;
+    this.activityHistory = null;
     this.load();
+  }
+
+  // ─── Activity (historique) ───────────────────────────────────────────────────
+
+  loadActivityHistory(): void {
+    if (!this.currentBranch) return;
+    this.activityLoading = true;
+    this.sonarService.getActivityHistory(this.currentBranch, this.serviceId || undefined).subscribe({
+      next: (res) => {
+        this.activityHistory = res;
+        this.activityAnalyses = res?.analyses || [];
+        this.activityLoading = false;
+        if (this.activeTab === 'overview') {
+          setTimeout(() => this.initActivityChart(), 80);
+        }
+      },
+      error: () => {
+        this.activityHistory = null;
+        this.activityAnalyses = [];
+        this.activityLoading = false;
+      }
+    });
+  }
+
+  setActivityGraphType(type: 'issues' | 'coverage' | 'duplications'): void {
+    if (this.activityGraphType === type) return;
+    this.activityGraphType = type;
+    setTimeout(() => this.initActivityChart(), 0);
+  }
+
+  private parseMeasureHistory(metricName: string): { date: string; value: number }[] {
+    const measures = this.activityHistory?.measure_history as any[] | undefined;
+    if (!measures?.length) return [];
+    const entry = measures.find((m: any) => m.metric === metricName);
+    if (!entry?.history?.length) return [];
+    return entry.history.map((h: any) => ({
+      date: h.date,
+      value: parseFloat(h.value) || 0
+    }));
+  }
+
+  formatActivityDate(iso: string): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('fr-FR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  formatAnalysisDate(iso: string): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  getAnalysisIssueDelta(analysis: any, index: number): string {
+    if (index >= this.activityAnalyses.length - 1) return '+0 problème(s)';
+    const cur = this.parseMeasureHistory('violations');
+    if (cur.length < 2) return '+0 problème(s)';
+    const delta = cur[cur.length - 1 - index]?.value - cur[cur.length - 2 - index]?.value;
+    if (delta === 0) return '= +0 problème(s)';
+    return delta > 0 ? `+${delta} problème(s)` : `${delta} problème(s)`;
+  }
+
+  private initActivityChart(): void {
+    const canvas = this.activityCanvas?.nativeElement;
+    if (!canvas) return;
+    this.activityChart?.destroy();
+
+    let labels: string[] = [];
+    let datasets: Chart['data']['datasets'] = [];
+
+    if (this.activityGraphType === 'issues') {
+      const points = this.parseMeasureHistory('violations');
+      labels = points.map(p => this.formatActivityDate(p.date));
+      datasets = [{
+        label: 'Problèmes',
+        data: points.map(p => p.value),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.12)',
+        fill: true,
+        tension: 0.15,
+        pointRadius: 4
+      }];
+    } else if (this.activityGraphType === 'coverage') {
+      const points = this.parseMeasureHistory('coverage');
+      labels = points.map(p => this.formatActivityDate(p.date));
+      datasets = [{
+        label: 'Couverture',
+        data: points.map(p => p.value),
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,0.12)',
+        fill: true,
+        tension: 0.15,
+        pointRadius: 4
+      }];
+    } else {
+      const ncloc = this.parseMeasureHistory('ncloc');
+      const dupLines = this.parseMeasureHistory('duplicated_lines');
+      const len = Math.max(ncloc.length, dupLines.length);
+      labels = (ncloc.length ? ncloc : dupLines).map(p => this.formatActivityDate(p.date));
+      datasets = [
+        {
+          label: 'Lignes de code',
+          data: ncloc.map(p => p.value),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.08)',
+          fill: true,
+          tension: 0.15,
+          pointRadius: 3
+        },
+        {
+          label: 'Lignes dupliquées',
+          data: dupLines.map(p => p.value),
+          borderColor: '#94a3b8',
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.15,
+          pointRadius: 3
+        }
+      ];
+    }
+
+    if (!labels.length) return;
+
+    this.activityChart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              title: items => items[0]?.label || ''
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+
+  // ─── Issue detail ────────────────────────────────────────────────────────────
+
+  loadIssueDetails(issue: any): void {
+    if (!issue?.key) return;
+    if (!this.userService.getToken()) {
+      this.selectedIssue = issue;
+      this.issueViewMode = 'detail';
+      this.issueDetailLoading = false;
+      this.selectedIssueDetails = { error: true, unauthorized: true };
+      return;
+    }
+    this.selectedIssue = issue;
+    this.selectedIssueDetails = null;
+    this.issueViewMode = 'detail';
+    this.issueDetailTab = 'where';
+    this.issueDetailLoading = true;
+    this.sonarService.getIssueDetails(issue.key, this.currentBranch).subscribe({
+      next: (res) => {
+        this.selectedIssueDetails = res;
+        const detailIssue = res?.issue;
+        if (detailIssue) {
+          (this.selectedIssue as any)._impactsUi = this.buildIssueImpactsUi(detailIssue);
+        }
+        this.issueDetailLoading = false;
+        setTimeout(() => {
+          document.getElementById('issue-highlight-line')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 80);
+      },
+      error: (err) => {
+        const unauthorized = err?.status === 401;
+        this.selectedIssueDetails = { error: true, unauthorized };
+        this.issueDetailLoading = false;
+      }
+    });
+  }
+
+  getIssueComponentDisplay(): string {
+    const issue = this.selectedIssueDetails?.issue || this.selectedIssue;
+    if (!issue) return '';
+    const comp = issue.component || issue._displayPath || '';
+    if (!comp) return '';
+    const sep = comp.indexOf(':');
+    return sep >= 0 ? comp.substring(sep + 1) : comp;
+  }
+
+  getIssueRuleContent(): string {
+    const rule: any = this.selectedIssueDetails?.rule;
+    if (!rule) return '';
+    return this.presentRuleHtml(this.getRuleWhySectionsContent(rule));
+  }
+
+  getIssueFixContent(): string {
+    const rule: any = this.selectedIssueDetails?.rule;
+    if (!rule) return '';
+    const raw = this.getRuleFixSectionsContent(rule);
+    if (raw) return this.presentRuleHtml(raw);
+    if (rule.fixRecommendations?.trim()) {
+      return this.presentRuleHtml(rule.fixRecommendations);
+    }
+    return '';
+  }
+
+  hasIssueMoreInfo(): boolean {
+    return this.hasRuleMoreInfoData(this.selectedIssueDetails?.rule);
+  }
+
+  getIssueMoreInfoContent(): string {
+    const rule: any = this.selectedIssueDetails?.rule;
+    if (!rule) return '';
+    return this.buildRuleMoreInfoContent(rule);
+  }
+
+  getIssueHighlightLineNumber(lineIndex: number): number {
+    const nums = this.selectedIssueDetails?.sourceLineNumbers as number[] | undefined;
+    if (nums?.length && nums[lineIndex] != null) return nums[lineIndex];
+    return (this.selectedIssueDetails?.sourceLineFrom || 1) + lineIndex;
+  }
+
+  isIssueHighlightLine(lineIndex: number): boolean {
+    const highlight = this.selectedIssueDetails?.highlightLine;
+    if (!highlight) return false;
+    return this.getIssueHighlightLineNumber(lineIndex) === highlight;
+  }
+
+  getIssueInlineMessage(): string {
+    const issue = this.selectedIssueDetails?.issue || this.selectedIssue;
+    return String(issue?.message || '').trim();
+  }
+
+  getIssueLineParts(lineIndex: number, lineText: string): { before: string; highlight: string; after: string } {
+    const text = lineText ?? '';
+    if (!this.isIssueHighlightLine(lineIndex)) {
+      return { before: text, highlight: '', after: '' };
+    }
+    const issue = this.selectedIssueDetails?.issue || this.selectedIssue;
+    const tr = issue?.textRange;
+    const lineNo = this.getIssueHighlightLineNumber(lineIndex);
+    if (tr && Number(tr.startLine) === lineNo) {
+      const start = Math.max(0, Number(tr.startOffset) || 0);
+      const end = Math.min(text.length, Number(tr.endOffset) || text.length);
+      if (end > start) {
+        return { before: text.slice(0, start), highlight: text.slice(start, end), after: text.slice(end) };
+      }
+    }
+    return { before: '', highlight: text, after: '' };
   }
 
   // ─── Overview Cards ──────────────────────────────────────────────────────────

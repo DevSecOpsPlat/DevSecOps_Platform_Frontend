@@ -3,7 +3,7 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
-import { FindingAiRemediationResponse } from '../findings/findings.service';
+import { FindingAiRemediationResponse } from '../../models/finding/finding-ai-remediation.model';
 
 const BASE = environment.BASE_URL;
 
@@ -43,6 +43,10 @@ export interface DefectDojoFindingItem {
   active: boolean;
   verified: boolean;
   mitigated: boolean;
+  falsePositive?: boolean;
+  outOfScope?: boolean;
+  riskAccepted?: boolean;
+  underReview?: boolean;
   cwe?: string;
   cvssScore?: number;
   cve?: string;
@@ -50,6 +54,7 @@ export interface DefectDojoFindingItem {
   line?: number;
   componentName?: string;
   scanType?: string;
+  testId?: number;
   testTitle?: string;
   toolName?: string;
   mitigation?: string;
@@ -57,6 +62,18 @@ export interface DefectDojoFindingItem {
   mitigatedDate?: string;
   url?: string;
 }
+
+export type DefectDojoFindingStatusAction =
+  | 'VERIFY'
+  | 'UNVERIFY'
+  | 'FALSE_POSITIVE'
+  | 'OUT_OF_SCOPE'
+  | 'UNDER_REVIEW'
+  | 'REACTIVATE'
+  | 'CLOSE'
+  | 'REOPEN'
+  | 'ACCEPT_RISK'
+  | 'UNACCEPT_RISK';
 
 export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   falsePositive?: boolean;
@@ -70,6 +87,7 @@ export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   productName?: string;
   codeSnippet?: string;
   codeContextSource?: string;
+  codeContextHint?: string;
   applicationId?: string;
 }
 
@@ -139,7 +157,9 @@ export interface DefectDojoDashboardCharts {
 export interface DefectDojoDashboard2Response {
   configured: boolean;
   message?: string;
-  scope: 'global' | 'branch';
+  scope: 'global' | 'branch' | 'environment' | 'pipeline' | 'scan';
+  environmentTag?: string | null;
+  pipelineTag?: string | null;
   applicationName?: string;
   productName?: string;
   productId?: number;
@@ -238,10 +258,22 @@ export class DefectDojoService {
   }
 
   /** Dashboard sécurité v2 — vue globale si branch omis ou __all__. */
-  getDashboard2(applicationId: string, branch?: string): Observable<DefectDojoDashboard2Response> {
+  getDashboard2(
+    applicationId: string,
+    branch?: string,
+    options?: { pipelineId?: number | string; environmentId?: string; scanOnly?: boolean }
+  ): Observable<DefectDojoDashboard2Response> {
     let params = new HttpParams().set('applicationId', applicationId);
     const b = this.normalizeDashboardBranch(branch);
     if (b) params = params.set('branch', b);
+    if (options?.pipelineId != null && String(options.pipelineId).trim()) {
+      params = params.set('pipelineId', String(options.pipelineId).trim());
+    }
+    if (options?.environmentId?.trim()) {
+      params = params.set('environmentId', options.environmentId.trim());
+    }
+    const scanOnly = options?.scanOnly !== false;
+    params = params.set('scanOnly', String(scanOnly));
     return this.http.get<DefectDojoDashboard2Response>(BASE + 'api/defectdojo/dashboard2', {
       headers: this.authHeaders(),
       params
@@ -276,7 +308,10 @@ export class DefectDojoService {
     page = 0,
     size = 25,
     severity?: string,
-    tags?: string
+    tags?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    testId?: number
   ): Observable<DefectDojoFindingsPage> {
     let params = new HttpParams()
       .set('applicationId', applicationId)
@@ -286,7 +321,34 @@ export class DefectDojoService {
     if (branch?.trim()) params = params.set('branch', branch.trim());
     if (severity?.trim()) params = params.set('severity', severity.trim());
     if (tags?.trim()) params = params.set('tags', tags.trim());
+    if (dateFrom?.trim()) params = params.set('dateFrom', dateFrom.trim());
+    if (dateTo?.trim()) params = params.set('dateTo', dateTo.trim());
+    if (testId != null) params = params.set('testId', String(testId));
     return this.http.get<DefectDojoFindingsPage>(BASE + 'api/defectdojo/findings', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  updateFindingStatus(
+    applicationId: string,
+    findingId: number,
+    action: DefectDojoFindingStatusAction,
+    branch?: string
+  ): Observable<DefectDojoFindingDetail> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    return this.http.post<DefectDojoFindingDetail>(
+      BASE + `api/defectdojo/findings/${findingId}/status`,
+      { action },
+      { headers: this.authHeaders(), params }
+    );
+  }
+
+  deleteFinding(applicationId: string, findingId: number, branch?: string): Observable<void> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    return this.http.delete<void>(BASE + `api/defectdojo/findings/${findingId}`, {
       headers: this.authHeaders(),
       params
     });
@@ -299,7 +361,17 @@ export class DefectDojoService {
     });
   }
 
-  /** Tag DefectDojo pour filtrer par environnement. */
+  /** Tag DefectDojo pour filtrer par pipeline GitLab (exécution CI). */
+  pipelineTag(pipelineId: number | string): string {
+    return `pipeline-${pipelineId}`;
+  }
+
+  /** Tag DefectDojo des imports scan (exclut les pipelines deploy). */
+  scanKindTag(): string {
+    return 'scan';
+  }
+
+  /** Tag DefectDojo legacy environnement éphémère. */
   environmentTag(environmentId: string): string {
     return `env-${environmentId}`;
   }
@@ -317,7 +389,7 @@ export class DefectDojoService {
     applicationId: string,
     findingId: number,
     branch: string | undefined,
-    body?: { codeSnippet?: string }
+    body?: { codeSnippet?: string; deepAnalysis?: boolean }
   ): Observable<FindingAiRemediationResponse> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch?.trim()) params = params.set('branch', branch.trim());
@@ -325,6 +397,13 @@ export class DefectDojoService {
       BASE + `api/defectdojo/findings/${findingId}/ai-remediation`,
       body ?? {},
       { headers: this.authHeaders(), params }
+    );
+  }
+
+  pollAiRemediationJob(jobId: string): Observable<FindingAiRemediationResponse> {
+    return this.http.get<FindingAiRemediationResponse>(
+      BASE + `api/defectdojo/ai-remediation/jobs/${encodeURIComponent(jobId)}`,
+      { headers: this.authHeaders() }
     );
   }
 

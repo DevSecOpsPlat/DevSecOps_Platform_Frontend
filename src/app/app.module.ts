@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app/app.component';
@@ -28,18 +28,13 @@ import { ProjectSecurityComponent } from './project/security/project-security.co
 import { DeploySuccessModalComponent } from './project/deploy-success-modal/deploy-success-modal.component';
 import { AdminSidebarComponent } from './admin/admin-sidebar/admin-sidebar.component';
 import { UserSidebarComponent } from './project/user-sidebar/user-sidebar.component';
-import { ApplicationsActiveComponent } from './applications/applications-active/applications-active.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
-import { MyApplicationsComponent } from './applications/my-applications/my-applications.component';
-import { EnvironmentCreateComponent } from './project/environments/environment-create/environment-create.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
-import { VulnerabilitiesDashboardComponent } from './project/vulnerabilities-dashboard/vulnerabilities-dashboard.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
-import { VulnerabilityDetailsComponent } from './project/vulnerability-details/vulnerability-details.component';
 import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
@@ -48,6 +43,7 @@ import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.componen
 import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
 import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
 import { PasswordRequirementsComponent } from './shared/password/password-requirements.component';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 
 @NgModule({
   declarations: [
@@ -55,12 +51,10 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     NavbarComponent,
     HomeComponent,
     SignInComponent,
-    EnvironmentCreateComponent,
     ProfileComponent,
     AdminUsersComponent,
     AdminCreateUserComponent,
     AdminUserDetailComponent,
-    MyApplicationsComponent,
     PipelineDetailsComponent,
     PipelinesListComponent,
     AdminLayoutComponent,
@@ -76,7 +70,6 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     ProjectSecurityComponent,
     DeploySuccessModalComponent,
     UserSidebarComponent,
-    ApplicationsActiveComponent,
     EnvironmentDetailsComponent,
     TimeAgoPipe,
     RecentActivityComponent,
@@ -97,13 +90,13 @@ import { PasswordRequirementsComponent } from './shared/password/password-requir
     HttpClientModule,
     ReactiveFormsModule,
     FormsModule,
-    VulnerabilitiesDashboardComponent,
-    VulnerabilityDetailsComponent,
     SecurityDashboardComponent,
     ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent
   ],
-  providers: [],
+  providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

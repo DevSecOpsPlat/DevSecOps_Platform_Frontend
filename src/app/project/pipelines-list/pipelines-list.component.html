@@ -19,6 +19,26 @@
     </div>
   </header>
 
+  <div class="pipelines-filters" *ngIf="!loading || filtered.length > 0">
+    <label class="filter-group">
+      <span class="filter-label">Type</span>
+      <select class="filter-select" [(ngModel)]="kindFilter" (ngModelChange)="onKindFilterChange()">
+        <option value="ALL">Tous</option>
+        <option value="SCAN">Pipelines scan</option>
+        <option value="DEPLOY">Pipelines déploiement</option>
+      </select>
+    </label>
+    <label class="filter-group">
+      <span class="filter-label">Statut</span>
+      <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onStatusFilterChange()">
+        <option value="ALL">Tous</option>
+        <option value="SUCCESS">Réussis</option>
+        <option value="FAILED">Échoués</option>
+        <option value="RUNNING">En cours</option>
+      </select>
+    </label>
+  </div>
+
   <!-- LOADING -->
   <div *ngIf="loading && filtered.length === 0" class="loading-section">
     <div class="loading-spinner"></div>
@@ -64,6 +84,9 @@
             <span class="badge-dot"></span>
             <span class="badge-status">{{ (item.status || item.pipelineStatus) | uppercase }}</span>
           </div>
+          <div class="pipeline-badge" [ngClass]="executionKindLabel(item) === 'DEPLOY' ? 'status status-warning' : 'status status-success'">
+            <span class="badge-status">{{ executionKindLabel(item) }}</span>
+          </div>
           <span *ngIf="item.duration != null && !isRunning(item)" class="pipeline-duration">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
@@ -85,11 +108,11 @@
           <div class="pipeline-info">
             <div class="info-row">
               <span class="pipeline-id">#{{ item.pipelineId }}</span>
-              <span class="pipeline-name">{{ item.environmentName }}</span>
+              <span class="pipeline-name">{{ displayName(item) }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Branche</span>
-              <span class="info-value">{{ item.ref || 'main' }}</span>
+              <span class="info-value">{{ item.gitBranch || item.ref || 'main' }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Commit</span>

@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -15,10 +16,13 @@ import { AnalyzeArtifactResponse } from '../../models/ai/analyze-artifact.model'
 })
 export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
-  envId!: string;
+  envId = '';
+  pipelineIdOnly: number | null = null;
   data?: PipelineScanResponse;
   loading = false;
   error: string | null = null;
+  /** SCAN | DEPLOY — depuis query param ou déduit des jobs. */
+  pipelineKind: 'SCAN' | 'DEPLOY' | null = null;
 
   selectedJob?: PipelineJobInfo;
   selectedJobLogs?: string;
@@ -35,24 +39,58 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   aiAnalysisError: string | null = null;
 
   private pollId?: any;
-  private lastAutoSelectedJobId?: number;
   private lastAutoScrollJobId?: number;
+  /** true = l'utilisateur a cliqué manuellement sur un job (pas de suivi auto). */
+  private jobSelectionPinned = false;
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private pipelineService: PipelineService,
     private toastService: ToastService,
-    private aiAnalysisService: AiAnalysisService
+    private aiAnalysisService: AiAnalysisService,
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
+    const kindParam = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
+    if (kindParam === 'SCAN' || kindParam === 'DEPLOY') {
+      this.pipelineKind = kindParam;
+    }
+    const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
+    if (pipelineIdParam) {
+      const pid = Number(pipelineIdParam);
+      if (!Number.isNaN(pid) && pid > 0) {
+        this.pipelineIdOnly = pid;
+        this.loadPipelineById();
+        return;
+      }
+    }
     if (this.envId) {
       this.loadPipeline();
     } else {
-      this.error = 'Environnement invalide';
+      this.error = 'Pipeline invalide';
     }
+  }
+
+  loadPipelineById(): void {
+    if (this.pipelineIdOnly == null) return;
+    this.loading = true;
+    this.error = null;
+    const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+    this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
+      next: res => {
+        this.applyPipelineUpdate(res);
+        this.loading = false;
+        this.autoFollowRunningJob();
+        this.ensurePolling();
+      },
+      error: err => {
+        this.loading = false;
+        this.error = err.error?.message || 'Erreur lors du chargement du pipeline';
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -62,12 +100,18 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Liste jobs normalisée pour le template. */
+  get jobsList(): PipelineJobInfo[] {
+    return this.normalizeJobs(this.data?.jobs);
+  }
+
   loadPipeline(): void {
     this.loading = true;
     this.error = null;
-    this.pipelineService.getPipelineAndScan(this.envId).subscribe({
+    // refresh=true au premier chargement pour peupler stages_json avant affichage
+    this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
       next: res => {
-        this.data = res;
+        this.applyPipelineUpdate(res);
         this.loading = false;
         this.autoFollowRunningJob();
         this.ensurePolling();
@@ -83,9 +127,142 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Met à jour le pipeline sans effacer les jobs si le refresh renvoie une liste vide. */
+  private applyPipelineUpdate(incoming: PipelineScanResponse): void {
+    const nextJobs = this.normalizeJobs(incoming?.jobs);
+    const normalized: PipelineScanResponse = {
+      ...incoming,
+      jobs: nextJobs,
+      durationSeconds: incoming.durationSeconds != null
+        ? Math.floor(incoming.durationSeconds)
+        : this.coerceDuration(incoming),
+    };
+
+    if (!this.pipelineKind) {
+      this.pipelineKind = this.inferPipelineKind(nextJobs.length ? nextJobs : this.normalizeJobs(this.data?.jobs));
+    }
+
+    if (!this.data) {
+      this.data = normalized;
+      return;
+    }
+
+    const prevJobs = this.normalizeJobs(this.data.jobs);
+
+    if (nextJobs.length === 0 && prevJobs.length > 0) {
+      this.data = {
+        ...this.data,
+        status: normalized.status || this.data.status,
+        webUrl: normalized.webUrl ?? this.data.webUrl,
+        jobStatusCount: normalized.jobStatusCount ?? this.data.jobStatusCount,
+        dataSource: normalized.dataSource ?? this.data.dataSource,
+        pipelineId: normalized.pipelineId ?? this.data.pipelineId,
+        ref: normalized.ref ?? this.data.ref,
+        triggeredBy: normalized.triggeredBy ?? this.data.triggeredBy,
+        durationSeconds: normalized.durationSeconds ?? this.data.durationSeconds,
+      };
+      this.syncSelectedJobFromData();
+      return;
+    }
+
+    const mergedJobs = nextJobs.length > 0
+      ? this.mergeJobsById(prevJobs, nextJobs)
+      : nextJobs;
+
+    this.data = {
+      ...normalized,
+      jobs: mergedJobs,
+    };
+    this.syncSelectedJobFromData();
+  }
+
+  /** Garantit que jobs est toujours un tableau (évite object / null après JSON). */
+  private normalizeJobs(raw: unknown): PipelineJobInfo[] {
+    if (!raw) return [];
+    const list = Array.isArray(raw) ? raw : Object.values(raw as Record<string, unknown>);
+    return list
+      .map(item => this.normalizeJob(item))
+      .filter(j => j.id != null && !Number.isNaN(j.id));
+  }
+
+  private normalizeJob(raw: unknown): PipelineJobInfo {
+    const j = (raw || {}) as Record<string, unknown>;
+    return {
+      id: Number(j['id']),
+      name: String(j['name'] ?? ''),
+      status: String(j['status'] ?? ''),
+      stage: String(j['stage'] ?? ''),
+      duration: j['duration'] != null ? Math.floor(Number(j['duration'])) : undefined,
+      webUrl: j['webUrl'] != null ? String(j['webUrl']) : undefined,
+    };
+  }
+
+  private coerceDuration(res: PipelineScanResponse): number | undefined {
+    if (res.durationSeconds != null) {
+      return Math.floor(res.durationSeconds);
+    }
+    const d = res.duration;
+    if (d == null) return undefined;
+    const n = Math.floor(Number(d));
+    return Number.isNaN(n) ? undefined : n;
+  }
+
+  /** Fusionne par id : conserve l'ordre existant, met à jour statut/durée. */
+  private mergeJobsById(prev: PipelineJobInfo[], next: PipelineJobInfo[]): PipelineJobInfo[] {
+    const nextById = new Map(next.map(j => [j.id, j]));
+    const merged: PipelineJobInfo[] = [];
+
+    for (const p of prev) {
+      const n = nextById.get(p.id);
+      merged.push(n ? { ...p, ...n } : p);
+      nextById.delete(p.id);
+    }
+    for (const n of nextById.values()) {
+      merged.push(n);
+    }
+    return merged.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  }
+
+  /** Garde le job sélectionné aligné sur la liste après refresh. */
+  private syncSelectedJobFromData(): void {
+    if (!this.selectedJob?.id || !this.data?.jobs?.length) {
+      return;
+    }
+    const updated = this.data.jobs.find(j => j.id === this.selectedJob!.id);
+    if (updated) {
+      this.selectedJob = updated;
+    }
+  }
+
+  private refreshPipelineLive(onDone?: () => void): void {
+    const done = () => {
+      this.autoFollowRunningJob();
+      onDone?.();
+    };
+    if (this.pipelineIdOnly != null) {
+      const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+      this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
+        next: res => {
+          this.applyPipelineUpdate(res);
+          done();
+        },
+        error: () => done()
+      });
+      return;
+    }
+    if (this.envId) {
+      this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
+        next: res => {
+          this.applyPipelineUpdate(res);
+          done();
+        },
+        error: () => done()
+      });
+    }
+  }
+
   private ensurePolling(): void {
-    const running = this.isRunning();
-    if (!running) {
+    if (!this.shouldPoll()) {
       if (this.pollId) {
         clearInterval(this.pollId);
         this.pollId = undefined;
@@ -93,24 +270,24 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.pollId) return;
-    // Poll léger (BDD-first + refresh async) pour suivre l’avancement sans bloquer l’UI
+    // Poll léger pour suivre statuts + récupérer jobs si la 1ère réponse était vide
     this.pollId = setInterval(() => {
-      if (!this.envId) return;
-      this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
-        next: (res) => {
-          this.data = res;
-          this.autoFollowRunningJob();
-          // stop auto si terminé
-          if (!this.isRunning()) {
-            clearInterval(this.pollId);
-            this.pollId = undefined;
-          }
-        },
-        error: () => {
-          // silencieux: on garde les dernières infos affichées
+      if (!this.envId && this.pipelineIdOnly == null) return;
+      this.refreshPipelineLive(() => {
+        if (!this.shouldPoll()) {
+          clearInterval(this.pollId);
+          this.pollId = undefined;
         }
       });
     }, 2500);
+  }
+
+  /** Polling tant que le pipeline tourne OU que les jobs ne sont pas encore chargés. */
+  private shouldPoll(): boolean {
+    if (this.isRunning()) return true;
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    const pipelineId = this.data?.pipelineId ?? 0;
+    return pipelineId > 0 && jobs.length === 0;
   }
 
   private handleNotFound(): void {
@@ -152,11 +329,23 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.router.navigate(['/pipelines']);
   }
 
-  selectJob(job: PipelineJobInfo): void {
-    if (this.selectedJob?.id === job.id) {
+  selectJob(job: PipelineJobInfo, fromUserClick = true): void {
+    if (fromUserClick) {
+      this.jobSelectionPinned = true;
+    }
+
+    const latest = this.normalizeJobs(this.data?.jobs).find(j => j.id === job.id) ?? job;
+
+    if (this.selectedJob?.id === latest.id) {
+      this.selectedJob = latest;
+      const st = this.normStatus(latest.status);
+      if (st === 'PENDING' || st === 'RUNNING') {
+        this.refreshSelectedJobLogsIfRunning();
+      }
       return;
     }
-    this.selectedJob = job;
+
+    this.selectedJob = latest;
     this.selectedJobLogs = undefined;
     this.selectedJobScanJson = undefined;
     this.jobLogsError = null;
@@ -165,28 +354,34 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.aiAnalysisError = null;
     this.loadingJob = true;
 
-    this.pipelineService.getJobLogs(job.id).subscribe({
+    this.pipelineService.getJobLogs(latest.id).subscribe({
       next: logs => {
-        this.selectedJobLogs = logs;
+        this.selectedJobLogs = this.cleanJobLogs(logs);
         this.jobLogsError = null;
         this.loadingJob = false;
       },
       error: () => {
         this.loadingJob = false;
-        const st = this.normStatus(job.status);
+        const st = this.normStatus(latest.status);
         this.jobLogsError = (st === 'PENDING' || st === 'RUNNING')
           ? 'Logs pas encore disponibles : le job est en cours.'
           : 'Logs indisponibles pour ce job.';
       }
     });
 
-    const st = this.normStatus(job.status);
+    const st = this.normStatus(latest.status);
     if (st === 'PENDING' || st === 'RUNNING') {
       this.selectedJobScanJson = undefined;
       this.scanError = 'Rapport de scan pas encore disponible : le job est en cours.';
+    } else if (this.isSonarJob(latest)) {
+      this.selectedJobScanJson = undefined;
+      this.scanError = 'Les résultats SonarQube sont disponibles dans le tableau de bord SonarQube.';
+    } else if (!this.isScanArtifactJob(latest)) {
+      this.selectedJobScanJson = undefined;
+      this.scanError = null;
     } else {
       this.pipelineService
-        .getScanResults(job.id)
+        .getScanResults(latest.id)
         .pipe(catchError(() => of(null)))
         .subscribe(json => {
           if (json != null) {
@@ -194,10 +389,24 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
             this.scanError = null;
           } else {
             this.selectedJobScanJson = undefined;
-            this.scanError = null;
+            this.scanError = 'Aucun rapport JSON publié pour ce job.';
           }
         });
     }
+  }
+
+  /** Jobs qui publient un artefact JSON de scan (Trivy, Semgrep, etc.). */
+  isScanArtifactJob(job?: PipelineJobInfo): boolean {
+    const name = (job?.name || '').toLowerCase();
+    const stage = (job?.stage || '').toLowerCase();
+    const keywords = [
+      'trivy', 'semgrep', 'hadolint', 'gitleaks', 'grype', 'checkov', 'syft',
+      'aggregate', 'sast', 'sca', 'secrets', 'iac', 'container-scan', 'dependency'
+    ];
+    if (keywords.some(k => name.includes(k) || stage.includes(k))) {
+      return true;
+    }
+    return stage.includes('scan') || stage.includes('reporting');
   }
 
   isSonarJob(job?: PipelineJobInfo): boolean {
@@ -215,18 +424,22 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  openVulnerabilitiesDashboard(): void {
-    if (!this.envId) return;
+  openSecurityDashboard(): void {
     const appId =
       this.route.snapshot.queryParamMap.get('appId') ||
       localStorage.getItem('envirotest-last-project-app-id');
-    if (appId) {
-      this.router.navigate(['/project', appId, 'vulnerabilities'], {
-        queryParams: { envId: this.envId }
-      });
-    } else {
+    if (!appId) {
       this.router.navigate(['/my-applications']);
+      return;
     }
+    const queryParams: Record<string, string> = {};
+    if (this.data?.ref) queryParams['branch'] = this.data.ref;
+    if (this.data?.pipelineId) {
+      queryParams['pipelineId'] = String(this.data.pipelineId);
+    } else if (this.envId) {
+      queryParams['pipelineId'] = '';
+    }
+    this.router.navigate(['/project', appId, 'security-dashboard'], { queryParams });
   }
 
   retryJob(jobId: number): void {
@@ -237,14 +450,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
           this.toastService.push('success', 'Job relancé', `Le job #${jobId} a été relancé.`, 2500);
         }
         // Refresh immédiat + polling va continuer si le pipeline est encore en cours
-        this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
-          next: (res) => {
-            this.data = res;
-            this.autoFollowRunningJob();
-            this.ensurePolling();
-          },
-          error: () => {}
-        });
+        this.refreshPipelineLive(() => this.ensurePolling());
       },
       error: () => {
         if (this.toastService) {
@@ -300,32 +506,86 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
+  get pipelineKindLabel(): string {
+    return this.pipelineKind === 'DEPLOY' ? 'DEPLOY' : this.pipelineKind === 'SCAN' ? 'SCAN' : '';
+  }
+
+  private inferPipelineKind(jobs: PipelineJobInfo[]): 'SCAN' | 'DEPLOY' | null {
+    if (!jobs?.length) return null;
+    const hay = jobs.map(j => `${j.stage || ''} ${j.name || ''}`.toLowerCase()).join(' ');
+    if (hay.includes('deploy-k8s') || hay.includes('deploy:') || hay.includes('push-image') || hay.includes('build-image')) {
+      return 'DEPLOY';
+    }
+    if (hay.includes('semgrep') || hay.includes('gitleaks') || hay.includes('code-analysis') || hay.includes('sca') || hay.includes('sast')) {
+      return 'SCAN';
+    }
+    return null;
+  }
+
+  /**
+   * Ordre des stages tel que défini dans le .gitlab-ci.yml (pipeline.md).
+   * On ne trie PAS par id de job : un retry GitLab crée un nouveau job id plus élevé
+   * et faisait remonter deploy-k8s en fin de liste après zap/reporting.
+   */
+  private static readonly CI_STAGE_ORDER: string[] = [
+    'setup',
+    'code-analysis',
+    'sca',
+    'sast',
+    'secrets-iac',
+    'build',
+    'container-scan',
+    'push-image',
+    'deploy-k8s',
+    'zap-scan',
+    'reporting',
+    'security-validation',
+    'report'
+  ];
+
   getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
-    if (!this.data?.jobs) return [];
-    // Stabiliser l'ordre: GitLab renvoie parfois les jobs dans un ordre non chronologique.
-    const jobsSorted = [...this.data.jobs].sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0));
-    const stageOrder: string[] = [];
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    if (!jobs.length) return [];
+
     const stageMap = new Map<string, PipelineJobInfo[]>();
-    jobsSorted.forEach(job => {
-      const stage = job.stage || 'unknown';
-      if (!stageOrder.includes(stage)) stageOrder.push(stage);
+    jobs.forEach(job => {
+      const stage = (job.stage || 'unknown').trim() || 'unknown';
       if (!stageMap.has(stage)) {
         stageMap.set(stage, []);
       }
       stageMap.get(stage)!.push(job);
     });
-    return stageOrder.map((name) => {
-      const jobs = stageMap.get(name) || [];
-      const statuses = jobs.map(j => this.normStatus(j.status));
+
+    // Jobs d'un même stage : id croissant (ordre d'apparition GitLab)
+    stageMap.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
+
+    const known = PipelineDetailsComponent.CI_STAGE_ORDER;
+    const stageNames = Array.from(stageMap.keys()).sort((a, b) => {
+      const ia = known.indexOf(a.toLowerCase());
+      const ib = known.indexOf(b.toLowerCase());
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0) return -1;
+      if (ib >= 0) return 1;
+      // Stages inconnus : premier job id le plus bas
+      const minA = Math.min(...(stageMap.get(a) || []).map(j => j.id ?? 0));
+      const minB = Math.min(...(stageMap.get(b) || []).map(j => j.id ?? 0));
+      return minA - minB;
+    });
+
+    return stageNames.map((name) => {
+      const stageJobs = stageMap.get(name) || [];
+      const statuses = stageJobs.map(j => this.normStatus(j.status));
       let overallStatus = 'SUCCESS';
       if (statuses.some(s => s === 'FAILED' || s === 'CANCELED')) {
         overallStatus = 'FAILED';
-      } else if (statuses.some(s => s === 'RUNNING' || s === 'PENDING')) {
+      } else if (statuses.some(s => s === 'RUNNING' || s === 'PENDING' || s === 'CREATED')) {
         overallStatus = 'RUNNING';
-      } else if (statuses.some(s => s === 'SKIPPED')) {
+      } else if (statuses.every(s => s === 'SKIPPED' || s === 'MANUAL')) {
+        overallStatus = 'SKIPPED';
+      } else if (statuses.some(s => s === 'SKIPPED') && !statuses.some(s => s === 'SUCCESS' || s === 'PASSED')) {
         overallStatus = 'SKIPPED';
       }
-      return { name, jobs, status: overallStatus };
+      return { name, jobs: stageJobs, status: overallStatus };
     });
   }
 
@@ -341,23 +601,104 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     jobs.forEach(j => this.retryJob(j.id));
   }
 
-  /** Auto-follow: sélectionne automatiquement le job en cours et charge ses logs. */
+  /** Auto-follow : affiche le 1er job RUNNING (ou PENDING), sauf si l'utilisateur a cliqué manuellement. */
   private autoFollowRunningJob(): void {
-    const jobsRaw = this.data?.jobs || [];
-    if (!jobsRaw.length) return;
-    // Choisir le job "actif" le plus tôt (id le plus petit) pour ne pas sauter vers le dernier stage.
-    const active = jobsRaw
-      .filter(j => ['RUNNING', 'PENDING'].includes(this.normStatus(j.status)) && j?.id != null)
-      .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))[0];
-    // Fallback: premier job (id le plus petit)
-    const first = [...jobsRaw].sort((a, b) => (a.id ?? 0) - (b.id ?? 0))[0];
-    const candidate = active || first;
-    if (!candidate?.id) return;
-    if (this.selectedJob?.id === candidate.id) return;
-    if (active && this.lastAutoSelectedJobId === candidate.id) return;
-    this.lastAutoSelectedJobId = candidate.id;
-    this.selectJob(candidate);
-    this.autoScrollToSelectedJob();
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    if (!jobs.length) return;
+
+    const active = this.getActiveRunningJob();
+
+    if (!this.jobSelectionPinned && active) {
+      if (this.selectedJob?.id !== active.id) {
+        this.selectJob(active, false);
+        this.autoScrollToSelectedJob();
+        return;
+      }
+    }
+
+    if (this.selectedJob?.id) {
+      const current = jobs.find(j => j.id === this.selectedJob!.id);
+      if (!current) {
+        if (!this.jobSelectionPinned && active) {
+          this.selectJob(active, false);
+          this.autoScrollToSelectedJob();
+        }
+        return;
+      }
+      this.selectedJob = current;
+      const st = this.normStatus(current.status);
+      if (!this.jobSelectionPinned && st !== 'RUNNING' && st !== 'PENDING' && active) {
+        this.selectJob(active, false);
+        this.autoScrollToSelectedJob();
+        return;
+      }
+      this.refreshSelectedJobLogsIfRunning();
+      return;
+    }
+
+    if (active) {
+      this.selectJob(active, false);
+      this.autoScrollToSelectedJob();
+    }
+  }
+
+  /** Premier job RUNNING, sinon premier PENDING (tri par id). */
+  private getActiveRunningJob(): PipelineJobInfo | undefined {
+    const active = this.normalizeJobs(this.data?.jobs)
+      .filter(j => {
+        const s = this.normStatus(j.status);
+        return s === 'RUNNING' || s === 'PENDING';
+      })
+      .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+    return active.find(j => this.normStatus(j.status) === 'RUNNING') ?? active[0];
+  }
+
+  /** Nettoie les codes ANSI / préfixes GitLab (filet de sécurité côté UI). */
+  private cleanJobLogs(raw: string): string {
+    if (!raw) return '';
+    let out = raw
+      .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+      .replace(/\u001B[@-_]/g, '')
+      .replace(/\[(?:\d{1,4}(?:;\d{1,4})*)?[mGKHfABCDEFJSTsu]/g, '')
+      .replace(/section_start:\d+:[^\r\n]*/g, '')
+      .replace(/section_end:\d+:[^\r\n]*/g, '')
+      // HH:mm:ss + offset hex (000, 010, 000+) — avec ou sans espace après le +
+      .replace(/^(\d{2}:\d{2}:\d{2})(?:\.\d+)? [0-9A-Fa-f]{3}\+?\s*/gm, '$1 ')
+      .replace(/^[0-9A-Fa-f]{3}\+?\s*/gm, '');
+    out = this.stripLogFractionalSeconds(out);
+    out = out.split('\n').map(line => {
+      const idx = line.lastIndexOf('\r');
+      return (idx >= 0 ? line.slice(idx + 1) : line).replace(/\s+$/, '');
+    }).filter(line => line.length > 0).join('\n');
+    return out.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  /** Supprime les fractions de secondes dans les logs (20:35:10.549 → 20:35:10, 12.47s → 12s). */
+  private stripLogFractionalSeconds(text: string): string {
+    return text
+      .replace(/\b(\d{2}:\d{2}:\d{2})\.\d+\b/g, '$1')
+      .replace(/\b(\d+)\.\d+(?=s\b)/gi, '$1')
+      .replace(/\b(\d+)\.\d+(?=\s+seconds?\b)/gi, '$1')
+      .replace(/\b(\d+)\.\d{4,}\b/g, '$1')
+      .replace(/\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})\.\d+Z?/g, '$1');
+  }
+
+  /** Recharge les logs du job sélectionné s'il est encore en cours. */
+  private refreshSelectedJobLogsIfRunning(): void {
+    if (!this.selectedJob?.id) return;
+    const st = this.normStatus(this.selectedJob.status);
+    if (st !== 'PENDING' && st !== 'RUNNING') return;
+
+    this.pipelineService.getJobLogs(this.selectedJob.id).subscribe({
+      next: logs => {
+        this.selectedJobLogs = this.cleanJobLogs(logs);
+        this.jobLogsError = null;
+        this.loadingJob = false;
+      },
+      error: () => {
+        // silencieux pendant l'exécution
+      }
+    });
   }
 
   private autoScrollToSelectedJob(): void {
@@ -374,11 +715,132 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   }
 
   formatDuration(seconds: number | undefined): string {
-    if (!seconds) return '—';
-    if (seconds < 60) return `${seconds}s`;
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
+    if (seconds == null || Number.isNaN(seconds)) return '—';
+    const total = Math.floor(Number(seconds));
+    if (total <= 0) return '0s';
+    if (total < 60) return `${total}s`;
+    const m = Math.floor(total / 60);
+    const s = total % 60;
     return `${m}m ${s}s`;
+  }
+
+  /** Logs colorés façon GitLab (accent orange sur commandes / sections / git). */
+  formatLogsForDisplay(raw: string | undefined): SafeHtml {
+    if (!raw) {
+      return this.sanitizer.bypassSecurityTrustHtml('');
+    }
+    const html = raw
+      .split('\n')
+      .map(line => this.formatLogLineHtml(line))
+      .join('\n');
+    return this.sanitizer.bypassSecurityTrustHtml(html);
+  }
+
+  private formatLogLineHtml(line: string): string {
+    if (!line) {
+      return '<span class="log-line log-line-default">&nbsp;</span>';
+    }
+    let timeHtml = '';
+    let message = line;
+    const timeMatch = line.match(/^(\d{2}:\d{2}:\d{2})(?:\.\d+)?\s+(.*)$/);
+    if (timeMatch) {
+      timeHtml = `<span class="log-time">${this.escapeHtml(timeMatch[1])}</span> `;
+      message = timeMatch[2].replace(/^[0-9A-Fa-f]{3}\+?\s*/, '');
+    }
+    const cls = this.logLineClass(message);
+    return `<span class="log-line ${cls}">${timeHtml}${this.escapeHtml(message)}</span>`;
+  }
+
+  /** Lignes accent (équivalent vert/cyan GitLab) → orange dans notre UI. */
+  private logLineClass(text: string): string {
+    const t = text.trim();
+    if (!t) return 'log-line-default';
+
+    if (/\bJob succeeded\b/i.test(t)) return 'log-line-success';
+    if (/\b(ERROR|FAILED|FATAL)\b/.test(t)) return 'log-line-error';
+    if (/\b(WARNING|WARN)\b/.test(t)) return 'log-line-warn';
+    if (/^INFO[:\s]/i.test(t)) return 'log-line-info';
+
+    // Métadonnées techniques (blanc sur GitLab) → gris neutre
+    if (/^(https?:\/\/|storage\.googleapis|correlation_id=|sha256:|status=\d{3}\b|token=glcbt-)/i.test(t)) {
+      return 'log-line-default';
+    }
+
+    if (this.isGitLabAccentLine(t)) {
+      const bold = /^(Downloading artifacts|Executing )/i.test(t);
+      return bold ? 'log-line-accent log-line-accent-bold' : 'log-line-accent';
+    }
+
+    return 'log-line-default';
+  }
+
+  private isGitLabAccentLine(t: string): boolean {
+    const prefixPatterns = [
+      /^\$ /,
+      /^git /i,
+      /^Fetching changes/i,
+      /^Checking out/i,
+      /^Skipping Git/i,
+      /^Initialized empty/i,
+      /^Created fresh/i,
+      /^Reinitialized/i,
+      /^From https?:/i,
+      /^remote:/i,
+      /^Cloning /i,
+      /^Updating /i,
+      /^Submodule/i,
+      /^Switched to/i,
+      /^Downloading artifacts/i,
+      /^Executing /i,
+      /^Getting source/i,
+      /^Preparing /i,
+      /^Running with/i,
+      /^Pulling docker/i,
+      /^Using Docker/i,
+      /^Using 'docker/i,
+      /^Using cache/i,
+      /^Cleaning up/i,
+      /^Uploading /i,
+      /^Saving cache/i,
+      /^Creating cache/i,
+      /^Entering /i,
+      /^cd /i,
+      /^sonar-scanner/i,
+      /^if \[/i,
+      /^echo /i,
+      /^apk /i,
+      /^curl /i,
+      /^trivy /i,
+      /^semgrep /i,
+      /^pip /i,
+      /^npm /i,
+      /^mvn /i,
+      /^docker /i,
+    ];
+    if (prefixPatterns.some(p => p.test(t))) {
+      return true;
+    }
+
+    const containsPatterns = [
+      /detached HEAD/i,
+      /Git repository/i,
+      /artifacts for/i,
+      /step_script/i,
+      /multi-line command/i,
+      /remote set-url/i,
+      /clone-repository/i,
+      /empty repository/i,
+      /repository in \//i,
+    ];
+    return containsPatterns.some(p => p.test(t));
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   hasVulnerabilities(scanJson: any): boolean {

@@ -3,7 +3,13 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ApplicationService } from '../../services/application/application.service';
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
-import { ENVIRONMENT_STATUS } from 'src/app/models/environment/status-types';
+import {
+  ENVIRONMENT_FILTER_OPTIONS,
+  ENVIRONMENT_STATUS,
+  environmentStatusView,
+  getPipelineStatusLabel,
+  matchesEnvironmentFilter
+} from 'src/app/models/environment/status-types';
 import { FormatService } from 'src/app/models/environment/format.service';
 
 @Component({
@@ -25,11 +31,12 @@ export class ProjectDeploymentsComponent implements OnInit {
   
   // Stats
   activeCount: number = 0;
-  expiredCount: number = 0;
+  inProgressCount: number = 0;
+  failedCount: number = 0;
+  endedCount: number = 0;
   totalCount: number = 0;
 
-  // Constantes pour les statuts
-  readonly ENV_STATUS = ENVIRONMENT_STATUS;
+  readonly statusFilterOptions = ENVIRONMENT_FILTER_OPTIONS;
 
   constructor(
     private route: ActivatedRoute,
@@ -83,18 +90,23 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   calculateStats(): void {
     this.totalCount = this.environments.length;
-    this.activeCount = this.environments.filter(env => 
-      this.isEnvironmentActive(env.environmentStatus)
+    this.activeCount = this.environments.filter(env =>
+      matchesEnvironmentFilter(env.environmentStatus, 'ACTIVE')
     ).length;
-    this.expiredCount = this.environments.filter(env => 
-      env.environmentStatus === 'EXPIRED' || env.environmentStatus === 'DESTROYED'
+    this.inProgressCount = this.environments.filter(env =>
+      matchesEnvironmentFilter(env.environmentStatus, 'IN_PROGRESS')
+    ).length;
+    this.failedCount = this.environments.filter(env =>
+      matchesEnvironmentFilter(env.environmentStatus, 'NEVER_STARTED')
+    ).length;
+    this.endedCount = this.environments.filter(env =>
+      matchesEnvironmentFilter(env.environmentStatus, 'ENDED')
     ).length;
   }
 
   applyFilter(): void {
     let filtered = [...this.environments];
     
-    // Filtre par branche
     if (this.branchFilter?.trim()) {
       const filter = this.branchFilter.toLowerCase().trim();
       filtered = filtered.filter(env => 
@@ -102,22 +114,29 @@ export class ProjectDeploymentsComponent implements OnInit {
       );
     }
     
-    // Filtre par statut d'ENVIRONNEMENT
     if (this.statusFilter) {
-      const statuses = this.statusFilter.split(',');
-      filtered = filtered.filter(env => {
-        const envStatus = env.environmentStatus?.toUpperCase() || '';
-        return statuses.some(s => {
-          // CORRECTION: Utiliser ENV_STATUS au lieu de this.ENV_STATUS
-          if (s === 'ACTIVE') return ENVIRONMENT_STATUS.ACTIVE.includes(envStatus as any);
-          if (s === 'IN_PROGRESS') return ENVIRONMENT_STATUS.IN_PROGRESS.includes(envStatus as any);
-          if (s === 'TERMINATED') return ENVIRONMENT_STATUS.TERMINATED.includes(envStatus as any);
-          return envStatus === s;
-        });
-      });
+      filtered = filtered.filter(env =>
+        matchesEnvironmentFilter(env.environmentStatus, this.statusFilter)
+      );
     }
     
     this.filteredEnvironments = filtered;
+  }
+
+  setStatusFilter(filter: string | null): void {
+    this.statusFilter = filter;
+    if (!this.appId) {
+      this.applyFilter();
+      return;
+    }
+    const queryParams: Record<string, string> = {};
+    if (filter) queryParams['status'] = filter;
+    if (this.branchFilter?.trim()) queryParams['branch'] = this.branchFilter.trim();
+    this.router.navigate(['/project', this.appId, 'deployments'], {
+      queryParams,
+      replaceUrl: true
+    });
+    this.applyFilter();
   }
 
   onBranchFilterChange(): void {
@@ -137,14 +156,7 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   // Classes CSS pour les statuts
   environmentStatusClass(status: string | undefined): string {
-    const s = (status || '').toUpperCase();
-    // CORRECTION: Utiliser ENVIRONMENT_STATUS directement
-    if (ENVIRONMENT_STATUS.ACTIVE.includes(s as any)) return 'env-status-active';
-    if (ENVIRONMENT_STATUS.IN_PROGRESS.includes(s as any)) return 'env-status-building';
-    if (s === 'EXPIRED') return 'env-status-expired';
-    if (s === 'FAILED') return 'env-status-failed';
-    if (s === 'DESTROYED') return 'env-status-destroyed';
-    return 'env-status-default';
+    return environmentStatusView(status).cssClass;
   }
 
   pipelineStatusClass(status: string | undefined): string {
@@ -167,22 +179,12 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   // Vérifications
   isEnvironmentActive(status: string | undefined): boolean {
-    return (status || '').toUpperCase() === 'RUNNING';
+    return ENVIRONMENT_STATUS.ACTIVE.includes((status || '').toUpperCase() as any);
   }
 
   isEnvironmentExpired(env: DeploymentHistoryItem): boolean {
-  // Vérifier d'abord le statut
-  if (env.environmentStatus === 'EXPIRED' || env.environmentStatus === 'DESTROYED') {
-    return true;
+    return (env.environmentStatus || '').toUpperCase() === 'EXPIRED';
   }
-  
-  // Vérifier par la date d'expiration si elle existe
-  if (env.expiresAt) {
-    return new Date(env.expiresAt) < new Date();
-  }
-  
-  return false;
-}
 
   // Navigation
   viewEnvironment(envId: string): void {
@@ -222,7 +224,7 @@ export class ProjectDeploymentsComponent implements OnInit {
   /** URL publique renseignée par le backend (webhook / déploiement). */
   deploymentLink(env: DeploymentHistoryItem): string | null {
     const u = (env.deploymentUrl || '').trim();
-    return u || null;
+    return this.canExposeDeploymentUrl(env, u) ? u : null;
   }
 
   canEmbedPreview(url: string): boolean {
@@ -241,6 +243,66 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   isDeploymentFailed(env: DeploymentHistoryItem): boolean {
     return (env.environmentStatus || '').toUpperCase() === 'FAILED';
+  }
+
+  environmentStatusLabel(env: DeploymentHistoryItem): string {
+    const view = environmentStatusView(env.environmentStatus);
+    if (env.statusReason?.trim()) {
+      return view.label;
+    }
+    if ((env.environmentStatus || '').toUpperCase() === 'DESTROYED') {
+      const pipeline = (env.pipelineStatus || '').toUpperCase();
+      if (pipeline === 'FAILED' || pipeline === 'CANCELED') {
+        return 'Détruit — déploiement en échec';
+      }
+      return 'Terminé';
+    }
+    return view.label;
+  }
+
+  environmentStatusReason(env: DeploymentHistoryItem): string | null {
+    return env.statusReason?.trim() || null;
+  }
+
+  pipelineStatusLabel(status: string | undefined): string {
+    return getPipelineStatusLabel(status || '');
+  }
+
+  previewFailureReason(env: DeploymentHistoryItem): string {
+    if (this.isEnvironmentExpired(env)) {
+      return 'Aucune URL — le déploiement est expiré.';
+    }
+    if (this.isDeploymentFailed(env)) {
+      return 'Aucune URL — le déploiement n\'a jamais abouti.';
+    }
+    if ((env.deploymentUrl || '').toLowerCase().includes('.local')) {
+      return 'URL locale non résolvable depuis le navigateur. Utilisez le pipeline ou un port-forward.';
+    }
+    return 'Aucune URL de prévisualisation n\'a été publiée pour cet environnement.';
+  }
+
+  showPortForwardHint(env: DeploymentHistoryItem): boolean {
+    return ((env.deploymentUrl || '').toLowerCase().includes('.local'));
+  }
+
+  portForwardCommand(env: DeploymentHistoryItem): string {
+    const ns = env.environmentName;
+    const service = this.serviceNameFromNamespace(env.environmentName);
+    return `kubectl -n ${ns} port-forward svc/${service} 8080:80`;
+  }
+
+  private serviceNameFromNamespace(namespace: string): string {
+    if (!namespace) return 'app';
+    const normalized = namespace.replace(/^env-/, '');
+    const parts = normalized.split('-');
+    if (parts.length <= 1) return normalized || 'app';
+    return parts.slice(0, -1).join('-') || 'app';
+  }
+
+  private canExposeDeploymentUrl(env: DeploymentHistoryItem, url: string): boolean {
+    if (!url) return false;
+    if (!this.canEmbedPreview(url) && !url.startsWith('http://') && !url.startsWith('https://')) return false;
+    return environmentStatusView(env.environmentStatus).canShowUrl;
   }
 
 

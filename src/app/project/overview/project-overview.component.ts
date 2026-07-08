@@ -6,14 +6,20 @@ import { ActivatedRoute, Router } from '@angular/router';
 import Chart from 'chart.js/auto';
 import { Subject, combineLatest, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, delay, distinctUntilChanged, map, switchMap, takeUntil, timeout } from 'rxjs/operators';
-import { ApplicationService, DeploymentMetrics } from '../../services/application/application.service';
+import { ApplicationService } from '../../services/application/application.service';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { FindingItem, FindingsService } from '../../services/findings/findings.service';
 import { ApplicationResponse } from '../../models/application/application-response';
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
+import {
+  ENVIRONMENT_FILTER_OPTIONS,
+  environmentStatusView,
+  matchesEnvironmentFilter
+} from '../../models/environment/status-types';
 import { PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
+import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import {
   ActivityItem,
   DashboardPipelineItem
@@ -57,10 +63,10 @@ const GRADE_COLORS: Record<string, string> = {
   B: '#22c55e',
   C: '#f59e0b',
   D: '#f97316',
-  F: '#dc2626'
+  E: '#dc2626'
 };
 
-const MATURITY_GRADE_SCALE = 'A · B · C · D · F';
+const MATURITY_GRADE_SCALE = 'A · B · C · D · E';
 
 interface SecurityScoreView {
   grade: string;
@@ -72,7 +78,7 @@ const SECURITY_REQUEST_TIMEOUT_MS = 90_000;
 
 const PIPELINE_STAGE_LABELS: Record<string, string> = {
   hello: 'Accueil',
-  setup: 'Setup',
+  setup: 'Setup / clone',
   clone: 'Clone / détection',
   'code-analysis': 'Code Analysis',
   'sonarqube-setup': 'Sonar — setup',
@@ -87,6 +93,7 @@ const PIPELINE_STAGE_LABELS: Record<string, string> = {
   'sast-generic': 'SAST — Semgrep',
   'sast-angular': 'SAST — Angular / React',
   secrets: 'Secrets (Gitleaks)',
+  'secrets-iac': 'Secrets / IaC',
   'secrets-lac': 'Secrets lac',
   container: 'Conteneur',
   iac: 'IaC (Checkov)',
@@ -229,7 +236,7 @@ const DEFAULT_SCANNER_ICON = 'assets/scanners/default.svg';
 })
 export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
-  private readonly securityReload$ = new Subject<{ appId: string; branch: string }>();
+  private readonly securityReload$ = new Subject<{ appId: string; branch: string; pipelineId?: string | null }>();
   private deployDonutChart?: Chart;
   private weekBarChart?: Chart;
   private daySeverityChart?: Chart;
@@ -252,6 +259,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   appId: string | null = null;
   selectedBranch = GLOBAL_BRANCH;
   selectedEnvironmentId: string | null = null;
+  selectedPipelineId: string | null = null;
   branches: string[] = [];
   toolList: { key: string; value: number }[] = [];
   hasOpenSeverityChart = false;
@@ -268,6 +276,14 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   latestDeployment: DeploymentHistoryItem | null = null;
   environmentSummary: EnvironmentSummaryResponse | null = null;
   loadingPipelineDetails = false;
+  loadingScanPipelineDetails = false;
+  latestDeployPipeline: PipelineListItem | null = null;
+  latestScanPipeline: PipelineListItem | null = null;
+  deployPipelineEver = false;
+  scanPipelineEver = false;
+  scanLaunching = false;
+  scanLaunchError: string | null = null;
+  private pipelineLivePollTimer?: ReturnType<typeof setInterval>;
   copied = false;
   remainingSeconds?: number;
   totalSeconds?: number;
@@ -330,7 +346,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     );
 
     this.securityReload$.pipe(
-      switchMap(({ appId, branch }) => {
+      switchMap(({ appId, branch, pipelineId }) => {
         const apiBranch = this.toApiBranch(branch);
         this.loading = true;
         this.destroyOpenSeverityChart();
@@ -338,7 +354,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.infoMessage = null;
         this.hasOpenSeverityChart = false;
 
-        return this.defectDojoService.getDashboard2(appId, apiBranch).pipe(
+        return this.defectDojoService.getDashboard2(appId, apiBranch, {
+          pipelineId: pipelineId ?? undefined,
+          scanOnly: true
+        }).pipe(
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
             const msg = err?.name === 'TimeoutError'
@@ -394,18 +413,24 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       this.loadMyApplications();
     });
 
-    combineLatest([appId$, branch$])
+    const pipelineId$ = this.route.queryParamMap.pipe(
+      map(qp => qp.get('pipelineId')),
+      distinctUntilChanged()
+    );
+
+    combineLatest([appId$, branch$, pipelineId$])
       .pipe(
         debounceTime(400),
-        distinctUntilChanged((a, b) => a[0] === b[0] && a[1] === b[1]),
+        distinctUntilChanged((a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2]),
         delay(800),
         takeUntil(this.destroy$)
       )
-      .subscribe(([id, branch]) => {
+      .subscribe(([id, branch, pipelineId]) => {
         if (!id) return;
         const prev = this.selectedBranch;
         this.selectedBranch = branch;
-        this.requestSecurityReload(id, branch);
+        this.selectedPipelineId = pipelineId;
+        this.requestSecurityReload(id, branch, pipelineId);
         if (!this.overviewLoading && prev !== branch) {
           this.reloadBranchScopedData();
         }
@@ -417,9 +442,29 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.destroyOpenSeverityChart();
     if (this.countdownTimer) clearInterval(this.countdownTimer);
     if (this.ttlCountdownInterval) clearInterval(this.ttlCountdownInterval);
+    if (this.pipelineLivePollTimer) clearInterval(this.pipelineLivePollTimer);
     if (this.kpiAnimFrame) cancelAnimationFrame(this.kpiAnimFrame);
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /** Profil déduit de l'historique pipeline (deploy / scan / les deux). */
+  get serviceProfile(): 'full' | 'deploy-only' | 'scan-only' {
+    if (this.scanPipelineEver && !this.deployPipelineEver) return 'scan-only';
+    if (this.deployPipelineEver && !this.scanPipelineEver) return 'deploy-only';
+    return 'full';
+  }
+
+  get showSecuritySection(): boolean {
+    return this.serviceProfile !== 'deploy-only';
+  }
+
+  get isScanOnlyProfile(): boolean {
+    return this.serviceProfile === 'scan-only';
+  }
+
+  get isDeployOnlyProfile(): boolean {
+    return this.serviceProfile === 'deploy-only';
   }
 
   get ciScannerSummary(): Array<{ name: string; iconUrl: string; active: boolean; type: DetectionType; tooltip: string }> {
@@ -639,7 +684,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     } else if (critical <= 3) {
       grade = 'D';
     } else {
-      grade = 'F';
+      grade = 'E';
     }
 
     const score = Math.max(0, Math.min(100, 100 - critical * 15 - high * 5 - medium));
@@ -660,7 +705,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         return 'Risque modéré — prioriser les corrections critiques.';
       case 'D':
         return 'Risque élevé — plusieurs failles critiques ouvertes.';
-      case 'F':
+      case 'E':
         return 'Risque critique — action immédiate requise.';
       default:
         return 'Posture sécurité calculée à partir des vulnérabilités ouvertes.';
@@ -796,7 +841,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const activeWithFindings = scans.filter(s => s.active && s.findingCount > 0);
     const alertScans = activeWithFindings.filter(s => s.status === 'alert');
 
-    if (grade === 'F' || critical > 3) {
+    if (grade === 'E' || critical > 3) {
       return {
         verdict: 'block',
         verdictTitle: 'Déploiement non recommandé',
@@ -993,8 +1038,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   get liveDeploymentUrl(): string | null {
     const fromSummary = (this.environmentSummary?.previewUrl || '').trim();
     const fromHistory = (this.displayLatestDeployment?.deploymentUrl || '').trim();
-    const u = fromSummary || fromHistory;
-    return u || null;
+    const candidate = fromSummary || fromHistory;
+    if (!candidate) return null;
+    if (!this.canDisplayDeploymentUrl(candidate)) return null;
+    return candidate;
   }
 
   get trustedEmbedUrl(): SafeResourceUrl | null {
@@ -1004,7 +1051,30 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
   /** Lien ouvrable dans un nouvel onglet (URL présente et session non expirée). */
   get canOpenDeploymentPreview(): boolean {
-    return !!this.liveDeploymentUrl && !this.isLatestEnvExpired;
+    const dep = this.displayLatestDeployment;
+    if (!dep || this.isLatestEnvExpired) return false;
+    const envStatus = (dep.environmentStatus || '').toUpperCase();
+    return envStatus === 'RUNNING' && !!this.liveDeploymentUrl;
+  }
+
+  get latestPreviewUnavailableTitle(): string {
+    const dep = this.displayLatestDeployment;
+    if (!dep) return 'Aperçu indisponible';
+    if (this.isLatestEnvExpired) return 'Session expirée';
+    if ((dep.environmentStatus || '').toUpperCase() === 'FAILED') return 'Aucune URL — déploiement en échec';
+    return 'Aperçu indisponible';
+  }
+
+  get latestPreviewUnavailableMessage(): string {
+    const dep = this.displayLatestDeployment;
+    if (!dep) return 'Aucune URL de prévisualisation n\'a été publiée pour cet environnement.';
+    if (this.isLatestEnvExpired) {
+      return 'La session éphémère est terminée. Relancez un déploiement pour obtenir une nouvelle URL.';
+    }
+    if ((dep.environmentStatus || '').toUpperCase() === 'FAILED') {
+      return 'Aucune URL — le déploiement n\'a jamais abouti. Ouvrez le pipeline pour diagnostiquer le job en échec.';
+    }
+    return 'Aucune URL de prévisualisation n\'a été publiée pour cet environnement.';
   }
 
   get displayRecentPipelines(): DashboardPipelineItem[] {
@@ -1019,7 +1089,21 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     failed: number;
     skipped: number;
   } {
-    return this.countDeploymentsByStatus(this.getChartDeployments());
+    return this.countPipelineChartStatuses(this.getChartDeployments());
+  }
+
+  /** KPI du bandeau haut — statuts environnement K8s. */
+  get environmentKpiCounts(): {
+    total: number;
+    online: number;
+    inProgress: number;
+    failed: number;
+    ended: number;
+  } {
+    const deps = this.selectedEnvironmentId
+      ? this.environmentFilteredDeployments
+      : this.deployments;
+    return this.countEnvironmentKpis(deps);
   }
 
   get displayDeploymentCounts(): {
@@ -1029,23 +1113,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     failed: number;
     skipped: number;
   } {
-    if (!this.selectedEnvironmentId) {
-      return {
-        total: this.totalDeployments,
-        success: this.successfulDeployments,
-        pending: this.pendingDeployments,
-        failed: this.failedDeployments,
-        skipped: this.skippedDeployments
-      };
-    }
-    const deps = this.environmentFilteredDeployments;
-    return {
-      total: deps.length,
-      success: deps.filter(d => d.pipelineStatus?.toUpperCase() === 'SUCCESS').length,
-      pending: deps.filter(d => ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')).length,
-      failed: deps.filter(d => ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')).length,
-      skipped: deps.filter(d => d.pipelineStatus?.toUpperCase() === 'SKIPPED').length
-    };
+    const deps = this.selectedEnvironmentId
+      ? this.environmentFilteredDeployments
+      : this.deployments;
+    return this.countPipelineChartStatuses(deps);
   }
 
   get displayedEnvironmentCards(): Array<{
@@ -1066,12 +1137,14 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     id: string;
     name: string;
     branch: string;
+    status: string;
+    statusLabel: string;
     timeRemaining: string;
     expiresAt: unknown;
     vulnCount: number | null;
   }> {
     let envs = (this.environmentsForApp || [])
-      .filter(e => (e.status || '').toUpperCase() === 'RUNNING');
+      .filter(e => matchesEnvironmentFilter(e.status, 'ACTIVE'));
     if (!this.isGlobalView) {
       envs = envs.filter(e => (e.gitBranch || 'main') === this.selectedBranch);
     }
@@ -1082,11 +1155,15 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       id: e.id,
       name: e.environmentName || 'Environnement',
       branch: e.gitBranch || '—',
+      status: (e.status || '').toUpperCase(),
+      statusLabel: environmentStatusView(e.status).label,
       timeRemaining: this.calculateTimeRemaining(e.expiresAt),
       expiresAt: e.expiresAt,
       vulnCount: this.envCountsLoading ? null : (this.envVulnCounts[e.id] ?? 0)
     }));
   }
+
+  readonly envStatusFilterOptions = ENVIRONMENT_FILTER_OPTIONS;
 
   get activeEnvironmentCards(): Array<{
     id: string;
@@ -1110,8 +1187,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   get successRate(): number {
-    if (!this.totalDeployments) return 0;
-    return Math.round((this.successfulDeployments / this.totalDeployments) * 100);
+    const env = this.environmentKpiCounts;
+    if (!env.total) return 0;
+    return Math.round((env.online / env.total) * 100);
   }
 
   get overviewStats(): Array<{
@@ -1121,8 +1199,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     color: string;
     iconBg: string;
     trend?: string;
+    filter?: string | null;
   }> {
-    const c = this.displayDeploymentCounts;
+    const env = this.environmentKpiCounts;
     const depPending = this.loadingSlow;
     const scope = this.isGlobalView ? '' : ` · ${this.selectedBranch}`;
     const vulnValue = this.dashboard?.bySeverity
@@ -1134,33 +1213,45 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
     return [
       {
-        label: `Déploiements${scope}`,
-        value: depPending ? '…' : c.total,
+        label: `Total${scope}`,
+        value: depPending ? '…' : env.total,
         icon: '📦',
         color: '#3B82F6',
-        iconBg: 'rgba(59, 130, 246, 0.15)'
+        iconBg: 'rgba(59, 130, 246, 0.15)',
+        filter: null
       },
       {
-        label: `Réussis${scope}`,
-        value: depPending ? '…' : c.success,
+        label: `En ligne${scope}`,
+        value: depPending ? '…' : env.online,
         icon: '✅',
         color: '#22C55E',
         iconBg: 'rgba(34, 197, 94, 0.15)',
-        trend: depPending ? undefined : (c.total ? `${Math.round(c.success / c.total * 100)}%` : '0%')
+        trend: depPending ? undefined : (env.total ? `${Math.round(env.online / env.total * 100)}%` : '0%'),
+        filter: 'ACTIVE'
       },
       {
-        label: `En attente${scope}`,
-        value: depPending ? '…' : c.pending,
-        icon: '⏳',
+        label: `En cours${scope}`,
+        value: depPending ? '…' : env.inProgress,
+        icon: '🔄',
         color: '#F97316',
-        iconBg: 'rgba(249, 115, 22, 0.15)'
+        iconBg: 'rgba(249, 115, 22, 0.15)',
+        filter: 'IN_PROGRESS'
       },
       {
-        label: `Échoués${scope}`,
-        value: depPending ? '…' : c.failed,
+        label: `Échec${scope}`,
+        value: depPending ? '…' : env.failed,
         icon: '❌',
         color: '#EF4444',
-        iconBg: 'rgba(239, 68, 68, 0.15)'
+        iconBg: 'rgba(239, 68, 68, 0.15)',
+        filter: 'NEVER_STARTED'
+      },
+      {
+        label: `Terminés${scope}`,
+        value: depPending ? '…' : env.ended,
+        icon: '⏰',
+        color: '#6B7280',
+        iconBg: 'rgba(107, 114, 128, 0.15)',
+        filter: 'ENDED'
       },
       {
         label: `Vulnérabilités${scope}`,
@@ -1316,6 +1407,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     return parts.join(' · ');
   }
 
+  get deploymentChartHint(): string {
+    return 'Réussi = environnement passé en ligne au moins une fois';
+  }
+
   get deploymentPeriodLabel(): string {
     switch (this.deploymentPeriod) {
       case 'week':
@@ -1332,37 +1427,36 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   get pipelineStagesWithStatus(): Array<{ name: string; status: PipelineStageStatus }> {
-    const dep = this.displayLatestDeployment;
-    if (!dep?.jobs?.length) return [];
+    return this.buildPipelineStages(this.latestDeployPipeline?.jobs, 'deploy');
+  }
 
-    const seenStages = new Set<string>();
-    const stagesInOrder: { name: string; jobs: PipelineJobInfo[] }[] = [];
+  get scanPipelineStagesWithStatus(): Array<{ name: string; status: PipelineStageStatus }> {
+    return this.buildPipelineStages(this.latestScanPipeline?.jobs, 'scan');
+  }
 
-    dep.jobs.forEach(job => {
-      const stage = job.stage || job.name || 'unknown';
-      if (!seenStages.has(stage)) {
-        seenStages.add(stage);
-        stagesInOrder.push({ name: stage, jobs: [] });
+  private buildPipelineStages(
+    jobs: PipelineJobInfo[] | undefined | null,
+    kind: 'scan' | 'deploy'
+  ): Array<{ name: string; status: PipelineStageStatus }> {
+    if (!jobs?.length) return [];
+
+    const stageJobs = new Map<string, PipelineJobInfo[]>();
+    jobs.forEach(job => {
+      const stage = (job.stage || job.name || 'unknown').toLowerCase();
+      if (!stageJobs.has(stage)) {
+        stageJobs.set(stage, []);
       }
-      stagesInOrder.find(s => s.name === stage)?.jobs.push(job);
+      stageJobs.get(stage)?.push(job);
     });
 
-    const stages = stagesInOrder.map(stageEntry => {
-      const jobStatuses = stageEntry.jobs.map(j => (j.status || '').toLowerCase());
-      let status: PipelineStageStatus = 'pending';
-
-      if (jobStatuses.some(s => s === 'failed' || s === 'canceled')) {
-        status = 'failed';
-      } else if (jobStatuses.every(s => s === 'success')) {
-        status = 'done';
-      } else if (jobStatuses.some(s => s === 'running' || s === 'pending' || s === 'building')) {
-        status = 'active';
-      }
-
-      return { name: this.formatStageName(stageEntry.name), status };
+    const template = this.stageTemplateForKind(kind);
+    return template.map(stageName => {
+      const stageJobList = stageJobs.get(stageName) ?? [];
+      return {
+        name: this.formatStageName(stageName),
+        status: this.statusFromStageJobs(stageJobList)
+      };
     });
-
-    return stages.reverse();
   }
 
   get safePreviewUrl(): SafeResourceUrl | null {
@@ -1390,7 +1484,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const dep = this.displayLatestDeployment;
     if (!dep) return true;
     const st = (dep.environmentStatus || '').toUpperCase();
-    if (st === 'EXPIRED' || st === 'DESTROYED') return true;
+    if (st === 'EXPIRED') return true;
     const ms = this.parseBackendInstantMs(dep.expiresAt);
     return ms != null && ms <= this.nowMs;
   }
@@ -2267,20 +2361,153 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   loadLatestPipelineDetails(): void {
-    const dep = this.displayLatestDeployment;
-    if (!dep?.environmentId) return;
+    this.refreshDeployPipelineLive();
+  }
+
+  private refreshDeployPipelineLive(): void {
+    const pipe = this.latestDeployPipeline;
+    if (!pipe?.pipelineId || !this.appId) {
+      return;
+    }
 
     this.loadingPipelineDetails = true;
-    this.pipelineService.getPipelineAndScan(dep.environmentId).pipe(
+    this.pipelineService.getPipelineAndScanLiveById(pipe.pipelineId, this.appId).pipe(
       catchError(() => of(null)),
       takeUntil(this.destroy$)
-    ).subscribe(pipelineDetails => {
-      if (pipelineDetails?.jobs && dep) {
-        dep.jobs = pipelineDetails.jobs;
-        this.deployments = [...this.deployments];
+    ).subscribe(details => {
+      if (details) {
+        pipe.jobs = details.jobs ?? pipe.jobs;
+        pipe.pipelineStatus = details.status || pipe.pipelineStatus;
+        this.latestDeployPipeline = { ...pipe };
+        const dep = this.displayLatestDeployment;
+        if (dep && details.jobs?.length) {
+          dep.jobs = details.jobs;
+          dep.pipelineStatus = details.status || dep.pipelineStatus;
+          this.deployments = [...this.deployments];
+        }
       }
       this.loadingPipelineDetails = false;
+      this.syncPipelineLivePolling();
     });
+  }
+
+  private refreshScanPipelineLive(): void {
+    const pipe = this.latestScanPipeline;
+    if (!pipe?.pipelineId || !this.appId) {
+      return;
+    }
+
+    this.loadingScanPipelineDetails = true;
+    this.pipelineService.getPipelineAndScanLiveById(pipe.pipelineId, this.appId).pipe(
+      catchError(() => of(null)),
+      takeUntil(this.destroy$)
+    ).subscribe(details => {
+      if (details) {
+        pipe.jobs = details.jobs ?? pipe.jobs;
+        pipe.pipelineStatus = details.status || pipe.pipelineStatus;
+        this.latestScanPipeline = { ...pipe };
+        if (details.status && this.isPipelineOpen(details.status)) {
+          this.selectedPipelineId = String(pipe.pipelineId);
+          this.requestSecurityReload(this.appId!, this.isGlobalView ? GLOBAL_BRANCH : this.selectedBranch, String(pipe.pipelineId));
+        }
+      }
+      this.loadingScanPipelineDetails = false;
+      this.syncPipelineLivePolling();
+    });
+  }
+
+  launchScanPipeline(): void {
+    if (!this.appId || this.scanLaunching) return;
+    this.scanLaunching = true;
+    this.scanLaunchError = null;
+    const branch = this.isGlobalView ? undefined : this.selectedBranch;
+    this.applicationService.triggerScan(this.appId, branch).pipe(
+      catchError(err => {
+        this.scanLaunchError = err?.error?.message || 'Impossible de lancer le scan';
+        this.scanLaunching = false;
+        return of(null);
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe(res => {
+      this.scanLaunching = false;
+      if (res) {
+        this.applicationService.clearDeploymentsCache(this.appId!);
+        this.loadDeploymentsAndPipelines();
+        if (this.appId) {
+          this.requestSecurityReload(this.appId, this.isGlobalView ? GLOBAL_BRANCH : this.selectedBranch);
+        }
+      }
+    });
+  }
+
+  viewDeployPipelineDetails(): void {
+    const pipe = this.latestDeployPipeline;
+    if (pipe?.environmentId) {
+      this.viewPipeline(pipe.environmentId, 'DEPLOY');
+      return;
+    }
+    const dep = this.displayLatestDeployment;
+    if (dep?.environmentId) {
+      this.viewPipeline(dep.environmentId, 'DEPLOY');
+      return;
+    }
+    if (pipe?.pipelineId) {
+      this.viewPipelineById(pipe.pipelineId, pipe.gitBranch, 'DEPLOY');
+    }
+  }
+
+  viewScanPipelineDetails(): void {
+    const pipe = this.latestScanPipeline;
+    if (!pipe?.pipelineId) return;
+    this.viewPipelineById(pipe.pipelineId, pipe.gitBranch, 'SCAN');
+  }
+
+  private isPipelineOpen(status: string | undefined | null): boolean {
+    const s = (status || '').toUpperCase();
+    return s === 'RUNNING' || s === 'PENDING';
+  }
+
+  private syncPipelineLivePolling(): void {
+    if (this.pipelineLivePollTimer) {
+      clearInterval(this.pipelineLivePollTimer);
+      this.pipelineLivePollTimer = undefined;
+    }
+    const deployOpen = this.isPipelineOpen(this.latestDeployPipeline?.pipelineStatus);
+    const scanOpen = this.isPipelineOpen(this.latestScanPipeline?.pipelineStatus);
+    if (!deployOpen && !scanOpen) {
+      return;
+    }
+    this.pipelineLivePollTimer = setInterval(() => {
+      if (this.isPipelineOpen(this.latestDeployPipeline?.pipelineStatus)) {
+        this.refreshDeployPipelineLive();
+      }
+      if (this.isPipelineOpen(this.latestScanPipeline?.pipelineStatus)) {
+        this.refreshScanPipelineLive();
+      }
+      if (!this.isPipelineOpen(this.latestDeployPipeline?.pipelineStatus)
+          && !this.isPipelineOpen(this.latestScanPipeline?.pipelineStatus)) {
+        if (this.pipelineLivePollTimer) {
+          clearInterval(this.pipelineLivePollTimer);
+          this.pipelineLivePollTimer = undefined;
+        }
+      }
+    }, 15_000);
+  }
+
+  private pickLatestPipeline(items: PipelineListItem[]): PipelineListItem | null {
+    if (!items.length) return null;
+    return [...items].sort((a, b) => {
+      const ta = this.safeParseDate(a.createdAt)?.getTime() || 0;
+      const tb = this.safeParseDate(b.createdAt)?.getTime() || 0;
+      return tb - ta;
+    })[0];
+  }
+
+  private filterPipelinesByBranch(items: PipelineListItem[]): PipelineListItem[] {
+    if (!this.isGlobalView && this.selectedBranch) {
+      return items.filter(p => (p.gitBranch || p.ref || 'main') === this.selectedBranch);
+    }
+    return items;
   }
 
   loadEnvironmentSummary(envId: string): void {
@@ -2323,10 +2550,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         clearInterval(this.ttlCountdownInterval);
         this.ttlCountdownInterval = undefined;
       }
-      return;
+    } else {
+      this.loadEnvironmentSummary(dep.environmentId);
     }
-    this.loadEnvironmentSummary(dep.environmentId);
-    this.loadLatestPipelineDetails();
+    this.refreshDeployPipelineLive();
+    this.refreshScanPipelineLive();
   }
 
   private startTtlCountdown(): void {
@@ -2535,6 +2763,43 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  private countEnvironmentKpis(deps: DeploymentHistoryItem[]): {
+    total: number;
+    online: number;
+    inProgress: number;
+    failed: number;
+    ended: number;
+  } {
+    return {
+      total: deps.length,
+      online: deps.filter(d => matchesEnvironmentFilter(d.environmentStatus, 'ACTIVE')).length,
+      inProgress: deps.filter(d => matchesEnvironmentFilter(d.environmentStatus, 'IN_PROGRESS')).length,
+      failed: deps.filter(d => matchesEnvironmentFilter(d.environmentStatus, 'NEVER_STARTED')).length,
+      ended: deps.filter(d => matchesEnvironmentFilter(d.environmentStatus, 'ENDED')).length
+    };
+  }
+
+  /** Donut / barres — logique pipeline : réussi si l'env a été en ligne. */
+  private countPipelineChartStatuses(deps: DeploymentHistoryItem[]): {
+    total: number;
+    success: number;
+    pending: number;
+    failed: number;
+    skipped: number;
+  } {
+    const success = deps.filter(d => this.pipelineChartOutcome(d) === 'success').length;
+    const pending = deps.filter(d => this.pipelineChartOutcome(d) === 'pending').length;
+    const failed = deps.filter(d => this.pipelineChartOutcome(d) === 'failed').length;
+    const skipped = deps.filter(d => this.pipelineChartOutcome(d) === 'skipped').length;
+    return {
+      total: deps.length,
+      success,
+      pending,
+      failed,
+      skipped
+    };
+  }
+
   private countDeploymentsByStatus(deps: DeploymentHistoryItem[]): {
     total: number;
     success: number;
@@ -2542,12 +2807,16 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     failed: number;
     skipped: number;
   } {
+    const success = deps.filter(d => this.deploymentOutcome(d) === 'success').length;
+    const pending = deps.filter(d => this.deploymentOutcome(d) === 'pending').length;
+    const failed = deps.filter(d => this.deploymentOutcome(d) === 'failed').length;
+    const skipped = deps.filter(d => this.deploymentOutcome(d) === 'skipped').length;
     return {
       total: deps.length,
-      success: deps.filter(d => d.pipelineStatus?.toUpperCase() === 'SUCCESS').length,
-      pending: deps.filter(d => ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')).length,
-      failed: deps.filter(d => ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')).length,
-      skipped: deps.filter(d => d.pipelineStatus?.toUpperCase() === 'SKIPPED').length
+      success,
+      pending,
+      failed,
+      skipped
     };
   }
 
@@ -2625,10 +2894,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       if (!created) return;
       const idx = this.getDeploymentBucketIndex(created, start);
       if (idx < 0 || idx >= bucketCount) return;
-      const st = (dep.pipelineStatus || '').toUpperCase();
-      if (st === 'SUCCESS') buckets[idx].success++;
-      else if (['FAILED', 'CANCELED'].includes(st)) buckets[idx].failed++;
-      else if (['PENDING', 'RUNNING'].includes(st)) buckets[idx].pending++;
+      const outcome = this.pipelineChartOutcome(dep);
+      if (outcome === 'success') buckets[idx].success++;
+      else if (outcome === 'failed') buckets[idx].failed++;
+      else if (outcome === 'pending') buckets[idx].pending++;
     });
 
     return {
@@ -2727,7 +2996,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.recentFindingsLoading = true;
     const branch = this.isGlobalView ? undefined : this.selectedBranch;
 
-    this.defectDojoService.getFindings(this.appId, branch, 'open', 0, 10).pipe(
+    const tags = this.selectedPipelineId
+      ? this.defectDojoService.pipelineTag(this.selectedPipelineId)
+      : this.defectDojoService.scanKindTag();
+
+    this.defectDojoService.getFindings(this.appId, branch, 'open', 0, 10, undefined, tags).pipe(
       catchError(() => of(null)),
       switchMap(page => {
         const dojoItems = page?.content?.filter(f => !!f?.title || !!f?.id) ?? [];
@@ -2756,7 +3029,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private loadDeployRecommendation(): void {
     if (!this.appId) return;
     const branch = this.isGlobalView ? undefined : this.selectedBranch;
-    this.defectDojoService.getDashboard(this.appId, branch).pipe(
+    this.defectDojoService.getDashboard(this.appId, branch, this.defectDojoService.scanKindTag()).pipe(
       catchError(() => of(null)),
       takeUntil(this.destroy$)
     ).subscribe(d => {
@@ -2773,13 +3046,21 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
   viewSecurityDashboard(): void {
     if (!this.appId) return;
-    const queryParams = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    const queryParams: Record<string, string> = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    if (this.selectedPipelineId) {
+      queryParams['pipelineId'] = this.selectedPipelineId;
+    }
     this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
   viewQualityGate(): void {
     if (!this.appId) return;
-    const queryParams = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    const queryParams: Record<string, string> = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    const pipelineId = this.selectedPipelineId
+      || (this.latestScanPipeline?.pipelineId != null ? String(this.latestScanPipeline.pipelineId) : null);
+    if (pipelineId) {
+      queryParams['pipelineId'] = pipelineId;
+    }
     this.router.navigate(['/project', this.appId, 'quality-gate'], { queryParams });
   }
 
@@ -2812,8 +3093,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     return branch === GLOBAL_BRANCH ? undefined : branch;
   }
 
-  private requestSecurityReload(appId: string, branch: string): void {
-    this.securityReload$.next({ appId, branch });
+  private requestSecurityReload(appId: string, branch: string, pipelineId?: string | null): void {
+    if (this.serviceProfile === 'deploy-only') {
+      return;
+    }
+    this.securityReload$.next({ appId, branch, pipelineId });
   }
 
   private buildToolList(d: DefectDojoDashboard2Response): { key: string; value: number }[] {
@@ -2893,12 +3177,22 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
     forkJoin({
       deployments: this.applicationService.getDeploymentHistory(this.appId, { branch, page: 0, size: 50 }).pipe(catchError(() => of([]))),
-      deploymentMetrics: this.applicationService.getDeploymentMetrics(this.appId, branch).pipe(catchError(() => of(null))),
-      pipelines: this.pipelineService.listPipelines(0, 30).pipe(catchError(() => of([])))
+      deployPipelines: this.pipelineService.listPipelines(0, 50, this.appId, 'DEPLOY').pipe(catchError(() => of([] as PipelineListItem[]))),
+      scanPipelines: this.pipelineService.listPipelines(0, 50, this.appId, 'SCAN').pipe(catchError(() => of([] as PipelineListItem[])))
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: slowData => {
         this.deployments = slowData.deployments || [];
         this.latestDeployment = this.deployments.length > 0 ? this.deployments[0] : null;
+
+        const deployList = this.filterPipelinesByBranch(slowData.deployPipelines || []);
+        const scanList = this.filterPipelinesByBranch(slowData.scanPipelines || []);
+
+        if (deployList.length > 0) this.deployPipelineEver = true;
+        if (scanList.length > 0) this.scanPipelineEver = true;
+        if ((slowData.deployments || []).length > 0) this.deployPipelineEver = true;
+
+        this.latestDeployPipeline = this.pickLatestPipeline(deployList);
+        this.latestScanPipeline = this.pickLatestPipeline(scanList);
 
         const envIdsForApp = new Set<string>();
         this.environmentsForApp.forEach(e => envIdsForApp.add(String(e.id)));
@@ -2906,71 +3200,37 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           if (d?.environmentId) envIdsForApp.add(String(d.environmentId));
         });
 
-        let rawPipelines = (slowData.pipelines || []).filter((p: { environmentId?: string }) =>
-          p?.environmentId && envIdsForApp.has(String(p.environmentId))
-        );
-
-        if (branch) {
-          rawPipelines = rawPipelines.filter((p: { gitBranch?: string; ref?: string }) =>
-            (p.gitBranch || p.ref || 'main') === branch
-          );
+        let rawPipelines: PipelineListItem[] = [...deployList, ...scanList];
+        if (!rawPipelines.length) {
+          rawPipelines = (slowData.deployPipelines || []).concat(slowData.scanPipelines || []);
         }
 
         this.recentPipelines = rawPipelines
-          .sort((a: { createdAt?: unknown }, b: { createdAt?: unknown }) => {
+          .sort((a, b) => {
             const dateA = this.safeParseDate(a.createdAt)?.getTime() || 0;
             const dateB = this.safeParseDate(b.createdAt)?.getTime() || 0;
             return dateB - dateA;
           })
           .slice(0, 5)
-          .map((p: {
-            pipelineId?: string | number;
-            gitBranch?: string;
-            ref?: string;
-            status?: string;
-            pipelineStatus?: string;
-            createdAt?: unknown;
-            startedAt?: unknown;
-            finishedAt?: unknown;
-            environmentId?: string;
-            environmentName?: string;
-            createdByUsername?: string;
-          }) => ({
-            id: p.pipelineId,
-            name: `Pipeline #${p.pipelineId}`,
+          .map((p): DashboardPipelineItem => ({
+            id: p.pipelineId ?? null,
+            name: p.serviceName || p.environmentName || `Pipeline #${p.pipelineId ?? '—'}`,
             branch: p.gitBranch || p.ref || 'main',
             status: p.status || p.pipelineStatus || 'UNKNOWN',
             createdAt: this.safeParseDate(p.createdAt)?.toISOString() ||
-              this.safeParseDate(p.startedAt)?.toISOString() ||
               this.safeParseDate(p.finishedAt)?.toISOString() ||
               new Date().toISOString(),
-            environmentId: p.environmentId!,
-            environmentName: p.environmentName,
-            triggeredBy: p.createdByUsername
+            environmentId: p.environmentId ?? '',
+            environmentName: p.environmentName ?? p.serviceName ?? `Scan #${p.pipelineId ?? '—'}`,
+            triggeredBy: p.createdByUsername ?? undefined
           }));
 
-        const m: DeploymentMetrics | null = slowData.deploymentMetrics;
-        if (m != null && typeof m.total === 'number') {
-          this.totalDeployments = m.total;
-          this.successfulDeployments = m.success ?? 0;
-          this.failedDeployments = (m.failed ?? 0) + (m.canceled ?? 0);
-          this.pendingDeployments = (m.pending ?? 0) + (m.running ?? 0);
-          this.skippedDeployments = m.skipped ?? 0;
-        } else {
-          this.totalDeployments = this.deployments.length;
-          this.successfulDeployments = this.deployments.filter(d =>
-            d.pipelineStatus?.toUpperCase() === 'SUCCESS'
-          ).length;
-          this.failedDeployments = this.deployments.filter(d =>
-            ['FAILED', 'CANCELED'].includes(d.pipelineStatus?.toUpperCase() || '')
-          ).length;
-          this.pendingDeployments = this.deployments.filter(d =>
-            ['PENDING', 'RUNNING'].includes(d.pipelineStatus?.toUpperCase() || '')
-          ).length;
-          this.skippedDeployments = this.deployments.filter(d =>
-            d.pipelineStatus?.toUpperCase() === 'SKIPPED'
-          ).length;
-        }
+        const counters = this.countPipelineChartStatuses(this.deployments);
+        this.totalDeployments = counters.total;
+        this.successfulDeployments = counters.success;
+        this.failedDeployments = counters.failed;
+        this.pendingDeployments = counters.pending;
+        this.skippedDeployments = counters.skipped;
 
         this.buildRecentActivities();
         this.computeWeekTrends();
@@ -2983,6 +3243,77 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.loadingSlow = false;
       }
     });
+  }
+
+  private hasEnvironmentBeenOnline(dep: DeploymentHistoryItem): boolean {
+    const env = (dep.environmentStatus || '').toUpperCase();
+    return ['RUNNING', 'DEGRADED', 'EXPIRED', 'DESTROYED'].includes(env);
+  }
+
+  /**
+   * Donut « Statut des déploiements » — indépendant des KPI env.
+   * Réussi = l'environnement est passé en ligne au moins une fois (RUNNING+),
+   * pas le statut SUCCESS du pipeline en base.
+   */
+  private pipelineChartOutcome(dep: DeploymentHistoryItem): 'success' | 'pending' | 'failed' | 'skipped' {
+    const pipelineStatus = (dep.pipelineStatus || '').toUpperCase();
+    if (pipelineStatus === 'SKIPPED') return 'skipped';
+    if (this.hasEnvironmentBeenOnline(dep)) return 'success';
+
+    const envStatus = (dep.environmentStatus || '').toUpperCase();
+    if (envStatus === 'FAILED') return 'failed';
+    if (envStatus === 'PENDING' || envStatus === 'BUILDING') {
+      if (pipelineStatus === 'FAILED' || pipelineStatus === 'CANCELED') return 'failed';
+      return 'pending';
+    }
+    if (pipelineStatus === 'FAILED' || pipelineStatus === 'CANCELED') return 'failed';
+    if (pipelineStatus === 'RUNNING' || pipelineStatus === 'PENDING') return 'pending';
+    return 'pending';
+  }
+
+  private deploymentOutcome(dep: DeploymentHistoryItem): 'success' | 'pending' | 'failed' | 'skipped' {
+    return this.pipelineChartOutcome(dep);
+  }
+
+  private inferPipelineKind(jobs: PipelineJobInfo[]): 'scan' | 'deploy' {
+    const hasDeployJob = jobs.some(j => {
+      const stage = (j.stage || j.name || '').toLowerCase();
+      return stage.includes('deploy') || stage.includes('build-image') || stage.includes('push-image');
+    });
+    return hasDeployJob ? 'deploy' : 'scan';
+  }
+
+  private stageTemplateForKind(kind: 'scan' | 'deploy'): string[] {
+    // Doit coller aux `stages:` GitLab (pipeline.md) — pas aux noms de jobs.
+    // clone-repository / deploy:clone sont des jobs du stage `setup`, pas un stage séparé.
+    if (kind === 'scan') {
+      return ['setup', 'code-analysis', 'sca', 'sast', 'secrets-iac', 'reporting'];
+    }
+    return ['setup', 'build', 'container-scan', 'push-image', 'deploy-k8s', 'zap-scan', 'reporting', 'security-validation'];
+  }
+
+  private statusFromStageJobs(jobs: PipelineJobInfo[]): PipelineStageStatus {
+    if (!jobs.length) return 'pending';
+    const statuses = jobs.map(j => (j.status || '').toLowerCase());
+    if (statuses.some(s => s === 'failed' || s === 'canceled')) return 'failed';
+    if (statuses.some(s => s === 'running' || s === 'pending' || s === 'created' || s === 'building')) return 'active';
+    if (statuses.every(s => s === 'success' || s === 'passed' || s === 'manual' || s === 'skipped')) {
+      // skipped/manual seuls → pas « done » ; done seulement si au moins un succès
+      if (statuses.every(s => s === 'skipped' || s === 'manual')) return 'pending';
+      return 'done';
+    }
+    if (statuses.some(s => s === 'skipped')) return 'pending';
+    return 'pending';
+  }
+
+  private canDisplayDeploymentUrl(url: string): boolean {
+    const dep = this.displayLatestDeployment;
+    if (!dep) return false;
+    const envStatus = (dep.environmentStatus || '').toUpperCase();
+    if (envStatus !== 'RUNNING') return false;
+    if (this.isLatestEnvExpired) return false;
+    const lower = url.toLowerCase();
+    return !lower.includes('.local');
   }
 
   loadEnvironmentVulnCounts(): void {
@@ -3007,15 +3338,26 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.viewSecurityDashboard();
   }
 
-  viewEnvSecurityAnalysis(env: { id: string; branch: string }): void {
+  viewEnvSecurityAnalysis(env: { id: string; branch?: string; gitBranch?: string }): void {
     if (!this.appId) return;
-    this.router.navigate(['/project', this.appId, 'security-dashboard'], {
-      queryParams: { branch: env.branch, envId: env.id }
-    });
+    const branch = env.branch || env.gitBranch;
+    const queryParams: Record<string, string> = {};
+    if (branch && branch !== '—') queryParams['branch'] = branch;
+    this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
-  viewPipeline(envId: string): void {
-    this.router.navigate(['/pipeline', envId], { queryParams: { appId: this.appId } });
+  viewPipeline(envId: string, kind?: 'SCAN' | 'DEPLOY'): void {
+    const queryParams: Record<string, string> = { appId: this.appId || '' };
+    if (kind) queryParams['kind'] = kind;
+    this.router.navigate(['/pipeline', envId], { queryParams });
+  }
+
+  viewPipelineById(pipelineId: number | string, branch?: string, kind?: 'SCAN' | 'DEPLOY'): void {
+    const queryParams: Record<string, string> = {};
+    if (this.appId) queryParams['appId'] = this.appId;
+    if (branch) queryParams['branch'] = branch;
+    if (kind) queryParams['kind'] = kind;
+    this.router.navigate(['/pipeline/id', String(pipelineId)], { queryParams });
   }
 
   viewEnvironment(envId: string): void {
@@ -3072,7 +3414,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         title,
         description,
         timestamp: e.createdAt,
-        status: e.status,
+        status: this.environmentStatusLabel(e.status),
         icon: this.getEnvironmentActivityIcon(e.status),
         link: `/pipeline/${e.id}?appId=${this.appId ?? ''}`,
         previewUrl: preview
@@ -3168,9 +3510,19 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const s = (status || '').toUpperCase();
     if (s === 'SUCCESS') return 'status-success';
     if (s === 'FAILED' || s === 'CANCELED') return 'status-danger';
-    if (s === 'RUNNING' || s === 'PENDING' || s === 'BUILDING') return 'status-warning';
+    if (s === 'RUNNING') return 'status-success';
+    if (s === 'DEGRADED') return 'status-warning';
+    if (s === 'PENDING' || s === 'BUILDING') return 'status-warning';
     if (s === 'DESTROYED' || s === 'EXPIRED') return 'status-muted';
     return 'status-muted';
+  }
+
+  environmentStatusClass(status: string | undefined): string {
+    return environmentStatusView(status).cssClass;
+  }
+
+  environmentStatusLabel(status: string | undefined): string {
+    return environmentStatusView(status).label;
   }
 
   calculateTimeRemaining(expiresAt: unknown): string {
@@ -3192,6 +3544,16 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   viewAllEnvironments(): void {
     if (!this.appId) return;
     this.router.navigate(['/project', this.appId, 'deployments']);
+  }
+
+  viewDeploymentsWithStatusFilter(filter: string | null): void {
+    if (!this.appId) return;
+    const queryParams: Record<string, string> = {};
+    if (filter) queryParams['status'] = filter;
+    if (!this.isGlobalView && this.selectedBranch) {
+      queryParams['branch'] = this.selectedBranch;
+    }
+    this.router.navigate(['/project', this.appId, 'deployments'], { queryParams });
   }
 
   navigateActivity(activity: ActivityItem): void {
@@ -3265,7 +3627,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const branch = env.gitBranch || '—';
     const st = (env.status || '').toUpperCase();
     switch (st) {
-      case 'RUNNING': return { title: 'Environnement actif', description: `${name} — branche ${branch}` };
+      case 'RUNNING': return { title: 'Environnement en ligne', description: `${name} — branche ${branch}` };
+      case 'DEGRADED': return { title: 'Environnement dégradé', description: `${name} — pods non prêts` };
       case 'PENDING': return { title: 'Environnement en attente', description: `${name} — branche ${branch}` };
       case 'BUILDING': return { title: 'Environnement en construction', description: `${name} — branche ${branch}` };
       case 'FAILED': return { title: 'Environnement en échec', description: `${name} — branche ${branch}` };
@@ -3278,6 +3641,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private getEnvironmentActivityIcon(status: string | undefined): string {
     const s = (status || '').toUpperCase();
     if (s === 'RUNNING') return '🌍';
+    if (s === 'DEGRADED') return '⚠️';
     if (s === 'BUILDING') return '🔧';
     if (s === 'PENDING') return '⏳';
     if (s === 'FAILED') return '⚠️';

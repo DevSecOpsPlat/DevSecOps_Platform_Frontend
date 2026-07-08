@@ -1,0 +1,809 @@
+{
+  "fileInfos" : [ {
+    "path" : "src\\app\\User\\activate-account\\activate-account.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -206263733,
+      "lastModified" : 1781787617559
+    },
+    "linesOfCode" : 72
+  }, {
+    "path" : "src\\app\\User\\profile\\profile.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1852655012,
+      "lastModified" : 1781977631540
+    },
+    "linesOfCode" : 379
+  }, {
+    "path" : "src\\app\\User\\sign-in\\sign-in.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1205152920,
+      "lastModified" : 1770133111134
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\User\\sign-in\\sign-in.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1834868890,
+      "lastModified" : 1782991189580
+    },
+    "linesOfCode" : 193
+  }, {
+    "path" : "src\\app\\admin\\admin-alerts\\admin-alerts.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -2129211224,
+      "lastModified" : 1781977629936
+    },
+    "linesOfCode" : 617
+  }, {
+    "path" : "src\\app\\admin\\admin-audit\\admin-audit.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -36502679,
+      "lastModified" : 1781977629938
+    },
+    "linesOfCode" : 578
+  }, {
+    "path" : "src\\app\\admin\\admin-create-user\\admin-create-user.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -928777786,
+      "lastModified" : 1781703227321
+    },
+    "linesOfCode" : 89
+  }, {
+    "path" : "src\\app\\admin\\admin-home\\admin-home.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -99553590,
+      "lastModified" : 1771447296958
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\admin\\admin-home\\admin-home.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 617896965,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 19
+  }, {
+    "path" : "src\\app\\admin\\admin-inventory\\admin-inventory.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 616741358,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 151
+  }, {
+    "path" : "src\\app\\admin\\admin-layout\\admin-layout.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1977151814,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 19
+  }, {
+    "path" : "src\\app\\admin\\admin-observability\\admin-observability.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 2029861899,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 24
+  }, {
+    "path" : "src\\app\\admin\\admin-overview\\admin-overview.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 849050987,
+      "lastModified" : 1781689816335
+    },
+    "linesOfCode" : 428
+  }, {
+    "path" : "src\\app\\admin\\admin-reclamations\\admin-reclamations.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1224538663,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 112
+  }, {
+    "path" : "src\\app\\admin\\admin-sidebar\\admin-sidebar.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 429405937,
+      "lastModified" : 1771447469629
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\admin\\admin-sidebar\\admin-sidebar.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1016225088,
+      "lastModified" : 1781689816339
+    },
+    "linesOfCode" : 32
+  }, {
+    "path" : "src\\app\\admin\\admin-user-detail\\admin-user-detail.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1524140651,
+      "lastModified" : 1781689816339
+    },
+    "linesOfCode" : 507
+  }, {
+    "path" : "src\\app\\admin\\admin-users\\admin-users.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 760966218,
+      "lastModified" : 1781702313595
+    },
+    "linesOfCode" : 485
+  }, {
+    "path" : "src\\app\\app-routing.module.ts",
+    "modificationInfo" : {
+      "contentHash" : -120850734,
+      "lastModified" : 1782974486558
+    },
+    "linesOfCode" : 165
+  }, {
+    "path" : "src\\app\\app.module.ts",
+    "modificationInfo" : {
+      "contentHash" : -1941254144,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 109
+  }, {
+    "path" : "src\\app\\app\\app.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1983970597,
+      "lastModified" : 1769253646962
+    },
+    "linesOfCode" : 29
+  }, {
+    "path" : "src\\app\\app\\app.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1352776400,
+      "lastModified" : 1773928918437
+    },
+    "linesOfCode" : 13
+  }, {
+    "path" : "src\\app\\application-management\\application-create\\application-create.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1366890797,
+      "lastModified" : 1782974486558
+    },
+    "linesOfCode" : 47
+  }, {
+    "path" : "src\\app\\application-management\\application-detail\\application-detail.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1525705805,
+      "lastModified" : 1782974486560
+    },
+    "linesOfCode" : 189
+  }, {
+    "path" : "src\\app\\application-management\\applications-list\\applications-list.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 692115813,
+      "lastModified" : 1782974486558
+    },
+    "linesOfCode" : 53
+  }, {
+    "path" : "src\\app\\application-management\\database-form\\database-form.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1225945385,
+      "lastModified" : 1782974486560
+    },
+    "linesOfCode" : 89
+  }, {
+    "path" : "src\\app\\application-management\\deployment-status\\deployment-status.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 425701502,
+      "lastModified" : 1782974486558
+    },
+    "linesOfCode" : 132
+  }, {
+    "path" : "src\\app\\application-management\\service-form\\service-form.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1159606032,
+      "lastModified" : 1782974486558
+    },
+    "linesOfCode" : 132
+  }, {
+    "path" : "src\\app\\applications\\applications-active\\applications-active.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1434250933,
+      "lastModified" : 1773929935662
+    },
+    "linesOfCode" : 37
+  }, {
+    "path" : "src\\app\\applications\\my-applications\\my-applications.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1420316681,
+      "lastModified" : 1771330929382
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\applications\\my-applications\\my-applications.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -2042148606,
+      "lastModified" : 1782307528903
+    },
+    "linesOfCode" : 46
+  }, {
+    "path" : "src\\app\\guards\\admin.guard.ts",
+    "modificationInfo" : {
+      "contentHash" : 703517928,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 31
+  }, {
+    "path" : "src\\app\\guards\\auth.guard.ts",
+    "modificationInfo" : {
+      "contentHash" : 398767223,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 32
+  }, {
+    "path" : "src\\app\\home\\home.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1424641592,
+      "lastModified" : 1770131190020
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\home\\home.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1677309531,
+      "lastModified" : 1781703228632
+    },
+    "linesOfCode" : 24
+  }, {
+    "path" : "src\\app\\models\\activity\\ActivityItem.ts",
+    "modificationInfo" : {
+      "contentHash" : -2063187305,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 19
+  }, {
+    "path" : "src\\app\\models\\ai\\analyze-artifact.model.ts",
+    "modificationInfo" : {
+      "contentHash" : 221954810,
+      "lastModified" : 1773916296618
+    },
+    "linesOfCode" : 17
+  }, {
+    "path" : "src\\app\\models\\application-management\\application-management.models.ts",
+    "modificationInfo" : {
+      "contentHash" : 415081758,
+      "lastModified" : 1782974486560
+    },
+    "linesOfCode" : 112
+  }, {
+    "path" : "src\\app\\models\\application-management\\confirm-modal.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 465036937,
+      "lastModified" : 1782931663499
+    },
+    "linesOfCode" : 61
+  }, {
+    "path" : "src\\app\\models\\application\\application-response.ts",
+    "modificationInfo" : {
+      "contentHash" : 682335905,
+      "lastModified" : 1771330066228
+    },
+    "linesOfCode" : 11
+  }, {
+    "path" : "src\\app\\models\\dashboard\\dashboard.models.ts",
+    "modificationInfo" : {
+      "contentHash" : -1631651853,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 49
+  }, {
+    "path" : "src\\app\\models\\deployment\\deploy-request.ts",
+    "modificationInfo" : {
+      "contentHash" : 631443322,
+      "lastModified" : 1771151284753
+    },
+    "linesOfCode" : 6
+  }, {
+    "path" : "src\\app\\models\\deployment\\deploy-response.ts",
+    "modificationInfo" : {
+      "contentHash" : -449737571,
+      "lastModified" : 1771860853921
+    },
+    "linesOfCode" : 9
+  }, {
+    "path" : "src\\app\\models\\deployment\\deployment-history-item.ts",
+    "modificationInfo" : {
+      "contentHash" : -1685084346,
+      "lastModified" : 1778236024117
+    },
+    "linesOfCode" : 20
+  }, {
+    "path" : "src\\app\\models\\environment\\environment-summary-response.ts",
+    "modificationInfo" : {
+      "contentHash" : 438652054,
+      "lastModified" : 1772185636410
+    },
+    "linesOfCode" : 14
+  }, {
+    "path" : "src\\app\\models\\environment\\format.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 627800682,
+      "lastModified" : 1772186849202
+    },
+    "linesOfCode" : 72
+  }, {
+    "path" : "src\\app\\models\\environment\\status-types.ts",
+    "modificationInfo" : {
+      "contentHash" : 777612100,
+      "lastModified" : 1772186088291
+    },
+    "linesOfCode" : 54
+  }, {
+    "path" : "src\\app\\models\\pipeline\\pipeline-list-item.ts",
+    "modificationInfo" : {
+      "contentHash" : 1541660557,
+      "lastModified" : 1771365928983
+    },
+    "linesOfCode" : 18
+  }, {
+    "path" : "src\\app\\models\\pipeline\\pipeline-scan-response.ts",
+    "modificationInfo" : {
+      "contentHash" : 1218183226,
+      "lastModified" : 1773231088258
+    },
+    "linesOfCode" : 28
+  }, {
+    "path" : "src\\app\\models\\pipeline\\security-summary-response.ts",
+    "modificationInfo" : {
+      "contentHash" : -1301156176,
+      "lastModified" : 1771855015836
+    },
+    "linesOfCode" : 14
+  }, {
+    "path" : "src\\app\\models\\user\\profile.models.ts",
+    "modificationInfo" : {
+      "contentHash" : 1884181311,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 22
+  }, {
+    "path" : "src\\app\\models\\user\\signin-payload.ts",
+    "modificationInfo" : {
+      "contentHash" : 778480403,
+      "lastModified" : 1771150337894
+    },
+    "linesOfCode" : 6
+  }, {
+    "path" : "src\\app\\models\\user\\signin-response.ts",
+    "modificationInfo" : {
+      "contentHash" : 1502640553,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 36
+  }, {
+    "path" : "src\\app\\models\\user\\user.ts",
+    "modificationInfo" : {
+      "contentHash" : -88782305,
+      "lastModified" : 1771150337894
+    },
+    "linesOfCode" : 17
+  }, {
+    "path" : "src\\app\\navbar\\navbar.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -864403685,
+      "lastModified" : 1770132812587
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\navbar\\navbar.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1322947741,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 74
+  }, {
+    "path" : "src\\app\\pipes\\chat-markdown.pipe.ts",
+    "modificationInfo" : {
+      "contentHash" : 698997721,
+      "lastModified" : 1774816334541
+    },
+    "linesOfCode" : 263
+  }, {
+    "path" : "src\\app\\pipes\\time-ago.pipe.ts",
+    "modificationInfo" : {
+      "contentHash" : 1519102861,
+      "lastModified" : 1772209262892
+    },
+    "linesOfCode" : 38
+  }, {
+    "path" : "src\\app\\project\\defectdojo-finding-details\\defectdojo-finding-details.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 506085658,
+      "lastModified" : 1782466754171
+    },
+    "linesOfCode" : 239
+  }, {
+    "path" : "src\\app\\project\\deploy-success-modal\\deploy-success-modal.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1691130700,
+      "lastModified" : 1772203585671
+    },
+    "linesOfCode" : 48
+  }, {
+    "path" : "src\\app\\project\\deployments\\project-deployments.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1574675315,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 287
+  }, {
+    "path" : "src\\app\\project\\environments\\environment-create\\environment-create.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 1812312689,
+      "lastModified" : 1770132646826
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\environments\\environment-create\\environment-create.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1841639050,
+      "lastModified" : 1773930161689
+    },
+    "linesOfCode" : 60
+  }, {
+    "path" : "src\\app\\project\\environments\\environment-details\\environment-details.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 2064568027,
+      "lastModified" : 1772203320054
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\environments\\environment-details\\environment-details.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 41934432,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 293
+  }, {
+    "path" : "src\\app\\project\\logs\\project-logs.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1234896954,
+      "lastModified" : 1771934915233
+    },
+    "linesOfCode" : 46
+  }, {
+    "path" : "src\\app\\project\\monitoring\\monitoring.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1401404870,
+      "lastModified" : 1778262509487
+    },
+    "linesOfCode" : 27
+  }, {
+    "path" : "src\\app\\project\\overview\\project-overview.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -889964869,
+      "lastModified" : 1782500021625
+    },
+    "linesOfCode" : 3287
+  }, {
+    "path" : "src\\app\\project\\pipeline-details\\pipeline-details.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 1017817488,
+      "lastModified" : 1771331108080
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\pipeline-details\\pipeline-details.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -855291682,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 450
+  }, {
+    "path" : "src\\app\\project\\pipelines-list\\pipelines-list.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 1798316557,
+      "lastModified" : 1771366181939
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\pipelines-list\\pipelines-list.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1503712661,
+      "lastModified" : 1773918496478
+    },
+    "linesOfCode" : 388
+  }, {
+    "path" : "src\\app\\project\\project-layout\\project-layout.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1436216688,
+      "lastModified" : 1773918669671
+    },
+    "linesOfCode" : 71
+  }, {
+    "path" : "src\\app\\project\\quality-gate\\quality-gate.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1913321485,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 1664
+  }, {
+    "path" : "src\\app\\project\\recent-activity\\recent-activity.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1445976716,
+      "lastModified" : 1772556466927
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\recent-activity\\recent-activity.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -1312451335,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 495
+  }, {
+    "path" : "src\\app\\project\\security-dashboard\\security-dashboard.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -2105909285,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 973
+  }, {
+    "path" : "src\\app\\project\\security\\project-security.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1398226620,
+      "lastModified" : 1773917094893
+    },
+    "linesOfCode" : 107
+  }, {
+    "path" : "src\\app\\project\\sonarqube\\sonarqube.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 706780871,
+      "lastModified" : 1774731895383
+    },
+    "linesOfCode" : 1504
+  }, {
+    "path" : "src\\app\\project\\user-account-layout\\user-account-layout.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 672303763,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 18
+  }, {
+    "path" : "src\\app\\project\\user-reclamations\\user-reclamations.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -2044861409,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 118
+  }, {
+    "path" : "src\\app\\project\\user-sidebar\\user-sidebar.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 989033549,
+      "lastModified" : 1771855662263
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\project\\user-sidebar\\user-sidebar.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 704218563,
+      "lastModified" : 1782500021625
+    },
+    "linesOfCode" : 506
+  }, {
+    "path" : "src\\app\\project\\vulnerabilities-dashboard\\vulnerabilities-dashboard.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1754883320,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 721
+  }, {
+    "path" : "src\\app\\project\\vulnerability-details\\vulnerability-details.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1309481105,
+      "lastModified" : 1775119845773
+    },
+    "linesOfCode" : 310
+  }, {
+    "path" : "src\\app\\services\\admin\\admin.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -2015802952,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 517
+  }, {
+    "path" : "src\\app\\services\\ai\\ai-analysis.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -1041057276,
+      "lastModified" : 1773916300758
+    },
+    "linesOfCode" : 42
+  }, {
+    "path" : "src\\app\\services\\application-management\\application-management.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 2064843017,
+      "lastModified" : 1782974486560
+    },
+    "linesOfCode" : 131
+  }, {
+    "path" : "src\\app\\services\\application\\application.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -1013308751,
+      "lastModified" : 1782466754130
+    },
+    "linesOfCode" : 215
+  }, {
+    "path" : "src\\app\\services\\auth\\auth.service.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -324130113,
+      "lastModified" : 1770134253901
+    },
+    "linesOfCode" : 16
+  }, {
+    "path" : "src\\app\\services\\auth\\auth.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 867913265,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 136
+  }, {
+    "path" : "src\\app\\services\\complaints\\complaint.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 1028332519,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 82
+  }, {
+    "path" : "src\\app\\services\\defectdojo\\defectdojo.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 1907499927,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 352
+  }, {
+    "path" : "src\\app\\services\\environment\\environment.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -1172282395,
+      "lastModified" : 1782991189580
+    },
+    "linesOfCode" : 92
+  }, {
+    "path" : "src\\app\\services\\findings\\findings.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -30171818,
+      "lastModified" : 1775122180857
+    },
+    "linesOfCode" : 324
+  }, {
+    "path" : "src\\app\\services\\pipeline\\pipeline.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -862652280,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 98
+  }, {
+    "path" : "src\\app\\services\\quality-gate\\quality-gate.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -902992562,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 275
+  }, {
+    "path" : "src\\app\\services\\reports\\vulnerability-reports.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -34433343,
+      "lastModified" : 1775149032675
+    },
+    "linesOfCode" : 70
+  }, {
+    "path" : "src\\app\\services\\security\\security.service.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 1341951703,
+      "lastModified" : 1772206843591
+    },
+    "linesOfCode" : 16
+  }, {
+    "path" : "src\\app\\services\\security\\security.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 1916719041,
+      "lastModified" : 1782991190282
+    },
+    "linesOfCode" : 177
+  }, {
+    "path" : "src\\app\\services\\sonarqube\\sonarqube.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -379541161,
+      "lastModified" : 1773916272261
+    },
+    "linesOfCode" : 79
+  }, {
+    "path" : "src\\app\\services\\ui\\theme.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -2031806685,
+      "lastModified" : 1771860688921
+    },
+    "linesOfCode" : 36
+  }, {
+    "path" : "src\\app\\services\\ui\\toast.service.ts",
+    "modificationInfo" : {
+      "contentHash" : 483157934,
+      "lastModified" : 1771855288531
+    },
+    "linesOfCode" : 28
+  }, {
+    "path" : "src\\app\\services\\user\\user.service.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : 2135023074,
+      "lastModified" : 1770133919039
+    },
+    "linesOfCode" : 16
+  }, {
+    "path" : "src\\app\\services\\user\\user.service.ts",
+    "modificationInfo" : {
+      "contentHash" : -832302901,
+      "lastModified" : 1781977629938
+    },
+    "linesOfCode" : 202
+  }, {
+    "path" : "src\\app\\shared\\password\\password-requirements.component.ts",
+    "modificationInfo" : {
+      "contentHash" : -2037047613,
+      "lastModified" : 1781689816339
+    },
+    "linesOfCode" : 17
+  }, {
+    "path" : "src\\app\\shared\\password\\password-rules.ts",
+    "modificationInfo" : {
+      "contentHash" : -1616820589,
+      "lastModified" : 1781689816339
+    },
+    "linesOfCode" : 25
+  }, {
+    "path" : "src\\app\\shared\\password\\password-strength.validator.ts",
+    "modificationInfo" : {
+      "contentHash" : -722362337,
+      "lastModified" : 1781689816337
+    },
+    "linesOfCode" : 12
+  }, {
+    "path" : "src\\app\\shared\\username\\username-rules.ts",
+    "modificationInfo" : {
+      "contentHash" : 1698084806,
+      "lastModified" : 1782991189543
+    },
+    "linesOfCode" : 39
+  }, {
+    "path" : "src\\app\\shared\\username\\username.validator.ts",
+    "modificationInfo" : {
+      "contentHash" : -942200063,
+      "lastModified" : 1782991190283
+    },
+    "linesOfCode" : 13
+  }, {
+    "path" : "src\\app\\toast-container\\toast-container.component.spec.ts",
+    "modificationInfo" : {
+      "contentHash" : -1106717426,
+      "lastModified" : 1771855732950
+    },
+    "linesOfCode" : 21
+  }, {
+    "path" : "src\\app\\toast-container\\toast-container.component.ts",
+    "modificationInfo" : {
+      "contentHash" : 1895112435,
+      "lastModified" : 1774127352120
+    },
+    "linesOfCode" : 12
+  }, {
+    "path" : "src\\environments\\environment.prod.ts",
+    "modificationInfo" : {
+      "contentHash" : -2056200284,
+      "lastModified" : 1779058818043
+    },
+    "linesOfCode" : 9
+  }, {
+    "path" : "src\\environments\\environment.ts",
+    "modificationInfo" : {
+      "contentHash" : -955722944,
+      "lastModified" : 1779058818050
+    },
+    "linesOfCode" : 13
+  }, {
+    "path" : "src\\main.ts",
+    "modificationInfo" : {
+      "contentHash" : 1495866411,
+      "lastModified" : 1782930535750
+    },
+    "linesOfCode" : 9
+  } ],
+  "appVersion" : "1.3.0"
+}

@@ -1,39 +1,105 @@
-<div class="am-page">
-  <header class="am-header">
-    <div>
-      <h1 class="am-title">Applications managées</h1>
-      <p class="am-subtitle">Composez une application de services et de bases, puis déployez-la sur Kubernetes.</p>
-    </div>
-    <button class="am-btn am-btn-primary" (click)="create()">
-      <span class="am-btn-icon">+</span> Créer une application
-    </button>
-  </header>
+<div class="am-page pj-page">
+  <div class="pj-hero">
+    <div class="pj-hero-glow"></div>
+    <header class="pj-hero-inner">
+      <div class="pj-hero-text">
+        <p class="pj-eyebrow">Espace projets</p>
+        <h1 class="pj-title">Projets</h1>
+        <p class="pj-lead">
+          Regroupez vos services et bases de données. Chaque projet est un conteneur logique —
+          le scan et le déploiement se font au niveau des services.
+        </p>
+      </div>
+      <button class="am-btn am-btn-primary pj-create-btn" (click)="create()">
+        <span class="am-btn-icon">+</span> Créer un projet
+      </button>
+    </header>
+  
+  </div>
 
   <div *ngIf="loading" class="am-empty">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
-  <div *ngIf="!loading && !error && apps.length === 0" class="am-empty-card">
-    <p>Aucune application managée pour le moment.</p>
-    <button class="am-btn am-btn-primary" (click)="create()">Créer ma première application</button>
+  <div *ngIf="!loading && !error && apps.length === 0 && orphanServices.length === 0" class="pj-empty">
+    <div class="pj-empty-icon">📁</div>
+    <h2>Aucun projet pour le moment</h2>
+    <p>Créez votre premier projet pour y ajouter des services et des bases de données.</p>
+    <button class="am-btn am-btn-primary" (click)="create()">Créer mon premier projet</button>
   </div>
 
-  <div class="am-cards" *ngIf="!loading && apps.length > 0">
-    <div class="am-card" *ngFor="let app of apps" (click)="open(app)">
-      <div class="am-card-head">
-        <h3 class="am-card-title">{{ app.name }}</h3>
-        <span class="am-badge" [ngClass]="statusClass(app)">
-          {{ app.lastDeployment?.status || 'Non déployée' }}
+  <div class="pj-grid" *ngIf="!loading && apps.length > 0">
+    <article
+      class="pj-card"
+      *ngFor="let app of apps; let i = index"
+      (click)="open(app)"
+      [style.animation-delay]="(i * 0.06) + 's'">
+      <div class="pj-card-accent"></div>
+      <div class="pj-card-top">
+        <div class="pj-stack" [attr.data-stack]="stack(app)">{{ stackIcon(stack(app)) }}</div>
+        <div class="pj-card-titles">
+          <h3 class="pj-card-name">{{ app.name }}</h3>
+          <code class="pj-slug">{{ app.slug }}</code>
+        </div>
+        <span class="pj-open-arrow" aria-hidden="true">→</span>
+      </div>
+
+      <p class="pj-card-desc">{{ app.description || 'Sans description' }}</p>
+
+      <div class="pj-card-chips">
+        <span class="pj-chip">
+          <span class="pj-chip-icon">⚙</span>
+          {{ app.services.length }} service{{ app.services.length !== 1 ? 's' : '' }}
+        </span>
+        <span class="pj-chip">
+          <span class="pj-chip-icon">🗄</span>
+          {{ app.databases.length }} base{{ app.databases.length !== 1 ? 's' : '' }}
         </span>
       </div>
-      <p class="am-card-desc">{{ app.description || 'Sans description' }}</p>
-      <div class="am-card-meta">
-        <span class="am-chip">{{ app.services.length }} service(s)</span>
-        <span class="am-chip">{{ app.databases.length }} base(s)</span>
-      </div>
-      <div class="am-card-foot">
-        <code class="am-slug">{{ app.slug }}</code>
-        <span class="am-open">Ouvrir →</span>
+
+      <p class="pj-composition" *ngIf="compositionLabel(app)">{{ compositionLabel(app) }}</p>
+
+      <footer class="pj-card-foot">
+        <span class="pj-meta" *ngIf="app.createdAt">
+          <span class="pj-meta-icon">📅</span>
+          Créé {{ formatDate(app.createdAt) }}
+        </span>
+        <span class="pj-meta" *ngIf="app.createdByUsername">
+          <span class="pj-meta-icon">👤</span>
+          {{ app.createdByUsername }}
+        </span>
+      </footer>
+    </article>
+  </div>
+
+  <section class="pj-orphans" *ngIf="!loading && orphanServices.length > 0">
+    <div class="pj-orphans-head">
+      <h3>Services orphelins ({{ orphanServices.length }})</h3>
+      <p>Vestiges d'anciens scans, sans projet parent.</p>
+    </div>
+    <div class="am-list">
+      <div class="am-list-item" *ngFor="let s of orphanServices" (click)="openOrphanServiceDashboard(s.id)" style="cursor:pointer">
+        <div class="am-list-item-main">
+          <div class="am-list-item-title">{{ s.name }}</div>
+          <div class="am-list-item-sub am-mono">{{ s.gitRepositoryUrl || 'Sans repo' }}</div>
+        </div>
+        <div class="am-list-actions">
+          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanServiceDashboard(s.id); $event.stopPropagation()">Consulter</button>
+          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanSecurityDashboard(s.id); $event.stopPropagation()">Sécurité</button>
+        </div>
       </div>
     </div>
+  </section>
+</div>
+
+<!-- Modal : création projet -->
+<div class="am-modal-backdrop" *ngIf="showCreateForm" (click)="cancelCreate()">
+  <div class="am-modal" (click)="$event.stopPropagation()">
+    <h3 class="am-modal-title">Créer un projet</h3>
+    <app-managed-project-form
+      [saving]="creating"
+      [error]="createError"
+      (save)="saveProject($event)"
+      (cancel)="cancelCreate()">
+    </app-managed-project-form>
   </div>
 </div>

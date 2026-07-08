@@ -4,7 +4,6 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ApplicationService } from '../../services/application/application.service';
 import { ApplicationResponse } from 'src/app/models/application/application-response';
 import { PipelineService } from 'src/app/services/pipeline/pipeline.service';
-import { EnvironmentService } from 'src/app/services/environment/environment.service'; // ← AJOUTER
 
 @Component({
   selector: 'app-user-sidebar',
@@ -41,8 +40,7 @@ export class UserSidebarComponent implements OnInit {
     public authService: AuthService,
     private router: Router,
     private applicationService: ApplicationService,
-    private pipelineService: PipelineService,
-    private environmentService: EnvironmentService // ← AJOUTER
+    private pipelineService: PipelineService
   ) {}
 
   ngOnInit(): void {
@@ -82,18 +80,7 @@ export class UserSidebarComponent implements OnInit {
       }
     });
     
-    // Récupérer le dernier environnement (pour affichage éventuel)
-    this.environmentService.getLatestEnvironment().subscribe({
-      next: latestEnv => {
-        if (latestEnv) {
-          this.lastEnvironmentId = latestEnv.id;
-          localStorage.setItem('last-environment-id', latestEnv.id);
-        }
-      },
-      error: () => {
-        this.lastEnvironmentId = localStorage.getItem('last-environment-id');
-      }
-    });
+    this.lastEnvironmentId = localStorage.getItem('last-environment-id');
   }
 
   // ✅ UNE SEULE MÉTHODE goToLastPipeline (supprimer l'autre)
@@ -118,33 +105,17 @@ export class UserSidebarComponent implements OnInit {
   }
 
   goToLastEnvironment(): void {
-    // Toujours récupérer dynamiquement le dernier environnement existant
-    this.environmentService.getLatestEnvironment().subscribe({
-      next: latest => {
-        if (latest && latest.id) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', latest.id], { queryParams });
-        } else if (this.lastDeploymentEnvId) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
-        }
-      },
-      error: () => {
-        if (this.lastDeploymentEnvId) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
-        }
-      }
-    });
+    const envId = this.lastDeploymentEnvId
+      || localStorage.getItem('envirotest-last-env-id')
+      || localStorage.getItem('last-environment-id');
+    if (!envId) {
+      return;
+    }
+    const queryParams: Record<string, string> = {};
+    if (this.currentAppId) {
+      queryParams['appId'] = this.currentAppId;
+    }
+    this.router.navigate(['/environment', envId], { queryParams });
   }
 
   getPipelineCount(): number {
@@ -223,20 +194,6 @@ export class UserSidebarComponent implements OnInit {
     this.router.navigate([path]);
   }
 
-  /**
-   * Environnement à utiliser pour vulnérabilités / correctifs IA.
-   * Priorité : dernier env global (API latest) — cohérent avec les pages qui appellent getLatestEnvironment().
-   * Éviter de mettre en premier lastDeploymentEnvId : l’historique des déploiements peut référencer un env plus ancien
-   * que le « dernier environnement » réel.
-   */
-  private preferredSecurityEnvId(): string | null {
-    return (
-      this.lastEnvironmentId ||
-      this.lastPipelineEnvId ||
-      this.lastDeploymentEnvId
-    );
-  }
-
   goToLegacySecurityDashboard(): void {
     const appId = this.lastKnownApplicationId();
     if (appId) {
@@ -249,23 +206,6 @@ export class UserSidebarComponent implements OnInit {
   isLegacySecurityDashboardRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
     return /\/project\/[^/]+\/security-dashboard(\/|$)/.test(path);
-  }
-
-  /** Même layout que le projet : /project/:appId/vulnerabilities */
-  navigateSecurityVulnerabilities(): void {
-    const appId = this.lastKnownApplicationId();
-    const envId = this.preferredSecurityEnvId();
-    const qp = envId ? { envId } : {};
-    if (appId) {
-      this.router.navigate(['/project', appId, 'vulnerabilities'], { queryParams: qp });
-    } else {
-      this.router.navigate(['/my-applications']);
-    }
-  }
-
-  isSecurityVulnerabilitiesRoute(): boolean {
-    const path = this.router.url.split(/[?#]/)[0];
-    return /\/project\/[^/]+\/vulnerabilities(\/[^/]+)?$/.test(path);
   }
 
   goToProjectOverview(): void {
@@ -459,33 +399,17 @@ goToActivity(): void {
 }
 
   goToLastDeployment(): void {
-    // Utiliser toujours le dernier environnement retourné par le backend
-    this.environmentService.getLatestEnvironment().subscribe({
-      next: latest => {
-        if (latest && latest.id) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', latest.id], { queryParams });
-        } else if (this.lastDeploymentEnvId) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
-        }
-      },
-      error: () => {
-        if (this.lastDeploymentEnvId) {
-          const queryParams: any = {};
-          if (this.currentAppId) {
-            queryParams.appId = this.currentAppId;
-          }
-          this.router.navigate(['/environment', this.lastDeploymentEnvId], { queryParams });
-        }
-      }
-    });
+    const envId = this.lastDeploymentEnvId
+      || localStorage.getItem('envirotest-last-env-id')
+      || localStorage.getItem('last-environment-id');
+    if (!envId) {
+      return;
+    }
+    const queryParams: Record<string, string> = {};
+    if (this.currentAppId) {
+      queryParams['appId'] = this.currentAppId;
+    }
+    this.router.navigate(['/environment', envId], { queryParams });
   }
 
   isEnvironmentActive(envId: string | null): boolean {

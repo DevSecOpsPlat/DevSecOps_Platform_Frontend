@@ -9,12 +9,14 @@
       <select class="am-select" formControlName="role">
         <option *ngFor="let r of roles" [value]="r">{{ r }}</option>
       </select>
+      <span class="am-hint">FRONTEND · BACKEND · WORKER — les champs adaptés s’affichent selon le rôle.</span>
     </div>
   </div>
 
   <div class="am-field">
     <label class="am-label">URL du repository Git *</label>
     <input class="am-input" formControlName="gitRepositoryUrl" placeholder="https://github.com/org/repo" />
+    <span class="am-hint">HTTPS uniquement (git://, ssh://, ext:: refusés).</span>
   </div>
 
   <div class="am-grid-2">
@@ -38,30 +40,44 @@
     <div class="am-field">
       <label class="am-label">Contexte de build</label>
       <input class="am-input" formControlName="buildContext" placeholder="." />
+      <span class="am-hint">Passé au pipeline comme <code>BUILD_CONTEXT</code>.</span>
     </div>
-    <div class="am-field">
+    <div class="am-field" *ngIf="!isWorker">
       <label class="am-label">Port exposé *</label>
-      <input class="am-input" type="number" formControlName="exposedPort" placeholder="8080" />
+      <input class="am-input" type="number" formControlName="exposedPort" min="1024" max="65535" placeholder="8080" />
+      <span class="am-hint">≥ 1024 (conteneur non-root).</span>
     </div>
   </div>
 
-  <!-- Dépendance base de données -->
-  <div class="am-field">
+  <div class="am-alert am-alert-info" *ngIf="isWorker">
+    WORKER : pas de port, de santé ni d’Ingress — Deployment seul (tâche de fond).
+  </div>
+
+  <!-- Base : BACKEND / WORKER uniquement -->
+  <div class="am-field" *ngIf="canLinkDatabase">
     <label class="am-label">Base de données liée</label>
     <select class="am-select" formControlName="dependsOnDatabaseId">
-      <option value="">Aucune</option>
+      <option value="">— Aucune —</option>
       <option *ngFor="let db of databases" [value]="db.id">{{ db.name }} ({{ db.engine }})</option>
     </select>
   </div>
 
-  <div class="am-field" *ngIf="hasLinkedDatabase">
-    <label class="am-label">Nom variable d'injection</label>
+  <div class="am-field" *ngIf="canLinkDatabase && hasLinkedDatabase">
+    <label class="am-label">Variable d’URL injectée</label>
     <input class="am-input" formControlName="dbUrlEnvVar" placeholder="DATABASE_URL" />
-    <span class="am-hint">L'URL de connexion générée sera injectée sous ce nom via un Secret K8s.</span>
+    <span class="am-hint">
+      La plateforme y place l’URL (+ USER/PASSWORD hors URI pour SQL).
+      Ne redéclarez pas cette clé en variable manuelle.
+    </span>
   </div>
 
   <div class="am-alert am-alert-warn" *ngIf="showBackendWarning">
-    Un backend a généralement besoin d'une base. Continuer sans&nbsp;?
+    Un BACKEND a généralement besoin d’une base. Continuer sans&nbsp;?
+  </div>
+
+  <div class="am-alert am-alert-info" *ngIf="isFrontend">
+    Un FRONTEND n’accède pas directement à une base : passez par un service BACKEND
+    (évite d’embarquer des secrets dans le bundle navigateur).
   </div>
 
   <!-- Dépendance service -->
@@ -69,18 +85,20 @@
     <label class="am-label">Dépend du service</label>
     <select class="am-select" formControlName="dependsOnServiceId">
       <option value="">Aucun</option>
-      <option *ngFor="let s of selectableServices" [value]="s.id">{{ s.name }}</option>
+      <option *ngFor="let s of selectableServices" [value]="s.id">{{ s.name }} ({{ s.role }})</option>
     </select>
+    <span class="am-hint">Déployé après ce service (ordre topologique + wait-for).</span>
   </div>
 
   <div class="am-grid-2">
     <div class="am-field">
       <label class="am-label">Réplicas</label>
-      <input class="am-input" type="number" formControlName="replicas" />
+      <input class="am-input" type="number" formControlName="replicas" min="1" max="5" />
+      <span class="am-hint">1–5.</span>
     </div>
-    <div class="am-field">
-      <label class="am-label">Health check path</label>
-      <input class="am-input" formControlName="healthCheckPath" placeholder="/health (optionnel)" />
+    <div class="am-field" *ngIf="!isWorker">
+      <label class="am-label">Chemin de santé (readiness)</label>
+      <input class="am-input" formControlName="healthCheckPath" placeholder="/actuator/health (optionnel)" />
     </div>
   </div>
 
@@ -109,16 +127,17 @@
     </div>
     <div formArrayName="envVars" class="am-list">
       <div class="am-envrow" *ngFor="let row of envVars.controls; let i = index" [formGroupName]="i">
-        <input class="am-input" formControlName="varKey" placeholder="CLÉ" />
+        <input class="am-input" formControlName="varKey" placeholder="CLÉ_C_IDENTIFIER" />
         <input class="am-input" [type]="row.get('isSecret')?.value ? 'password' : 'text'"
                formControlName="varValue" placeholder="valeur" />
         <label class="am-check"><input type="checkbox" formControlName="isSecret" /> secret</label>
         <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="removeEnvVar(i)">✕</button>
       </div>
     </div>
+    <span class="am-hint">Clés : lettres, chiffres, _ (pas de tiret). Évitez PATH, KUBERNETES_*.</span>
   </div>
 
-  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+  <div class="am-alert am-alert-error" *ngIf="localError || error">{{ localError || error }}</div>
 
   <div class="am-form-actions">
     <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()">Annuler</button>

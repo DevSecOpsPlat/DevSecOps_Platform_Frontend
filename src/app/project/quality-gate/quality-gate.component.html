@@ -9,10 +9,10 @@
       <select class="qg-branch-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()">
         <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
       </select>
-      <label class="qg-branch-label">Environnement</label>
-      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedEnvironmentId" (change)="onEnvironmentChange()">
-        <option *ngFor="let env of environments" [ngValue]="env.environmentId">
-          {{ env.environmentName }} · {{ env.branch }}<ng-container *ngIf="env.pipelineId"> · #{{ env.pipelineId }}</ng-container><ng-container *ngIf="env.verdict"> · {{ env.verdict }}</ng-container>
+      <label class="qg-branch-label">Pipeline</label>
+      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedPipelineId" (change)="onPipelineChange()">
+        <option *ngFor="let env of environments" [ngValue]="env.pipelineId">
+          #{{ env.pipelineId }}
         </option>
       </select>
       <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading" [title]="refreshButtonTitle">Actualiser</button>
@@ -21,7 +21,7 @@
   </header>
 
   <p class="qg-env-hint" *ngIf="selectedBranch">
-    Environnements de la branche <strong>{{ selectedBranch }}</strong> — un par exécution de pipeline, du plus récent au plus ancien.
+    Pipelines scan de la branche <strong>{{ selectedBranch }}</strong> — du plus récent au plus ancien.
   </p>
 
   <div class="qg-banner qg-banner--warn" *ngIf="error && !loading">
@@ -62,8 +62,10 @@
   </div>
 
   <div class="qg-banner qg-banner--warn" *ngIf="!loading && !error && result?.verdictSource === 'SNAPSHOT_MISSING'">
-    <span>{{ result?.summary }}</span>
-    <button type="button" class="qg-banner-link" (click)="captureSnapshot()" *ngIf="result?.pipelineStatus !== 'running' && result?.pipelineStatus !== 'pending'">Créer le snapshot</button>
+    <span class="qg-banner-ico">⚠</span>
+    <span>Aucun snapshot disponible — le stage <strong>security-validation</strong> ne s'est probablement pas exécuté dans le pipeline.
+      Vérifiez le pipeline GitLab et relancez-le si nécessaire.</span>
+    <a *ngIf="result?.pipelineWebUrl" [href]="result?.pipelineWebUrl" target="_blank" rel="noopener" class="qg-banner-link">Pipeline GitLab</a>
   </div>
 
   <ng-container *ngIf="!loading && !error && result && result.verdictSource !== 'SNAPSHOT_MISSING'">
@@ -141,8 +143,8 @@
       </div>
     </section>
 
-    <!-- ════ 2. CONDITIONS DE DÉPLOIEMENT (checklist tolérance zéro) ═══════ -->
-    <section class="qg-conditions">
+    <!-- ════ 2. CONDITIONS DE DÉPLOIEMENT ═══════════════════════════════ -->
+    <section class="qg-conditions" *ngIf="!securityValidationFailed">
       <div class="qg-cond-head">
         <h3 class="qg-cond-title">Conditions de déploiement</h3>
         <span class="qg-cond-tag">Tolérance zéro — une seule suffit à bloquer</span>
@@ -167,7 +169,7 @@
     </section>
 
     <!-- KPIs -->
-    <section class="qg-kpis">
+    <section class="qg-kpis" *ngIf="!securityValidationFailed">
       <article class="qg-kpi">
         <span class="qg-kpi-val">{{ vulnMetricsAvailable ? totalVulnCount : '—' }}</span>
         <span class="qg-kpi-lbl">Ouvertes ({{ vulnCentralizationLabel }})</span>
@@ -195,7 +197,7 @@
     </section>
 
     <!-- ════ 3. POURQUOI CE VERDICT ═══════════════════════════════════════ -->
-    <section class="qg-card qg-why" *ngIf="result.verdictExplanation?.length">
+    <section class="qg-card qg-why" *ngIf="!securityValidationFailed && result.verdictExplanation?.length">
       <h3 class="qg-card-title"><span class="qg-card-ico">①</span> Pourquoi ce verdict ?</h3>
       <ul class="qg-why-list">
         <li *ngFor="let line of result.verdictExplanation" class="qg-why-item">
@@ -225,7 +227,7 @@
     </section>
 
     <!-- ════ 4. CONSEILS PRATIQUES ════════════════════════════════════════ -->
-    <section class="qg-card qg-advice">
+    <section class="qg-card qg-advice" *ngIf="!securityValidationFailed">
       <div class="qg-card-head">
         <h3 class="qg-card-title"><span class="qg-card-ico">②</span> Conseils pratiques</h3>
         <button type="button" class="qg-ai-btn" (click)="loadAiInsight()" [disabled]="aiLoading">
@@ -250,7 +252,7 @@
     </section>
 
     <!-- Méthode de notation (repliable) -->
-    <section class="qg-card qg-method">
+    <section class="qg-card qg-method" *ngIf="!securityValidationFailed">
       <button type="button" class="qg-method-toggle" (click)="toggleScoringMethod()">
         {{ showScoringMethod ? '▾' : '▸' }} Méthode de décision
       </button>
