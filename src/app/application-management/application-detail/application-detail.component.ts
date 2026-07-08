@@ -35,6 +35,7 @@ export class ApplicationDetailComponent implements OnInit {
   formError: string | null = null;
   deploying = false;
   deployError: string | null = null;
+  appDeployOpen = false;
 
   // --- Actions par service (scan / déploiement ciblé) ---
   serviceActionTarget: AppServiceModel | null = null;
@@ -135,19 +136,23 @@ export class ApplicationDetailComponent implements OnInit {
   confirmServiceAction(params: DeployRunParams): void {
     const svc = this.serviceActionTarget;
     if (!svc?.id || !this.serviceActionKind) return;
+    const serviceId = svc.id;
     this.serviceActionRunning = true;
     this.serviceActionError = null;
 
     if (this.serviceActionKind === 'scan') {
-      this.api.scanService(svc.id, {
-        branch: params.branch,
-        sessionDurationHours: params.sessionDurationHours
+      this.api.scanService(serviceId, {
+        branch: params.branch
       }).subscribe({
         next: (resp) => {
           this.serviceActionRunning = false;
-          this.serviceActionTarget = null;
-          this.serviceActionKind = null;
-          this.router.navigate(['/pipeline', resp.environmentId]);
+          if (this.navigateToPipelineDetails(resp.gitlabPipelineId, serviceId, params.branch)) {
+            this.serviceActionTarget = null;
+            this.serviceActionKind = null;
+            this.serviceActionError = null;
+          } else {
+            this.serviceActionError = 'Scan lancé mais ID pipeline GitLab absent.';
+          }
         },
         error: (e) => {
           this.serviceActionError = e?.error?.message || 'Scan impossible.';
@@ -158,18 +163,30 @@ export class ApplicationDetailComponent implements OnInit {
     }
 
     // deploy single service
-    this.api.deployService(this.appId, svc.id).subscribe({
-      next: () => {
+    this.api.deployService(this.appId, serviceId, {
+      branch: params.branch,
+      sessionDurationHours: params.sessionDurationHours
+    }).subscribe({
+      next: (resp) => {
         this.serviceActionRunning = false;
-        this.serviceActionTarget = null;
-        this.serviceActionKind = null;
-        this.load();
+        if (this.navigateToPipelineDetails(resp.gitlabPipelineId, serviceId, params.branch)) {
+          this.serviceActionTarget = null;
+          this.serviceActionKind = null;
+          this.serviceActionError = null;
+        } else {
+          this.serviceActionError = 'Déploiement lancé mais ID pipeline GitLab absent.';
+        }
       },
       error: (e) => {
         this.serviceActionError = e?.error?.message || 'Déploiement du service impossible.';
         this.serviceActionRunning = false;
       }
     });
+  }
+
+  viewServiceDashboard(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.router.navigate(['/project', svc.id, 'overview']);
   }
 
   viewServiceSecurityDashboard(svc: AppServiceModel): void {
@@ -220,13 +237,39 @@ export class ApplicationDetailComponent implements OnInit {
 
   // ---------- Deploy ----------
 
-  deploy(): void {
+  openAppDeploy(): void {
+    this.appDeployOpen = true;
+    this.deployError = null;
+  }
+
+  cancelAppDeploy(): void {
+    if (this.deploying) return;
+    this.appDeployOpen = false;
+    this.deployError = null;
+  }
+
+  confirmAppDeploy(params: DeployRunParams): void {
     this.deploying = true;
     this.deployError = null;
-    this.api.deploy(this.appId).subscribe({
-      next: () => {
+    this.api.deploy(this.appId, {
+      branch: params.branch,
+      sessionDurationHours: params.sessionDurationHours
+    }).subscribe({
+      next: (resp) => {
         this.deploying = false;
-        this.load();
+        const serviceId = this.app?.services.find((s) => s.id)?.id;
+        if (!serviceId) {
+          this.deployError = 'Déploiement lancé mais aucun service disponible pour ouvrir le pipeline.';
+          this.load();
+          return;
+        }
+        if (this.navigateToPipelineDetails(resp.gitlabPipelineId, serviceId, params.branch)) {
+          this.appDeployOpen = false;
+          this.deployError = null;
+        } else {
+          this.deployError = 'Déploiement lancé mais ID pipeline GitLab absent.';
+          this.load();
+        }
       },
       error: (e) => {
         this.deployError = e?.error?.message || 'Déploiement impossible.';
@@ -260,5 +303,26 @@ export class ApplicationDetailComponent implements OnInit {
 
   roleClass(role: string): string {
     return 'role-' + role.toLowerCase();
+  }
+
+  get defaultAppDeployBranch(): string {
+    const branch = this.app?.services?.[0]?.gitBranch;
+    return branch?.trim() || 'main';
+  }
+
+  private navigateToPipelineDetails(
+    gitlabPipelineId: number | null | undefined,
+    applicationServiceId: string,
+    branch?: string
+  ): boolean {
+    if (!gitlabPipelineId) {
+      return false;
+    }
+    const queryParams: Record<string, string> = { appId: applicationServiceId };
+    if (branch?.trim()) {
+      queryParams['branch'] = branch.trim();
+    }
+    this.router.navigate(['/pipeline/id', gitlabPipelineId], { queryParams });
+    return true;
   }
 }

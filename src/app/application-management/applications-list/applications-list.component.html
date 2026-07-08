@@ -46,14 +46,17 @@
       </span>
     </div>
     <div class="am-list">
-      <div class="am-list-item" *ngFor="let s of orphanServices">
+      <div class="am-list-item" *ngFor="let s of orphanServices" (click)="openOrphanServiceDashboard(s.id)" style="cursor:pointer">
         <div class="am-list-item-main">
           <div class="am-list-item-title">{{ s.name }}</div>
           <div class="am-list-item-sub am-mono">{{ s.gitRepositoryUrl || 'Sans repo' }}</div>
           <div class="am-list-item-sub" *ngIf="s.description">{{ s.description }}</div>
         </div>
         <div class="am-list-actions">
-          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanSecurityDashboard(s.id)">
+          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanServiceDashboard(s.id); $event.stopPropagation()">
+            Consulter
+          </button>
+          <button class="am-btn am-btn-secondary am-btn-sm" (click)="openOrphanSecurityDashboard(s.id); $event.stopPropagation()">
             Sécurité
           </button>
         </div>

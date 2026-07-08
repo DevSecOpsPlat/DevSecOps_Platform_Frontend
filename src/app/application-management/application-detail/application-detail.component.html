@@ -11,7 +11,7 @@
         <p class="am-subtitle">{{ app.description || 'Sans description' }} · <code class="am-slug">{{ app.slug }}</code></p>
       </div>
       <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
-        <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
+        <button class="am-btn am-btn-primary" (click)="openAppDeploy()" [disabled]="deploying">
           {{ deploying ? 'Déploiement…' : 'Déployer' }}
         </button>
         <button class="am-btn am-btn-danger" (click)="deleteApp()">Supprimer l'application</button>
@@ -51,7 +51,7 @@
 
       <div class="am-list">
         <div class="am-list-item" *ngFor="let s of app.services">
-          <div class="am-list-item-main" style="cursor:pointer" (click)="viewServiceSecurityDashboard(s)">
+          <div class="am-list-item-main" style="cursor:pointer" (click)="viewServiceDashboard(s)">
             <div class="am-list-item-title">
               {{ s.name }}
               <span class="am-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
@@ -149,9 +149,24 @@
   [actionLabel]="serviceActionKind === 'scan' ? 'Lancer le scan' : 'Lancer le déploiement'"
   [defaultBranch]="serviceActionTarget.gitBranch || 'main'"
   [defaultTtlHours]="4"
-  [showTtl]="serviceActionKind === 'scan'"
+  [showTtl]="serviceActionKind === 'deploy'"
   [running]="serviceActionRunning"
   [error]="serviceActionError"
   (cancel)="cancelServiceAction()"
   (confirm)="confirmServiceAction($event)">
+</app-deploy-run-modal>
+
+<!-- Modal : déploiement complet du projet -->
+<app-deploy-run-modal
+  *ngIf="appDeployOpen"
+  [title]="'Déployer ' + (app?.name || 'le projet')"
+  subtitle="Déploiement de tous les services du projet dans un nouveau namespace."
+  actionLabel="Lancer le déploiement"
+  [defaultBranch]="defaultAppDeployBranch"
+  [defaultTtlHours]="4"
+  [showTtl]="true"
+  [running]="deploying"
+  [error]="deployError"
+  (cancel)="cancelAppDeploy()"
+  (confirm)="confirmAppDeploy($event)">
 </app-deploy-run-modal>

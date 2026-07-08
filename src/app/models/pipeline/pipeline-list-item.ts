@@ -1,9 +1,12 @@
 import { PipelineJobInfo } from './pipeline-scan-response';
 
 export interface PipelineListItem {
-  environmentId: string;
-  environmentName: string;
+  applicationId?: string | null;
+  serviceName?: string | null;
+  environmentId?: string | null;
+  environmentName?: string | null;
   gitBranch: string;
+  executionKind?: 'SCAN' | 'DEPLOY' | string;
   pipelineId: number | null;
   pipelineStatus: string;
   createdAt: string;

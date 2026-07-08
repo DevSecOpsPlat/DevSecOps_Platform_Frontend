@@ -102,17 +102,41 @@ export class ApplicationManagementService {
 
   // ---------- Déploiements ----------
 
-  deploy(appId: string): Observable<AppDeployment> {
-    return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, {}, { headers: this.headers() });
+  deploy(appId: string, body?: { branch?: string; sessionDurationHours?: number }): Observable<AppDeployment> {
+    return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, this.buildDeployPayload(body), { headers: this.headers() });
   }
 
   /** Déploie un seul service (avec sa base dépendante si déclarée). */
-  deployService(appId: string, serviceId: string): Observable<AppDeployment> {
+  deployService(
+    appId: string,
+    serviceId: string,
+    body?: { branch?: string; sessionDurationHours?: number }
+  ): Observable<AppDeployment> {
     return this.http.post<AppDeployment>(
       `${API}/${appId}/services/${serviceId}/deploy`,
-      {},
+      this.buildDeployPayload(body),
       { headers: this.headers() }
     );
+  }
+
+  private buildDeployPayload(body?: { branch?: string; sessionDurationHours?: number }): {
+    branch?: string;
+    sessionDurationHours: number;
+    ttlHours: number;
+  } {
+    const ttl = this.normalizeDeployTtl(body?.sessionDurationHours);
+    return {
+      branch: body?.branch?.trim() || undefined,
+      sessionDurationHours: ttl,
+      ttlHours: ttl
+    };
+  }
+
+  private normalizeDeployTtl(value?: number): number {
+    if (value == null || !Number.isFinite(value) || value <= 0) {
+      return 4;
+    }
+    return Math.max(1, Math.min(Math.floor(value), 72));
   }
 
   /**
@@ -147,7 +171,7 @@ export class ApplicationManagementService {
    */
   scanService(
     applicationId: string,
-    body?: { sessionDurationHours?: number; branch?: string }
+    body?: { branch?: string }
   ): Observable<{
     environmentId: string;
     applicationId: string;

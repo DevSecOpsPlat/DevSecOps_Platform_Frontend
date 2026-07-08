@@ -135,26 +135,7 @@
       <span class="nav-count">{{ getPipelineCount() }}</span>
     </button>
     
-    <!-- Réussis -->
-    <button class="nav-item" (click)="goToProjectPipelines('SUCCESS')">
-      <span class="nav-dot" style="background: #10b981;"></span>
-      <span class="nav-text">Réussis</span>
-      <span class="nav-count success">{{ getSuccessCount() }}</span>
-    </button>
-    
-    <!-- Échoués -->
-    <button class="nav-item" (click)="goToProjectPipelines('FAILED,CANCELED')">
-      <span class="nav-dot" style="background: #ef4444;"></span>
-      <span class="nav-text">Échoués</span>
-      <span class="nav-count danger">{{ getFailedCount() }}</span>
-    </button>
-    
-    <!-- En attente / En cours -->
-    <button class="nav-item" (click)="goToProjectPipelines('PENDING,RUNNING')">
-      <span class="nav-dot" style="background: #f59e0b;"></span>
-      <span class="nav-text">En attente / En cours</span>
-      <span class="nav-count warning">{{ getPendingCount() }}</span>
-    </button>
+    <!-- Réussis / Échoués / En cours : filtres dans la page Pipelines -->
     
     <!-- Dernier Pipeline -->
     <button class="nav-item" (click)="goToLastPipeline()" 

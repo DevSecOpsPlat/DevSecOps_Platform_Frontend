@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -9,9 +9,6 @@ export interface DeployRunParams {
 
 /**
  * Petite modale pour confirmer / paramétrer une action (scan ou déploiement d'un service).
- * Reste volontairement simple : l'écrasante majorité des champs (repo, token, dockerfile,
- * ports, dépendances) est déjà persistée sur le service — l'utilisateur n'a plus qu'à
- * (éventuellement) surcharger branche + TTL.
  */
 @Component({
   selector: 'app-deploy-run-modal',
@@ -20,7 +17,7 @@ export interface DeployRunParams {
   templateUrl: './deploy-run-modal.component.html',
   styleUrls: ['../shared/app-management.shared.css']
 })
-export class DeployRunModalComponent {
+export class DeployRunModalComponent implements OnInit {
   @Input() title = 'Confirmer le lancement';
   @Input() subtitle: string | null = null;
   @Input() actionLabel = 'Lancer';
@@ -33,17 +30,33 @@ export class DeployRunModalComponent {
   @Output() cancel = new EventEmitter<void>();
   @Output() confirm = new EventEmitter<DeployRunParams>();
 
-  branch = '';
-  ttl = 4;
+  branch = 'main';
+  sessionDurationHours = 4;
 
   ngOnInit(): void {
-    this.branch = this.defaultBranch;
-    this.ttl = this.defaultTtlHours;
+    this.resetForm();
   }
 
   onConfirm(): void {
-    const branch = (this.branch || '').trim() || this.defaultBranch;
-    const ttl = Math.max(1, Math.min(this.ttl || this.defaultTtlHours, 72));
-    this.confirm.emit({ branch, sessionDurationHours: ttl });
+    const branch = (this.branch || '').trim() || this.defaultBranch || 'main';
+    const sessionDurationHours = this.resolveSessionDurationHours();
+    this.confirm.emit({ branch, sessionDurationHours });
+  }
+
+  private resetForm(): void {
+    this.branch = (this.defaultBranch || 'main').trim() || 'main';
+    this.sessionDurationHours = this.normalizeTtl(this.defaultTtlHours);
+  }
+
+  private resolveSessionDurationHours(): number {
+    return this.normalizeTtl(this.sessionDurationHours);
+  }
+
+  private normalizeTtl(value: unknown): number {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return this.normalizeTtl(this.defaultTtlHours);
+    }
+    return Math.max(1, Math.min(Math.floor(parsed), 72));
   }
 }

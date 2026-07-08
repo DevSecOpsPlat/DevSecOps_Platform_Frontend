@@ -14,6 +14,7 @@ import { ApplicationResponse } from '../../models/application/application-respon
 import { DeploymentHistoryItem } from '../../models/deployment/deployment-history-item';
 import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
 import { PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
+import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import {
   ActivityItem,
   DashboardPipelineItem
@@ -229,7 +230,7 @@ const DEFAULT_SCANNER_ICON = 'assets/scanners/default.svg';
 })
 export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
-  private readonly securityReload$ = new Subject<{ appId: string; branch: string }>();
+  private readonly securityReload$ = new Subject<{ appId: string; branch: string; pipelineId?: string | null }>();
   private deployDonutChart?: Chart;
   private weekBarChart?: Chart;
   private daySeverityChart?: Chart;
@@ -252,6 +253,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   appId: string | null = null;
   selectedBranch = GLOBAL_BRANCH;
   selectedEnvironmentId: string | null = null;
+  selectedPipelineId: string | null = null;
   branches: string[] = [];
   toolList: { key: string; value: number }[] = [];
   hasOpenSeverityChart = false;
@@ -330,7 +332,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     );
 
     this.securityReload$.pipe(
-      switchMap(({ appId, branch }) => {
+      switchMap(({ appId, branch, pipelineId }) => {
         const apiBranch = this.toApiBranch(branch);
         this.loading = true;
         this.destroyOpenSeverityChart();
@@ -338,7 +340,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.infoMessage = null;
         this.hasOpenSeverityChart = false;
 
-        return this.defectDojoService.getDashboard2(appId, apiBranch).pipe(
+        return this.defectDojoService.getDashboard2(appId, apiBranch, {
+          pipelineId: pipelineId ?? undefined,
+          scanOnly: true
+        }).pipe(
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
             const msg = err?.name === 'TimeoutError'
@@ -394,18 +399,24 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       this.loadMyApplications();
     });
 
-    combineLatest([appId$, branch$])
+    const pipelineId$ = this.route.queryParamMap.pipe(
+      map(qp => qp.get('pipelineId')),
+      distinctUntilChanged()
+    );
+
+    combineLatest([appId$, branch$, pipelineId$])
       .pipe(
         debounceTime(400),
-        distinctUntilChanged((a, b) => a[0] === b[0] && a[1] === b[1]),
+        distinctUntilChanged((a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2]),
         delay(800),
         takeUntil(this.destroy$)
       )
-      .subscribe(([id, branch]) => {
+      .subscribe(([id, branch, pipelineId]) => {
         if (!id) return;
         const prev = this.selectedBranch;
         this.selectedBranch = branch;
-        this.requestSecurityReload(id, branch);
+        this.selectedPipelineId = pipelineId;
+        this.requestSecurityReload(id, branch, pipelineId);
         if (!this.overviewLoading && prev !== branch) {
           this.reloadBranchScopedData();
         }
@@ -2727,7 +2738,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.recentFindingsLoading = true;
     const branch = this.isGlobalView ? undefined : this.selectedBranch;
 
-    this.defectDojoService.getFindings(this.appId, branch, 'open', 0, 10).pipe(
+    const tags = this.selectedPipelineId
+      ? this.defectDojoService.pipelineTag(this.selectedPipelineId)
+      : this.defectDojoService.scanKindTag();
+
+    this.defectDojoService.getFindings(this.appId, branch, 'open', 0, 10, undefined, tags).pipe(
       catchError(() => of(null)),
       switchMap(page => {
         const dojoItems = page?.content?.filter(f => !!f?.title || !!f?.id) ?? [];
@@ -2756,7 +2771,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private loadDeployRecommendation(): void {
     if (!this.appId) return;
     const branch = this.isGlobalView ? undefined : this.selectedBranch;
-    this.defectDojoService.getDashboard(this.appId, branch).pipe(
+    this.defectDojoService.getDashboard(this.appId, branch, this.defectDojoService.scanKindTag()).pipe(
       catchError(() => of(null)),
       takeUntil(this.destroy$)
     ).subscribe(d => {
@@ -2773,13 +2788,19 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
   viewSecurityDashboard(): void {
     if (!this.appId) return;
-    const queryParams = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    const queryParams: Record<string, string> = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    if (this.selectedPipelineId) {
+      queryParams['pipelineId'] = this.selectedPipelineId;
+    }
     this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
   viewQualityGate(): void {
     if (!this.appId) return;
-    const queryParams = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    const queryParams: Record<string, string> = this.isGlobalView ? {} : { branch: this.selectedBranch };
+    if (this.selectedPipelineId) {
+      queryParams['pipelineId'] = this.selectedPipelineId;
+    }
     this.router.navigate(['/project', this.appId, 'quality-gate'], { queryParams });
   }
 
@@ -2812,8 +2833,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     return branch === GLOBAL_BRANCH ? undefined : branch;
   }
 
-  private requestSecurityReload(appId: string, branch: string): void {
-    this.securityReload$.next({ appId, branch });
+  private requestSecurityReload(appId: string, branch: string, pipelineId?: string | null): void {
+    this.securityReload$.next({ appId, branch, pipelineId });
   }
 
   private buildToolList(d: DefectDojoDashboard2Response): { key: string; value: number }[] {
@@ -2894,7 +2915,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     forkJoin({
       deployments: this.applicationService.getDeploymentHistory(this.appId, { branch, page: 0, size: 50 }).pipe(catchError(() => of([]))),
       deploymentMetrics: this.applicationService.getDeploymentMetrics(this.appId, branch).pipe(catchError(() => of(null))),
-      pipelines: this.pipelineService.listPipelines(0, 30).pipe(catchError(() => of([])))
+      pipelines: this.pipelineService.listPipelines(0, 50, this.appId).pipe(catchError(() => of([] as PipelineListItem[])))
     }).pipe(takeUntil(this.destroy$)).subscribe({
       next: slowData => {
         this.deployments = slowData.deployments || [];
@@ -2906,47 +2927,40 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           if (d?.environmentId) envIdsForApp.add(String(d.environmentId));
         });
 
-        let rawPipelines = (slowData.pipelines || []).filter((p: { environmentId?: string }) =>
-          p?.environmentId && envIdsForApp.has(String(p.environmentId))
-        );
+        let rawPipelines: PipelineListItem[] = (slowData.pipelines || []).filter(p => {
+          if (this.appId && p.applicationId) {
+            return String(p.applicationId) === String(this.appId);
+          }
+          if (p.environmentId) {
+            return envIdsForApp.has(String(p.environmentId));
+          }
+          return false;
+        });
 
         if (branch) {
-          rawPipelines = rawPipelines.filter((p: { gitBranch?: string; ref?: string }) =>
+          rawPipelines = rawPipelines.filter(p =>
             (p.gitBranch || p.ref || 'main') === branch
           );
         }
 
         this.recentPipelines = rawPipelines
-          .sort((a: { createdAt?: unknown }, b: { createdAt?: unknown }) => {
+          .sort((a, b) => {
             const dateA = this.safeParseDate(a.createdAt)?.getTime() || 0;
             const dateB = this.safeParseDate(b.createdAt)?.getTime() || 0;
             return dateB - dateA;
           })
           .slice(0, 5)
-          .map((p: {
-            pipelineId?: string | number;
-            gitBranch?: string;
-            ref?: string;
-            status?: string;
-            pipelineStatus?: string;
-            createdAt?: unknown;
-            startedAt?: unknown;
-            finishedAt?: unknown;
-            environmentId?: string;
-            environmentName?: string;
-            createdByUsername?: string;
-          }) => ({
-            id: p.pipelineId,
-            name: `Pipeline #${p.pipelineId}`,
+          .map((p): DashboardPipelineItem => ({
+            id: p.pipelineId ?? null,
+            name: p.serviceName || p.environmentName || `Pipeline #${p.pipelineId ?? '—'}`,
             branch: p.gitBranch || p.ref || 'main',
             status: p.status || p.pipelineStatus || 'UNKNOWN',
             createdAt: this.safeParseDate(p.createdAt)?.toISOString() ||
-              this.safeParseDate(p.startedAt)?.toISOString() ||
               this.safeParseDate(p.finishedAt)?.toISOString() ||
               new Date().toISOString(),
-            environmentId: p.environmentId!,
-            environmentName: p.environmentName,
-            triggeredBy: p.createdByUsername
+            environmentId: p.environmentId ?? '',
+            environmentName: p.environmentName ?? p.serviceName ?? `Scan #${p.pipelineId ?? '—'}`,
+            triggeredBy: p.createdByUsername ?? undefined
           }));
 
         const m: DeploymentMetrics | null = slowData.deploymentMetrics;
@@ -3007,15 +3021,23 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.viewSecurityDashboard();
   }
 
-  viewEnvSecurityAnalysis(env: { id: string; branch: string }): void {
+  viewEnvSecurityAnalysis(env: { id: string; branch?: string; gitBranch?: string }): void {
     if (!this.appId) return;
-    this.router.navigate(['/project', this.appId, 'security-dashboard'], {
-      queryParams: { branch: env.branch, envId: env.id }
-    });
+    const branch = env.branch || env.gitBranch;
+    const queryParams: Record<string, string> = {};
+    if (branch && branch !== '—') queryParams['branch'] = branch;
+    this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
   viewPipeline(envId: string): void {
     this.router.navigate(['/pipeline', envId], { queryParams: { appId: this.appId } });
+  }
+
+  viewPipelineById(pipelineId: number | string, branch?: string): void {
+    const queryParams: Record<string, string> = {};
+    if (this.appId) queryParams['appId'] = this.appId;
+    if (branch) queryParams['branch'] = branch;
+    this.router.navigate(['/pipeline/id', String(pipelineId)], { queryParams });
   }
 
   viewEnvironment(envId: string): void {

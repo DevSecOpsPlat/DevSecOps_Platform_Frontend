@@ -157,7 +157,9 @@ export interface DefectDojoDashboardCharts {
 export interface DefectDojoDashboard2Response {
   configured: boolean;
   message?: string;
-  scope: 'global' | 'branch';
+  scope: 'global' | 'branch' | 'environment' | 'pipeline' | 'scan';
+  environmentTag?: string | null;
+  pipelineTag?: string | null;
   applicationName?: string;
   productName?: string;
   productId?: number;
@@ -256,10 +258,22 @@ export class DefectDojoService {
   }
 
   /** Dashboard sécurité v2 — vue globale si branch omis ou __all__. */
-  getDashboard2(applicationId: string, branch?: string): Observable<DefectDojoDashboard2Response> {
+  getDashboard2(
+    applicationId: string,
+    branch?: string,
+    options?: { pipelineId?: number | string; environmentId?: string; scanOnly?: boolean }
+  ): Observable<DefectDojoDashboard2Response> {
     let params = new HttpParams().set('applicationId', applicationId);
     const b = this.normalizeDashboardBranch(branch);
     if (b) params = params.set('branch', b);
+    if (options?.pipelineId != null && String(options.pipelineId).trim()) {
+      params = params.set('pipelineId', String(options.pipelineId).trim());
+    }
+    if (options?.environmentId?.trim()) {
+      params = params.set('environmentId', options.environmentId.trim());
+    }
+    const scanOnly = options?.scanOnly !== false;
+    params = params.set('scanOnly', String(scanOnly));
     return this.http.get<DefectDojoDashboard2Response>(BASE + 'api/defectdojo/dashboard2', {
       headers: this.authHeaders(),
       params
@@ -347,7 +361,17 @@ export class DefectDojoService {
     });
   }
 
-  /** Tag DefectDojo pour filtrer par environnement. */
+  /** Tag DefectDojo pour filtrer par pipeline GitLab (exécution CI). */
+  pipelineTag(pipelineId: number | string): string {
+    return `pipeline-${pipelineId}`;
+  }
+
+  /** Tag DefectDojo des imports scan (exclut les pipelines deploy). */
+  scanKindTag(): string {
+    return 'scan';
+  }
+
+  /** Tag DefectDojo legacy environnement éphémère. */
   environmentTag(environmentId: string): string {
     return `env-${environmentId}`;
   }

@@ -52,6 +52,10 @@ export class ApplicationsListComponent implements OnInit {
     this.router.navigate(['/projects/create']);
   }
 
+  openOrphanServiceDashboard(svcId: string): void {
+    this.router.navigate(['/project', svcId, 'overview']);
+  }
+
   openOrphanSecurityDashboard(svcId: string): void {
     this.router.navigate(['/project', svcId, 'security-dashboard']);
   }

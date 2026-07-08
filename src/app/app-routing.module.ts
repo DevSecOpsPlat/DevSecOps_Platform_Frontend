@@ -79,6 +79,7 @@ const routes: Routes = [
   },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
+  { path: 'pipeline/id/:pipelineId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
   // Projets = liste unifiée (services + bases + scan/deploy).
   // Route canonique : /projects. L'ancien alias /app-management redirige vers /projects.

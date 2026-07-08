@@ -9,8 +9,11 @@
           Engagement <strong>{{ dashboard!.engagementName }}</strong>
           <span *ngIf="charts?.lastScanDate"> · Dernier scan : {{ charts!.lastScanDate }}</span>
         </p>
-        <p class="vuln-subtitle vuln-subtitle--meta" *ngIf="selectedEnvironmentId">
-          Filtre environnement : <strong>{{ selectedEnvironmentTag }}</strong>
+        <p class="vuln-subtitle vuln-subtitle--meta">
+          Filtre DefectDojo : <strong>{{ defectDojoFilterLabel }}</strong>
+          <button *ngIf="selectedPipelineId" type="button" class="vuln-btn vuln-btn-secondary dd-clear-filter" (click)="clearPipelineFilter()">
+            Tous les scans
+          </button>
         </p>
       </div>
       <div class="vuln-header-right">
@@ -25,14 +28,14 @@
             </div>
           </div>
           <div class="vuln-env-card">
-            <span class="vuln-env-label">Environnement (optionnel)</span>
+            <span class="vuln-env-label">Pipeline</span>
             <div class="vuln-env-value">
-              <span class="vuln-env-icon">🌍</span>
-              <select class="vuln-env-select" [(ngModel)]="selectedEnvironmentId" (ngModelChange)="onEnvironmentChange()" [disabled]="loading">
-                <option value="">Tous (engagement complet)</option>
-                <option *ngFor="let e of environmentsForBranch" [ngValue]="e.id">
-                  {{ e.environmentName }} — {{ e.status }}
-                </option>
+              <span class="vuln-env-icon">#</span>
+              <select class="vuln-env-select"
+                      [(ngModel)]="selectedPipelineId"
+                      (ngModelChange)="onPipelineChange()"
+                      [disabled]="loading || !pipelineOptions.length">
+                <option *ngFor="let p of pipelineOptions" [ngValue]="p.id">{{ p.label }}</option>
               </select>
             </div>
           </div>

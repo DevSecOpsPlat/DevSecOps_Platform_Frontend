@@ -10,8 +10,8 @@
       </label>
 
       <label class="am-field" *ngIf="showTtl">
-        <span class="am-field-label">Durée de session (heures)</span>
-        <input class="am-input" type="number" min="1" max="72" [(ngModel)]="ttl" />
+        <span class="am-field-label">Durée de test (heures)</span>
+        <input class="am-input" type="number" min="1" max="72" name="sessionDurationHours" [(ngModel)]="sessionDurationHours" />
       </label>
     </div>
 

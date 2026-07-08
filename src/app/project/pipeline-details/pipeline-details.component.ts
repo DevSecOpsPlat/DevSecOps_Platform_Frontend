@@ -16,7 +16,8 @@ import { AnalyzeArtifactResponse } from '../../models/ai/analyze-artifact.model'
 })
 export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
-  envId!: string;
+  envId = '';
+  pipelineIdOnly: number | null = null;
   data?: PipelineScanResponse;
   loading = false;
   error: string | null = null;
@@ -50,12 +51,40 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
+    if (pipelineIdParam) {
+      const pid = Number(pipelineIdParam);
+      if (!Number.isNaN(pid) && pid > 0) {
+        this.pipelineIdOnly = pid;
+        this.loadPipelineById();
+        return;
+      }
+    }
     if (this.envId) {
       this.loadPipeline();
     } else {
-      this.error = 'Environnement invalide';
+      this.error = 'Pipeline invalide';
     }
+  }
+
+  loadPipelineById(): void {
+    if (this.pipelineIdOnly == null) return;
+    this.loading = true;
+    this.error = null;
+    const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+    this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
+      next: res => {
+        this.applyPipelineUpdate(res);
+        this.loading = false;
+        this.autoFollowRunningJob();
+        this.ensurePolling();
+      },
+      error: err => {
+        this.loading = false;
+        this.error = err.error?.message || 'Erreur lors du chargement du pipeline';
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -195,6 +224,33 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
+  private refreshPipelineLive(onDone?: () => void): void {
+    const done = () => {
+      this.autoFollowRunningJob();
+      onDone?.();
+    };
+    if (this.pipelineIdOnly != null) {
+      const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+      this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
+        next: res => {
+          this.applyPipelineUpdate(res);
+          done();
+        },
+        error: () => done()
+      });
+      return;
+    }
+    if (this.envId) {
+      this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
+        next: res => {
+          this.applyPipelineUpdate(res);
+          done();
+        },
+        error: () => done()
+      });
+    }
+  }
+
   private ensurePolling(): void {
     if (!this.shouldPoll()) {
       if (this.pollId) {
@@ -206,18 +262,11 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     if (this.pollId) return;
     // Poll léger pour suivre statuts + récupérer jobs si la 1ère réponse était vide
     this.pollId = setInterval(() => {
-      if (!this.envId) return;
-      this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
-        next: (res) => {
-          this.applyPipelineUpdate(res);
-          this.autoFollowRunningJob();
-          if (!this.shouldPoll()) {
-            clearInterval(this.pollId);
-            this.pollId = undefined;
-          }
-        },
-        error: () => {
-          // silencieux: on garde les dernières infos affichées
+      if (!this.envId && this.pipelineIdOnly == null) return;
+      this.refreshPipelineLive(() => {
+        if (!this.shouldPoll()) {
+          clearInterval(this.pollId);
+          this.pollId = undefined;
         }
       });
     }, 2500);
@@ -366,15 +415,21 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   }
 
   openSecurityDashboard(): void {
-    if (!this.envId) return;
     const appId =
       this.route.snapshot.queryParamMap.get('appId') ||
       localStorage.getItem('envirotest-last-project-app-id');
-    if (appId) {
-      this.router.navigate(['/project', appId, 'security-dashboard']);
-    } else {
+    if (!appId) {
       this.router.navigate(['/my-applications']);
+      return;
     }
+    const queryParams: Record<string, string> = {};
+    if (this.data?.ref) queryParams['branch'] = this.data.ref;
+    if (this.data?.pipelineId) {
+      queryParams['pipelineId'] = String(this.data.pipelineId);
+    } else if (this.envId) {
+      queryParams['pipelineId'] = '';
+    }
+    this.router.navigate(['/project', appId, 'security-dashboard'], { queryParams });
   }
 
   retryJob(jobId: number): void {
@@ -385,14 +440,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
           this.toastService.push('success', 'Job relancé', `Le job #${jobId} a été relancé.`, 2500);
         }
         // Refresh immédiat + polling va continuer si le pipeline est encore en cours
-        this.pipelineService.getPipelineAndScanLive(this.envId).subscribe({
-          next: (res) => {
-            this.applyPipelineUpdate(res);
-            this.autoFollowRunningJob();
-            this.ensurePolling();
-          },
-          error: () => {}
-        });
+        this.refreshPipelineLive(() => this.ensurePolling());
       },
       error: () => {
         if (this.toastService) {

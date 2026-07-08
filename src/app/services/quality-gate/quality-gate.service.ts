@@ -42,7 +42,7 @@ export interface QualityGateToolMetric {
 }
 
 export interface QualityGateEnvironmentOption {
-  environmentId: string;
+  environmentId?: string | null;
   environmentName: string;
   branch: string;
   status?: string;
@@ -199,7 +199,8 @@ export class QualityGateService {
     applicationId: string,
     branch?: string | null,
     environmentId?: string | null,
-    refresh = false
+    refresh = false,
+    pipelineId?: string | null
   ): Observable<QualityGateResult> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch && branch !== '__global__') {
@@ -207,6 +208,9 @@ export class QualityGateService {
     }
     if (environmentId) {
       params = params.set('environmentId', environmentId);
+    }
+    if (pipelineId) {
+      params = params.set('pipelineId', pipelineId);
     }
     if (refresh) {
       params = params.set('refresh', 'true');
@@ -228,10 +232,31 @@ export class QualityGateService {
     );
   }
 
-  listEnvironments(applicationId: string, branch?: string | null): Observable<QualityGateEnvironmentOption[]> {
+  listScanPipelines(
+    applicationId: string,
+    branch?: string | null
+  ): Observable<QualityGateEnvironmentOption[]> {
     let params = new HttpParams().set('applicationId', applicationId);
     if (branch && branch !== '__global__') {
       params = params.set('branch', branch);
+    }
+    return this.http.get<QualityGateEnvironmentOption[]>(BASE + 'api/quality-gate/pipelines', {
+      headers: this.authHeaders(),
+      params
+    });
+  }
+
+  listEnvironments(
+    applicationId: string,
+    branch?: string | null,
+    scanOnly = false
+  ): Observable<QualityGateEnvironmentOption[]> {
+    let params = new HttpParams().set('applicationId', applicationId);
+    if (branch && branch !== '__global__') {
+      params = params.set('branch', branch);
+    }
+    if (scanOnly) {
+      params = params.set('scanOnly', 'true');
     }
     return this.http.get<QualityGateEnvironmentOption[]>(BASE + 'api/quality-gate/environments', {
       headers: this.authHeaders(),

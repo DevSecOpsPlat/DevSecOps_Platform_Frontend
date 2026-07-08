@@ -28,8 +28,7 @@ import {
   renderTreatmentFluxChart
 } from '../../services/defectdojo/treatment-flux-chart.helper';
 import { cweDisplayLabel } from '../../services/defectdojo/cwe-labels';
-import { EnvironmentService } from '../../services/environment/environment.service';
-import { EnvironmentSummaryResponse } from '../../models/environment/environment-summary-response';
+import { QualityGateService, QualityGateEnvironmentOption } from '../../services/quality-gate/quality-gate.service';
 
 const METRIC_META: Record<DefectDojoMetricCategory, { icon: string; tone: string }> = {
   verified: { icon: '✓', tone: 'verified' },
@@ -99,9 +98,9 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   appId: string | null = null;
   selectedBranch = '';
-  selectedEnvironmentId = '';
+  selectedPipelineId = '';
   branches: string[] = [];
-  environments: EnvironmentSummaryResponse[] = [];
+  pipelineOptions: Array<{ id: string; label: string }> = [];
 
   loading = false;
   chartsLoading = false;
@@ -154,7 +153,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private defectDojoService: DefectDojoService,
-    private environmentService: EnvironmentService,
+    private qualityGateService: QualityGateService,
     private ngZone: NgZone
   ) {}
 
@@ -170,7 +169,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.chartsLoading = false;
         this.error = null;
         this.destroyCharts();
-        return this.defectDojoService.getDashboard(appId, branch, tags).pipe(
+        return this.defectDojoService.getDashboard(appId, branch, tags ?? this.defectDojoService.scanKindTag()).pipe(
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
             const msg = err?.name === 'TimeoutError'
@@ -207,7 +206,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       this.appId = id;
       if (this.appId) {
         this.loadBranches();
-        this.loadEnvironments();
       }
     });
 
@@ -217,21 +215,21 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         map(qp => ({
           branch: qp.get('branch') ?? '',
           category: (qp.get('category') ?? 'open') as DefectDojoMetricCategory,
-          envId: qp.get('envId') ?? ''
+          pipelineId: qp.get('pipelineId') ?? ''
         })),
         distinctUntilChanged((a, b) =>
-          a.branch === b.branch && a.envId === b.envId && a.category === b.category
+          a.branch === b.branch && a.pipelineId === b.pipelineId && a.category === b.category
         )
       )
     ]).pipe(takeUntil(this.destroy$)).subscribe(([id, qp]) => {
       if (!id) return;
       const branchChanged = qp.branch !== this.selectedBranch;
-      const envChanged = qp.envId !== this.selectedEnvironmentId;
+      const pipelineChanged = qp.pipelineId !== this.selectedPipelineId;
       const catChanged = qp.category !== this.selectedCategory;
       if (qp.branch) this.selectedBranch = qp.branch;
-      this.selectedEnvironmentId = qp.envId || '';
+      this.selectedPipelineId = qp.pipelineId || '';
       this.selectedCategory = qp.category;
-      if (this.selectedBranch && (branchChanged || envChanged)) {
+      if (this.selectedBranch && (branchChanged || pipelineChanged)) {
         this.requestDashboardReload(id, this.selectedBranch);
       } else if (catChanged && this.showFindingsTable) {
         this.loadFindings();
@@ -243,7 +241,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     this.dashboardReload$.next({
       appId,
       branch,
-      tags: this.selectedEnvironmentTag || undefined
+      tags: this.selectedDefectDojoTag || undefined
     });
   }
 
@@ -275,24 +273,21 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadEnvironments(): void {
-    if (!this.appId) return;
-    this.environmentService.getMyEnvironments(this.appId).subscribe({
-      next: envs => (this.environments = envs || [])
-    });
-  }
-
   onBranchChange(): void {
     this.page = 0;
-    const envStillValid = this.environmentsForBranch.some(e => e.id === this.selectedEnvironmentId);
-    if (!envStillValid) {
-      this.selectedEnvironmentId = '';
-    }
+    this.selectedPipelineId = '';
+    this.syncQueryParams();
+    this.loadPipelineOptions(true);
+  }
+
+  onPipelineChange(): void {
+    this.page = 0;
     this.syncQueryParams();
     this.triggerDashboardReload();
   }
 
-  onEnvironmentChange(): void {
+  clearPipelineFilter(): void {
+    this.selectedPipelineId = '';
     this.page = 0;
     this.syncQueryParams();
     this.triggerDashboardReload();
@@ -300,7 +295,38 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
 
   private triggerDashboardReload(): void {
     if (!this.appId || !this.selectedBranch) return;
-    this.requestDashboardReload(this.appId, this.selectedBranch);
+    this.loadPipelineOptions(true);
+  }
+
+  private loadPipelineOptions(reloadAfter = false): void {
+    if (!this.appId) return;
+    this.qualityGateService.listScanPipelines(this.appId, this.selectedBranch).pipe(
+      map((envs: QualityGateEnvironmentOption[]) => (envs ?? [])
+        .filter(e => e.pipelineId)
+        .map(e => ({
+          id: String(e.pipelineId),
+          label: `#${e.pipelineId}`
+        }))
+      ),
+      catchError(() => of([] as Array<{ id: string; label: string }>)),
+      takeUntil(this.destroy$)
+    ).subscribe(opts => {
+      this.pipelineOptions = opts;
+      let changed = false;
+      if (this.selectedPipelineId && !opts.some(o => o.id === this.selectedPipelineId)) {
+        this.selectedPipelineId = opts.length ? opts[0].id : '';
+        changed = true;
+      } else if (!this.selectedPipelineId && opts.length) {
+        this.selectedPipelineId = opts[0].id;
+        changed = true;
+      }
+      if (changed) {
+        this.syncQueryParams();
+      }
+      if ((changed || reloadAfter) && this.appId && this.selectedBranch) {
+        this.requestDashboardReload(this.appId, this.selectedBranch);
+      }
+    });
   }
 
   backToProject(): void {
@@ -308,19 +334,23 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     const branch = this.selectedBranch && this.selectedBranch !== '__all__'
       ? this.selectedBranch
       : undefined;
-    this.router.navigate(['/project', this.appId, 'security-center'], {
+    this.router.navigate(['/project', this.appId, 'overview'], {
       queryParams: branch ? { branch } : {}
     });
   }
 
-  get selectedEnvironmentTag(): string | null {
-    if (!this.selectedEnvironmentId) return null;
-    return this.defectDojoService.environmentTag(this.selectedEnvironmentId);
+  get selectedDefectDojoTag(): string | null {
+    if (this.selectedPipelineId) {
+      return this.defectDojoService.pipelineTag(this.selectedPipelineId);
+    }
+    return this.defectDojoService.scanKindTag();
   }
 
-  get environmentsForBranch(): EnvironmentSummaryResponse[] {
-    if (!this.selectedBranch) return this.environments;
-    return this.environments.filter(e => (e.gitBranch || '') === this.selectedBranch);
+  get defectDojoFilterLabel(): string {
+    if (this.selectedPipelineId) {
+      return `Pipeline #${this.selectedPipelineId}`;
+    }
+    return 'Scans CI uniquement';
   }
 
   selectCategory(card: DefectDojoMetricCard): void {
@@ -434,7 +464,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.page,
         this.size,
         this.filterSeverity || undefined,
-        this.selectedEnvironmentTag || undefined,
+        this.selectedDefectDojoTag || undefined,
         this.filterDateFrom || undefined,
         this.filterDateTo || undefined,
         this.filterTestId ?? undefined
@@ -842,7 +872,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   envCountForBranch(branch: string): number {
-    return this.environments.filter(e => e.gitBranch === branch).length;
+    return branch?.trim() ? 1 : 0;
   }
 
   mapEntries(m?: Record<string, number>): { key: string; value: number }[] {
@@ -859,7 +889,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
       queryParams: {
         branch: this.selectedBranch,
         category: this.selectedCategory,
-        envId: this.selectedEnvironmentId || null
+        pipelineId: this.selectedPipelineId || null
       },
       queryParamsHandling: 'merge'
     });

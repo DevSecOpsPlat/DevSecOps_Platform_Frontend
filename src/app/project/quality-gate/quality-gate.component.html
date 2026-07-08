@@ -9,10 +9,10 @@
       <select class="qg-branch-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()">
         <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
       </select>
-      <label class="qg-branch-label">Environnement</label>
-      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedEnvironmentId" (change)="onEnvironmentChange()">
-        <option *ngFor="let env of environments" [ngValue]="env.environmentId">
-          {{ env.environmentName }} · {{ env.branch }}<ng-container *ngIf="env.pipelineId"> · #{{ env.pipelineId }}</ng-container><ng-container *ngIf="env.verdict"> · {{ env.verdict }}</ng-container>
+      <label class="qg-branch-label">Pipeline</label>
+      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedPipelineId" (change)="onPipelineChange()">
+        <option *ngFor="let env of environments" [ngValue]="env.pipelineId">
+          #{{ env.pipelineId }}
         </option>
       </select>
       <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading" [title]="refreshButtonTitle">Actualiser</button>
@@ -21,7 +21,7 @@
   </header>
 
   <p class="qg-env-hint" *ngIf="selectedBranch">
-    Environnements de la branche <strong>{{ selectedBranch }}</strong> — un par exécution de pipeline, du plus récent au plus ancien.
+    Pipelines scan de la branche <strong>{{ selectedBranch }}</strong> — du plus récent au plus ancien.
   </p>
 
   <div class="qg-banner qg-banner--warn" *ngIf="error && !loading">
