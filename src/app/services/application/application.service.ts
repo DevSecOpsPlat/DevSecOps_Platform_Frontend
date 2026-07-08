@@ -154,6 +154,15 @@ export class ApplicationService {
     );
   }
 
+  triggerScan(appId: string, branch?: string): Observable<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }> {
+    const body = branch ? { branch } : {};
+    return this.http.post<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }>(
+      `${BASE}api/applications/${appId}/scan`,
+      body,
+      { headers: this.authHeaders() }
+    );
+  }
+
   getDeploymentMetrics(appId: string, branch?: string): Observable<DeploymentMetrics> {
     let url = `${BASE}api/applications/${appId}/deployments/metrics`;
     if (branch) {

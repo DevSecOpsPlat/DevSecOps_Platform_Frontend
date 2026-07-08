@@ -21,6 +21,8 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   data?: PipelineScanResponse;
   loading = false;
   error: string | null = null;
+  /** SCAN | DEPLOY — depuis query param ou déduit des jobs. */
+  pipelineKind: 'SCAN' | 'DEPLOY' | null = null;
 
   selectedJob?: PipelineJobInfo;
   selectedJobLogs?: string;
@@ -51,6 +53,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    const kindParam = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
+    if (kindParam === 'SCAN' || kindParam === 'DEPLOY') {
+      this.pipelineKind = kindParam;
+    }
     const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
     if (pipelineIdParam) {
@@ -131,6 +137,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         ? Math.floor(incoming.durationSeconds)
         : this.coerceDuration(incoming),
     };
+
+    if (!this.pipelineKind) {
+      this.pipelineKind = this.inferPipelineKind(nextJobs.length ? nextJobs : this.normalizeJobs(this.data?.jobs));
+    }
 
     if (!this.data) {
       this.data = normalized;
@@ -496,32 +506,86 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
+  get pipelineKindLabel(): string {
+    return this.pipelineKind === 'DEPLOY' ? 'DEPLOY' : this.pipelineKind === 'SCAN' ? 'SCAN' : '';
+  }
+
+  private inferPipelineKind(jobs: PipelineJobInfo[]): 'SCAN' | 'DEPLOY' | null {
+    if (!jobs?.length) return null;
+    const hay = jobs.map(j => `${j.stage || ''} ${j.name || ''}`.toLowerCase()).join(' ');
+    if (hay.includes('deploy-k8s') || hay.includes('deploy:') || hay.includes('push-image') || hay.includes('build-image')) {
+      return 'DEPLOY';
+    }
+    if (hay.includes('semgrep') || hay.includes('gitleaks') || hay.includes('code-analysis') || hay.includes('sca') || hay.includes('sast')) {
+      return 'SCAN';
+    }
+    return null;
+  }
+
+  /**
+   * Ordre des stages tel que défini dans le .gitlab-ci.yml (pipeline.md).
+   * On ne trie PAS par id de job : un retry GitLab crée un nouveau job id plus élevé
+   * et faisait remonter deploy-k8s en fin de liste après zap/reporting.
+   */
+  private static readonly CI_STAGE_ORDER: string[] = [
+    'setup',
+    'code-analysis',
+    'sca',
+    'sast',
+    'secrets-iac',
+    'build',
+    'container-scan',
+    'push-image',
+    'deploy-k8s',
+    'zap-scan',
+    'reporting',
+    'security-validation',
+    'report'
+  ];
+
   getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
-    const jobsSorted = this.normalizeJobs(this.data?.jobs)
-      .sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0));
-    if (!jobsSorted.length) return [];
-    const stageOrder: string[] = [];
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    if (!jobs.length) return [];
+
     const stageMap = new Map<string, PipelineJobInfo[]>();
-    jobsSorted.forEach(job => {
-      const stage = job.stage || 'unknown';
-      if (!stageOrder.includes(stage)) stageOrder.push(stage);
+    jobs.forEach(job => {
+      const stage = (job.stage || 'unknown').trim() || 'unknown';
       if (!stageMap.has(stage)) {
         stageMap.set(stage, []);
       }
       stageMap.get(stage)!.push(job);
     });
-    return stageOrder.map((name) => {
-      const jobs = stageMap.get(name) || [];
-      const statuses = jobs.map(j => this.normStatus(j.status));
+
+    // Jobs d'un même stage : id croissant (ordre d'apparition GitLab)
+    stageMap.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
+
+    const known = PipelineDetailsComponent.CI_STAGE_ORDER;
+    const stageNames = Array.from(stageMap.keys()).sort((a, b) => {
+      const ia = known.indexOf(a.toLowerCase());
+      const ib = known.indexOf(b.toLowerCase());
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0) return -1;
+      if (ib >= 0) return 1;
+      // Stages inconnus : premier job id le plus bas
+      const minA = Math.min(...(stageMap.get(a) || []).map(j => j.id ?? 0));
+      const minB = Math.min(...(stageMap.get(b) || []).map(j => j.id ?? 0));
+      return minA - minB;
+    });
+
+    return stageNames.map((name) => {
+      const stageJobs = stageMap.get(name) || [];
+      const statuses = stageJobs.map(j => this.normStatus(j.status));
       let overallStatus = 'SUCCESS';
       if (statuses.some(s => s === 'FAILED' || s === 'CANCELED')) {
         overallStatus = 'FAILED';
-      } else if (statuses.some(s => s === 'RUNNING' || s === 'PENDING')) {
+      } else if (statuses.some(s => s === 'RUNNING' || s === 'PENDING' || s === 'CREATED')) {
         overallStatus = 'RUNNING';
-      } else if (statuses.some(s => s === 'SKIPPED')) {
+      } else if (statuses.every(s => s === 'SKIPPED' || s === 'MANUAL')) {
+        overallStatus = 'SKIPPED';
+      } else if (statuses.some(s => s === 'SKIPPED') && !statuses.some(s => s === 'SUCCESS' || s === 'PASSED')) {
         overallStatus = 'SKIPPED';
       }
-      return { name, jobs, status: overallStatus };
+      return { name, jobs: stageJobs, status: overallStatus };
     });
   }
 

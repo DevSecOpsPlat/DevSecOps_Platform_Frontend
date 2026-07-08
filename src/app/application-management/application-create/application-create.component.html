@@ -1,35 +1,14 @@
-<div class="am-page">
-  <div class="am-breadcrumb" (click)="back()">← Projets</div>
-  <header class="am-header">
-    <div>
-      <h1 class="am-title">Créer un projet</h1>
-      <p class="am-subtitle">Un projet regroupe des services et des bases de données. Chaque service pourra être scanné et déployé indépendamment.</p>
-    </div>
-  </header>
-
-  <div class="am-section" style="max-width: 640px;">
-    <form class="am-form" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="am-field">
-        <label class="am-label">Nom *</label>
-        <input class="am-input" formControlName="name" placeholder="Ex. Boutique en ligne" />
-        <span class="am-error" *ngIf="form.get('name')?.touched && form.get('name')?.invalid">
-          Le nom est obligatoire.
-        </span>
-      </div>
-
-      <div class="am-field">
-        <label class="am-label">Description</label>
-        <textarea class="am-textarea" formControlName="description" placeholder="Optionnel"></textarea>
-      </div>
-
-      <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
-
-      <div class="am-form-actions">
-        <button type="button" class="am-btn am-btn-secondary" (click)="back()">Annuler</button>
-        <button type="submit" class="am-btn am-btn-primary" [disabled]="submitting">
-          {{ submitting ? 'Création…' : 'Créer' }}
-        </button>
-      </div>
-    </form>
+<div class="am-modal-backdrop am-create-page-backdrop">
+  <div class="am-modal">
+    <h3 class="am-modal-title">Créer un projet</h3>
+    <p class="am-create-lead">
+      Un projet regroupe vos services et bases de données. Chaque service pourra être scanné et déployé indépendamment.
+    </p>
+    <app-managed-project-form
+      [saving]="submitting"
+      [error]="error"
+      (save)="submit($event)"
+      (cancel)="back()">
+    </app-managed-project-form>
   </div>
 </div>

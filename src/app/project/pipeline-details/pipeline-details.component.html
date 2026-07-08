@@ -17,7 +17,14 @@
       <!-- ── HEADER ── -->
       <header class="pipeline-header">
         <div class="pipeline-main-title">
-          <div class="pipeline-eyebrow">Pipeline</div>
+          <div class="pipeline-eyebrow">
+            Pipeline
+            <span class="pipeline-kind-badge" *ngIf="pipelineKindLabel"
+              [class.pipeline-kind-badge--scan]="pipelineKind === 'SCAN'"
+              [class.pipeline-kind-badge--deploy]="pipelineKind === 'DEPLOY'">
+              {{ pipelineKindLabel }}
+            </span>
+          </div>
           <h1>
             <span *ngIf="data.pipelineId">#{{ data.pipelineId }}</span>
             <span *ngIf="!data.pipelineId">ID GitLab invalide</span>
