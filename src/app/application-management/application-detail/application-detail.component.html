@@ -1,33 +1,39 @@
-<div class="am-page">
-  <div class="am-breadcrumb" (click)="back()">← Applications managées</div>
+<div class="am-page ad-page">
+  <div class="ad-breadcrumb" (click)="back()">← Applications managées</div>
 
   <div *ngIf="loading" class="am-empty">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
   <ng-container *ngIf="app && !loading">
-    <header class="am-header">
-      <div>
-        <h1 class="am-title">{{ app.name }}</h1>
-        <p class="am-subtitle">{{ app.description || 'Sans description' }} · <code class="am-slug">{{ app.slug }}</code></p>
+    <section class="ad-hero">
+      <div class="ad-hero-glow"></div>
+      <div class="ad-hero-content">
+        <div class="ad-hero-main">
+          <h1 class="ad-title">{{ app.name }}</h1>
+          <p class="ad-subtitle">{{ app.description || 'Sans description' }}</p>
+          <code class="ad-slug">{{ app.slug }}</code>
+        </div>
+        <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+          <label class="am-deploy-ttl" style="color:rgba(255,255,255,.85);">
+            Durée (h)
+            <input
+              type="number"
+              min="1"
+              max="72"
+              class="am-input"
+              [value]="deployTtlHours"
+              (input)="deployTtlHours = +$any($event.target).value"
+              [disabled]="deploying" />
+          </label>
+          <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
+            {{ deploying ? 'Déploiement…' : 'Déployer' }}
+          </button>
+          <button class="am-btn am-btn-danger ad-delete-btn" (click)="deleteApp()">
+            Supprimer l'application
+          </button>
+        </div>
       </div>
-      <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
-        <label class="am-deploy-ttl">
-          Durée (h)
-          <input
-            type="number"
-            min="1"
-            max="72"
-            class="am-input"
-            [value]="deployTtlHours"
-            (input)="deployTtlHours = +$any($event.target).value"
-            [disabled]="deploying" />
-        </label>
-        <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
-          {{ deploying ? 'Déploiement…' : 'Déployer' }}
-        </button>
-        <button class="am-btn am-btn-danger" (click)="deleteApp()">Supprimer l'application</button>
-      </div>
-    </header>
+    </section>
 
     <div class="am-alert am-alert-error" *ngIf="deployError">{{ deployError }}</div>
     <div class="am-alert" *ngIf="syncMessage"
@@ -35,9 +41,9 @@
          style="background:#e8f5e9;border-color:#a5d6a7;">{{ syncMessage }}</div>
 
     <!-- Domaine custom -->
-    <div class="am-section" style="padding-top:.5rem;padding-bottom:.5rem;">
-      <div class="am-section-head" style="margin-bottom:.5rem;">
-        <h3 class="am-section-title" style="font-size:1rem;margin:0;">Domaine personnalisé</h3>
+    <div class="ad-panel" style="margin-bottom:1.25rem;padding:1.25rem 1.5rem;">
+      <div class="ad-panel-head" style="margin-bottom:.6rem;">
+        <h2 class="ad-panel-title" style="font-size:1rem;">Domaine personnalisé</h2>
       </div>
       <p class="am-subtitle" style="margin:0 0 .6rem;">
         Par défaut : <code class="am-slug">app-&lt;ns&gt;.nip.io</code>.
@@ -60,7 +66,7 @@
     <div class="am-alert am-alert-warn" *ngFor="let w of app.warnings">{{ w }}</div>
 
     <!-- État du dernier déploiement -->
-    <div class="am-section" *ngIf="app.lastDeployment">
+    <div class="ad-panel" *ngIf="app.lastDeployment" style="margin-bottom:1.25rem;">
       <app-managed-deployment-status
         [appId]="appId"
         [deployment]="app.lastDeployment"
@@ -72,31 +78,31 @@
     </div>
 
     <!-- Onglets -->
-    <div class="am-tabs">
-      <div class="am-tab" [class.active]="activeTab === 'services'" (click)="setTab('services')">
-        Services ({{ app.services.length }})
-      </div>
-      <div class="am-tab" [class.active]="activeTab === 'databases'" (click)="setTab('databases')">
-        Bases de données ({{ app.databases.length }})
-      </div>
-      <div class="am-tab" [class.active]="activeTab === 'monitoring'" (click)="setTab('monitoring')">
+    <div class="ad-tabs">
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'services'" (click)="setTab('services')">
+        Services
+        <span class="ad-tab-count">{{ app.services.length }}</span>
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'databases'" (click)="setTab('databases')">
+        Bases de données
+        <span class="ad-tab-count">{{ app.databases.length }}</span>
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'monitoring'" (click)="setTab('monitoring')">
         Monitoring
-      </div>
-      <div class="am-tab" [class.active]="activeTab === 'alerts'" (click)="setTab('alerts')">
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'alerts'" (click)="setTab('alerts')">
         Alertes
-        <span *ngIf="alertsData?.liveCount" class="am-badge status-failed" style="margin-left:.35rem;">
-          {{ alertsData!.liveCount }}
-        </span>
-      </div>
-      <div class="am-tab" [class.active]="activeTab === 'history'" (click)="setTab('history')">
+        <span class="ad-tab-count" *ngIf="alertsData?.liveCount">{{ alertsData!.liveCount }}</span>
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'history'" (click)="setTab('history')">
         Historique
-      </div>
+      </button>
     </div>
 
     <!-- Alertes runtime -->
-    <div class="am-section" *ngIf="activeTab === 'alerts'">
-      <div class="am-section-head">
-        <h3 class="am-section-title">Alertes runtime</h3>
+    <div class="ad-panel" *ngIf="activeTab === 'alerts'">
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Alertes runtime</h2>
         <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadAlerts()" [disabled]="alertsLoading || !app.lastDeployment">
           {{ alertsLoading ? '…' : 'Actualiser' }}
         </button>
@@ -140,9 +146,9 @@
     </div>
 
     <!-- Historique des déploiements -->
-    <div class="am-section" *ngIf="activeTab === 'history'">
-      <div class="am-section-head">
-        <h3 class="am-section-title">Historique des déploiements</h3>
+    <div class="ad-panel" *ngIf="activeTab === 'history'">
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Historique des déploiements</h2>
         <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadHistory()" [disabled]="historyLoading">
           {{ historyLoading ? '…' : 'Actualiser' }}
         </button>
@@ -201,8 +207,8 @@
       </div>
     </div>
 
-    <!-- Monitoring dashboard (namespace de l'app uniquement) -->
-    <div class="am-section" *ngIf="activeTab === 'monitoring'">
+    <!-- Monitoring -->
+    <div class="ad-panel" *ngIf="activeTab === 'monitoring'">
       <app-monitoring-dashboard
         *ngIf="app.lastDeployment"
         [appId]="appId"
@@ -215,31 +221,64 @@
     </div>
 
     <!-- Services -->
-    <div class="am-section" *ngIf="activeTab === 'services'">
-      <div class="am-section-head">
-        <h3 class="am-section-title">Services</h3>
-        <button class="am-btn am-btn-secondary" (click)="openAddService()">+ Ajouter un service</button>
+    <div class="ad-panel ad-panel--services" *ngIf="activeTab === 'services'">
+      <div class="ad-panel-glow"></div>
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Services du projet</h2>
+        <button class="am-btn am-btn-primary" (click)="openAddService()">+ Ajouter un service</button>
       </div>
 
-      <div class="am-empty" *ngIf="app.services.length === 0">Aucun service.</div>
+      <div class="ad-empty-inline" *ngIf="app.services.length === 0">
+        <p>Aucun service configuré.</p>
+        <button class="am-btn am-btn-secondary" (click)="openAddService()">Ajouter le premier service</button>
+      </div>
 
-      <div class="am-list">
-        <div class="am-list-item" *ngFor="let s of app.services">
-          <div class="am-list-item-main">
-            <div class="am-list-item-title">
-              {{ s.name }}
-              <span class="am-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
-            </div>
-            <div class="am-list-item-sub am-mono">port {{ s.exposedPort }} · {{ s.gitRepositoryUrl }}</div>
-            <div class="am-list-item-sub am-mono" *ngIf="s.contextPath">chemin métier {{ s.contextPath }} → public /api</div>
-            <div class="am-list-item-sub" *ngIf="s.dependsOnDatabaseId">
-              BD liée : {{ databaseName(s.dependsOnDatabaseId) }} → {{ s.dbUrlEnvVar }}
-            </div>
-            <div class="am-list-item-sub" *ngIf="s.dependsOnServiceId">
-              Dépend de : {{ serviceName(s.dependsOnServiceId) }}
+      <div class="ad-service-list">
+        <article
+          class="ad-service-card"
+          *ngFor="let s of app.services; let i = index"
+          [style.animation-delay]="(i * 0.06) + 's'">
+          <div class="ad-service-glow"></div>
+          <div class="ad-service-stripe"></div>
+
+          <div class="ad-service-body">
+            <div class="ad-service-main">
+              <div class="ad-service-icon">{{ roleIcon(s.role) }}</div>
+              <div class="ad-service-info">
+                <div class="ad-service-top">
+                  <div class="ad-service-identity">
+                    <h3 class="ad-service-name">{{ s.name }}</h3>
+                    <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
+                  </div>
+                </div>
+
+                <div class="ad-service-details">
+                  <span class="ad-detail-pill" *ngIf="s.exposedPort">
+                    <span class="ad-detail-pill-label">Port</span>
+                    <span class="am-mono">{{ s.exposedPort }}</span>
+                  </span>
+                  <span class="ad-detail-pill ad-detail-pill--repo">
+                    <span class="ad-detail-pill-label">Repo</span>
+                    <span class="am-mono">{{ s.gitRepositoryUrl }}</span>
+                  </span>
+                  <span class="ad-detail-pill" *ngIf="s.contextPath">
+                    <span class="ad-detail-pill-label">/api →</span>
+                    <span class="am-mono">{{ s.contextPath }}</span>
+                  </span>
+                  <span class="ad-detail-pill" *ngIf="s.dependsOnDatabaseId">
+                    <span class="ad-detail-pill-label">BD</span>
+                    {{ databaseName(s.dependsOnDatabaseId) }}
+                  </span>
+                  <span class="ad-detail-pill" *ngIf="s.dependsOnServiceId">
+                    <span class="ad-detail-pill-label">Dépend de</span>
+                    {{ serviceName(s.dependsOnServiceId) }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="am-list-actions">
+
+          <footer class="ad-service-actions" (click)="$event.stopPropagation()">
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
             <button
               class="am-btn am-btn-primary am-btn-sm"
@@ -249,34 +288,39 @@
               {{ syncingServiceId === s.id ? 'Sync…' : 'Appliquer au cluster' }}
             </button>
             <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>
-          </div>
-        </div>
+          </footer>
+        </article>
       </div>
     </div>
 
-    <!-- Databases -->
-    <div class="am-section" *ngIf="activeTab === 'databases'">
-      <div class="am-section-head">
-        <h3 class="am-section-title">Bases de données</h3>
-        <button class="am-btn am-btn-secondary" (click)="openAddDatabase()">+ Ajouter une base</button>
+    <!-- Bases de données -->
+    <div class="ad-panel" *ngIf="activeTab === 'databases'">
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Bases de données</h2>
+        <button class="am-btn am-btn-primary" (click)="openAddDatabase()">+ Ajouter une base</button>
       </div>
 
-      <div class="am-empty" *ngIf="app.databases.length === 0">Aucune base de données.</div>
+      <div class="ad-empty-inline" *ngIf="app.databases.length === 0">
+        <p>Aucune base de données configurée.</p>
+        <button class="am-btn am-btn-secondary" (click)="openAddDatabase()">Ajouter une base</button>
+      </div>
 
-      <div class="am-list">
-        <div class="am-list-item" *ngFor="let d of app.databases">
-          <div class="am-list-item-main">
-            <div class="am-list-item-title">
-              {{ d.name }}
-              <span class="am-chip">{{ d.engine }} {{ d.version }}</span>
-            </div>
-            <div class="am-list-item-sub am-mono">db {{ d.dbName }} · port {{ d.exposedPort }} · {{ d.storageSize }}</div>
+      <div class="ad-db-grid">
+        <article class="ad-db-card" *ngFor="let d of app.databases; let i = index" [style.animation-delay]="(i * 0.05) + 's'">
+          <div class="ad-db-head">
+            <h3 class="ad-db-name">{{ d.name }}</h3>
+            <span class="ad-db-engine">{{ d.engine }} {{ d.version }}</span>
           </div>
-          <div class="am-list-actions">
+          <div class="ad-db-details">
+            <span>Base <strong class="am-mono">{{ d.dbName }}</strong></span>
+            <span>Port <strong>{{ d.exposedPort }}</strong></span>
+            <span *ngIf="d.storageSize">Stockage <strong>{{ d.storageSize }}</strong></span>
+          </div>
+          <div class="ad-db-actions">
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditDatabase(d)">Éditer</button>
             <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteDatabase(d)">Supprimer</button>
           </div>
-        </div>
+        </article>
       </div>
     </div>
   </ng-container>

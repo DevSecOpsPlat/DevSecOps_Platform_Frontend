@@ -20,7 +20,7 @@ import { MonitoringDashboardComponent } from '../monitoring-dashboard/monitoring
   standalone: true,
   imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeploymentStatusComponent, MonitoringDashboardComponent],
   templateUrl: './application-detail.component.html',
-  styleUrls: ['../shared/app-management.shared.css']
+  styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
 })
 export class ApplicationDetailComponent implements OnInit {
   appId!: string;
@@ -388,5 +388,13 @@ export class ApplicationDetailComponent implements OnInit {
 
   roleClass(role: string): string {
     return 'role-' + role.toLowerCase();
+  }
+
+  roleIcon(role: string): string {
+    const r = (role || '').toUpperCase();
+    if (r === 'FRONTEND') return 'F';
+    if (r === 'BACKEND') return 'B';
+    if (r === 'WORKER') return 'W';
+    return 'S';
   }
 }
