@@ -7,9 +7,18 @@ import {
   AppDatabaseModel,
   AppDeployment,
   AppServiceModel,
+  ClusterPruneResult,
+  DeploymentLogsResponse,
+  DeploymentMonitoringResponse,
+  DeploymentMonitorAlert,
+  DeploymentAlertsResponse,
+  DeploymentPodsResponse,
+  MetricsHistoryResponse,
   EnvVar,
-  ManagedApp
+  ManagedApp,
+  RuntimeSyncResult
 } from '../../models/application-management/application-management.models';
+import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 
 const BASE = environment.BASE_URL;
 const API = BASE + 'api/managed-applications';
@@ -45,7 +54,7 @@ export class ApplicationManagementService {
     return this.http.post<ManagedApp>(API, body, { headers: this.headers() });
   }
 
-  update(id: string, body: { name: string; description?: string }): Observable<ManagedApp> {
+  update(id: string, body: { name: string; description?: string; customHostname?: string | null }): Observable<ManagedApp> {
     return this.http.put<ManagedApp>(`${API}/${id}`, body, { headers: this.headers() });
   }
 
@@ -63,8 +72,8 @@ export class ApplicationManagementService {
     return this.http.put<AppServiceModel>(`${API}/${appId}/services/${serviceId}`, body, { headers: this.headers() });
   }
 
-  deleteService(appId: string, serviceId: string): Observable<void> {
-    return this.http.delete<void>(`${API}/${appId}/services/${serviceId}`, { headers: this.headers() });
+  deleteService(appId: string, serviceId: string): Observable<ClusterPruneResult> {
+    return this.http.delete<ClusterPruneResult>(`${API}/${appId}/services/${serviceId}`, { headers: this.headers() });
   }
 
   // ---------- Databases ----------
@@ -77,8 +86,8 @@ export class ApplicationManagementService {
     return this.http.put<AppDatabaseModel>(`${API}/${appId}/databases/${dbId}`, body, { headers: this.headers() });
   }
 
-  deleteDatabase(appId: string, dbId: string): Observable<void> {
-    return this.http.delete<void>(`${API}/${appId}/databases/${dbId}`, { headers: this.headers() });
+  deleteDatabase(appId: string, dbId: string): Observable<ClusterPruneResult> {
+    return this.http.delete<ClusterPruneResult>(`${API}/${appId}/databases/${dbId}`, { headers: this.headers() });
   }
 
   // ---------- Env vars (CRUD dédié) ----------
@@ -101,8 +110,11 @@ export class ApplicationManagementService {
 
   // ---------- Déploiements ----------
 
-  deploy(appId: string): Observable<AppDeployment> {
-    return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, {}, { headers: this.headers() });
+  deploy(
+    appId: string,
+    body?: { sessionDurationHours?: number; branch?: string }
+  ): Observable<AppDeployment> {
+    return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, body ?? {}, { headers: this.headers() });
   }
 
   listDeployments(appId: string): Observable<AppDeployment[]> {
@@ -115,6 +127,102 @@ export class ApplicationManagementService {
 
   teardownDeployment(appId: string, deploymentId: string): Observable<AppDeployment> {
     return this.http.delete<AppDeployment>(`${API}/${appId}/deployments/${deploymentId}`, { headers: this.headers() });
+  }
+
+  /** Prolonge le TTL (1–24 h, plafond 72 h depuis Ready). */
+  extendDeploymentTtl(
+    appId: string,
+    deploymentId: string,
+    additionalHours: number
+  ): Observable<AppDeployment> {
+    return this.http.post<AppDeployment>(
+      `${API}/${appId}/deployments/${deploymentId}/extend-ttl`,
+      { additionalHours },
+      { headers: this.headers() }
+    );
+  }
+
+  listDeploymentPods(appId: string, deploymentId: string): Observable<DeploymentPodsResponse> {
+    return this.http.get<DeploymentPodsResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/pods`,
+      { headers: this.headers() }
+    );
+  }
+
+  getDeploymentMonitoring(appId: string, deploymentId: string): Observable<DeploymentMonitoringResponse> {
+    return this.http.get<DeploymentMonitoringResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/monitoring`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Alertes live + historique 24 h (CrashLoop, OOM, health…). */
+  getDeploymentAlerts(appId: string, deploymentId: string): Observable<DeploymentAlertsResponse> {
+    return this.http.get<DeploymentAlertsResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/alerts`,
+      { headers: this.headers() }
+    );
+  }
+
+  getMetricsHistory(
+    appId: string,
+    deploymentId: string,
+    from?: string,
+    to?: string
+  ): Observable<MetricsHistoryResponse> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    return this.http.get<MetricsHistoryResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/metrics/history`,
+      { headers: this.headers(), params }
+    );
+  }
+
+  getDeploymentLogs(
+    appId: string,
+    deploymentId: string,
+    workload: string,
+    tailLines = 300
+  ): Observable<DeploymentLogsResponse> {
+    return this.http.get<DeploymentLogsResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/logs`,
+      { headers: this.headers(), params: { workload, tailLines: String(tailLines) } }
+    );
+  }
+
+  /** Pipeline GitLab CI lié au déploiement (jobs + statut). */
+  getDeploymentCiPipeline(appId: string, deploymentId: string): Observable<PipelineScanResponse> {
+    return this.http.get<PipelineScanResponse>(
+      `${API}/${appId}/deployments/${deploymentId}/ci-pipeline`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Logs texte d'un job CI du pipeline de déploiement. */
+  getDeploymentCiJobLogs(appId: string, deploymentId: string, jobId: number): Observable<string> {
+    return this.http.get(
+      `${API}/${appId}/deployments/${deploymentId}/ci-jobs/${jobId}/logs`,
+      { headers: this.headers(), responseType: 'text' }
+    );
+  }
+
+  /** Applique les env vars du service sur le cluster RUNNING (sans rebuild). */
+  syncServiceRuntime(appId: string, serviceId: string): Observable<RuntimeSyncResult> {
+    return this.http.post<RuntimeSyncResult>(
+      `${API}/${appId}/services/${serviceId}/sync-runtime`,
+      {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Rebuild CI d'un seul service dans le namespace RUNNING (même déploiement). */
+  rebuildService(appId: string, serviceId: string): Observable<AppDeployment> {
+    return this.http.post<AppDeployment>(
+      `${API}/${appId}/services/${serviceId}/rebuild`,
+      {},
+      { headers: this.headers() }
+    );
   }
 
   revealSecret(

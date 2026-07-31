@@ -1,0 +1,323 @@
+<div class="md-root" *ngIf="deployment">
+  <div class="md-hero">
+    <div class="md-hero-text">
+      <p class="md-kicker">Monitoring · namespace isolé · live charts</p>
+      <h2 class="md-title">{{ appName || data?.applicationName || 'Application' }}</h2>
+      <p class="md-sub am-mono">
+        {{ data?.namespace || deployment.namespace }}
+        <span *ngIf="lastRefresh"> · maj {{ lastRefresh | date:'HH:mm:ss' }}</span>
+      </p>
+    </div>
+    <div class="md-hero-actions">
+      <button class="am-btn am-btn-secondary am-btn-sm" (click)="refresh()" [disabled]="loading">
+        {{ loading ? '…' : 'Actualiser' }}
+      </button>
+      <a *ngIf="data?.appUrl" class="am-btn am-btn-primary am-btn-sm"
+         [href]="data!.appUrl!" target="_blank" rel="noopener">Ouvrir l’app</a>
+    </div>
+  </div>
+
+  <div class="am-alert am-alert-warn" *ngIf="isInactive">
+    Environnement inactif — pas de métriques live. Redéploie pour activer le dashboard.
+  </div>
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+  <div class="am-empty" *ngIf="loading && !data">Chargement du dashboard…</div>
+
+  <ng-container *ngIf="data && !isInactive">
+    <!-- KPI strip -->
+    <div class="md-kpis">
+      <div class="md-kpi">
+        <span class="md-kpi-label">Pods Ready</span>
+        <span class="md-kpi-value">{{ summary?.readyPods || 0 }}/{{ summary?.totalPods || 0 }}</span>
+        <div class="md-meter"><div class="md-meter-fill" [style.width.%]="readyPct"></div></div>
+      </div>
+      <div class="md-kpi">
+        <span class="md-kpi-label">CPU (réel)</span>
+        <span class="md-kpi-value">{{ cpuTotalLabel }}</span>
+        <span class="md-kpi-hint">req {{ cpuRequestTotalLabel }} · lim {{ cpuLimitTotalLabel }}</span>
+      </div>
+      <div class="md-kpi">
+        <span class="md-kpi-label">Mémoire</span>
+        <span class="md-kpi-value">{{ memTotalLabel }}</span>
+        <span class="md-kpi-hint">req {{ memRequestTotalLabel }} · lim {{ memLimitTotalLabel }}</span>
+      </div>
+      <div class="md-kpi">
+        <span class="md-kpi-label">Network RX / TX</span>
+        <span class="md-kpi-value" style="font-size:1.05rem;">{{ netRxLabel }}</span>
+        <span class="md-kpi-hint">TX {{ netTxLabel }}</span>
+      </div>
+      <div class="md-kpi">
+        <span class="md-kpi-label">Disk (ephemeral)</span>
+        <span class="md-kpi-value" style="font-size:1.05rem;">{{ fsLabel }}</span>
+      </div>
+      <div class="md-kpi">
+        <span class="md-kpi-label">Health</span>
+        <span [class]="healthClass()">
+          {{ health?.checked ? (health?.ok ? 'OK' : 'KO') : 'N/A' }}
+        </span>
+        <span class="md-kpi-hint" *ngIf="health?.message">{{ health?.message }}</span>
+      </div>
+      <div class="md-kpi" *ngIf="quota?.enabled">
+        <span class="md-kpi-label">Quota CPU (alloué)</span>
+        <span class="md-kpi-value" style="font-size:1.05rem;">
+          {{ formatQuotaCpu(quota!.usedCpu) }} / {{ formatQuotaCpu(quota!.hardCpu) }}
+        </span>
+        <div class="md-meter"><div class="md-meter-fill" [style.width.%]="quotaCpuAllocPct"></div></div>
+        <span class="md-kpi-hint">réel {{ quotaCpuActualPct }}% du hard</span>
+      </div>
+      <div class="md-kpi" *ngIf="quota?.enabled">
+        <span class="md-kpi-label">Quota MEM (alloué)</span>
+        <span class="md-kpi-value" style="font-size:1.05rem;">
+          {{ formatQuotaMem(quota!.usedMemoryBytes) }} / {{ formatQuotaMem(quota!.hardMemoryBytes) }}
+        </span>
+        <div class="md-meter"><div class="md-meter-fill" [style.width.%]="quotaMemAllocPct"></div></div>
+        <span class="md-kpi-hint">réel {{ quotaMemActualPct }}% du hard</span>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <section class="md-section" *ngIf="alerts.length">
+      <h3 class="md-section-title">Alertes</h3>
+      <div *ngFor="let a of alerts" class="am-alert" [ngClass]="alertClass(a.severity)" style="margin-bottom:.4rem;">
+        <span *ngIf="a.workload || a.pod" class="am-mono">{{ a.workload || a.pod }} — </span>{{ a.message }}
+      </div>
+    </section>
+
+    <!-- Charts row: time series -->
+    <section class="md-section">
+      <div class="am-section-head" style="margin-bottom:.5rem;">
+        <h3 class="md-section-title" style="margin:0;">Métriques namespace</h3>
+        <div style="display:flex; gap:.35rem; flex-wrap:wrap;">
+          <button type="button" class="am-btn am-btn-sm"
+                  [class.am-btn-primary]="rangeMode === 'live'"
+                  [class.am-btn-secondary]="rangeMode !== 'live'"
+                  (click)="setRange('live')">Live</button>
+          <button type="button" class="am-btn am-btn-sm"
+                  [class.am-btn-primary]="rangeMode === '24h'"
+                  [class.am-btn-secondary]="rangeMode !== '24h'"
+                  (click)="setRange('24h')">24 h</button>
+          <button type="button" class="am-btn am-btn-sm"
+                  [class.am-btn-primary]="rangeMode === '7d'"
+                  [class.am-btn-secondary]="rangeMode !== '7d'"
+                  (click)="setRange('7d')">7 j</button>
+        </div>
+      </div>
+      <p class="md-section-hint">
+        <ng-container *ngIf="rangeMode === 'live'">Refresh 15s · CPU/MEM (metrics-server) · Network/Disk (kubelet)</ng-container>
+        <ng-container *ngIf="rangeMode !== 'live'">
+          Historique DB (échantillon ~5 min)
+          <span *ngIf="historyLoading"> · chargement…</span>
+        </ng-container>
+      </p>
+      <div class="md-charts-2">
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">CPU usage (millicores) — valeurs réelles</h4>
+          <div class="md-chart-wrap"><canvas #cpuTimeCanvas></canvas></div>
+        </div>
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">Mémoire usage (Mi)</h4>
+          <div class="md-chart-wrap"><canvas #memTimeCanvas></canvas></div>
+        </div>
+      </div>
+      <div class="md-charts-2">
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">Network débit (KiB/s)</h4>
+          <div class="md-chart-wrap"><canvas #netTimeCanvas></canvas></div>
+        </div>
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">Disk ephemeral (Mi) par pod</h4>
+          <div class="md-chart-wrap"><canvas #diskBarCanvas></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="md-section">
+      <h3 class="md-section-title">Ressources par pod — usage vs requests</h3>
+      <p class="md-section-hint">Sans limits (évite d’écraser les petites valeurs sur l’échelle)</p>
+      <div class="md-charts-2">
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">CPU (millicores)</h4>
+          <div class="md-chart-wrap md-chart-tall"><canvas #cpuBarCanvas></canvas></div>
+        </div>
+        <div class="md-chart-card">
+          <h4 class="md-chart-title">Mémoire (Mi)</h4>
+          <div class="md-chart-wrap md-chart-tall"><canvas #memBarCanvas></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="md-charts-2 md-charts-sm">
+      <div class="md-chart-card">
+        <h4 class="md-chart-title">Pods Ready</h4>
+        <div class="md-chart-wrap"><canvas #readyCanvas></canvas></div>
+      </div>
+      <div class="md-chart-card">
+        <h4 class="md-chart-title">Restarts</h4>
+        <div class="md-chart-wrap"><canvas #restartCanvas></canvas></div>
+      </div>
+    </div>
+
+    <div class="md-grid">
+      <section class="md-panel">
+        <h3 class="md-section-title">Workloads</h3>
+        <div class="am-empty" *ngIf="!workloads.length">Aucun Deployment / StatefulSet.</div>
+        <table class="md-table" *ngIf="workloads.length">
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>Nom</th>
+              <th>Ready</th>
+              <th>État</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let w of workloads">
+              <td class="am-mono">{{ w.kind }}</td>
+              <td class="am-mono">{{ w.name }}</td>
+              <td class="am-mono">{{ w.ready }}/{{ w.desired }}</td>
+              <td>
+                <span class="md-pill" [class.ok]="w.healthy" [class.bad]="!w.healthy">
+                  {{ w.healthy ? 'Healthy' : 'Degraded' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="md-panel">
+        <h3 class="md-section-title">Services K8s</h3>
+        <div class="am-empty" *ngIf="!services.length">Aucun Service.</div>
+        <table class="md-table" *ngIf="services.length">
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Type</th>
+              <th>Ports</th>
+              <th>ClusterIP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of services">
+              <td class="am-mono">{{ s.name }}</td>
+              <td>{{ s.type }}</td>
+              <td class="am-mono">{{ s.ports?.join(', ') || '—' }}</td>
+              <td class="am-mono">{{ s.clusterIP || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- Pods detail -->
+    <section class="md-section">
+      <div class="md-section-head">
+        <h3 class="md-section-title">Pods — détail ressources</h3>
+        <input class="am-input md-filter" type="search" placeholder="Filtrer nom / workload / node…"
+               [value]="filter" (input)="filter = $any($event.target).value" />
+      </div>
+      <div class="am-empty" *ngIf="!pods.length">Aucun pod{{ filter ? ' pour ce filtre' : '' }}.</div>
+      <div class="md-pods" *ngIf="pods.length">
+        <article class="md-pod" *ngFor="let p of pods" [class.md-pod-bad]="!p.ready || p.phase !== 'Running'">
+          <header class="md-pod-head">
+            <div>
+              <div class="md-pod-name am-mono">{{ p.name }}</div>
+              <div class="md-pod-meta am-mono">
+                {{ p.workload || '—' }} · {{ p.phase }}{{ p.ready ? ' · ready' : '' }}
+                · restarts {{ p.restarts }}
+                <span *ngIf="p.node"> · node {{ p.node }}</span>
+                <span *ngIf="p.reason"> · {{ p.reason }}</span>
+              </div>
+            </div>
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openLogs(p)">Logs</button>
+          </header>
+          <div class="md-res-grid am-mono">
+            <div>
+              <span class="md-res-l">CPU usage</span>
+              <strong>{{ p.cpuUsage || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">request</span>
+              <strong>{{ p.cpuRequest || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">limit</span>
+              <strong>{{ p.cpuLimit || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">MEM usage</span>
+              <strong>{{ p.memoryUsage || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">request</span>
+              <strong>{{ p.memoryRequest || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">limit</span>
+              <strong>{{ p.memoryLimit || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">Net RX</span>
+              <strong>{{ p.networkRx || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">Net TX</span>
+              <strong>{{ p.networkTx || '—' }}</strong>
+            </div>
+            <div>
+              <span class="md-res-l">Disk</span>
+              <strong>{{ p.fsUsed || '—' }}<span *ngIf="p.fsCapacity"> / {{ p.fsCapacity }}</span></strong>
+            </div>
+          </div>
+          <div class="md-bars" style="margin-top:.6rem;">
+            <div class="md-bar-row">
+              <span>CPU</span>
+              <div class="md-bar-track">
+                <div class="md-bar-fill"
+                     [class.md-bar-tiny]="usageBarWidth('cpu', p) > 0 && usageBarWidth('cpu', p) < 5"
+                     [style.width.%]="usageBarWidth('cpu', p)"></div>
+              </div>
+              <span class="am-mono md-bar-val">{{ usagePctLabel('cpu', p) }}</span>
+            </div>
+            <div class="md-bar-row">
+              <span>MEM</span>
+              <div class="md-bar-track">
+                <div class="md-bar-fill mem"
+                     [class.md-bar-tiny]="usageBarWidth('mem', p) > 0 && usageBarWidth('mem', p) < 5"
+                     [style.width.%]="usageBarWidth('mem', p)"></div>
+              </div>
+              <span class="am-mono md-bar-val">{{ usagePctLabel('mem', p) }}</span>
+            </div>
+          </div>
+          <div class="md-pod-res am-mono">
+            usage réel affiché ci-dessus · barre = % de la <em>request</em> (idle ≈ quelques m)
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="md-section">
+      <h3 class="md-section-title">Événements récents</h3>
+      <div class="am-empty" *ngIf="!events.length">Aucun événement.</div>
+      <ul class="md-events" *ngIf="events.length">
+        <li *ngFor="let e of events" [class]="eventClass(e.type)">
+          <span class="md-event-type">{{ e.type || 'Normal' }}</span>
+          <span class="am-mono">{{ e.object }}</span>
+          <span class="md-event-reason">{{ e.reason }}</span>
+          <span class="md-event-msg">{{ e.message }}</span>
+          <span class="md-event-time am-mono" *ngIf="e.lastTimestamp">{{ e.lastTimestamp | date:'short' }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <div class="md-logs" *ngIf="selectedPod">
+      <div class="md-logs-head">
+        <h3 class="md-section-title" style="margin:0;">Logs · {{ selectedPod }}</h3>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="closeLogs()">Fermer</button>
+      </div>
+      <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
+      <pre class="md-logs-body" *ngIf="!logsLoading">{{ logs || '(vide)' }}</pre>
+      <div class="am-empty" *ngIf="logsLoading">Chargement des logs…</div>
+    </div>
+  </ng-container>
+</div>

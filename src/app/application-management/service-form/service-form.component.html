@@ -84,6 +84,15 @@
     </div>
   </div>
 
+  <div class="am-field" *ngIf="form.get('role')?.value === 'BACKEND' || form.get('role')?.value === 'FRONTEND'">
+    <label class="am-label">Chemin métier (context-path)</label>
+    <input class="am-input" formControlName="contextPath" placeholder="/projet (optionnel, laisser vide si /)" />
+    <span class="am-hint">
+      Publicement le backend reste sous <code>/api</code>. Si ton app écoute sur
+      <code>/projet</code>, saisis <code>/projet</code> ici — Traefik réécrit automatiquement.
+    </span>
+  </div>
+
   <div class="am-grid-2">
     <div class="am-field">
       <label class="am-label">CPU (request / limit)</label>

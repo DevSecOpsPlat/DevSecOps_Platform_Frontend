@@ -388,6 +388,30 @@
   border: 1px solid var(--am-navy-soft);
 }
 
+.am-logs-panel {
+  margin-top: 1.25rem;
+  border: 1px solid rgba(28, 28, 46, .12);
+  border-radius: 12px;
+  padding: 1rem;
+  background: #0f172a;
+}
+.am-logs-panel .am-label { color: #e2e8f0; }
+.am-logs-pre {
+  margin: .75rem 0 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: .85rem 1rem;
+  background: #020617;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.status-failed { background: #fef2f2; color: #dc2626; }
+
 /* ---------- Modal ---------- */
 .am-modal-backdrop {
   position: fixed; inset: 0;
@@ -470,4 +494,76 @@
   .am-envrow { grid-template-columns: 1fr 1fr; }
   .am-page { padding: 1.5rem 1rem 3rem; }
   .am-title { font-size: 1.5rem; }
+}
+
+.am-deploy-ttl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+}
+.am-deploy-ttl .am-input {
+  width: 4.5rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+}
+/* ---------- Chrono TTL cluster ---------- */
+.am-ttl {
+  margin: .75rem 0 1rem;
+  padding: .85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.am-ttl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.am-ttl-clock {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: .02em;
+}
+.am-ttl-urgent { color: #c2410c; }
+.am-ttl-expired { color: #b91c1c; }
+.am-ttl-meta {
+  margin-top: .35rem;
+  font-size: .75rem;
+  color: #64748b;
+}
+.am-ttl-bar {
+  margin-top: .65rem;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.am-ttl-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #0ea5e9;
+  transition: width .8s linear;
+}
+.am-ttl-fill-urgent { background: #f97316; }
+.am-ttl-extend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .75rem;
+}
+.am-ttl-extend-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-right: .25rem;
 }
