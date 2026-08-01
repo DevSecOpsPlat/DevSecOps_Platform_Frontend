@@ -82,30 +82,27 @@ const routes: Routes = [
   { path: 'pipeline/id/:pipelineId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
   // Projets = liste unifiée (services + bases + scan/deploy).
-  // Route canonique : /projects. L'ancien alias /app-management redirige vers /projects.
+  // Routes à plat (évite parent sans component / router-outlet).
   {
     path: 'projects',
     canActivate: [AuthGuard],
-    children: [
-      {
-        path: '',
-        loadComponent: () =>
-          import('./application-management/applications-list/applications-list.component')
-            .then(m => m.ApplicationsListComponent)
-      },
-      {
-        path: 'create',
-        loadComponent: () =>
-          import('./application-management/application-create/application-create.component')
-            .then(m => m.ApplicationCreateComponent)
-      },
-      {
-        path: ':id',
-        loadComponent: () =>
-          import('./application-management/application-detail/application-detail.component')
-            .then(m => m.ApplicationDetailComponent)
-      }
-    ]
+    loadComponent: () =>
+      import('./application-management/applications-list/applications-list.component')
+        .then(m => m.ApplicationsListComponent)
+  },
+  {
+    path: 'projects/create',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./application-management/application-create/application-create.component')
+        .then(m => m.ApplicationCreateComponent)
+  },
+  {
+    path: 'projects/:id',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./application-management/application-detail/application-detail.component')
+        .then(m => m.ApplicationDetailComponent)
   },
   { path: 'app-management', redirectTo: 'projects', pathMatch: 'full' },
   { path: 'app-management/create', redirectTo: 'projects/create', pathMatch: 'full' },

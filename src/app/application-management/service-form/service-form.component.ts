@@ -9,10 +9,6 @@ import {
   SECRET_MASK
 } from '../../models/application-management/application-management.models';
 
-const GIT_HTTPS = /^https:\/\/.+/i;
-const RELATIVE_PATH = /^(?!\/)(?!.*\.\.)(?!-)[A-Za-z0-9._/\-]+$/;
-const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 @Component({
   selector: 'app-managed-service-form',
   standalone: true,
@@ -31,32 +27,24 @@ export class ServiceFormComponent implements OnInit {
 
   roles: AppServiceRole[] = ['FRONTEND', 'BACKEND', 'WORKER'];
   form!: FormGroup;
-  localError: string | null = null;
 
   ngOnInit(): void {
     const s = this.service;
-    const role: AppServiceRole = s?.role || 'FRONTEND';
     this.form = new FormGroup({
-      name: new FormControl(s?.name || '', [Validators.required, Validators.maxLength(80)]),
-      role: new FormControl<AppServiceRole>(role, [Validators.required]),
-      gitRepositoryUrl: new FormControl(s?.gitRepositoryUrl || '', [
-        Validators.required,
-        Validators.pattern(GIT_HTTPS)
-      ]),
+      name: new FormControl(s?.name || '', [Validators.required]),
+      role: new FormControl<AppServiceRole>(s?.role || 'FRONTEND', [Validators.required]),
+      gitRepositoryUrl: new FormControl(s?.gitRepositoryUrl || '', [Validators.required]),
       gitToken: new FormControl(s?.hasGitToken ? SECRET_MASK : ''),
       gitBranch: new FormControl(s?.gitBranch || 'main'),
-      dockerfilePath: new FormControl(s?.dockerfilePath || 'Dockerfile', [
-        Validators.pattern(RELATIVE_PATH)
-      ]),
-      buildContext: new FormControl(s?.buildContext || '.', [
-        Validators.pattern(RELATIVE_PATH)
-      ]),
-      exposedPort: new FormControl(s?.exposedPort ?? 8080, []),
+      dockerfilePath: new FormControl(s?.dockerfilePath || 'Dockerfile'),
+      buildContext: new FormControl(s?.buildContext || '.'),
+      exposedPort: new FormControl(s?.exposedPort || 8080, [Validators.required, Validators.min(1)]),
       dependsOnDatabaseId: new FormControl(s?.dependsOnDatabaseId || ''),
       dbUrlEnvVar: new FormControl(s?.dbUrlEnvVar || 'DATABASE_URL'),
       dependsOnServiceId: new FormControl(s?.dependsOnServiceId || ''),
-      replicas: new FormControl(s?.replicas || 1, [Validators.min(1), Validators.max(5)]),
+      replicas: new FormControl(s?.replicas || 1, [Validators.min(1)]),
       healthCheckPath: new FormControl(s?.healthCheckPath || ''),
+      contextPath: new FormControl(s?.contextPath || ''),
       cpuRequest: new FormControl(s?.cpuRequest || '100m'),
       cpuLimit: new FormControl(s?.cpuLimit || '500m'),
       memoryRequest: new FormControl(s?.memoryRequest || '128Mi'),
@@ -65,31 +53,10 @@ export class ServiceFormComponent implements OnInit {
     });
 
     (s?.envVars || []).forEach((v) => this.envVars.push(this.buildEnvRow(v)));
-    this.applyRoleConstraints(role);
-
-    this.form.get('role')!.valueChanges.subscribe((r: AppServiceRole) => {
-      this.applyRoleConstraints(r);
-    });
   }
 
   get envVars(): FormArray<FormGroup> {
     return this.form.get('envVars') as FormArray<FormGroup>;
-  }
-
-  get role(): AppServiceRole {
-    return this.form?.get('role')?.value as AppServiceRole;
-  }
-
-  get isWorker(): boolean {
-    return this.role === 'WORKER';
-  }
-
-  get isFrontend(): boolean {
-    return this.role === 'FRONTEND';
-  }
-
-  get canLinkDatabase(): boolean {
-    return this.role === 'BACKEND' || this.role === 'WORKER';
   }
 
   get selectableServices(): AppServiceModel[] {
@@ -101,47 +68,17 @@ export class ServiceFormComponent implements OnInit {
   }
 
   get showBackendWarning(): boolean {
-    return this.role === 'BACKEND' && !this.hasLinkedDatabase;
+    return this.form?.get('role')?.value === 'BACKEND' && !this.hasLinkedDatabase;
   }
 
   get isEdit(): boolean {
     return !!this.service?.id;
   }
 
-  private applyRoleConstraints(role: AppServiceRole): void {
-    const port = this.form.get('exposedPort')!;
-    const health = this.form.get('healthCheckPath')!;
-    const db = this.form.get('dependsOnDatabaseId')!;
-
-    if (role === 'WORKER') {
-      port.clearValidators();
-      port.setValue(null, { emitEvent: false });
-      health.setValue('', { emitEvent: false });
-    } else {
-      port.setValidators([
-        Validators.required,
-        Validators.min(1024),
-        Validators.max(65535)
-      ]);
-      if (port.value == null) {
-        port.setValue(8080, { emitEvent: false });
-      }
-    }
-
-    if (role === 'FRONTEND') {
-      db.setValue('', { emitEvent: false });
-    }
-
-    port.updateValueAndValidity({ emitEvent: false });
-  }
-
   private buildEnvRow(v?: EnvVar): FormGroup {
     return new FormGroup({
       id: new FormControl(v?.id || null),
-      varKey: new FormControl(v?.varKey || '', [
-        Validators.required,
-        Validators.pattern(ENV_KEY)
-      ]),
+      varKey: new FormControl(v?.varKey || '', [Validators.required]),
       varValue: new FormControl(v?.isSecret ? SECRET_MASK : (v?.varValue || '')),
       isSecret: new FormControl(v?.isSecret || false)
     });
@@ -156,11 +93,8 @@ export class ServiceFormComponent implements OnInit {
   }
 
   onSubmit(): void {
-    this.localError = null;
-    this.applyRoleConstraints(this.role);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      this.localError = 'Corrigez les champs en rouge avant d’enregistrer.';
       return;
     }
     const v = this.form.value;
@@ -172,29 +106,20 @@ export class ServiceFormComponent implements OnInit {
       return row;
     });
 
-    // Collision dbUrlEnvVar vs variables manuelles
-    if (this.canLinkDatabase && v.dependsOnDatabaseId) {
-      const urlEnv = (v.dbUrlEnvVar || 'DATABASE_URL').trim();
-      if (envVars.some(e => e.varKey === urlEnv)) {
-        this.localError =
-          `La variable « ${urlEnv} » est réservée à l’injection auto de l’URL de base. Retirez-la des variables manuelles.`;
-        return;
-      }
-    }
-
     const payload: AppServiceModel = {
-      name: (v.name || '').trim(),
+      name: v.name,
       role: v.role,
-      gitRepositoryUrl: (v.gitRepositoryUrl || '').trim(),
+      gitRepositoryUrl: v.gitRepositoryUrl,
       gitBranch: v.gitBranch || 'main',
       dockerfilePath: v.dockerfilePath || 'Dockerfile',
       buildContext: v.buildContext || '.',
-      exposedPort: this.isWorker ? undefined : Number(v.exposedPort),
-      dependsOnDatabaseId: this.canLinkDatabase ? (v.dependsOnDatabaseId || null) : null,
-      dbUrlEnvVar: this.canLinkDatabase ? (v.dbUrlEnvVar || 'DATABASE_URL') : undefined,
+      exposedPort: v.exposedPort,
+      dependsOnDatabaseId: v.dependsOnDatabaseId || null,
+      dbUrlEnvVar: v.dbUrlEnvVar || 'DATABASE_URL',
       dependsOnServiceId: v.dependsOnServiceId || null,
       replicas: v.replicas || 1,
-      healthCheckPath: this.isWorker ? undefined : (v.healthCheckPath || undefined),
+      healthCheckPath: v.healthCheckPath || undefined,
+      contextPath: v.contextPath || undefined,
       cpuRequest: v.cpuRequest || undefined,
       cpuLimit: v.cpuLimit || undefined,
       memoryRequest: v.memoryRequest || undefined,

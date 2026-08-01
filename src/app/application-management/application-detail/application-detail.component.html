@@ -1,11 +1,10 @@
 <div class="am-page ad-page">
-  <div class="ad-breadcrumb" (click)="back()">← Projets</div>
+  <div class="ad-breadcrumb" (click)="back()">← Applications managées</div>
 
   <div *ngIf="loading" class="am-empty">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
   <ng-container *ngIf="app && !loading">
-    <!-- En-tête projet -->
     <section class="ad-hero">
       <div class="ad-hero-glow"></div>
       <div class="ad-hero-content">
@@ -14,28 +13,211 @@
           <p class="ad-subtitle">{{ app.description || 'Sans description' }}</p>
           <code class="ad-slug">{{ app.slug }}</code>
         </div>
-      
-        <button class="am-btn am-btn-danger ad-delete-btn" (click)="deleteApp()">
-          Supprimer le projet
-        </button>
-        
+        <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+          <label class="am-deploy-ttl" style="color:rgba(255,255,255,.85);">
+            Durée (h)
+            <input
+              type="number"
+              min="1"
+              max="72"
+              class="am-input"
+              [value]="deployTtlHours"
+              (input)="deployTtlHours = +$any($event.target).value"
+              [disabled]="deploying" />
+          </label>
+          <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
+            {{ deploying ? 'Déploiement…' : 'Déployer' }}
+          </button>
+          <button class="am-btn am-btn-danger ad-delete-btn" (click)="deleteApp()">
+            Supprimer l'application
+          </button>
+        </div>
       </div>
     </section>
 
+    <div class="am-alert am-alert-error" *ngIf="deployError">{{ deployError }}</div>
+    <div class="am-alert" *ngIf="syncMessage"
+         [class.am-alert-warn]="syncMessage.includes('échou') || syncMessage.includes('impossible')"
+         style="background:#e8f5e9;border-color:#a5d6a7;">{{ syncMessage }}</div>
+
+    <!-- Domaine custom -->
+    <div class="ad-panel" style="margin-bottom:1.25rem;padding:1.25rem 1.5rem;">
+      <div class="ad-panel-head" style="margin-bottom:.6rem;">
+        <h2 class="ad-panel-title" style="font-size:1rem;">Domaine personnalisé</h2>
+      </div>
+      <p class="am-subtitle" style="margin:0 0 .6rem;">
+        Par défaut : <code class="am-slug">app-&lt;ns&gt;.nip.io</code>.
+        Saisis un hostname (ex. <code class="am-slug">demo.example.com</code>) et pointe le DNS A/CNAME vers l’IP Traefik du cluster.
+      </p>
+      <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+        <input class="am-input" style="max-width:320px;"
+               placeholder="demo.example.com"
+               [value]="customHostnameDraft"
+               (input)="customHostnameDraft = $any($event.target).value"
+               [disabled]="savingHostname" />
+        <button class="am-btn am-btn-secondary" (click)="saveCustomHostname()" [disabled]="savingHostname">
+          {{ savingHostname ? '…' : 'Enregistrer' }}
+        </button>
+      </div>
+      <div class="am-alert am-alert-info" *ngIf="hostnameMessage" style="margin-top:.6rem;">{{ hostnameMessage }}</div>
+      <div class="am-alert am-alert-error" *ngIf="hostnameError" style="margin-top:.6rem;">{{ hostnameError }}</div>
+    </div>
+
     <div class="am-alert am-alert-warn" *ngFor="let w of app.warnings">{{ w }}</div>
+
+    <!-- État du dernier déploiement -->
+    <div class="ad-panel" *ngIf="app.lastDeployment" style="margin-bottom:1.25rem;">
+      <app-managed-deployment-status
+        [appId]="appId"
+        [deployment]="app.lastDeployment"
+        [services]="app.services || []">
+      </app-managed-deployment-status>
+      <div class="am-form-actions" *ngIf="app.lastDeployment.status !== 'STOPPED'">
+        <button class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">Supprimer le déploiement (teardown)</button>
+      </div>
+    </div>
 
     <!-- Onglets -->
     <div class="ad-tabs">
-      <button class="ad-tab" [class.active]="activeTab === 'services'" (click)="activeTab = 'services'">
-        <span class="ad-tab-icon">⚙</span>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'services'" (click)="setTab('services')">
         Services
         <span class="ad-tab-count">{{ app.services.length }}</span>
       </button>
-      <button class="ad-tab" [class.active]="activeTab === 'databases'" (click)="activeTab = 'databases'">
-        <span class="ad-tab-icon">🗄</span>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'databases'" (click)="setTab('databases')">
         Bases de données
         <span class="ad-tab-count">{{ app.databases.length }}</span>
       </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'monitoring'" (click)="setTab('monitoring')">
+        Monitoring
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'alerts'" (click)="setTab('alerts')">
+        Alertes
+        <span class="ad-tab-count" *ngIf="alertsData?.liveCount">{{ alertsData!.liveCount }}</span>
+      </button>
+      <button type="button" class="ad-tab" [class.active]="activeTab === 'history'" (click)="setTab('history')">
+        Historique
+      </button>
+    </div>
+
+    <!-- Alertes runtime -->
+    <div class="ad-panel" *ngIf="activeTab === 'alerts'">
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Alertes runtime</h2>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadAlerts()" [disabled]="alertsLoading || !app.lastDeployment">
+          {{ alertsLoading ? '…' : 'Actualiser' }}
+        </button>
+      </div>
+      <p class="am-subtitle" style="margin-top:0;">
+        CrashLoop, OOM, pods Failed, health KO — détection live + historique 24&nbsp;h (e-mail propriétaire).
+      </p>
+
+      <div class="am-empty" *ngIf="!app.lastDeployment">Aucun déploiement actif.</div>
+      <div class="am-alert am-alert-error" *ngIf="alertsError">{{ alertsError }}</div>
+      <div class="am-empty" *ngIf="alertsLoading && !alertsData">Chargement…</div>
+
+      <ng-container *ngIf="alertsData && !alertsLoading">
+        <h4 class="am-label">En cours (live)</h4>
+        <div class="am-empty" *ngIf="!alertsData.live?.length">Aucune alerte active.</div>
+        <div *ngFor="let a of alertsData.live" class="am-alert" [ngClass]="alertClass(a.severity)"
+             style="margin-bottom:.4rem;"
+             [style.background]="a.severity === 'warn' ? '#fff7ed' : null"
+             [style.border-color]="a.severity === 'warn' ? '#fdba74' : null"
+             [style.color]="a.severity === 'warn' ? '#9a3412' : null">
+          <span *ngIf="a.workload || a.pod" class="am-mono">{{ a.workload || a.pod }} — </span>{{ a.message }}
+        </div>
+
+        <h4 class="am-label" style="margin-top:1.25rem;">Historique (24 h)</h4>
+        <div class="am-empty" *ngIf="!alertsData.history?.length">Aucune alerte enregistrée.</div>
+        <div class="am-list" *ngIf="alertsData.history?.length">
+          <div class="am-list-item" *ngFor="let a of alertsData.history">
+            <div class="am-list-item-main">
+              <div class="am-list-item-title">
+                <span class="am-badge" [ngClass]="a.type?.includes('HEALTH') || a.type?.includes('OOM') || a.type?.includes('CRASH') || a.type?.includes('FAILED') ? 'status-failed' : 'status-pending'">
+                  {{ a.type || 'ALERT' }}
+                </span>
+                <span class="am-badge status-pending" *ngIf="a.status">{{ a.status }}</span>
+              </div>
+              <div class="am-list-item-sub">{{ a.message }}</div>
+              <div class="am-list-item-sub am-mono" *ngIf="a.createdAt">{{ a.createdAt | date:'short' }}</div>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
+    <!-- Historique des déploiements -->
+    <div class="ad-panel" *ngIf="activeTab === 'history'">
+      <div class="ad-panel-head">
+        <h2 class="ad-panel-title">Historique des déploiements</h2>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadHistory()" [disabled]="historyLoading">
+          {{ historyLoading ? '…' : 'Actualiser' }}
+        </button>
+      </div>
+      <p class="am-subtitle" style="margin-top:0;">Tous les cycles deploy / rebuild / teardown de cette application.</p>
+
+      <div class="am-alert am-alert-error" *ngIf="historyError">{{ historyError }}</div>
+      <div class="am-empty" *ngIf="historyLoading && !history.length">Chargement…</div>
+      <div class="am-empty" *ngIf="!historyLoading && !history.length">Aucun déploiement encore.</div>
+
+      <div class="am-list" *ngIf="history.length">
+        <div class="am-list-item"
+             *ngFor="let d of history"
+             [style.outline]="selectedHistoryId === d.id ? '2px solid #F97316' : null"
+             [style.outline-offset]="'2px'"
+             style="cursor:pointer;"
+             (click)="selectHistory(d)">
+          <div class="am-list-item-main">
+            <div class="am-list-item-title">
+              <span class="am-badge" [ngClass]="historyStatusClass(d.status)">{{ d.status }}</span>
+              <span *ngIf="isCurrentDeployment(d)" class="am-chip" style="margin-left:.4rem;">actuel</span>
+            </div>
+            <div class="am-list-item-sub am-mono">
+              {{ d.namespace }}
+              <span *ngIf="d.gitlabPipelineId"> · pipeline #{{ d.gitlabPipelineId }}</span>
+            </div>
+            <div class="am-list-item-sub">
+              créé {{ d.createdAt | date:'short' }}
+              <span *ngIf="d.deployedAt"> · prêt {{ d.deployedAt | date:'short' }}</span>
+              <span *ngIf="d.ttlHours"> · TTL {{ d.ttlHours }}h</span>
+              <span *ngIf="d.expiresAt"> · expire {{ d.expiresAt | date:'short' }}</span>
+              · {{ serviceReadySummary(d) }}
+            </div>
+          </div>
+          <div class="am-list-actions">
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="selectHistory(d); $event.stopPropagation()">
+              Voir
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="selectedHistory" style="margin-top:1.25rem;">
+        <h4 class="am-label">Détail · {{ selectedHistory.namespace }}</h4>
+        <app-managed-deployment-status
+          [appId]="appId"
+          [deployment]="selectedHistory"
+          [services]="app.services || []">
+        </app-managed-deployment-status>
+        <div class="am-form-actions"
+             *ngIf="isCurrentDeployment(selectedHistory) && selectedHistory.status !== 'STOPPED'">
+          <button class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">
+            Supprimer le déploiement (teardown)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monitoring -->
+    <div class="ad-panel" *ngIf="activeTab === 'monitoring'">
+      <app-monitoring-dashboard
+        *ngIf="app.lastDeployment"
+        [appId]="appId"
+        [deployment]="app.lastDeployment"
+        [appName]="app.name">
+      </app-monitoring-dashboard>
+      <div class="am-empty" *ngIf="!app.lastDeployment">
+        Aucun déploiement — lance un déploiement pour voir le dashboard Monitoring de cette app.
+      </div>
     </div>
 
     <!-- Services -->
@@ -55,8 +237,7 @@
         <article
           class="ad-service-card"
           *ngFor="let s of app.services; let i = index"
-          [style.animation-delay]="(i * 0.06) + 's'"
-          (click)="viewServiceDashboard(s)">
+          [style.animation-delay]="(i * 0.06) + 's'">
           <div class="ad-service-glow"></div>
           <div class="ad-service-stripe"></div>
 
@@ -68,9 +249,7 @@
                   <div class="ad-service-identity">
                     <h3 class="ad-service-name">{{ s.name }}</h3>
                     <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
-                    <span class="am-live-dot" *ngIf="serviceHasActiveEnvironment(s.name)" title="Environnement actif"></span>
                   </div>
-                  <span class="ad-service-dash-link">Dashboard →</span>
                 </div>
 
                 <div class="ad-service-details">
@@ -81,6 +260,10 @@
                   <span class="ad-detail-pill ad-detail-pill--repo">
                     <span class="ad-detail-pill-label">Repo</span>
                     <span class="am-mono">{{ s.gitRepositoryUrl }}</span>
+                  </span>
+                  <span class="ad-detail-pill" *ngIf="s.contextPath">
+                    <span class="ad-detail-pill-label">/api →</span>
+                    <span class="am-mono">{{ s.contextPath }}</span>
                   </span>
                   <span class="ad-detail-pill" *ngIf="s.dependsOnDatabaseId">
                     <span class="ad-detail-pill-label">BD</span>
@@ -93,29 +276,17 @@
                 </div>
               </div>
             </div>
-
-            <div class="ad-service-metrics" *ngIf="s.id">
-              <div class="ad-metric">
-                <span class="ad-metric-value">{{ serviceMetricCount(s.id, 'deploys') }}</span>
-                <span class="ad-metric-label">déploiements</span>
-              </div>
-              <div class="ad-metric-divider"></div>
-              <div class="ad-metric">
-                <span class="ad-metric-value">{{ serviceMetricCount(s.id, 'scans') }}</span>
-                <span class="ad-metric-label">scans</span>
-              </div>
-              <div class="ad-metric-divider" *ngIf="serviceLastScanLabel(s)"></div>
-              <div class="ad-metric ad-metric--last" *ngIf="serviceLastScanLabel(s) as scanLabel">
-                <span class="ad-metric-label">Dernier scan</span>
-                <span class="ad-metric-value ad-metric-value--sm">{{ scanLabel }}</span>
-              </div>
-            </div>
           </div>
 
           <footer class="ad-service-actions" (click)="$event.stopPropagation()">
-            <button class="am-btn am-btn-primary am-btn-sm" (click)="openScanService(s)">Scanner</button>
-            <button class="am-btn am-btn-primary am-btn-sm" (click)="openDeployService(s)">Déployer</button>
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
+            <button
+              class="am-btn am-btn-primary am-btn-sm"
+              (click)="syncServiceToCluster(s)"
+              [disabled]="syncingServiceId === s.id || app.lastDeployment?.status !== 'RUNNING'"
+              title="Appliquer les variables sur le cluster sans rebuild">
+              {{ syncingServiceId === s.id ? 'Sync…' : 'Appliquer au cluster' }}
+            </button>
             <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>
           </footer>
         </article>
@@ -184,20 +355,3 @@
     </app-managed-database-form>
   </div>
 </div>
-
-<!-- Modal : action ciblée sur un service (scan ou déploiement) -->
-<app-deploy-run-modal
-  *ngIf="serviceActionTarget && serviceActionKind"
-  [title]="serviceActionKind === 'scan' ? 'Scanner ' + serviceActionTarget.name : 'Déployer ' + serviceActionTarget.name"
-  [subtitle]="serviceActionKind === 'scan'
-    ? 'Le repo et le token sont pris directement sur le service — vous pouvez juste ajuster la branche.'
-    : 'Déploiement ciblé de ce service (la base dépendante sera aussi déployée dans un nouveau namespace).'"
-  [actionLabel]="serviceActionKind === 'scan' ? 'Lancer le scan' : 'Lancer le déploiement'"
-  [defaultBranch]="serviceActionTarget.gitBranch || 'main'"
-  [defaultTtlHours]="4"
-  [showTtl]="serviceActionKind === 'deploy'"
-  [running]="serviceActionRunning"
-  [error]="serviceActionError"
-  (cancel)="cancelServiceAction()"
-  (confirm)="confirmServiceAction($event)">
-</app-deploy-run-modal>

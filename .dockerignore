@@ -1,0 +1,22 @@
+# Node / Angular
+node_modules
+dist
+
+# Logs
+**/*.log
+
+# Git
+.git
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode
+.idea
+.bevel
+
+# Docker
+docker-compose*.yml

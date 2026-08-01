@@ -1,29 +1,24 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
-import { PipelineService } from '../../services/pipeline/pipeline.service';
 import {
   AppDatabaseModel,
+  AppDeployment,
   AppServiceModel,
+  DeploymentAlertsResponse,
+  DeploymentMonitorAlert,
   ManagedApp
 } from '../../models/application-management/application-management.models';
 import { ServiceFormComponent } from '../service-form/service-form.component';
 import { DatabaseFormComponent } from '../database-form/database-form.component';
-import { DeployRunModalComponent, DeployRunParams } from '../deploy-run-modal/deploy-run-modal.component';
-
-interface ServiceStats {
-  deploys: number;
-  scans: number;
-  lastScan?: string | number[] | null;
-}
+import { DeploymentStatusComponent } from '../deployment-status/deployment-status.component';
+import { MonitoringDashboardComponent } from '../monitoring-dashboard/monitoring-dashboard.component';
 
 @Component({
   selector: 'app-managed-application-detail',
   standalone: true,
-  imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeployRunModalComponent],
+  imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeploymentStatusComponent, MonitoringDashboardComponent],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
 })
@@ -32,7 +27,7 @@ export class ApplicationDetailComponent implements OnInit {
   app: ManagedApp | null = null;
   loading = true;
   error: string | null = null;
-  activeTab: 'services' | 'databases' = 'services';
+  activeTab: 'services' | 'databases' | 'monitoring' | 'history' | 'alerts' = 'services';
 
   showServiceForm = false;
   editingService: AppServiceModel | null = null;
@@ -41,17 +36,29 @@ export class ApplicationDetailComponent implements OnInit {
 
   saving = false;
   formError: string | null = null;
+  deploying = false;
+  deployError: string | null = null;
+  deployTtlHours = 4;
+  syncMessage: string | null = null;
+  syncingServiceId: string | null = null;
+  customHostnameDraft = '';
+  savingHostname = false;
+  hostnameMessage: string | null = null;
+  hostnameError: string | null = null;
 
-  serviceStats: Record<string, ServiceStats> = {};
+  /** Historique des déploiements (onglet). */
+  history: AppDeployment[] = [];
+  historyLoading = false;
+  historyError: string | null = null;
+  selectedHistoryId: string | null = null;
 
-  serviceActionTarget: AppServiceModel | null = null;
-  serviceActionKind: 'scan' | 'deploy' | null = null;
-  serviceActionRunning = false;
-  serviceActionError: string | null = null;
+  /** Alertes runtime (onglet). */
+  alertsData: DeploymentAlertsResponse | null = null;
+  alertsLoading = false;
+  alertsError: string | null = null;
 
   constructor(
     private api: ApplicationManagementService,
-    private pipelineService: PipelineService,
     private route: ActivatedRoute,
     private router: Router
   ) {}
@@ -66,8 +73,8 @@ export class ApplicationDetailComponent implements OnInit {
     this.api.get(this.appId).subscribe({
       next: (app) => {
         this.app = app;
+        this.customHostnameDraft = app.customHostname || '';
         this.loading = false;
-        this.loadServiceStats();
       },
       error: () => {
         this.error = 'Application introuvable.';
@@ -76,68 +83,8 @@ export class ApplicationDetailComponent implements OnInit {
     });
   }
 
-  private loadServiceStats(): void {
-    const services = (this.app?.services ?? []).filter(s => !!s.id);
-    if (!services.length) {
-      this.serviceStats = {};
-      return;
-    }
-
-    const requests = services.map(s => forkJoin({
-      serviceId: of(s.id!),
-      deploys: this.pipelineService.listPipelines(0, 200, s.id!, 'DEPLOY').pipe(
-        map(list => list.length),
-        catchError(() => of(0))
-      ),
-      scans: this.pipelineService.listPipelines(0, 200, s.id!, 'SCAN').pipe(
-        map(list => list.length),
-        catchError(() => of(0))
-      ),
-      lastScan: this.pipelineService.listPipelines(0, 1, s.id!, 'SCAN').pipe(
-        map(list => list[0]?.createdAt ?? null),
-        catchError(() => of(null))
-      )
-    }));
-
-    forkJoin(requests).subscribe(results => {
-      const stats: Record<string, ServiceStats> = {};
-      for (const r of results) {
-        stats[r.serviceId] = {
-          deploys: r.deploys,
-          scans: r.scans,
-          lastScan: r.lastScan
-        };
-      }
-      this.serviceStats = stats;
-    });
-  }
-
   back(): void {
-    this.router.navigate(['/projects']);
-  }
-
-  formatDate(value?: unknown): string {
-    const date = this.safeParseDate(value);
-    if (!date) return '—';
-    return date.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-  }
-
-  compositionLabel(): string {
-    if (!this.app) return '';
-    const parts: string[] = [];
-    const fe = this.app.services.filter(s => s.role === 'FRONTEND').length;
-    const be = this.app.services.filter(s => s.role === 'BACKEND').length;
-    const wk = this.app.services.filter(s => s.role === 'WORKER').length;
-    if (fe) parts.push(`${fe} frontend`);
-    if (be) parts.push(`${be} backend`);
-    if (wk) parts.push(`${wk} worker`);
-    const engines = [...new Set(this.app.databases.map(d => d.engine))];
-    if (engines.length) parts.push(engines.join(', '));
-    return parts.join(' · ');
+    this.router.navigate(['/app-management']);
   }
 
   // ---------- Services ----------
@@ -157,14 +104,38 @@ export class ApplicationDetailComponent implements OnInit {
   saveService(payload: AppServiceModel): void {
     this.saving = true;
     this.formError = null;
-    const req = this.editingService?.id
-      ? this.api.updateService(this.appId, this.editingService.id, payload)
+    this.syncMessage = null;
+    const editingId = this.editingService?.id;
+    const req = editingId
+      ? this.api.updateService(this.appId, editingId, payload)
       : this.api.addService(this.appId, payload);
     req.subscribe({
-      next: () => {
-        this.saving = false;
-        this.showServiceForm = false;
-        this.load();
+      next: (saved) => {
+        const serviceId = editingId || saved?.id;
+        if (!serviceId || !editingId) {
+          this.saving = false;
+          this.showServiceForm = false;
+          this.load();
+          return;
+        }
+        // Après sauvegarde DB : appliquer direct sur le cluster RUNNING (sans rebuild).
+        this.api.syncServiceRuntime(this.appId, serviceId).subscribe({
+          next: (sync) => {
+            this.saving = false;
+            this.showServiceForm = false;
+            this.syncMessage = sync?.message || (sync?.synced
+              ? 'Variables appliquées sur le cluster.'
+              : 'Enregistré en base (pas d’env RUNNING à synchroniser).');
+            this.load();
+          },
+          error: (e) => {
+            this.saving = false;
+            this.showServiceForm = false;
+            this.syncMessage = e?.error?.message
+              || 'Enregistré en base, mais sync cluster échouée.';
+            this.load();
+          }
+        });
       },
       error: (e) => {
         this.formError = e?.error?.message || 'Enregistrement impossible.';
@@ -173,83 +144,34 @@ export class ApplicationDetailComponent implements OnInit {
     });
   }
 
-  deleteService(svc: AppServiceModel): void {
-    if (!svc.id || !confirm(`Supprimer le service « ${svc.name} » ?`)) return;
-    this.api.deleteService(this.appId, svc.id).subscribe({ next: () => this.load() });
-  }
-
-  openScanService(svc: AppServiceModel): void {
+  syncServiceToCluster(svc: AppServiceModel): void {
     if (!svc.id) return;
-    this.serviceActionTarget = svc;
-    this.serviceActionKind = 'scan';
-    this.serviceActionError = null;
-  }
-
-  openDeployService(svc: AppServiceModel): void {
-    if (!svc.id) return;
-    this.serviceActionTarget = svc;
-    this.serviceActionKind = 'deploy';
-    this.serviceActionError = null;
-  }
-
-  cancelServiceAction(): void {
-    if (this.serviceActionRunning) return;
-    this.serviceActionTarget = null;
-    this.serviceActionKind = null;
-    this.serviceActionError = null;
-  }
-
-  confirmServiceAction(params: DeployRunParams): void {
-    const svc = this.serviceActionTarget;
-    if (!svc?.id || !this.serviceActionKind) return;
-    const serviceId = svc.id;
-    this.serviceActionRunning = true;
-    this.serviceActionError = null;
-
-    if (this.serviceActionKind === 'scan') {
-      this.api.scanService(serviceId, { branch: params.branch }).subscribe({
-        next: (resp) => {
-          this.serviceActionRunning = false;
-          if (this.navigateToPipelineDetails(resp.gitlabPipelineId, serviceId, params.branch)) {
-            this.serviceActionTarget = null;
-            this.serviceActionKind = null;
-            this.serviceActionError = null;
-          } else {
-            this.serviceActionError = 'Scan lancé mais ID pipeline GitLab absent.';
-          }
-        },
-        error: (e) => {
-          this.serviceActionError = e?.error?.message || 'Scan impossible.';
-          this.serviceActionRunning = false;
-        }
-      });
-      return;
-    }
-
-    this.api.deployService(this.appId, serviceId, {
-      branch: params.branch,
-      sessionDurationHours: params.sessionDurationHours
-    }).subscribe({
-      next: (resp) => {
-        this.serviceActionRunning = false;
-        if (this.navigateToPipelineDetails(resp.gitlabPipelineId, serviceId, params.branch)) {
-          this.serviceActionTarget = null;
-          this.serviceActionKind = null;
-          this.serviceActionError = null;
-        } else {
-          this.serviceActionError = 'Déploiement lancé mais ID pipeline GitLab absent.';
-        }
+    this.syncingServiceId = svc.id;
+    this.syncMessage = null;
+    this.api.syncServiceRuntime(this.appId, svc.id).subscribe({
+      next: (sync) => {
+        this.syncingServiceId = null;
+        this.syncMessage = sync?.message || 'Sync terminée.';
       },
       error: (e) => {
-        this.serviceActionError = e?.error?.message || 'Déploiement du service impossible.';
-        this.serviceActionRunning = false;
+        this.syncingServiceId = null;
+        this.syncMessage = e?.error?.message || 'Sync cluster impossible.';
       }
     });
   }
 
-  viewServiceDashboard(svc: AppServiceModel): void {
-    if (!svc.id) return;
-    this.router.navigate(['/project', svc.id, 'overview']);
+  deleteService(svc: AppServiceModel): void {
+    if (!svc.id || !confirm(`Supprimer le service « ${svc.name} » ?\nSes pods/ressources seront aussi retirés du cluster RUNNING.`)) return;
+    this.syncMessage = null;
+    this.api.deleteService(this.appId, svc.id).subscribe({
+      next: (res) => {
+        this.syncMessage = res?.message || 'Service supprimé.';
+        this.load();
+      },
+      error: (e) => {
+        this.syncMessage = e?.error?.message || 'Suppression impossible.';
+      }
+    });
   }
 
   // ---------- Databases ----------
@@ -286,16 +208,170 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   deleteDatabase(db: AppDatabaseModel): void {
-    if (!db.id || !confirm(`Supprimer la base « ${db.name} » ?`)) return;
+    if (!db.id || !confirm(`Supprimer la base « ${db.name} » ?\nSes pods/PVC seront aussi retirés du cluster RUNNING.`)) return;
+    this.syncMessage = null;
     this.api.deleteDatabase(this.appId, db.id).subscribe({
-      next: () => this.load(),
-      error: (e) => alert(e?.error?.message || 'Suppression impossible.')
+      next: (res) => {
+        this.syncMessage = res?.message || 'Base supprimée.';
+        this.load();
+      },
+      error: (e) => {
+        this.syncMessage = e?.error?.message || 'Suppression impossible.';
+      }
+    });
+  }
+
+  // ---------- Deploy ----------
+
+  deploy(): void {
+    this.deploying = true;
+    this.deployError = null;
+    const ttl = Math.min(72, Math.max(1, this.deployTtlHours || 4));
+    this.api.deploy(this.appId, { sessionDurationHours: ttl }).subscribe({
+      next: () => {
+        this.deploying = false;
+        this.load();
+        if (this.activeTab === 'history') this.loadHistory();
+      },
+      error: (e) => {
+        this.deployError = e?.error?.message || 'Déploiement impossible.';
+        this.deploying = false;
+      }
+    });
+  }
+
+  teardown(): void {
+    const dep = this.app?.lastDeployment;
+    if (!dep || !confirm('Supprimer le déploiement (namespace K8s) ?\nLes pods et services cluster seront détruits.')) return;
+    this.syncMessage = null;
+    this.api.teardownDeployment(this.appId, dep.id).subscribe({
+      next: () => {
+        this.syncMessage = 'Déploiement arrêté — environnement STOPPED.';
+        this.load();
+        if (this.activeTab === 'history') this.loadHistory();
+      },
+      error: (e) => {
+        this.syncMessage = e?.error?.message || 'Teardown impossible.';
+        this.load();
+      }
     });
   }
 
   deleteApp(): void {
     if (!confirm(`Supprimer l'application « ${this.app?.name} » et tout son contenu ?`)) return;
     this.api.delete(this.appId).subscribe({ next: () => this.back() });
+  }
+
+  saveCustomHostname(): void {
+    if (!this.app) return;
+    this.savingHostname = true;
+    this.hostnameError = null;
+    this.hostnameMessage = null;
+    const host = (this.customHostnameDraft || '').trim() || null;
+    this.api.update(this.appId, {
+      name: this.app.name,
+      description: this.app.description,
+      customHostname: host
+    }).subscribe({
+      next: (updated) => {
+        this.app = updated;
+        this.customHostnameDraft = updated.customHostname || '';
+        this.savingHostname = false;
+        this.hostnameMessage = host
+          ? `Domaine « ${host} » enregistré — pointez le DNS vers l'IP Traefik.`
+          : 'Domaine custom retiré — retour à nip.io.';
+      },
+      error: (e) => {
+        this.savingHostname = false;
+        this.hostnameError = e?.error?.message || 'Impossible d\'enregistrer le domaine.';
+      }
+    });
+  }
+
+  // ---------- Historique / Alertes ----------
+
+  setTab(tab: 'services' | 'databases' | 'monitoring' | 'history' | 'alerts'): void {
+    this.activeTab = tab;
+    if (tab === 'history') {
+      this.loadHistory();
+    }
+    if (tab === 'alerts') {
+      this.loadAlerts();
+    }
+  }
+
+  loadHistory(): void {
+    this.historyLoading = true;
+    this.historyError = null;
+    this.api.listDeployments(this.appId).subscribe({
+      next: (list) => {
+        this.history = list || [];
+        this.historyLoading = false;
+        if (!this.selectedHistoryId && this.history.length) {
+          this.selectedHistoryId = this.history[0].id;
+        }
+      },
+      error: (e) => {
+        this.historyError = e?.error?.message || 'Impossible de charger l\'historique.';
+        this.historyLoading = false;
+      }
+    });
+  }
+
+  loadAlerts(): void {
+    const depId = this.app?.lastDeployment?.id;
+    if (!depId) {
+      this.alertsData = null;
+      this.alertsError = null;
+      return;
+    }
+    this.alertsLoading = true;
+    this.alertsError = null;
+    this.api.getDeploymentAlerts(this.appId, depId).subscribe({
+      next: (res) => {
+        this.alertsData = res;
+        this.alertsLoading = false;
+      },
+      error: (e) => {
+        this.alertsError = e?.error?.message || 'Impossible de charger les alertes.';
+        this.alertsLoading = false;
+      }
+    });
+  }
+
+  alertClass(severity: string | undefined): string {
+    return severity === 'error' ? 'am-alert-error' : 'am-alert';
+  }
+
+  selectHistory(dep: AppDeployment): void {
+    this.selectedHistoryId = dep.id;
+  }
+
+  get selectedHistory(): AppDeployment | null {
+    if (!this.selectedHistoryId) return null;
+    return this.history.find(d => d.id === this.selectedHistoryId) || null;
+  }
+
+  isCurrentDeployment(dep: AppDeployment): boolean {
+    return !!this.app?.lastDeployment && this.app.lastDeployment.id === dep.id;
+  }
+
+  historyStatusClass(status: string): string {
+    const s = (status || '').toLowerCase();
+    if (s === 'running') return 'status-running';
+    if (s === 'failed') return 'status-failed';
+    if (s === 'stopped') return 'status-stopped';
+    if (s === 'deploying' || s === 'pending') return 'status-deploying';
+    return 'status-none';
+  }
+
+  serviceReadySummary(dep: AppDeployment): string {
+    const services = dep.servicesState?.['services'];
+    if (!services || typeof services !== 'object') return '—';
+    const vals = Object.values(services as Record<string, { status?: string }>);
+    if (!vals.length) return '—';
+    const ready = vals.filter(v => (v?.status || '').toLowerCase() === 'ready').length;
+    return `${ready}/${vals.length} Ready`;
   }
 
   // ---------- Helpers ----------
@@ -320,87 +396,5 @@ export class ApplicationDetailComponent implements OnInit {
     if (r === 'BACKEND') return 'B';
     if (r === 'WORKER') return 'W';
     return 'S';
-  }
-
-  serviceMetricCount(serviceId: string, field: 'deploys' | 'scans'): string | number {
-    const stats = this.serviceStats[serviceId];
-    if (!stats) return '…';
-    return stats[field];
-  }
-
-  serviceHasActiveEnvironment(serviceName: string): boolean {
-    const dep = this.app?.lastDeployment;
-    if (!dep || dep.status !== 'RUNNING') return false;
-    const states = this.extractServiceStates(dep.servicesState);
-    return states.some(s => String(s?.['name'] ?? '').toLowerCase() === serviceName.toLowerCase());
-  }
-
-  serviceLastScanLabel(svc: AppServiceModel): string | null {
-    if (!svc.id) return null;
-    const stats = this.serviceStats[svc.id];
-    if (!stats) return null;
-    if (!stats.lastScan) return 'Jamais';
-    const date = this.safeParseDate(stats.lastScan);
-    if (!date) return 'Jamais';
-    return date.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-  }
-
-  /** Accepte ISO string, epoch, ou tableau Jackson LocalDateTime [y,m,d,h,mi,s]. */
-  private safeParseDate(dateValue: unknown): Date | null {
-    if (dateValue == null || dateValue === '') return null;
-    try {
-      if (typeof dateValue === 'number') {
-        const date = new Date(dateValue < 1e12 ? dateValue * 1000 : dateValue);
-        return Number.isNaN(date.getTime()) ? null : date;
-      }
-      if (typeof dateValue === 'string') {
-        const date = new Date(dateValue);
-        return Number.isNaN(date.getTime()) ? null : date;
-      }
-      if (Array.isArray(dateValue) && dateValue.length >= 3) {
-        const [year, month, day, hour = 0, minute = 0, second = 0] = dateValue as number[];
-        const date = new Date(year, month - 1, day, hour, minute, Math.floor(Number(second) || 0));
-        return Number.isNaN(date.getTime()) ? null : date;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  private extractServiceStates(raw: unknown): Array<Record<string, unknown>> {
-    if (!raw) return [];
-    if (Array.isArray(raw)) {
-      return raw.filter(x => !!x && typeof x === 'object') as Array<Record<string, unknown>>;
-    }
-    if (typeof raw === 'object') {
-      return Object.entries(raw as Record<string, unknown>).map(([name, value]) => {
-        if (value && typeof value === 'object') {
-          return { name, ...(value as Record<string, unknown>) };
-        }
-        return { name, status: value };
-      });
-    }
-    return [];
-  }
-
-  private navigateToPipelineDetails(
-    gitlabPipelineId: number | null | undefined,
-    applicationServiceId: string,
-    branch?: string
-  ): boolean {
-    if (!gitlabPipelineId) {
-      return false;
-    }
-    const queryParams: Record<string, string> = { appId: applicationServiceId };
-    if (branch?.trim()) {
-      queryParams['branch'] = branch.trim();
-    }
-    this.router.navigate(['/pipeline/id', gitlabPipelineId], { queryParams });
-    return true;
   }
 }

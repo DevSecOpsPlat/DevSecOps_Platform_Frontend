@@ -12,6 +12,115 @@
   <div class="am-alert am-alert-info" *ngIf="dep.status === 'DEPLOYING' || dep.status === 'PENDING'">
     Déploiement en cours… actualisation automatique toutes les 5&nbsp;secondes.
   </div>
+  <div class="am-alert am-alert-error" *ngIf="dep.status === 'FAILED'">
+    Déploiement en échec.
+  </div>
+  <div class="am-alert" *ngIf="dep.status === 'STOPPED'"
+       style="background:#f1f5f9;border-color:#cbd5e1;color:#475569;">
+    Environnement arrêté — namespace et pods supprimés. Relance un déploiement pour repartir.
+  </div>
+  <div class="am-alert" *ngIf="ingressWarning"
+       style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">
+    {{ ingressWarning }}
+  </div>
+
+  <!-- Chrono TTL réel (horloge serveur) -->
+  <div class="am-ttl" *ngIf="ttlLabel && dep.status !== 'STOPPED'">
+    <div class="am-ttl-head">
+      <span class="am-label" style="margin:0;">Cycle de vie cluster</span>
+      <span class="am-ttl-clock" [class.am-ttl-urgent]="ttlUrgent" [class.am-ttl-expired]="ttlExpired">
+        {{ ttlLabel }}
+      </span>
+    </div>
+    <div class="am-ttl-meta" *ngIf="dep.ttlHours || expiresAtMs">
+      <span *ngIf="dep.ttlHours">TTL {{ dep.ttlHours }}h</span>
+      <span *ngIf="readyAtMs"> · prêt {{ readyAtMs | date:'short' }}</span>
+      <span *ngIf="expiresAtMs"> · expire {{ expiresAtMs | date:'short' }}</span>
+    </div>
+    <div class="am-ttl-bar" *ngIf="expiresAtMs">
+      <div class="am-ttl-fill"
+           [class.am-ttl-fill-urgent]="ttlUrgent"
+           [style.width.%]="ttlProgress"></div>
+    </div>
+    <div class="am-ttl-extend" *ngIf="canExtendTtl">
+      <span class="am-ttl-extend-label">Prolonger</span>
+      <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+              [disabled]="extendingTtl" (click)="extendTtl(1)">+1 h</button>
+      <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+              [disabled]="extendingTtl" (click)="extendTtl(2)">+2 h</button>
+      <button type="button" class="am-btn am-btn-primary am-btn-sm"
+              [disabled]="extendingTtl" (click)="extendTtl(4)">+4 h</button>
+    </div>
+    <div class="am-alert am-alert-info" *ngIf="extendTtlMessage" style="margin-top:.5rem;">{{ extendTtlMessage }}</div>
+    <div class="am-alert am-alert-error" *ngIf="extendTtlError" style="margin-top:.5rem;">{{ extendTtlError }}</div>
+  </div>
+
+  <div class="am-alert am-alert-info" *ngIf="rebuildMessage">{{ rebuildMessage }}</div>
+  <div class="am-alert am-alert-error" *ngIf="rebuildError">{{ rebuildError }}</div>
+
+  <!-- Pipeline CI -->
+  <div style="margin-top:1rem;" *ngIf="dep.gitlabPipelineId">
+    <div class="am-section-head" style="margin-bottom:.5rem;">
+      <div>
+        <h4 class="am-label" style="margin:0;">Pipeline CI</h4>
+        <span class="am-mono" style="color:#64748b;">
+          #{{ dep.gitlabPipelineId }}
+          <span *ngIf="ciPipeline?.status"> · {{ ciPipeline?.status }}</span>
+        </span>
+      </div>
+      <div style="display:flex; gap:.4rem; align-items:center;">
+        <a *ngIf="ciPipeline?.webUrl" class="am-btn am-btn-ghost am-btn-sm"
+           [href]="ciPipeline!.webUrl!" target="_blank" rel="noopener">GitLab</a>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="refreshCiPipeline()" [disabled]="ciLoading">
+          {{ ciLoading ? '…' : 'Actualiser' }}
+        </button>
+      </div>
+    </div>
+    <div class="am-alert am-alert-error" *ngIf="ciError">{{ ciError }}</div>
+    <div class="am-empty" *ngIf="!ciLoading && !ciError && (!ciPipeline?.jobs || ciPipeline!.jobs.length === 0)">
+      Aucun job CI pour l’instant.
+    </div>
+    <div class="am-list" *ngIf="ciPipeline?.jobs?.length">
+      <div class="am-list-item" *ngFor="let job of ciPipeline!.jobs"
+           [style.outline]="selectedCiJob?.id === job.id ? '2px solid #f36c21' : null"
+           style="cursor:pointer;"
+           (click)="selectCiJob(job)">
+        <div class="am-list-item-main">
+          <div class="am-list-item-title">
+            {{ job.name }}
+            <span class="am-badge" [ngClass]="ciJobStatusClass(job.status)">{{ job.status }}</span>
+          </div>
+          <div class="am-list-item-sub am-mono">
+            stage {{ job.stage || '—' }}
+            <span *ngIf="job.duration != null"> · {{ job.duration }}s</span>
+          </div>
+        </div>
+        <div class="am-list-actions">
+          <button class="am-btn am-btn-secondary am-btn-sm"
+                  (click)="selectCiJob(job); $event.stopPropagation()">Logs CI</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panneau logs CI -->
+  <div class="am-logs-panel" *ngIf="selectedCiJob" style="margin-top:.75rem;">
+    <div class="am-section-head">
+      <div>
+        <h4 class="am-label" style="margin:0;">Logs CI — {{ selectedCiJob.name }}</h4>
+        <span class="am-mono" style="color:#64748b;">job #{{ selectedCiJob.id }} · {{ selectedCiJob.status }}</span>
+      </div>
+      <div style="display:flex; gap:.4rem;">
+        <button class="am-btn am-btn-secondary am-btn-sm"
+                (click)="selectCiJob(selectedCiJob!)" [disabled]="ciJobLogsLoading">
+          {{ ciJobLogsLoading ? '…' : 'Rafraîchir' }}
+        </button>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="closeCiLogs()">Fermer</button>
+      </div>
+    </div>
+    <div class="am-alert am-alert-error" *ngIf="ciJobLogsError">{{ ciJobLogsError }}</div>
+    <pre class="am-logs-pre" *ngIf="!ciJobLogsError">{{ ciJobLogsLoading ? 'Chargement…' : ciJobLogs }}</pre>
+  </div>
 
   <div class="am-list" *ngIf="serviceEntries.length">
     <h4 class="am-label">Services</h4>
@@ -19,13 +128,26 @@
       <div class="am-list-item-main">
         <div class="am-list-item-title">
           {{ s.name }}
-          <span class="am-badge" [ngClass]="statusClass(s.status)">{{ s.status }}</span>
+          <span class="am-badge" [ngClass]="statusClass(displayStatus(s.status))">{{ displayStatus(s.status) }}</span>
         </div>
-        <div class="am-list-item-sub am-mono">vague {{ s.wave }} · {{ s.internalHost }}</div>
-        <div class="am-list-item-sub" *ngIf="s.externalUrl">
+        <div class="am-list-item-sub am-mono" *ngIf="!isStopped">vague {{ s.wave }} · {{ s.internalHost }}</div>
+        <div class="am-list-item-sub" *ngIf="!isStopped && s.externalUrl && !ingressBroken">
           URL externe :
           <a [href]="s.externalUrl" target="_blank" rel="noopener" style="color:#f36c21;">{{ s.externalUrl }}</a>
         </div>
+        <div class="am-list-item-sub" *ngIf="!isStopped && ingressBroken" style="color:#9a3412;">
+          URL externe indisponible (Ingress non appliqué)
+        </div>
+      </div>
+      <div class="am-list-actions" *ngIf="!isStopped">
+        <button class="am-btn am-btn-secondary am-btn-sm"
+                (click)="openLogs(workloadFromHost(s.internalHost) || s.name)">Logs pod</button>
+        <button class="am-btn am-btn-primary am-btn-sm"
+                *ngIf="canRebuild(s)"
+                [disabled]="!!rebuildingServiceId"
+                (click)="rebuildService(s)">
+          {{ rebuildingServiceId && serviceIdFor(s.name) === rebuildingServiceId ? '…' : 'Rebuild' }}
+        </button>
       </div>
     </div>
   </div>
@@ -36,15 +158,118 @@
       <div class="am-list-item-main">
         <div class="am-list-item-title">
           {{ d.name }}
-          <span class="am-badge" [ngClass]="statusClass(d.status)">{{ d.status }}</span>
+          <span class="am-badge" [ngClass]="statusClass(displayStatus(d.status))">{{ displayStatus(d.status) }}</span>
         </div>
-        <div class="am-list-item-sub am-mono">vague {{ d.wave }} · {{ d.internalHost }}</div>
+        <div class="am-list-item-sub am-mono" *ngIf="!isStopped">vague {{ d.wave }} · {{ d.internalHost }}</div>
+      </div>
+      <div class="am-list-actions" *ngIf="!isStopped">
+        <button class="am-btn am-btn-secondary am-btn-sm"
+                (click)="openLogs(workloadFromHost(d.internalHost) || d.name)">Logs pod</button>
       </div>
     </div>
   </div>
 
-  <!-- URL de connexion générée (lecture seule, mot de passe masqué + révéler) -->
-  <div style="margin-top:1.25rem;" *ngIf="dep.databases?.length">
+  <!-- Monitoring (aperçu) — dashboard complet dans l'onglet Monitoring -->
+  <div style="margin-top:1.25rem;" *ngIf="!isStopped && (monitorSummary || monitorAlerts.length)">
+    <div class="am-section-head" style="margin-bottom:.5rem;">
+      <h4 class="am-label" style="margin:0;">Monitoring (aperçu)</h4>
+      <button class="am-btn am-btn-ghost am-btn-sm" (click)="refreshPods()" [disabled]="podsLoading">
+        {{ podsLoading ? '…' : 'Actualiser' }}
+      </button>
+    </div>
+
+    <div class="am-list-item-sub" *ngIf="monitorSummary" style="margin-bottom:.5rem;">
+      Pods Ready {{ monitorSummary.readyPods }}/{{ monitorSummary.totalPods }}
+      · alertes {{ monitorSummary.alertCount }}
+      · métriques {{ metricsAvailable ? 'metrics-server' : 'requests/limits seulement' }}
+      — ouvre l’onglet <strong>Monitoring</strong> pour le dashboard détaillé.
+    </div>
+
+    <div class="am-list-item" *ngIf="monitorHealth" style="margin-bottom:.5rem;">
+      <div class="am-list-item-main">
+        <div class="am-list-item-title">
+          Health URL
+          <span class="am-badge" [ngClass]="healthBadgeClass()">
+            {{ monitorHealth.checked ? (monitorHealth.ok ? 'OK' : 'KO') : 'N/A' }}
+          </span>
+        </div>
+        <div class="am-list-item-sub">
+          <span *ngIf="monitorAppUrl || monitorHealth.url">{{ monitorHealth.probedUrl || monitorAppUrl || monitorHealth.url }}</span>
+          <span *ngIf="monitorHealth.message"> — {{ monitorHealth.message }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngFor="let a of monitorAlerts" class="am-alert" [ngClass]="alertClass(a.severity)"
+         style="margin-bottom:.4rem;"
+         [style.background]="a.severity === 'warn' ? '#fff7ed' : null"
+         [style.border-color]="a.severity === 'warn' ? '#fdba74' : null"
+         [style.color]="a.severity === 'warn' ? '#9a3412' : null">
+      <span *ngIf="a.workload || a.pod" class="am-mono">{{ a.workload || a.pod }} — </span>{{ a.message }}
+    </div>
+  </div>
+
+  <!-- Pods cluster -->
+  <div style="margin-top:1.25rem;" *ngIf="!isStopped">
+    <div class="am-section-head" style="margin-bottom:.5rem;">
+      <h4 class="am-label" style="margin:0;">Pods (cluster)</h4>
+      <button class="am-btn am-btn-ghost am-btn-sm" (click)="refreshPods()" [disabled]="podsLoading">
+        {{ podsLoading ? '…' : 'Actualiser' }}
+      </button>
+    </div>
+    <div class="am-alert am-alert-error" *ngIf="podsError">{{ podsError }}</div>
+    <div class="am-empty" *ngIf="!podsLoading && !podsError && pods.length === 0">Aucun pod.</div>
+    <div class="am-list" *ngIf="pods.length">
+      <div class="am-list-item" *ngFor="let p of pods">
+        <div class="am-list-item-main">
+          <div class="am-list-item-title">
+            <span class="am-mono">{{ p.name }}</span>
+            <span class="am-badge" [ngClass]="podPhaseClass(p.phase, p.ready)">
+              {{ p.phase }}{{ p.ready ? ' · ready' : '' }}
+            </span>
+          </div>
+          <div class="am-list-item-sub am-mono">
+            workload {{ p.workload || '—' }} · restarts {{ p.restarts }}
+            <span *ngIf="p.reason"> · {{ p.reason }}</span>
+          </div>
+          <div class="am-list-item-sub am-mono" *ngIf="p.cpuUsage || p.memoryUsage || p.cpuRequest || p.memoryRequest">
+            <span *ngIf="p.cpuUsage">CPU {{ p.cpuUsage }}</span>
+            <span *ngIf="!p.cpuUsage && p.cpuRequest">CPU req {{ p.cpuRequest }}</span>
+            <span *ngIf="p.cpuLimit"> / lim {{ p.cpuLimit }}</span>
+            <span *ngIf="p.memoryUsage"> · MEM {{ p.memoryUsage }}</span>
+            <span *ngIf="!p.memoryUsage && p.memoryRequest"> · MEM req {{ p.memoryRequest }}</span>
+            <span *ngIf="p.memoryLimit"> / lim {{ p.memoryLimit }}</span>
+          </div>
+        </div>
+        <div class="am-list-actions">
+          <button class="am-btn am-btn-secondary am-btn-sm"
+                  (click)="openLogs(p.workload || p.name)">Logs pod</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panneau logs pod -->
+  <div class="am-logs-panel" *ngIf="selectedWorkload && !isStopped">
+    <div class="am-section-head">
+      <div>
+        <h4 class="am-label" style="margin:0;">Logs pod — {{ selectedWorkload }}</h4>
+        <span class="am-mono" style="color:#64748b;" *ngIf="logsPod">pod : {{ logsPod }}</span>
+      </div>
+      <div style="display:flex; gap:.4rem;">
+        <button class="am-btn am-btn-secondary am-btn-sm"
+                (click)="openLogs(selectedWorkload!)" [disabled]="logsLoading">
+          {{ logsLoading ? '…' : 'Rafraîchir' }}
+        </button>
+        <button class="am-btn am-btn-ghost am-btn-sm" (click)="closeLogs()">Fermer</button>
+      </div>
+    </div>
+    <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
+    <pre class="am-logs-pre" *ngIf="!logsError">{{ logsLoading ? 'Chargement…' : logs }}</pre>
+  </div>
+
+  <!-- URL de connexion générée -->
+  <div style="margin-top:1.25rem;" *ngIf="!isStopped && dep.databases?.length">
     <h4 class="am-label">URL de connexion générée</h4>
     <div *ngFor="let db of dep.databases" style="margin-bottom:.75rem;">
       <div class="am-list-item-sub" style="margin-bottom:.3rem;">{{ db.name }}</div>
