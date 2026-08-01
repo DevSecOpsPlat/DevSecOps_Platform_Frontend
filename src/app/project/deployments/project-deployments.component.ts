@@ -9,8 +9,8 @@ import {
   environmentStatusView,
   getPipelineStatusLabel,
   matchesEnvironmentFilter
-} from 'src/app/models/environment/status-types';
-import { FormatService } from 'src/app/models/environment/format.service';
+} from '../../models/environment/status-types';
+import { FormatService } from '../../models/environment/format.service';
 
 @Component({
   selector: 'app-project-deployments',

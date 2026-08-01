@@ -2,8 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { AuthService } from '../../services/auth/auth.service';
 import { ApplicationService } from '../../services/application/application.service';
-import { ApplicationResponse } from 'src/app/models/application/application-response';
-import { PipelineService } from 'src/app/services/pipeline/pipeline.service';
+import { ApplicationResponse } from '../../models/application/application-response';
+import { PipelineService } from '../../services/pipeline/pipeline.service';
 
 @Component({
   selector: 'app-user-sidebar',

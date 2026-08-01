@@ -2,8 +2,8 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } fr
 import { ActivatedRoute } from '@angular/router';
 
 import Chart from 'chart.js/auto';
-import { SonarQubeService } from 'src/app/services/sonarqube/sonarqube.service';
-import { UserService } from 'src/app/services/user/user.service';
+import { SonarQubeService } from '../../services/sonarqube/sonarqube.service';
+import { UserService } from '../../services/user/user.service';
 import {
   translateSonarMessage,
   translateSonarSeverity,

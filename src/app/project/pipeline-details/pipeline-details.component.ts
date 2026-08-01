@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { PipelineScanResponse, PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
-import { ToastService } from 'src/app/services/ui/toast.service';
+import { ToastService } from '../../services/ui/toast.service';
 import { AiAnalysisService } from '../../services/ai/ai-analysis.service';
 import { AnalyzeArtifactResponse } from '../../models/ai/analyze-artifact.model';
 
