@@ -1,6 +1,7 @@
 export const environment = {
   production: true,
-  BASE_URL: 'https://api.envirotest.cloud/projet/', // front envirotest.cloud → API api.envirotest.cloud
+  // Front : https://envirotest.cloud  |  API : https://api.envirotest.cloud
+  BASE_URL: 'https://api.envirotest.cloud/projet/',
   adminObservability: {
     grafanaEmbedUrl: '',
     sonarCloudOrgUrl: 'https://sonarcloud.io/organizations/amanibennaceur-group',
