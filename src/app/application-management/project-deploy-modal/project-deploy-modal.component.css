@@ -1,0 +1,120 @@
+.pdm-modal {
+  max-width: 560px;
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
+}
+
+.pdm-services {
+  margin: 1rem 0 0.75rem;
+}
+
+.pdm-services-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pdm-services-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pdm-svc {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--am-border, #e5e7eb);
+  border-radius: 10px;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pdm-svc:hover {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.pdm-svc-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.pdm-svc .ad-role {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.pdm-svc .role-frontend { background: #eff6ff; color: #1d4ed8; }
+.pdm-svc .role-backend { background: #fef3c7; color: #b45309; }
+.pdm-svc .role-worker { background: #f3e8ff; color: #7e22ce; }
+
+.pdm-hint {
+  margin: 0.35rem 0 0;
+  color: #b45309;
+}
+
+.pdm-dbs {
+  margin: 0.85rem 0 0.5rem;
+}
+
+.pdm-db {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--am-border, #e5e7eb);
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+  background: #fafafa;
+  font-size: 0.88rem;
+}
+
+.pdm-db-name {
+  font-weight: 600;
+}
+
+.pdm-db-meta {
+  color: var(--am-muted, #6b7280);
+  font-size: 0.8rem;
+}
+
+.pdm-preview {
+  margin: 0.85rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pdm-preview .am-alert {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.pdm-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: #9a3412;
+  cursor: pointer;
+}
+
+.pdm-confirm input {
+  margin-top: 0.15rem;
+}

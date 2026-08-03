@@ -300,6 +300,33 @@ export interface ManagedApp {
   warnings?: string[];
 }
 
+/** Corps de requête déploiement managé. */
+export interface ManagedDeployRequest {
+  branch?: string;
+  sessionDurationHours?: number;
+  serviceIds?: string[];
+}
+
+/** Aperçu infos / warnings avant déploiement. */
+export interface DeployPreview {
+  infos: string[];
+  warnings: string[];
+  blockingErrors: string[];
+  requiresConfirmation: boolean;
+  ttlHours: number;
+  selectedServiceCount: number;
+  selectedDatabaseCount: number;
+  resolvedServiceIds: string[];
+}
+
+/** Stats légères affichées sur une carte service. */
+export interface ServiceCardStats {
+  scanCount: number;
+  deployCount: number;
+  lastScanAt: string | null;
+  loading: boolean;
+}
+
 /** Ports par défaut par moteur (pré-remplissage du formulaire). */
 export const DEFAULT_DB_PORTS: Record<DbEngine, number> = {
   MARIADB: 3306,

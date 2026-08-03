@@ -8,6 +8,7 @@ import {
   AppDeployment,
   AppServiceModel,
   ClusterPruneResult,
+  DeployPreview,
   DeploymentLogsResponse,
   DeploymentMonitoringResponse,
   DeploymentMonitorAlert,
@@ -128,9 +129,31 @@ export class ApplicationManagementService {
 
   deploy(
     appId: string,
-    body?: { sessionDurationHours?: number; branch?: string }
+    body?: { sessionDurationHours?: number; branch?: string; serviceIds?: string[] }
   ): Observable<AppDeployment> {
     return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, body ?? {}, { headers: this.headers() });
+  }
+
+  /** Aperçu infos / warnings avant déploiement (sélection services + TTL). */
+  previewDeploy(
+    appId: string,
+    body?: { sessionDurationHours?: number; branch?: string; serviceIds?: string[] }
+  ): Observable<DeployPreview> {
+    return this.http.post<DeployPreview>(
+      `${API}/${appId}/deploy/preview`,
+      body ?? {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Déclenche un scan sécurité sur un service (AppService UUID). */
+  scanService(serviceId: string, branch?: string): Observable<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }> {
+    const body = branch ? { branch } : {};
+    return this.http.post<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }>(
+      `${SCAN_API}/${serviceId}/scan`,
+      body,
+      { headers: this.headers() }
+    );
   }
 
   listDeployments(appId: string): Observable<AppDeployment[]> {

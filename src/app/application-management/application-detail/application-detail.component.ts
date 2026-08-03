@@ -1,28 +1,46 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { forkJoin, of, Subject } from 'rxjs';
+import { catchError, debounceTime, takeUntil } from 'rxjs/operators';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
+import { PipelineService } from '../../services/pipeline/pipeline.service';
+import { ApplicationService } from '../../services/application/application.service';
 import {
   AppDatabaseModel,
   AppDeployment,
   AppServiceModel,
+  DeployPreview,
   DeploymentAlertsResponse,
-  DeploymentMonitorAlert,
-  ManagedApp
+  ManagedApp,
+  ServiceCardStats
 } from '../../models/application-management/application-management.models';
 import { ServiceFormComponent } from '../service-form/service-form.component';
 import { DatabaseFormComponent } from '../database-form/database-form.component';
 import { DeploymentStatusComponent } from '../deployment-status/deployment-status.component';
 import { MonitoringDashboardComponent } from '../monitoring-dashboard/monitoring-dashboard.component';
+import { DeployRunModalComponent, DeployRunParams } from '../deploy-run-modal/deploy-run-modal.component';
+import {
+  ProjectDeployModalComponent,
+  ProjectDeployParams
+} from '../project-deploy-modal/project-deploy-modal.component';
 
 @Component({
   selector: 'app-managed-application-detail',
   standalone: true,
-  imports: [CommonModule, ServiceFormComponent, DatabaseFormComponent, DeploymentStatusComponent, MonitoringDashboardComponent],
+  imports: [
+    CommonModule,
+    ServiceFormComponent,
+    DatabaseFormComponent,
+    DeploymentStatusComponent,
+    MonitoringDashboardComponent,
+    DeployRunModalComponent,
+    ProjectDeployModalComponent
+  ],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
 })
-export class ApplicationDetailComponent implements OnInit {
+export class ApplicationDetailComponent implements OnInit, OnDestroy {
   appId!: string;
   app: ManagedApp | null = null;
   loading = true;
@@ -38,13 +56,31 @@ export class ApplicationDetailComponent implements OnInit {
   formError: string | null = null;
   deploying = false;
   deployError: string | null = null;
-  deployTtlHours = 4;
   syncMessage: string | null = null;
   syncingServiceId: string | null = null;
   customHostnameDraft = '';
   savingHostname = false;
   hostnameMessage: string | null = null;
   hostnameError: string | null = null;
+
+  /** Modale scan (branche, pas de TTL). */
+  showScanModal = false;
+  scanningService: AppServiceModel | null = null;
+  scanRunning = false;
+  scanError: string | null = null;
+
+  /** Modale déploiement projet. */
+  showDeployModal = false;
+  deployPreview: DeployPreview | null = null;
+  deployPreviewLoading = false;
+  private previewTrigger$ = new Subject<{
+    branch: string;
+    sessionDurationHours: number;
+    serviceIds: string[];
+  }>();
+
+  /** Stats cartes service (best-effort). */
+  serviceStats: Record<string, ServiceCardStats> = {};
 
   /** Historique des déploiements (onglet). */
   history: AppDeployment[] = [];
@@ -57,15 +93,27 @@ export class ApplicationDetailComponent implements OnInit {
   alertsLoading = false;
   alertsError: string | null = null;
 
+  private destroy$ = new Subject<void>();
+
   constructor(
     private api: ApplicationManagementService,
+    private pipelineApi: PipelineService,
+    private applicationApi: ApplicationService,
     private route: ActivatedRoute,
     private router: Router
   ) {}
 
   ngOnInit(): void {
     this.appId = this.route.snapshot.paramMap.get('id')!;
+    this.previewTrigger$
+      .pipe(debounceTime(250), takeUntil(this.destroy$))
+      .subscribe((sel) => this.fetchDeployPreview(sel));
     this.load();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   load(): void {
@@ -75,6 +123,7 @@ export class ApplicationDetailComponent implements OnInit {
         this.app = app;
         this.customHostnameDraft = app.customHostname || '';
         this.loading = false;
+        this.loadServiceStats(app.services || []);
       },
       error: () => {
         this.error = 'Application introuvable.';
@@ -84,10 +133,52 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   back(): void {
-    this.router.navigate(['/app-management']);
+    this.router.navigate(['/projects']);
   }
 
   // ---------- Services ----------
+
+  openDashboard(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.router.navigate(['/project', svc.id, 'overview']);
+  }
+
+  openScanModal(svc: AppServiceModel): void {
+    if (!svc.id) return;
+    this.scanningService = svc;
+    this.scanError = null;
+    this.scanRunning = false;
+    this.showScanModal = true;
+  }
+
+  closeScanModal(): void {
+    if (this.scanRunning) return;
+    this.showScanModal = false;
+    this.scanningService = null;
+    this.scanError = null;
+  }
+
+  confirmScan(params: DeployRunParams): void {
+    if (!this.scanningService?.id) return;
+    this.scanRunning = true;
+    this.scanError = null;
+    this.api.scanService(this.scanningService.id, params.branch).subscribe({
+      next: (res) => {
+        this.scanRunning = false;
+        this.showScanModal = false;
+        const name = this.scanningService?.name || 'service';
+        this.scanningService = null;
+        this.syncMessage = res?.message
+          || `Scan lancé pour « ${name} »`
+            + (res?.gitlabPipelineId ? ` (pipeline #${res.gitlabPipelineId}).` : '.');
+        if (this.app) this.loadServiceStats(this.app.services || []);
+      },
+      error: (e) => {
+        this.scanRunning = false;
+        this.scanError = e?.error?.message || 'Impossible de lancer le scan.';
+      }
+    });
+  }
 
   openAddService(): void {
     this.editingService = null;
@@ -118,7 +209,6 @@ export class ApplicationDetailComponent implements OnInit {
           this.load();
           return;
         }
-        // Après sauvegarde DB : appliquer direct sur le cluster RUNNING (sans rebuild).
         this.api.syncServiceRuntime(this.appId, serviceId).subscribe({
           next: (sync) => {
             this.saving = false;
@@ -223,18 +313,104 @@ export class ApplicationDetailComponent implements OnInit {
 
   // ---------- Deploy ----------
 
-  deploy(): void {
-    this.deploying = true;
+  openDeployModal(): void {
+    if (!this.app?.services?.length) {
+      this.deployError = 'Ajoutez au moins un service avant de déployer.';
+      return;
+    }
     this.deployError = null;
-    const ttl = Math.min(72, Math.max(1, this.deployTtlHours || 4));
-    this.api.deploy(this.appId, { sessionDurationHours: ttl }).subscribe({
-      next: () => {
-        this.deploying = false;
-        this.load();
-        if (this.activeTab === 'history') this.loadHistory();
+    this.deployPreview = null;
+    this.showDeployModal = true;
+  }
+
+  closeDeployModal(): void {
+    if (this.deploying) return;
+    this.showDeployModal = false;
+    this.deployPreview = null;
+    this.deployError = null;
+  }
+
+  onDeploySelectionChange(sel: {
+    branch: string;
+    sessionDurationHours: number;
+    serviceIds: string[];
+  }): void {
+    this.previewTrigger$.next(sel);
+  }
+
+  private fetchDeployPreview(sel: {
+    branch: string;
+    sessionDurationHours: number;
+    serviceIds: string[];
+  }): void {
+    if (!this.showDeployModal) return;
+    if (!sel.serviceIds.length) {
+      this.deployPreview = null;
+      this.deployPreviewLoading = false;
+      return;
+    }
+    this.deployPreviewLoading = true;
+    this.api.previewDeploy(this.appId, {
+      branch: sel.branch,
+      sessionDurationHours: sel.sessionDurationHours,
+      serviceIds: sel.serviceIds
+    }).subscribe({
+      next: (preview) => {
+        this.deployPreview = preview;
+        this.deployPreviewLoading = false;
       },
       error: (e) => {
-        this.deployError = e?.error?.message || 'Déploiement impossible.';
+        this.deployPreviewLoading = false;
+        this.deployError = e?.error?.message || 'Impossible d\'analyser la sélection.';
+      }
+    });
+  }
+
+  confirmDeploy(params: ProjectDeployParams): void {
+    this.deploying = true;
+    this.deployError = null;
+    const host = (params.customHostname || '').trim() || null;
+    const current = (this.app?.customHostname || '').trim() || null;
+    const runDeploy = () => {
+      this.api.deploy(this.appId, {
+        branch: params.branch,
+        sessionDurationHours: params.sessionDurationHours,
+        serviceIds: params.serviceIds
+      }).subscribe({
+        next: () => {
+          this.deploying = false;
+          this.showDeployModal = false;
+          this.deployPreview = null;
+          this.syncMessage = host
+            ? `Déploiement lancé — domaine « ${host} ».`
+            : 'Déploiement lancé.';
+          this.load();
+          if (this.activeTab === 'history') this.loadHistory();
+        },
+        error: (e) => {
+          this.deployError = e?.error?.message || 'Déploiement impossible.';
+          this.deploying = false;
+        }
+      });
+    };
+
+    if (host === current || !this.app) {
+      runDeploy();
+      return;
+    }
+    // Enregistre le domaine optionnel avant de déclencher le pipeline.
+    this.api.update(this.appId, {
+      name: this.app.name,
+      description: this.app.description,
+      customHostname: host
+    }).subscribe({
+      next: (updated) => {
+        this.app = updated;
+        this.customHostnameDraft = updated.customHostname || '';
+        runDeploy();
+      },
+      error: (e) => {
+        this.deployError = e?.error?.message || 'Impossible d\'enregistrer le domaine.';
         this.deploying = false;
       }
     });
@@ -286,6 +462,61 @@ export class ApplicationDetailComponent implements OnInit {
         this.hostnameError = e?.error?.message || 'Impossible d\'enregistrer le domaine.';
       }
     });
+  }
+
+  // ---------- Stats cartes ----------
+
+  private loadServiceStats(services: AppServiceModel[]): void {
+    for (const svc of services) {
+      if (!svc.id) continue;
+      const id = svc.id;
+      this.serviceStats[id] = {
+        scanCount: this.serviceStats[id]?.scanCount ?? 0,
+        deployCount: this.serviceStats[id]?.deployCount ?? 0,
+        lastScanAt: this.serviceStats[id]?.lastScanAt ?? null,
+        loading: true
+      };
+      forkJoin({
+        scans: this.pipelineApi.listPipelines(0, 50, id, 'SCAN').pipe(catchError(() => of([]))),
+        metrics: this.applicationApi.getDeploymentMetrics(id).pipe(
+          catchError(() => of({ total: 0, success: 0, failed: 0, canceled: 0, pending: 0, running: 0, skipped: 0 }))
+        )
+      }).subscribe({
+        next: ({ scans, metrics }) => {
+          const lastScan = scans?.length
+            ? [...scans].sort((a, b) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              )[0]
+            : null;
+          this.serviceStats[id] = {
+            scanCount: scans?.length ?? 0,
+            deployCount: metrics?.total ?? 0,
+            lastScanAt: lastScan?.createdAt || null,
+            loading: false
+          };
+        },
+        error: () => {
+          this.serviceStats[id] = {
+            scanCount: 0,
+            deployCount: 0,
+            lastScanAt: null,
+            loading: false
+          };
+        }
+      });
+    }
+  }
+
+  statsFor(svc: AppServiceModel): ServiceCardStats {
+    if (!svc.id) {
+      return { scanCount: 0, deployCount: 0, lastScanAt: null, loading: false };
+    }
+    return this.serviceStats[svc.id] || {
+      scanCount: 0,
+      deployCount: 0,
+      lastScanAt: null,
+      loading: true
+    };
   }
 
   // ---------- Historique / Alertes ----------
@@ -396,5 +627,9 @@ export class ApplicationDetailComponent implements OnInit {
     if (r === 'BACKEND') return 'B';
     if (r === 'WORKER') return 'W';
     return 'S';
+  }
+
+  scanDefaultBranch(svc: AppServiceModel | null): string {
+    return (svc?.gitBranch || 'main').trim() || 'main';
   }
 }

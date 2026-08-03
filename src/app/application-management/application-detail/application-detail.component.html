@@ -14,18 +14,7 @@
           <code class="ad-slug">{{ app.slug }}</code>
         </div>
         <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
-          <label class="am-deploy-ttl" style="color:rgba(255,255,255,.85);">
-            Durée (h)
-            <input
-              type="number"
-              min="1"
-              max="72"
-              class="am-input"
-              [value]="deployTtlHours"
-              (input)="deployTtlHours = +$any($event.target).value"
-              [disabled]="deploying" />
-          </label>
-          <button class="am-btn am-btn-primary" (click)="deploy()" [disabled]="deploying">
+          <button class="am-btn am-btn-primary" (click)="openDeployModal()" [disabled]="deploying">
             {{ deploying ? 'Déploiement…' : 'Déployer' }}
           </button>
           <button class="am-btn am-btn-danger ad-delete-btn" (click)="deleteApp()">
@@ -39,29 +28,6 @@
     <div class="am-alert" *ngIf="syncMessage"
          [class.am-alert-warn]="syncMessage.includes('échou') || syncMessage.includes('impossible')"
          style="background:#e8f5e9;border-color:#a5d6a7;">{{ syncMessage }}</div>
-
-    <!-- Domaine custom -->
-    <div class="ad-panel" style="margin-bottom:1.25rem;padding:1.25rem 1.5rem;">
-      <div class="ad-panel-head" style="margin-bottom:.6rem;">
-        <h2 class="ad-panel-title" style="font-size:1rem;">Domaine personnalisé</h2>
-      </div>
-      <p class="am-subtitle" style="margin:0 0 .6rem;">
-        Par défaut : <code class="am-slug">app-&lt;ns&gt;.nip.io</code>.
-        Saisis un hostname (ex. <code class="am-slug">demo.example.com</code>) et pointe le DNS A/CNAME vers l’IP Traefik du cluster.
-      </p>
-      <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
-        <input class="am-input" style="max-width:320px;"
-               placeholder="demo.example.com"
-               [value]="customHostnameDraft"
-               (input)="customHostnameDraft = $any($event.target).value"
-               [disabled]="savingHostname" />
-        <button class="am-btn am-btn-secondary" (click)="saveCustomHostname()" [disabled]="savingHostname">
-          {{ savingHostname ? '…' : 'Enregistrer' }}
-        </button>
-      </div>
-      <div class="am-alert am-alert-info" *ngIf="hostnameMessage" style="margin-top:.6rem;">{{ hostnameMessage }}</div>
-      <div class="am-alert am-alert-error" *ngIf="hostnameError" style="margin-top:.6rem;">{{ hostnameError }}</div>
-    </div>
 
     <div class="am-alert am-alert-warn" *ngFor="let w of app.warnings">{{ w }}</div>
 
@@ -274,14 +240,27 @@
                     {{ serviceName(s.dependsOnServiceId) }}
                   </span>
                 </div>
+
+                <div class="ad-service-stats" *ngIf="s.id">
+                  <ng-container *ngIf="statsFor(s) as st">
+                    <span class="ad-stat" *ngIf="!st.loading">{{ st.deployCount }} DÉPLOIEMENTS</span>
+                    <span class="ad-stat" *ngIf="!st.loading">{{ st.scanCount }} SCANS</span>
+                    <span class="ad-stat ad-stat--muted" *ngIf="!st.loading && st.lastScanAt">
+                      DERNIER SCAN {{ st.lastScanAt | date:'d MMM y' }}
+                    </span>
+                    <span class="ad-stat ad-stat--muted" *ngIf="st.loading">Chargement stats…</span>
+                  </ng-container>
+                </div>
               </div>
             </div>
           </div>
 
           <footer class="ad-service-actions" (click)="$event.stopPropagation()">
+            <button class="am-btn am-btn-primary am-btn-sm" (click)="openScanModal(s)">Scanner</button>
+            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openDashboard(s)">Dashboard</button>
             <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
             <button
-              class="am-btn am-btn-primary am-btn-sm"
+              class="am-btn am-btn-ghost am-btn-sm"
               (click)="syncServiceToCluster(s)"
               [disabled]="syncingServiceId === s.id || app.lastDeployment?.status !== 'RUNNING'"
               title="Appliquer les variables sur le cluster sans rebuild">
@@ -355,3 +334,34 @@
     </app-managed-database-form>
   </div>
 </div>
+
+<!-- Modal : scan service (branche, sans TTL) -->
+<app-deploy-run-modal
+  *ngIf="showScanModal && scanningService"
+  title="Lancer un scan"
+  [subtitle]="'Scan sécurité de « ' + scanningService.name + ' » — pipeline SCA / SAST / secrets…'"
+  actionLabel="Scanner"
+  [defaultBranch]="scanDefaultBranch(scanningService)"
+  [showTtl]="false"
+  [running]="scanRunning"
+  [error]="scanError"
+  (cancel)="closeScanModal()"
+  (confirm)="confirmScan($event)">
+</app-deploy-run-modal>
+
+<!-- Modal : déploiement projet -->
+<app-project-deploy-modal
+  *ngIf="showDeployModal && app"
+  [services]="app.services || []"
+  [databases]="app.databases || []"
+  [defaultBranch]="(app.services[0].gitBranch || 'main')"
+  [defaultTtlHours]="4"
+  [defaultCustomHostname]="app.customHostname || ''"
+  [preview]="deployPreview"
+  [previewLoading]="deployPreviewLoading"
+  [running]="deploying"
+  [error]="deployError"
+  (cancel)="closeDeployModal()"
+  (confirm)="confirmDeploy($event)"
+  (selectionChange)="onDeploySelectionChange($event)">
+</app-project-deploy-modal>

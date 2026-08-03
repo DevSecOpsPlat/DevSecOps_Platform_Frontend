@@ -490,6 +490,28 @@
   border-top: 1px solid var(--am-border);
 }
 
+.ad-service-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem 1rem;
+  margin-top: .85rem;
+}
+
+.ad-stat {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--am-navy, #1e1e3a);
+}
+
+.ad-stat--muted {
+  font-weight: 600;
+  color: var(--am-muted, #6b7280);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 /* ---------- Cartes BDD ---------- */
 .ad-db-grid {
   display: grid;

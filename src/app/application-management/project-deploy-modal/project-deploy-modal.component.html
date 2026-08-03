@@ -1,0 +1,112 @@
+<div class="am-modal-backdrop" (click)="cancel.emit()">
+  <div class="am-modal pdm-modal" (click)="$event.stopPropagation()">
+    <h3 class="am-modal-title">Déployer l'application</h3>
+    <p class="am-subtitle">
+      Choisissez la branche, la durée de vie (TTL), un domaine optionnel et les services à inclure.
+      Les bases liées aux services sélectionnés sont déployées automatiquement.
+    </p>
+
+    <div class="am-form-grid">
+      <label class="am-field">
+        <span class="am-field-label">Branche</span>
+        <input
+          class="am-input"
+          type="text"
+          [(ngModel)]="branch"
+          [placeholder]="defaultBranch"
+          (ngModelChange)="onTtlOrBranchChange()"
+          [disabled]="running" />
+      </label>
+
+      <label class="am-field">
+        <span class="am-field-label">Durée de test (heures)</span>
+        <input
+          class="am-input"
+          type="number"
+          min="1"
+          max="72"
+          name="sessionDurationHours"
+          [(ngModel)]="sessionDurationHours"
+          (ngModelChange)="onTtlOrBranchChange()"
+          [disabled]="running" />
+      </label>
+    </div>
+
+    <label class="am-field" style="display:block;margin-top:.85rem;">
+      <span class="am-field-label">Domaine personnalisé (optionnel)</span>
+      <input
+        class="am-input"
+        type="text"
+        [(ngModel)]="customHostname"
+        placeholder="demo.example.com — vide = nip.io"
+        [disabled]="running" />
+      <span class="am-subtitle" style="display:block;margin:.35rem 0 0;font-size:.8rem;">
+        Si renseigné, pointez le DNS A/CNAME vers l’IP Traefik du cluster. Sinon : <code class="am-slug">app-&lt;ns&gt;.nip.io</code>.
+      </span>
+    </label>
+
+    <div class="pdm-services">
+      <div class="pdm-services-head">
+        <span class="am-field-label">Services inclus</span>
+        <div class="pdm-services-actions">
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="selectAll()" [disabled]="running">Tous</button>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="selectNone()" [disabled]="running">Aucun</button>
+        </div>
+      </div>
+      <div class="am-empty" *ngIf="!services.length">Aucun service configuré.</div>
+      <label class="pdm-svc" *ngFor="let s of services">
+        <input
+          type="checkbox"
+          [checked]="isSelected(s.id)"
+          (change)="toggleService(s.id)"
+          [disabled]="running || !s.id" />
+        <span class="pdm-svc-name">{{ s.name }}</span>
+        <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
+      </label>
+      <p class="am-subtitle pdm-hint" *ngIf="selectedCount === 0">Sélectionnez au moins un service.</p>
+    </div>
+
+    <div class="pdm-dbs" *ngIf="includedDatabases.length">
+      <span class="am-field-label">Bases incluses automatiquement</span>
+      <p class="am-subtitle" style="margin:.25rem 0 .5rem;font-size:.8rem;">
+        Liées aux services cochés via « dépend de BD » — pas de case à cocher séparée.
+      </p>
+      <div class="pdm-db" *ngFor="let d of includedDatabases">
+        <span class="pdm-db-name">{{ d.name }}</span>
+        <span class="pdm-db-meta">{{ d.engine }} {{ d.version }}</span>
+      </div>
+    </div>
+    <div class="pdm-dbs" *ngIf="selectedCount > 0 && !includedDatabases.length">
+      <span class="am-field-label">Bases incluses</span>
+      <p class="am-subtitle" style="margin:.25rem 0 0;font-size:.8rem;">
+        Aucune BD liée aux services sélectionnés.
+      </p>
+    </div>
+
+    <div class="pdm-preview" *ngIf="previewLoading">
+      <p class="am-subtitle">Analyse de la sélection…</p>
+    </div>
+
+    <div class="pdm-preview" *ngIf="!previewLoading && preview">
+      <div class="am-alert am-alert-info" *ngFor="let info of preview.infos">{{ info }}</div>
+      <div class="am-alert am-alert-warn" *ngFor="let w of preview.warnings">{{ w }}</div>
+      <div class="am-alert am-alert-error" *ngFor="let e of preview.blockingErrors">{{ e }}</div>
+
+      <label class="pdm-confirm" *ngIf="preview.requiresConfirmation">
+        <input type="checkbox" [(ngModel)]="persistenceConfirmed" [disabled]="running" />
+        <span>Je confirme déployer un backend sans persistance des données (aucune BD associée).</span>
+      </label>
+    </div>
+
+    <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+    <div class="am-form-actions">
+      <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()" [disabled]="running">
+        Annuler
+      </button>
+      <button type="button" class="am-btn am-btn-primary" (click)="onConfirm()" [disabled]="!canConfirm">
+        {{ running ? 'Déploiement…' : 'Déployer' }}
+      </button>
+    </div>
+  </div>
+</div>
