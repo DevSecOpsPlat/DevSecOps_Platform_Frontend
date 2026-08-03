@@ -201,7 +201,7 @@
             <tr *ngFor="let s of services">
               <td class="am-mono">{{ s.name }}</td>
               <td>{{ s.type }}</td>
-              <td class="am-mono">{{ s.ports?.join(', ') || '—' }}</td>
+              <td class="am-mono">{{ s.ports.join(', ') || '—' }}</td>
               <td class="am-mono">{{ s.clusterIP || '—' }}</td>
             </tr>
           </tbody>

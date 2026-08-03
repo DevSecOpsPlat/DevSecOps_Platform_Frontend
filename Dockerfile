@@ -10,7 +10,10 @@ RUN npm ci
 COPY . ./
 
 # Build Angular production output
-RUN npm run build -- --configuration docker
+# Local (même origine /projet/) : docker
+# Hostinger (api.envirotest.cloud) : hostinger
+ARG ANGULAR_CONFIG=docker
+RUN npm run build -- --configuration ${ANGULAR_CONFIG}
 
 ## Runtime stage (serve static files)
 FROM nginx:1.27-alpine AS runtime

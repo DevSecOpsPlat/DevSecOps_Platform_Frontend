@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { UserService } from '../../services/user/user.service';
+import { AuthService } from '../../services/auth/auth.service';
 import { passwordStrengthValidator } from '../../shared/password/password-strength.validator';
 import { isPasswordStrong } from '../../shared/password/password-rules';
 
@@ -24,10 +25,15 @@ export class ActivateAccountComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private userService: UserService
+    private userService: UserService,
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
+    if (this.authService.isAuthenticated()) {
+      this.authService.silentLogout();
+    }
+
     this.route.queryParamMap.subscribe(params => {
       this.token = params.get('token') ?? '';
       if (!this.token) {

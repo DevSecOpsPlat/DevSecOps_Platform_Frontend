@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
-  BASE_URL: 'https://envirotest.attijari-bank.tn/projet/', // trailing slash pour concat API
+  BASE_URL: 'https://api.envirotest.cloud/projet/', // front envirotest.cloud → API api.envirotest.cloud
   adminObservability: {
     grafanaEmbedUrl: '',
     sonarCloudOrgUrl: 'https://sonarcloud.io/organizations/amanibennaceur-group',

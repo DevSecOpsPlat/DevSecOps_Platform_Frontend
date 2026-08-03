@@ -1,0 +1,25 @@
+<form class="am-form" [formGroup]="form" (ngSubmit)="onSubmit()">
+  <div class="am-field">
+    <label class="am-label">Nom du projet *</label>
+    <input class="am-input" formControlName="name" placeholder="Ex. Première_App" />
+    <span class="am-hint">Identifiant lisible — le slug est généré automatiquement.</span>
+    <span class="am-error" *ngIf="form.get('name')?.touched && form.get('name')?.invalid">
+      Le nom est obligatoire (200 caractères max).
+    </span>
+  </div>
+
+  <div class="am-field">
+    <label class="am-label">Description</label>
+    <textarea class="am-textarea" formControlName="description" rows="3"
+              placeholder="Ex. Application de démonstration avec frontend et API"></textarea>
+  </div>
+
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+  <div class="am-form-actions">
+    <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()" [disabled]="saving">Annuler</button>
+    <button type="submit" class="am-btn am-btn-primary" [disabled]="saving">
+      {{ saving ? 'Création…' : 'Créer le projet' }}
+    </button>
+  </div>
+</form>

@@ -94,7 +94,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   branches: string[] = [];
   environments: QualityGateEnvironmentOption[] = [];
   selectedBranch = 'main';
-  selectedEnvironmentId: string | null = null;
+  selectedPipelineId: string | null = null;
 
   loading = true;
 
@@ -125,7 +125,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   ];
 
   /** Évite boucle infinie auto-capture SNAPSHOT_MISSING → refresh → load */
-  private autoCaptureAttemptedForEnv: string | null = null;
+  private autoCaptureAttemptedForPipeline: string | null = null;
 
 
 
@@ -150,8 +150,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
       if (!this.appId) return;
 
       this.loadBranches();
-      this.loadEnvironments();
-      this.load();
+      this.loadEnvironments(true);
 
       this.startPolling();
 
@@ -161,16 +160,15 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
     this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(qp => {
       const branch = qp.get('branch');
-      const environmentId = qp.get('environmentId');
+      const pipelineId = qp.get('pipelineId');
       if (branch) {
         this.selectedBranch = branch;
       }
-      if (environmentId) {
-        this.selectedEnvironmentId = environmentId;
+      if (pipelineId) {
+        this.selectedPipelineId = pipelineId;
       }
-      if (branch || environmentId) {
-        this.loadEnvironments();
-        this.load();
+      if (branch || pipelineId) {
+        this.loadEnvironments(true);
       }
     });
 
@@ -188,17 +186,23 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
-  loadEnvironments(): void {
+  loadEnvironments(andThenLoad = false): void {
     if (!this.appId) return;
-    this.qualityGateService.listEnvironments(this.appId, this.selectedBranch).pipe(
+    this.qualityGateService.listScanPipelines(this.appId, this.selectedBranch).pipe(
       catchError(() => of([] as QualityGateEnvironmentOption[]))
     ).subscribe(envs => {
       this.environments = envs;
-      if (this.selectedEnvironmentId && !envs.some(e => e.environmentId === this.selectedEnvironmentId)) {
-        this.selectedEnvironmentId = envs.length ? envs[0].environmentId : null;
+      if (this.selectedPipelineId && !envs.some(e => e.pipelineId === this.selectedPipelineId)) {
+        this.selectedPipelineId = envs.length ? (envs[0].pipelineId ?? null) : null;
       }
-      if (!this.selectedEnvironmentId && envs.length) {
-        this.selectedEnvironmentId = envs[0].environmentId;
+      if (!this.selectedPipelineId && envs.length) {
+        this.selectedPipelineId = envs[0].pipelineId ?? null;
+      }
+      if (andThenLoad && this.selectedPipelineId) {
+        this.load(false);
+      } else if (andThenLoad && !this.selectedPipelineId) {
+        this.loading = false;
+        this.result = null;
       }
     });
   }
@@ -229,12 +233,17 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   load(refresh = false): void {
     if (!this.appId) return;
+    if (!this.selectedPipelineId) {
+      this.loading = false;
+      this.result = null;
+      return;
+    }
     this.loading = true;
     this.error = null;
     this.aiInsight = null;
     this.aiError = null;
     this.qualityGateService.getQualityGate(
-      this.appId, this.selectedBranch, this.selectedEnvironmentId, refresh
+      this.appId, this.selectedBranch, null, refresh, this.selectedPipelineId
     ).pipe(
 
       catchError(err => {
@@ -265,15 +274,15 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
   }
 
-  /** Sans webhook : tente une capture API une fois si snapshot absent et pipeline terminé. */
+  /** Sans webhook : tente un refresh API une fois si snapshot absent et pipeline terminé. */
   private maybeAutoCaptureMissingSnapshot(): void {
-    if (!this.appId || !this.selectedEnvironmentId || !this.result) return;
+    if (!this.appId || !this.selectedPipelineId || !this.result) return;
     if (this.result.verdictSource !== 'SNAPSHOT_MISSING') return;
     const ps = (this.result.pipelineStatus || '').toUpperCase();
     if (ps === 'RUNNING' || ps === 'PENDING') return;
-    if (this.autoCaptureAttemptedForEnv === this.selectedEnvironmentId) return;
-    this.autoCaptureAttemptedForEnv = this.selectedEnvironmentId;
-    this.captureSnapshot();
+    if (this.autoCaptureAttemptedForPipeline === this.selectedPipelineId) return;
+    this.autoCaptureAttemptedForPipeline = this.selectedPipelineId;
+    this.refreshData();
   }
 
 
@@ -286,7 +295,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
     this.aiError = null;
 
-    this.qualityGateService.generateAiInsight(this.appId, this.selectedBranch, this.selectedEnvironmentId).pipe(
+    this.qualityGateService.generateAiInsight(this.appId, this.selectedBranch, null).pipe(
 
       catchError(() => of({ insight: '', message: 'Erreur lors de l\'appel IA' }))
 
@@ -311,31 +320,31 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
   onBranchChange(): void {
-    this.selectedEnvironmentId = null;
-    this.autoCaptureAttemptedForEnv = null;
+    this.selectedPipelineId = null;
+    this.autoCaptureAttemptedForPipeline = null;
     this.result = null;
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { branch: this.selectedBranch, environmentId: null },
+      queryParams: { branch: this.selectedBranch, pipelineId: null },
       queryParamsHandling: 'merge'
     });
     this.loadEnvironmentsAndRefresh();
   }
 
-  /** Après changement de branche : sélectionne le 1er env puis recharge le snapshot BDD. */
+  /** Après changement de branche : sélectionne le dernier pipeline scan puis recharge. */
   private loadEnvironmentsAndRefresh(): void {
     if (!this.appId) return;
-    this.qualityGateService.listEnvironments(this.appId, this.selectedBranch).pipe(
+    this.qualityGateService.listScanPipelines(this.appId, this.selectedBranch).pipe(
       catchError(() => of([] as QualityGateEnvironmentOption[]))
     ).subscribe(envs => {
       this.environments = envs;
-      if (this.selectedEnvironmentId && !envs.some(e => e.environmentId === this.selectedEnvironmentId)) {
-        this.selectedEnvironmentId = envs.length ? envs[0].environmentId : null;
+      if (this.selectedPipelineId && !envs.some(e => e.pipelineId === this.selectedPipelineId)) {
+        this.selectedPipelineId = envs.length ? (envs[0].pipelineId ?? null) : null;
       }
-      if (!this.selectedEnvironmentId && envs.length) {
-        this.selectedEnvironmentId = envs[0].environmentId;
+      if (!this.selectedPipelineId && envs.length) {
+        this.selectedPipelineId = envs[0].pipelineId ?? null;
       }
-      if (this.selectedEnvironmentId) {
+      if (this.selectedPipelineId) {
         this.load(false);
       } else {
         this.loading = false;
@@ -344,18 +353,18 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Recharge le snapshot enregistré (quality_gate_snapshots) et synchronise le statut GitLab. */
+  /** Recharge le snapshot enregistré et synchronise le statut GitLab. */
   refreshData(): void {
     const appId = this.appId;
-    const environmentId = this.selectedEnvironmentId;
-    if (!appId || !environmentId) {
-      this.error = 'Sélectionnez un environnement pour actualiser.';
+    const pipelineId = this.selectedPipelineId;
+    if (!appId || !pipelineId) {
+      this.error = 'Sélectionnez un pipeline pour actualiser.';
       return;
     }
     this.loading = true;
     this.error = null;
     this.qualityGateService.getQualityGate(
-      appId, this.selectedBranch, environmentId, false
+      appId, this.selectedBranch, null, false, pipelineId
     ).pipe(
       catchError(err => {
         const msg = err?.error?.message || err?.error?.detail || 'Actualisation impossible';
@@ -375,9 +384,9 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   /** Recapture live (DefectDojo + Sonar) et persiste un nouveau snapshot en BDD. */
   captureSnapshot(): void {
     const appId = this.appId;
-    const environmentId = this.selectedEnvironmentId;
+    const environmentId = this.result?.environmentId ?? null;
     if (!appId || !environmentId) {
-      this.error = 'Sélectionnez un environnement.';
+      this.error = 'Capture manuelle indisponible pour un pipeline scan sans environnement.';
       return;
     }
     this.loading = true;
@@ -398,12 +407,12 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     });
   }
 
-  onEnvironmentChange(): void {
-    this.autoCaptureAttemptedForEnv = null;
+  onPipelineChange(): void {
+    this.autoCaptureAttemptedForPipeline = null;
     this.result = null;
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { environmentId: this.selectedEnvironmentId || null },
+      queryParams: { pipelineId: this.selectedPipelineId || null },
       queryParamsHandling: 'merge'
     });
     this.load(false);
@@ -518,7 +527,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   get refreshButtonTitle(): string {
-    return 'Recharger le snapshot enregistré pour cet environnement et synchroniser le statut GitLab';
+    return 'Recharger le snapshot enregistré pour ce pipeline et synchroniser le statut GitLab';
   }
 
   /** Données issues de quality_gate_snapshots (pas un recalcul live DefectDojo/Sonar). */
@@ -1636,7 +1645,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
         if (!this.pipelinePolling) return of(null);
 
         return this.qualityGateService.getQualityGate(
-          this.appId, this.selectedBranch, this.selectedEnvironmentId, false
+          this.appId, this.selectedBranch, null, false, this.selectedPipelineId
         ).pipe(
 
           catchError(() => of(null))

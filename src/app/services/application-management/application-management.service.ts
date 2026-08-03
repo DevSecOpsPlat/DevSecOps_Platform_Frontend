@@ -22,6 +22,7 @@ import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-respon
 
 const BASE = environment.BASE_URL;
 const API = BASE + 'api/managed-applications';
+const SCAN_API = BASE + 'api/applications';
 
 /**
  * Appels API du module de gestion des applications managées.
@@ -44,6 +45,21 @@ export class ApplicationManagementService {
 
   list(): Observable<ManagedApp[]> {
     return this.http.get<ManagedApp[]>(API, { headers: this.headers() });
+  }
+
+  /** Services scannés sans projet parent (legacy). */
+  listOrphanServices(): Observable<Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    gitRepositoryUrl: string | null;
+  }>> {
+    return this.http.get<Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      gitRepositoryUrl: string | null;
+    }>>(`${SCAN_API}/orphans`, { headers: this.headers() });
   }
 
   get(id: string): Observable<ManagedApp> {

@@ -670,6 +670,12 @@
   background: #e2e8f0;
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+
+.btn-inline {
+  margin-top: 0.5rem;
 }
 
 /* ===== ACTIONS DE LA CARTE ===== */
@@ -906,5 +912,27 @@
   content: "📅";
   font-size: 0.7rem;
   margin-right: 0.25rem;
+}
+
+.status-filter-btn.degraded-btn.active {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.stat-item .stat-value.in-progress { color: #2563eb; }
+.stat-item .stat-value.failed { color: #dc2626; }
+.stat-item .stat-value.ended { color: #6b7280; }
+
+.env-status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.status-reason {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 400;
 }
 }

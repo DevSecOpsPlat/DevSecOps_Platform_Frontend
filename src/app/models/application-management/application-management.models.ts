@@ -37,7 +37,8 @@ export interface AppServiceModel {
   gitBranch?: string;
   dockerfilePath?: string;
   buildContext?: string;
-  exposedPort: number;
+  /** Obligatoire FRONTEND/BACKEND (≥1024). Absent / undefined pour WORKER. */
+  exposedPort?: number;
   dependsOnServiceId?: string | null;
   dependsOnDatabaseId?: string | null;
   dbUrlEnvVar?: string;

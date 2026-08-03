@@ -34,39 +34,105 @@
         <div class="vuln-detail-info">
           <h3>{{ detail.title }}</h3>
           <div class="vuln-detail-meta">
+            <span class="vuln-meta-item"><span class="vuln-meta-label">Outil</span><span>{{ detail.toolName }}</span></span>
             <span class="vuln-meta-item"><span class="vuln-meta-label">Scan</span><span>{{ detail.scanType }}</span></span>
             <span class="vuln-meta-item"><span class="vuln-meta-label">Statut</span><span>{{ detail.status }}</span></span>
             <span class="vuln-meta-item" *ngIf="detail.cve"><span class="vuln-meta-label">CVE</span><span>{{ detail.cve }}</span></span>
             <span class="vuln-meta-item" *ngIf="detail.cwe"><span class="vuln-meta-label">CWE</span><span>{{ detail.cwe }}</span></span>
+            <span class="vuln-meta-item" *ngIf="detail.cvssScore"><span class="vuln-meta-label">CVSS</span><span>{{ detail.cvssScore }}</span></span>
           </div>
         </div>
+      </div>
+
+      <section class="dd-finding-actions" *ngIf="branch">
+        <div class="dd-finding-actions-head">
+          <h4>Cycle de vie DefectDojo</h4>
+          <p>Les actions sont synchronisées avec votre instance DefectDojo (branche {{ branch }}).</p>
+        </div>
+        <div class="vuln-alert vuln-alert-error" *ngIf="statusError">{{ statusError }}</div>
+        <div class="vuln-alert vuln-alert-info" *ngIf="statusMessage && !statusError">{{ statusMessage }}</div>
+        <div class="dd-finding-actions-bar">
+          <button
+            type="button"
+            *ngFor="let btn of availableStatusActions"
+            class="dd-action-btn"
+            [class.dd-action-btn--primary]="btn.tone === 'primary'"
+            [class.dd-action-btn--secondary]="btn.tone === 'secondary'"
+            [class.dd-action-btn--danger]="btn.tone === 'danger'"
+            [class.dd-action-btn--neutral]="btn.tone === 'neutral'"
+            [disabled]="statusLoading"
+            (click)="applyStatusAction(btn)"
+          >
+            {{ btn.label }}
+          </button>
+          <span class="dd-action-loading" *ngIf="statusLoading">Mise à jour…</span>
+        </div>
+      </section>
+      <div class="vuln-alert vuln-alert-warning" *ngIf="!branch">
+        Sélectionnez une branche depuis le dashboard pour modifier le statut du finding.
       </div>
 
       <section class="vuln-remediation-hero">
         <div class="vuln-hero-head">
           <div>
-            <h4 class="vuln-hero-title">Code / composant concerné</h4>
-            <p class="vuln-hero-sub">Extrait du dépôt (branche {{ detail.branch }}) si disponible — base de l'analyse IA.</p>
+            <h4 class="vuln-hero-title">Code concerné dans votre dépôt</h4>
+            <p class="vuln-hero-sub">
+              <ng-container *ngIf="detail.codeContextSource === 'DOCKERFILE'">
+                Finding conteneur — extrait du <strong>Dockerfile</strong> du dépôt (branche {{ detail.branch }}).
+              </ng-container>
+              <ng-container *ngIf="detail.codeContextSource !== 'DOCKERFILE'">
+                Extrait chargé automatiquement lorsque le dépôt est joignable (branche {{ detail.branch }}). Les analyses IA et le chat s'appuient dessus.
+              </ng-container>
+            </p>
           </div>
           <span class="vuln-hero-badge">{{ sourceLabel(detail.codeContextSource) }}</span>
         </div>
         <div class="vuln-hero-path-row">
-          <code class="vuln-file-path vuln-file-path--hero">{{ detail.filePath || detail.componentName || 'Non spécifié' }}</code>
-          <span class="vuln-line-pill" *ngIf="detail.line != null">Ligne {{ detail.line }}</span>
+          <code class="vuln-file-path vuln-file-path--hero" *ngIf="detail.codeContextSource !== 'DOCKERFILE'">{{ detail.filePath || detail.componentName || 'Non spécifié' }}</code>
+          <code class="vuln-file-path vuln-file-path--hero vuln-file-path--muted" *ngIf="detail.codeContextSource === 'DOCKERFILE' && detail.filePath">{{ detail.filePath }} <span class="vuln-path-note">(dans l'image)</span></code>
+          <span class="vuln-line-pill" *ngIf="detail.line != null && detail.codeContextSource !== 'DOCKERFILE'">Ligne {{ detail.line }}</span>
+          <button
+            type="button"
+            class="vuln-copy-chip"
+            *ngIf="detail.codeSnippet?.trim()"
+            (click)="copyText('code', detail.codeSnippet || '')"
+          >
+            Copier l'extrait
+          </button>
+        </div>
+        <div class="vuln-version-info vuln-hero-versions" *ngIf="detail.componentName">
+          <strong>Composant</strong> — {{ detail.componentName }}
+        </div>
+        <div class="vuln-hero-hint vuln-alert vuln-alert-info" *ngIf="detail.codeContextHint">
+          {{ detail.codeContextHint }}
         </div>
         <pre class="vuln-code-block" *ngIf="detail.codeSnippet?.trim()"><code>{{ detail.codeSnippet }}</code></pre>
         <div class="vuln-hero-empty" *ngIf="!detail.codeSnippet?.trim()">
-          <p>Pas d'extrait code — collez un snippet ci-dessous puis regénérez l'analyse IA.</p>
+          <p *ngIf="isContainerImagePath()">
+            Ce finding concerne un paquet dans l'<strong>image Docker</strong> scannée, pas un fichier source du dépôt.
+          </p>
+          <p *ngIf="!isContainerImagePath()">
+            Aucun fichier correspondant n'a pu être lu depuis le dépôt (chemin absent, binaire, ou accès Git non configuré).
+          </p>
+          <p class="vuln-hero-empty-hint">Vous pouvez coller un extrait (ex. Dockerfile) dans « Affiner l'analyse » puis regénérer.</p>
         </div>
         <div class="vuln-snippet-refine">
           <label>Affiner l'analyse (extrait optionnel)</label>
           <textarea [(ngModel)]="codeSnippetInput" rows="4" placeholder="Coller du code…"></textarea>
-          <button type="button" class="vuln-btn vuln-btn-primary" (click)="runAiRemediation()" [disabled]="aiLoading">Regénérer l'analyse IA</button>
+          <div class="vuln-snippet-actions">
+            <button type="button" class="vuln-btn vuln-btn-primary" (click)="runAiRemediation(false)" [disabled]="aiLoading">
+              Regénérer l'analyse
+            </button>
+            <button type="button" class="vuln-btn vuln-btn-secondary" (click)="runAiRemediation(true)" [disabled]="aiLoading"
+                    title="Ignore le template statique et appelle Groq/OpenRouter/Ollama avec un prompt complet">
+              Analyse approfondie par IA
+            </button>
+          </div>
         </div>
       </section>
 
       <section class="vuln-detail-section" *ngIf="detail.description">
-        <div class="vuln-section-title"><span class="vuln-section-icon">📝</span><h4>Description DefectDojo</h4></div>
+        <div class="vuln-section-title"><span class="vuln-section-icon">📝</span><h4>Description du scanner</h4></div>
         <div class="vuln-description">{{ detail.description }}</div>
       </section>
 
@@ -75,28 +141,54 @@
         <div class="vuln-description">{{ detail.mitigation }}</div>
       </section>
 
-      <section class="vuln-detail-section ai-section">
+      <section class="vuln-detail-section ai-section" id="vuln-ai-analysis">
         <div class="vuln-section-title vuln-section-title--row">
           <div class="vuln-section-title-text">
             <span class="vuln-section-icon">🤖</span>
-            <h4>Analyse &amp; remédiation IA</h4>
+            <h4>Analyse &amp; remédiation détaillée</h4>
           </div>
+          <span class="vuln-ai-auto-hint">recommandation instantanée (cache / OWASP) ou IA cloud ; approfondie = Groq complet</span>
+          <span class="vuln-ai-source-badge" *ngIf="responseSourceLabel()">{{ responseSourceLabel() }}</span>
+          <span class="vuln-confidence-badge" *ngIf="aiResult?.confidence"
+                [attr.data-level]="aiResult?.confidence">
+            Confiance {{ aiResult?.confidence === 'HIGH' ? 'élevée' : aiResult?.confidence === 'LOW' ? 'faible' : 'moyenne' }}
+          </span>
         </div>
 
         <div class="vuln-ai-loading-panel" *ngIf="aiLoading">
           <div class="vuln-ai-loading-bar"></div>
-          <p><strong>Analyse IA en cours…</strong></p>
+          <p><strong *ngIf="!aiPolling">Analyse en cours…</strong><strong *ngIf="aiPolling">Ollama local (async)…</strong></p>
+          <p class="vuln-muted" *ngIf="!aiPolling">Cache → recommandation OWASP → Groq/OpenRouter si nécessaire.</p>
+          <p class="vuln-muted" *ngIf="aiPolling">Le modèle local peut prendre plusieurs minutes — cette page se met à jour automatiquement.</p>
         </div>
+
         <div class="vuln-alert vuln-alert-error" *ngIf="aiError && !aiLoading">{{ aiError }}</div>
 
         <div class="vuln-ai-results-grid" *ngIf="aiResult && !aiLoading">
+
           <article class="vuln-ai-panel vuln-ai-panel--problem" *ngIf="aiResult.problemSummary">
             <h5 class="vuln-ai-panel-title">Quel est le problème ?</h5>
             <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.problemSummary | chatMarkdown"></div>
           </article>
+          <article class="vuln-ai-panel vuln-ai-panel--cause" *ngIf="aiResult.rootCause">
+            <h5 class="vuln-ai-panel-title">Cause racine</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.rootCause | chatMarkdown"></div>
+          </article>
           <article class="vuln-ai-panel vuln-ai-panel--impact" *ngIf="aiResult.impact">
             <h5 class="vuln-ai-panel-title">Risques &amp; impact</h5>
             <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.impact | chatMarkdown"></div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--business" *ngIf="aiResult.businessRisk">
+            <h5 class="vuln-ai-panel-title">Risque métier</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.businessRisk | chatMarkdown"></div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--repro" *ngIf="aiResult.reproduction?.trim()">
+            <h5 class="vuln-ai-panel-title">Comment l'observer</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.reproduction | chatMarkdown"></div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--location" *ngIf="aiResult.location">
+            <h5 class="vuln-ai-panel-title">Où ça se situe</h5>
+            <div class="vuln-ai-panel-body vuln-markdown" [innerHTML]="aiResult.location | chatMarkdown"></div>
           </article>
           <article class="vuln-ai-panel vuln-ai-panel--steps" *ngIf="aiResult.remediationSteps?.length">
             <h5 class="vuln-ai-panel-title">Plan de correction</h5>
@@ -106,12 +198,91 @@
               </li>
             </ol>
           </article>
+          <article class="vuln-ai-panel vuln-ai-panel--verify" *ngIf="aiResult.verificationCommands?.length || aiResult.verificationHints?.length">
+            <h5 class="vuln-ai-panel-title">Vérifier que c'est corrigé</h5>
+            <p class="vuln-muted-small" *ngIf="aiResult.verificationHints?.length">Contrôles manuels ou process à suivre :</p>
+            <ul class="vuln-verify-hints" *ngIf="aiResult.verificationHints?.length">
+              <li *ngFor="let h of aiResult.verificationHints">
+                <div class="vuln-markdown" [innerHTML]="h | chatMarkdown"></div>
+              </li>
+            </ul>
+            <p class="vuln-muted-small" *ngIf="aiResult.verificationCommands?.length">Commandes possibles (dans le dossier de votre projet) :</p>
+            <div class="vuln-cmd-list" *ngIf="aiResult.verificationCommands?.length">
+              <div class="vuln-cmd-row" *ngFor="let cmd of aiResult.verificationCommands">
+                <pre class="vuln-cmd-pre"><code>{{ cmd }}</code></pre>
+                <button type="button" class="vuln-copy-chip" (click)="copyText('cmd', cmd)">Copier</button>
+              </div>
+            </div>
+          </article>
           <article class="vuln-ai-panel vuln-ai-panel--patch" *ngIf="aiResult.suggestedPatch">
             <div class="vuln-patch-head">
-              <h5 class="vuln-ai-panel-title">Correctif suggéré</h5>
+              <h5 class="vuln-ai-panel-title">Correctif suggéré (patch / extrait)</h5>
               <button type="button" class="vuln-copy-chip" (click)="copyText('patch', aiResult.suggestedPatch || '')">Copier</button>
             </div>
             <pre class="vuln-code-patch vuln-code-patch--large"><code>{{ aiResult.suggestedPatch }}</code></pre>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--beforeafter"
+                   *ngIf="aiResult.secureCodeBefore?.trim() || aiResult.secureCodeAfter?.trim()">
+            <h5 class="vuln-ai-panel-title">Avant / Après</h5>
+            <div class="vuln-beforeafter-grid">
+              <div class="vuln-beforeafter-col vuln-beforeafter-col--before" *ngIf="aiResult.secureCodeBefore?.trim()">
+                <div class="vuln-beforeafter-label vuln-beforeafter-label--bad">Vulnérable</div>
+                <pre class="vuln-code-patch"><code>{{ aiResult.secureCodeBefore }}</code></pre>
+              </div>
+              <div class="vuln-beforeafter-col vuln-beforeafter-col--after" *ngIf="aiResult.secureCodeAfter?.trim()">
+                <div class="vuln-beforeafter-label vuln-beforeafter-label--good">Corrigé</div>
+                <pre class="vuln-code-patch"><code>{{ aiResult.secureCodeAfter }}</code></pre>
+                <button type="button" class="vuln-copy-chip" (click)="copyText('after', aiResult.secureCodeAfter || '')">Copier</button>
+              </div>
+            </div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--practices" *ngIf="aiResult.bestPractices?.length">
+            <h5 class="vuln-ai-panel-title">Bonnes pratiques</h5>
+            <ul class="vuln-verify-hints">
+              <li *ngFor="let p of aiResult.bestPractices">
+                <div class="vuln-markdown" [innerHTML]="p | chatMarkdown"></div>
+              </li>
+            </ul>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--refs" *ngIf="aiResult.references?.length">
+            <h5 class="vuln-ai-panel-title">Références officielles</h5>
+            <div class="vuln-refs-list">
+              <a *ngFor="let ref of aiResult.references"
+                 class="vuln-ref-chip" [href]="ref.url" target="_blank" rel="noopener noreferrer">
+                <span class="vuln-ref-type" [attr.data-type]="ref.type">{{ ref.type }}</span>
+                {{ ref.id }}
+              </a>
+            </div>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--full" *ngIf="aiResult.fullFileRewrite?.trim()">
+            <button type="button" class="vuln-expand-file-btn" (click)="toggleFullFileRewrite()">
+              {{ showFullFileRewrite ? 'Masquer' : 'Afficher' }} le fichier complet proposé par l'IA
+            </button>
+            <ng-container *ngIf="showFullFileRewrite">
+              <div class="vuln-patch-head">
+                <h5 class="vuln-ai-panel-title">Fichier entier (aperçu)</h5>
+                <button type="button" class="vuln-copy-chip" (click)="copyText('full', aiResult.fullFileRewrite || '')">Copier tout</button>
+              </div>
+              <pre class="vuln-code-patch vuln-code-patch--full"><code>{{ aiResult.fullFileRewrite }}</code></pre>
+            </ng-container>
+          </article>
+          <article class="vuln-ai-panel vuln-ai-panel--raw" *ngIf="aiResult.rawModelOutput">
+            <div class="vuln-raw-head">
+              <h5 class="vuln-ai-panel-title">Réponse brute</h5>
+              <div class="vuln-raw-actions">
+                <span class="vuln-raw-pill" *ngIf="rawIsJson">JSON</span>
+                <button type="button" class="vuln-copy-chip" (click)="copyText('raw', aiResult.rawModelOutput || '')">Copier</button>
+                <button
+                  type="button"
+                  class="vuln-copy-chip"
+                  *ngIf="rawPrettyJson"
+                  (click)="copyText('pretty', rawPrettyJson)"
+                >
+                  Copier (pretty)
+                </button>
+              </div>
+            </div>
+            <pre class="vuln-raw-output"><code>{{ rawPrettyJson || aiResult.rawModelOutput }}</code></pre>
           </article>
         </div>
       </section>
@@ -121,17 +292,65 @@
           <span class="vuln-chat-icon">💬</span>
           <div>
             <h4>Discussion avec l'assistant</h4>
-            <p class="vuln-chat-lead">Questions sur cette vulnérabilité DefectDojo et la correction sur votre branche.</p>
+            <p class="vuln-chat-lead">
+              Il connaît ce finding, l'extrait affiché et, une fois l'analyse terminée, le diagnostic complet. Posez des questions précises sur votre projet de test ou la suite CI.
+            </p>
           </div>
         </div>
         <div class="vuln-alert vuln-alert-error" *ngIf="chatError">{{ chatError }}</div>
         <div class="vuln-chat-messages">
-          <div *ngFor="let msg of chatMessages" class="vuln-chat-message" [class.user]="msg.role === 'user'">
-            <div class="vuln-chat-bubble">{{ msg.content }}</div>
+          <div
+            *ngFor="let msg of chatMessages"
+            class="vuln-chat-message"
+            [class.user]="msg.role === 'user'"
+            [class.assistant]="msg.role === 'assistant'"
+          >
+            <div class="vuln-chat-lane" [class.vuln-chat-lane--user]="msg.role === 'user'">
+              <div
+                class="vuln-chat-avatar"
+                [attr.aria-hidden]="true"
+                [class.vuln-chat-avatar--user]="msg.role === 'user'"
+              >
+                {{ msg.role === 'user' ? '👤' : '🤖' }}
+              </div>
+              <div class="vuln-chat-stack" [class.vuln-chat-stack--user]="msg.role === 'user'">
+                <span class="vuln-chat-role" [class.vuln-chat-role--user]="msg.role === 'user'">
+                  {{ msg.role === 'user' ? 'Vous' : 'Assistant' }}
+                </span>
+                <div
+                  class="vuln-chat-bubble"
+                  [class.vuln-chat-bubble--assistant]="msg.role === 'assistant'"
+                  [class.vuln-chat-bubble--user]="msg.role === 'user'"
+                >
+                  <div *ngIf="msg.role === 'user'" class="vuln-chat-text vuln-chat-text--user">{{ msg.content }}</div>
+                  <div
+                    *ngIf="msg.role === 'assistant'"
+                    class="vuln-chat-text vuln-chat-text--rich"
+                    [innerHTML]="msg.content | chatMarkdown"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div *ngIf="chatLoading" class="vuln-chat-message assistant">
+            <div class="vuln-chat-lane">
+              <div class="vuln-chat-avatar" aria-hidden="true">🤖</div>
+              <div class="vuln-chat-stack">
+                <span class="vuln-chat-role">Assistant</span>
+                <div class="vuln-chat-bubble typing">
+                  <span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="vuln-chat-input">
-          <textarea [(ngModel)]="chatInput" rows="2" (keydown.enter)="onChatEnter($event)" placeholder="Votre question…"></textarea>
+          <textarea
+            [(ngModel)]="chatInput"
+            placeholder="Ex. : pourquoi cette ligne est‑elle flaggée ?"
+            (keydown.enter)="onChatEnter($event)"
+            rows="2"
+          ></textarea>
           <button type="button" (click)="sendChat()" [disabled]="!chatInput.trim() || chatLoading">Envoyer</button>
         </div>
       </section>

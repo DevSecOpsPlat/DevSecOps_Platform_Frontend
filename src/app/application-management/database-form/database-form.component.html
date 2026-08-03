@@ -1,16 +1,27 @@
 <form class="am-form" [formGroup]="form" (ngSubmit)="onSubmit()">
+  <p class="am-form-intro">
+    Deux noms distincts : le <strong>nom ressource</strong> identifie la BD dans la plateforme / Kubernetes ;
+    le <strong>nom dans le moteur</strong> est celui créé à l’intérieur de PostgreSQL, MySQL, Mongo, etc.
+  </p>
+
   <div class="am-field">
-    <label class="am-label">Nom de la base *</label>
-    <input class="am-input" formControlName="name" placeholder="Ex. main-db" />
+    <label class="am-label">Nom ressource (plateforme) *</label>
+    <input class="am-input" formControlName="name" placeholder="Ex. main-db"
+           [class.am-input--invalid]="isInvalid('name')" />
+    <span class="am-error" *ngIf="fieldError('name')">{{ fieldError('name') }}</span>
+    <span class="am-hint" *ngIf="!fieldError('name')">
+      Affiché dans la liste, utilisé pour le service K8s (<code>db-main-db</code>). Minuscules, chiffres, tirets.
+    </span>
   </div>
 
   <div class="am-grid-2">
     <div class="am-field">
-      <label class="am-label">Famille *</label>
+      <label class="am-label">Famille</label>
       <select class="am-select" formControlName="dbFamily">
         <option value="SQL">SQL</option>
         <option value="NOSQL">NoSQL</option>
       </select>
+      <span class="am-hint">Filtre d’affichage — la famille réelle est dérivée du moteur.</span>
     </div>
     <div class="am-field">
       <label class="am-label">Moteur *</label>
@@ -22,41 +33,70 @@
 
   <div class="am-grid-2">
     <div class="am-field">
-      <label class="am-label">Version *</label>
-      <input class="am-input" formControlName="version" placeholder="Ex. 16, 10.11" />
+      <label class="am-label">Version image *</label>
+      <input class="am-input" formControlName="version" placeholder="Ex. 16, 16.2, 8.4"
+             [class.am-input--invalid]="isInvalid('version')" />
+      <span class="am-error" *ngIf="fieldError('version')">{{ fieldError('version') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('version')">Tag Docker du moteur — vérifié sur Docker Hub à l’enregistrement.</span>
     </div>
     <div class="am-field">
-      <label class="am-label">Nom de la base (db) *</label>
-      <input class="am-input" formControlName="dbName" placeholder="Ex. appdb" />
+      <label class="am-label">{{ dbNameLabel }}</label>
+      <input class="am-input" formControlName="dbName"
+             [placeholder]="isRedis ? '0' : (isCassandra ? 'app_ks' : 'Ex. appdb')"
+             [class.am-input--invalid]="isInvalid('dbName')" />
+      <span class="am-error" *ngIf="fieldError('dbName')">{{ fieldError('dbName') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('dbName')">{{ dbNameHint }}</span>
     </div>
   </div>
 
-  <div class="am-grid-2">
-    <div class="am-field">
-      <label class="am-label">Utilisateur root *</label>
-      <input class="am-input" formControlName="rootUser" />
+  <div class="am-grid-2" *ngIf="showRootUser || showRootPassword">
+    <div class="am-field" *ngIf="showRootUser">
+      <label class="am-label">Utilisateur *</label>
+      <input class="am-input" formControlName="rootUser"
+             [class.am-input--invalid]="isInvalid('rootUser')" />
+      <span class="am-error" *ngIf="fieldError('rootUser')">{{ fieldError('rootUser') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('rootUser')">PostgreSQL / MongoDB uniquement.</span>
     </div>
-    <div class="am-field">
-      <label class="am-label">Mot de passe root</label>
+    <div class="am-field" *ngIf="showRootPassword">
+      <label class="am-label">{{ passwordLabel }}</label>
       <input class="am-input" type="password" formControlName="rootPassword"
-             placeholder="{{ isEdit ? 'Laisser masqué pour conserver' : '' }}" />
-      <span class="am-hint">Chiffré au repos, jamais renvoyé en clair.</span>
+             [class.am-input--invalid]="isInvalid('rootPassword')"
+             [placeholder]="isEdit ? 'Laisser masqué pour conserver' : '8–128 car., sans espace'" />
+      <span class="am-error" *ngIf="fieldError('rootPassword')">{{ fieldError('rootPassword') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('rootPassword')">
+        Chiffré au repos.
+        <ng-container *ngIf="isRedis"> Injecté via <code>--requirepass</code>.</ng-container>
+      </span>
     </div>
+  </div>
+
+  <div class="am-alert am-alert-info" *ngIf="!showRootUser && !isCassandra">
+    MySQL / MariaDB : seul le mot de passe root est utiliséé (pas de <code>MYSQL_USER</code>).
+  </div>
+  <div class="am-alert am-alert-warn" *ngIf="isCassandra">
+    Cassandra : pas d’utilisateur/mot de passe via env ; le keyspace n’est pas créé au démarrage.
   </div>
 
   <div class="am-grid-2">
     <div class="am-field">
-      <label class="am-label">Port exposé *</label>
-      <input class="am-input" type="number" formControlName="exposedPort" />
-      <span class="am-hint">Pré-rempli selon le moteur, modifiable.</span>
+      <label class="am-label">Port Service K8s *</label>
+      <input class="am-input" type="number" formControlName="exposedPort"
+             [class.am-input--invalid]="isInvalid('exposedPort')" />
+      <span class="am-error" *ngIf="fieldError('exposedPort')">{{ fieldError('exposedPort') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('exposedPort')">
+        Port du Service (apps). Le conteneur écoute toujours le port natif du moteur.
+      </span>
     </div>
     <div class="am-field">
       <label class="am-label">Taille du volume (PVC) *</label>
-      <input class="am-input" formControlName="storageSize" placeholder="Ex. 1Gi" />
+      <input class="am-input" formControlName="storageSize" placeholder="Ex. 1Gi"
+             [class.am-input--invalid]="isInvalid('storageSize')" />
+      <span class="am-error" *ngIf="fieldError('storageSize')">{{ fieldError('storageSize') }}</span>
+      <span class="am-hint" *ngIf="!fieldError('storageSize')">Format Kubernetes : 512Mi, 1Gi… (plafond 50Gi).</span>
     </div>
   </div>
 
-  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+  <div class="am-alert am-alert-error" *ngIf="localError || error">{{ localError || error }}</div>
 
   <div class="am-form-actions">
     <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()">Annuler</button>

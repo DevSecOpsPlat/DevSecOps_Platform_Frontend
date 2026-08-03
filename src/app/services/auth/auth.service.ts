@@ -116,6 +116,11 @@ export class AuthService {
     this.router.navigate(['/home']);
   }
 
+  silentLogout(): void {
+    this.userService.clear();
+    this.isLoggedInSubject.next(false);
+  }
+
   getCurrentUser(): any {
     return this.userService.getUser();
   }

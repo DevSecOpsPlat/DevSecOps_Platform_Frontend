@@ -3,7 +3,7 @@ import {
   getEnvironmentStatusIcon as getEnvIcon, 
   getEnvironmentStatusDescription as getEnvDesc,
   getPipelineStatusIcon as getPipeIcon 
-} from 'src/app/models/environment/status-types';
+} from './status-types';
 
 @Injectable({
   providedIn: 'root'

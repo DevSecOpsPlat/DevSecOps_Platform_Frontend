@@ -2,10 +2,10 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { EnvironmentSummaryResponse } from 'src/app/models/environment/environment-summary-response';
-import { FormatService } from 'src/app/models/environment/format.service';
-import { EnvironmentService } from 'src/app/services/environment/environment.service';
-import { ToastService } from 'src/app/services/ui/toast.service';
+import { EnvironmentSummaryResponse } from '../../../models/environment/environment-summary-response';
+import { FormatService } from '../../../models/environment/format.service';
+import { EnvironmentService } from '../../../services/environment/environment.service';
+import { ToastService } from '../../../services/ui/toast.service';
 
 @Component({
   selector: 'app-environment-details',

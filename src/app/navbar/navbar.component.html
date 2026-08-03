@@ -32,16 +32,10 @@
       >Admin</a>
 
       <ng-container *ngIf="(authService.isLoggedIn$ | async) && isTester">
-        <a routerLink="/my-applications" routerLinkActive="active" class="nav-link">
-          Applications
+        <a routerLink="/projects" routerLinkActive="active" class="nav-link">
+          <span class="btn-icon"></span> Projets
         </a>
-        <a routerLink="/environment-create" routerLinkActive="active" class="nav-link">
-         <span class="btn-icon">+</span> New Deployment
-        </a>
-        <a routerLink="/app-management" routerLinkActive="active" class="nav-link">
-         <span class="btn-icon">🚀</span> Deploy Application
-        </a>
-        
+
         <button type="button" class="icon-btn" aria-label="Notifications">
           <span class="bell-icon">🔔</span>
         </button>
@@ -69,7 +63,7 @@
           <a *ngIf="isAdmin" routerLink="/admin/observability" class="user-dropdown-item" (click)="userMenuOpen = false">Observabilité</a>
           <a *ngIf="isAdmin" routerLink="/admin/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Réclamations (admin)</a>
           <a routerLink="/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Mes réclamations</a>
-          <a *ngIf="isTester" routerLink="/my-applications" class="user-dropdown-item" (click)="userMenuOpen = false">Applications</a>
+          <a *ngIf="isTester" routerLink="/projects" class="user-dropdown-item" (click)="userMenuOpen = false">Projets</a>
           <a *ngIf="isTester" routerLink="/pipelines" class="user-dropdown-item" (click)="userMenuOpen = false">Pipelines</a>
           <button type="button" class="user-dropdown-item user-dropdown-item-logout" (click)="logout()">Déconnexion</button>
         </div>

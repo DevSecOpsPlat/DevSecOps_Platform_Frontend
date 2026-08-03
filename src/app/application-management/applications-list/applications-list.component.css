@@ -1,0 +1,307 @@
+/* Page liste projets — thème navy + orange */
+
+.pj-page {
+  padding-top: 1.5rem;
+}
+
+/* ---------- Hero ---------- */
+.pj-hero {
+  position: relative;
+  background: linear-gradient(135deg, var(--am-navy) 0%, #141428 55%, #1a1a38 100%);
+  border-radius: 20px;
+  padding: 2.25rem 2.5rem 2rem;
+  margin-bottom: 2.5rem;
+  overflow: hidden;
+  color: #fff;
+  animation: am-fade-up .5s var(--am-ease) both;
+}
+
+.pj-hero-glow {
+  position: absolute;
+  top: -60%;
+  right: -10%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(249, 115, 22, .22) 0%, transparent 70%);
+  pointer-events: none;
+  animation: pj-glow-pulse 6s ease-in-out infinite;
+}
+
+@keyframes pj-glow-pulse {
+  0%, 100% { opacity: .6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.pj-hero-inner {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.pj-eyebrow {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--am-primary-light);
+  margin: 0 0 .5rem;
+}
+
+.pj-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  margin: 0 0 .6rem;
+  letter-spacing: -.03em;
+}
+
+.pj-lead {
+  margin: 0;
+  max-width: 52ch;
+  color: rgba(255, 255, 255, .72);
+  line-height: 1.55;
+  font-size: .95rem;
+}
+
+.pj-create-btn {
+  flex-shrink: 0;
+  box-shadow: 0 8px 28px rgba(249, 115, 22, .35);
+}
+
+.pj-hero-stats {
+  position: relative;
+  display: flex;
+  gap: 2rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+.pj-stat {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+
+.pj-stat-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--am-primary-light);
+  line-height: 1;
+}
+
+.pj-stat-label {
+  font-size: .78rem;
+  color: rgba(255, 255, 255, .55);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* ---------- Grille cartes ---------- */
+.pj-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.35rem;
+}
+
+.pj-card {
+  position: relative;
+  background: var(--am-surface);
+  border: 1px solid var(--am-border);
+  border-radius: 18px;
+  padding: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  overflow: hidden;
+  transition: transform .25s var(--am-ease), box-shadow .25s var(--am-ease), border-color .25s var(--am-ease);
+  animation: am-fade-up .45s var(--am-ease-spring) both;
+}
+
+.pj-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 40px rgba(28, 28, 46, .12);
+  border-color: var(--am-primary-light);
+}
+
+.pj-card-accent {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--am-primary), var(--am-primary-light));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .35s var(--am-ease);
+}
+
+.pj-card:hover .pj-card-accent { transform: scaleX(1); }
+
+.pj-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+}
+
+.pj-stack {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--am-navy-soft), var(--am-navy));
+  transition: transform .25s var(--am-ease-spring);
+}
+
+.pj-stack[data-stack="Angular"] { background: linear-gradient(135deg, #dd0031, #a00025); }
+.pj-stack[data-stack="React"]   { background: linear-gradient(135deg, #61dafb, #20232a); color: #20232a; }
+.pj-stack[data-stack="Spring"]  { background: linear-gradient(135deg, #6db33f, #2d5a1e); }
+
+.pj-card:hover .pj-stack { transform: scale(1.08) rotate(-3deg); }
+
+.pj-card-titles { flex: 1; min-width: 0; }
+
+.pj-card-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 .2rem;
+  color: var(--am-navy);
+}
+
+.pj-slug {
+  font-size: .72rem;
+  color: var(--am-muted);
+  background: var(--am-bg);
+  padding: .12rem .45rem;
+  border-radius: 5px;
+}
+
+.pj-open-arrow {
+  font-size: 1.1rem;
+  color: var(--am-primary);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity .2s var(--am-ease), transform .2s var(--am-ease);
+}
+
+.pj-card:hover .pj-open-arrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.pj-card-desc {
+  margin: 0;
+  font-size: .88rem;
+  color: var(--am-muted);
+  line-height: 1.45;
+  min-height: 2.6em;
+}
+
+.pj-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+.pj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--am-navy);
+  background: var(--am-bg);
+  border: 1px solid var(--am-border);
+  padding: .28rem .65rem;
+  border-radius: 999px;
+}
+
+.pj-chip-icon { font-size: .8rem; opacity: .7; }
+
+.pj-composition {
+  margin: 0;
+  font-size: .78rem;
+  color: var(--am-muted);
+  line-height: 1.4;
+}
+
+.pj-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem 1.25rem;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px dashed var(--am-border);
+}
+
+.pj-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  color: var(--am-muted);
+}
+
+.pj-meta-icon { font-size: .85rem; }
+
+/* ---------- Vide ---------- */
+.pj-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--am-surface);
+  border: 1.5px dashed var(--am-border);
+  border-radius: 20px;
+  animation: am-fade-up .4s var(--am-ease) both;
+}
+
+.pj-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  animation: pj-float 3s ease-in-out infinite;
+}
+
+@keyframes pj-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.pj-empty h2 {
+  margin: 0 0 .5rem;
+  color: var(--am-navy);
+  font-size: 1.25rem;
+}
+
+.pj-empty p {
+  margin: 0 0 1.5rem;
+  color: var(--am-muted);
+}
+
+/* ---------- Orphelins ---------- */
+.pj-orphans {
+  margin-top: 3rem;
+  animation: am-fade-up .4s var(--am-ease) both;
+}
+
+.pj-orphans-head h3 {
+  margin: 0 0 .25rem;
+  color: var(--am-navy);
+}
+
+.pj-orphans-head p {
+  margin: 0 0 1rem;
+  color: var(--am-muted);
+  font-size: .88rem;
+}
+
+@media (max-width: 640px) {
+  .pj-hero { padding: 1.5rem 1.25rem; }
+  .pj-title { font-size: 1.75rem; }
+  .pj-hero-stats { gap: 1.25rem; }
+  .pj-grid { grid-template-columns: 1fr; }
+}

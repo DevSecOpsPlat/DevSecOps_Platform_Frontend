@@ -17,7 +17,19 @@
       </div>
       <div class="stat-item">
         <span class="stat-value active">{{ activeCount }}</span>
-        <span class="stat-label">Actifs</span>
+        <span class="stat-label">En ligne</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value in-progress">{{ inProgressCount }}</span>
+        <span class="stat-label">En cours</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value failed">{{ failedCount }}</span>
+        <span class="stat-label">Échec</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value ended">{{ endedCount }}</span>
+        <span class="stat-label">Terminés</span>
       </div>
     </div>
   </header>
@@ -40,31 +52,21 @@
     </div>
 
     <div class="filter-group">
-      <span class="filter-label">Statut:</span>
+      <span class="filter-label">Statut env:</span>
       <div class="status-filters">
-        <button 
-          class="status-filter-btn" 
-          [class.active]="!statusFilter"
-          (click)="statusFilter = null; applyFilter()">
-          Tous
-        </button>
-        <button 
-          class="status-filter-btn active-btn" 
-          [class.active]="statusFilter === 'ACTIVE'"
-          (click)="statusFilter = 'ACTIVE'; applyFilter()">
-          ✅ Actifs
-        </button>
-        <button 
-          class="status-filter-btn in-progress-btn" 
-          [class.active]="statusFilter === 'IN_PROGRESS'"
-          (click)="statusFilter = 'IN_PROGRESS'; applyFilter()">
-          🔄 En cours
-        </button>
-        <button 
-          class="status-filter-btn terminated-btn" 
-          [class.active]="statusFilter === 'TERMINATED'"
-          (click)="statusFilter = 'TERMINATED'; applyFilter()">
-          ⏰ Terminés
+        <button
+          *ngFor="let opt of statusFilterOptions"
+          type="button"
+          class="status-filter-btn"
+          [class.active]="statusFilter === opt.id"
+          [class.active-btn]="opt.id === 'ACTIVE'"
+          [class.in-progress-btn]="opt.id === 'IN_PROGRESS'"
+          [class.degraded-btn]="opt.id === 'DEGRADED'"
+          [class.failed-btn]="opt.id === 'NEVER_STARTED'"
+          [class.terminated-btn]="opt.id === 'ENDED'"
+          [title]="opt.title"
+          (click)="setStatusFilter(opt.id)">
+          <span *ngIf="opt.icon">{{ opt.icon }} </span>{{ opt.label }}
         </button>
       </div>
     </div>
@@ -143,22 +145,24 @@
   <!-- Statut environnement -->
   <div class="info-row">
     <span class="info-icon">⏱️</span>
-    <span class="info-label">Statut env:</span>
-    <span class="info-value">
+    <span class="info-label">Environnement:</span>
+    <span class="info-value env-status-block">
       <span class="status-badge" [class]="environmentStatusClass(env.environmentStatus)">
-        {{ getEnvironmentStatusDescription(env.environmentStatus) }}
+        {{ environmentStatusLabel(env) }}
       </span>
+      <span class="status-reason" *ngIf="environmentStatusReason(env)">{{ environmentStatusReason(env) }}</span>
     </span>
   </div>
 
-  <!-- Info pipeline -->
+  <!-- Pipeline CI (indépendant) -->
   <div class="info-row" *ngIf="env.pipelineStatus">
     <span class="info-icon">⚙️</span>
     <span class="info-label">Pipeline:</span>
     <span class="info-value">
       <span class="pipeline-badge" [class]="pipelineStatusClass(env.pipelineStatus)">
-        {{ env.pipelineStatus }}
+        {{ pipelineStatusLabel(env.pipelineStatus) }}
       </span>
+      <span class="pipeline-id" *ngIf="env.pipelineId">#{{ env.pipelineId }}</span>
     </span>
   </div>
 
@@ -205,7 +209,7 @@
       <span *ngIf="!isEnvironmentExpired(env) && getTimeRemaining(env) !== '—'" class="time-remaining">
         ({{ getTimeRemaining(env) }})
       </span>
-      <span *ngIf="isEnvironmentExpired(env)" class="expired-badge">Expiré</span>
+      <span *ngIf="isEnvironmentExpired(env)" class="expired-badge">TTL atteint</span>
     </span>
   </div>
 
@@ -223,9 +227,7 @@
 
         <div *ngIf="isEnvironmentExpired(env)" class="preview-state preview-state-muted">
           <p class="preview-state-title">Aperçu indisponible</p>
-          <p class="preview-state-text">
-            Cet environnement est expiré, détruit ou terminé. L’URL de preview n’est plus utilisable.
-          </p>
+          <p class="preview-state-text">{{ previewFailureReason(env) }}</p>
         </div>
 
         <ng-container *ngIf="!isEnvironmentExpired(env)">
@@ -243,10 +245,7 @@
           </ng-container>
 
           <div *ngIf="isEnvironmentActive(env.environmentStatus) && !deploymentLink(env)" class="preview-state">
-            <p class="preview-state-text">
-              Environnement <strong>actif</strong>, mais l’URL publique n’a pas encore été enregistrée
-              (webhook <code>deployment-published</code> ou synchro en attente).
-            </p>
+            <p class="preview-state-text">{{ previewFailureReason(env) }}</p>
           </div>
 
           <div *ngIf="!isEnvironmentActive(env.environmentStatus) && isDeploymentInProgress(env)" class="preview-state preview-state-pending">
@@ -257,13 +256,19 @@
           </div>
 
           <div *ngIf="!isEnvironmentActive(env.environmentStatus) && isDeploymentFailed(env)" class="preview-state preview-state-warning">
-            <p class="preview-state-text">
-              Le déploiement a <strong>échoué</strong>. Aucune application n’est exposée sur cet environnement.
-            </p>
+            <p class="preview-state-text">{{ previewFailureReason(env) }}</p>
+            <button type="button" class="btn-secondary btn-inline" (click)="viewPipeline(env.environmentId)">
+              Voir le job en échec
+            </button>
           </div>
 
           <div *ngIf="!isEnvironmentActive(env.environmentStatus) && !isDeploymentInProgress(env) && !isDeploymentFailed(env)" class="preview-state preview-state-muted">
             <p class="preview-state-text">Aperçu non disponible pour cet état.</p>
+          </div>
+
+          <div *ngIf="showPortForwardHint(env)" class="preview-state preview-state-muted">
+            <p class="preview-state-text">URL locale détectée. Utilisez cette commande :</p>
+            <code>{{ portForwardCommand(env) }}</code>
           </div>
         </ng-container>
       </div>

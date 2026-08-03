@@ -2,8 +2,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { catchError, of, Subscription } from 'rxjs';
-import { AuthService } from 'src/app/services/auth/auth.service';
-import { SigninResponse } from 'src/app/models/user/signin-response';
+import { AuthService } from '../../services/auth/auth.service';
+import { SigninResponse } from '../../models/user/signin-response';
 
 interface LoginErrorBody {
   message?: string;

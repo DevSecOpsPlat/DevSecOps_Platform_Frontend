@@ -91,8 +91,8 @@
           </button>
         </div>
       </div>
-      <span class="d2-path-arrow">›</span>
-      <button type="button" class="d2-path-seg" (click)="goToSecuritySection(); $event.stopPropagation()">
+      <span class="d2-path-arrow" *ngIf="showSecuritySection">›</span>
+      <button type="button" class="d2-path-seg" *ngIf="showSecuritySection" (click)="goToSecuritySection(); $event.stopPropagation()">
         <span class="d2-path-icon">🛡️</span>
         <span class="d2-path-text"><strong>Sécurité</strong><span>Analyse complète</span></span>
       </button>
@@ -151,7 +151,10 @@
     </section>
 
     <section class="d2-stats-grid d2-animate" [style.--i]="2" *ngIf="!overviewLoading && !overviewError">
-      <article class="d2-stat-card" *ngFor="let stat of overviewStats">
+      <article class="d2-stat-card"
+        *ngFor="let stat of overviewStats"
+        [class.d2-stat-card--clickable]="!!stat.filter"
+        (click)="stat.filter ? viewDeploymentsWithStatusFilter(stat.filter) : null">
         <span class="d2-stat-icon-wrap" [style.background]="stat.iconBg">
           <span [style.color]="stat.color">{{ stat.icon }}</span>
         </span>
@@ -173,11 +176,30 @@
           <span class="d2-section-num">01</span>
           <div class="d2-section-heading">
             <h2 class="d2-section-name"><span class="d2-section-emoji">🚀</span> Déploiement</h2>
-            <p class="d2-section-desc">Vue d'ensemble des livraisons et de la dernière mise en ligne</p>
+            <p class="d2-section-desc" *ngIf="!isScanOnlyProfile">Vue d'ensemble des livraisons et de la dernière mise en ligne</p>
+            <p class="d2-section-desc" *ngIf="isScanOnlyProfile">Ce service est configuré pour le scan — pas de déploiement actif</p>
           </div>
         </header>
 
-        <div class="d2-deploy-layout">
+        <!-- Scan-only : pas de déploiement en cours -->
+        <article class="d2-card d2-card--scan-only-deploy" *ngIf="isScanOnlyProfile && !displayLatestDeployment">
+          <div class="d2-empty-block">
+            <span class="d2-empty-icon">🚀</span>
+            <h3>Aucun déploiement actuel</h3>
+            <p *ngIf="deployRecommendation?.deployRecommended">
+              Le dernier scan recommande un déploiement — la posture sécurité est suffisante pour livrer.
+            </p>
+            <p *ngIf="!deployRecommendation?.deployRecommended">
+              Lancez un déploiement lorsque le quality gate le permet.
+            </p>
+            <div class="d2-scan-only-actions">
+              <button type="button" class="d2-btn-orange" (click)="deployOnSelectedBranch()">Déployer</button>
+              <button type="button" class="d2-ghost-sm" (click)="viewQualityGate()">Quality Gate →</button>
+            </div>
+          </div>
+        </article>
+
+        <div class="d2-deploy-layout" *ngIf="displayLatestDeployment">
           <!-- Dernier déploiement (gauche) -->
           <article class="d2-card d2-card--latest-deploy" *ngIf="displayLatestDeployment as latestDeployment">
             <header class="d2-card-head">
@@ -210,14 +232,8 @@
                     <div class="vercel-preview-unavailable-visual" aria-hidden="true">
                       <span class="vercel-preview-unavailable-icon">{{ isLatestEnvExpired ? '⏱️' : '🔗' }}</span>
                     </div>
-                    <p class="vercel-preview-unavailable-title">
-                      {{ isLatestEnvExpired ? 'Session expirée' : 'Aperçu indisponible' }}
-                    </p>
-                    <p class="vercel-preview-unavailable-sub">
-                      {{ isLatestEnvExpired
-                        ? 'La session éphémère est terminée. Relancez un déploiement pour obtenir une nouvelle URL.'
-                        : 'Aucune URL de prévisualisation n\'a été publiée pour cet environnement.' }}
-                    </p>
+                    <p class="vercel-preview-unavailable-title">{{ latestPreviewUnavailableTitle }}</p>
+                    <p class="vercel-preview-unavailable-sub">{{ latestPreviewUnavailableMessage }}</p>
                     <button type="button" class="vercel-preview-relaunch-btn" (click)="deployOnSelectedBranch()">
                       🚀 Relancer un déploiement
                     </button>
@@ -253,7 +269,7 @@
                 <div class="d2-deploy-meta-actions">
                   <button type="button" class="d2-btn-orange d2-btn-orange--block" (click)="openLiveDeployment()"
                     [disabled]="!canOpenDeploymentPreview">Visiter l'application</button>
-                  <button type="button" class="d2-ghost-sm d2-ghost-sm--block" (click)="viewPipeline(latestDeployment.environmentId)">
+                  <button type="button" class="d2-ghost-sm d2-ghost-sm--block" (click)="viewDeployPipelineDetails()">
                     Voir les détails du pipeline →
                   </button>
                 </div>
@@ -262,10 +278,11 @@
           </article>
 
           <!-- Statut des déploiements (droite) -->
-          <article class="d2-card d2-card--deploy-stats">
+          <article class="d2-card d2-card--deploy-stats" *ngIf="!isScanOnlyProfile || displayLatestDeployment">
             <header class="d2-card-head">
               <h2 class="d2-card-title">Statut des déploiements</h2>
               <p class="d2-card-sub">{{ deploymentChartSubtitle }}</p>
+              <p class="d2-card-hint">{{ deploymentChartHint }}</p>
             </header>
             <div class="d2-granularity-toolbar" *ngIf="!loadingSlow">
               <span class="d2-granularity-label">Période :</span>
@@ -305,18 +322,27 @@
           </article>
         </div>
 
-        <!-- Pipeline (ligne complète) -->
-        <article class="d2-card d2-card--pipeline-full" *ngIf="displayLatestDeployment as latestDeployment">
+        <!-- Dernier pipeline DEPLOY -->
+        <article class="d2-card d2-card--pipeline-full" *ngIf="latestDeployPipeline as deployPipe">
           <header class="d2-card-head d2-card-head--row">
             <div>
-              <h2 class="d2-card-title">Dernier Pipeline</h2>
-              <p class="d2-card-sub">Étapes d'exécution du dernier déploiement</p>
+              <h2 class="d2-card-title">Dernier pipeline <span class="d2-pipeline-kind-inline">DEPLOY</span></h2>
+              <p class="d2-card-sub">
+                Pipeline #{{ deployPipe.pipelineId }} · {{ deployPipe.gitBranch || deployPipe.ref || '—' }}
+                <span class="d2-pipeline-kind-badge">DEPLOY</span>
+              </p>
             </div>
-            <button type="button" class="d2-link-right" (click)="viewPipeline(latestDeployment.environmentId)">Détails →</button>
+            <button type="button" class="d2-link-right" (click)="viewDeployPipelineDetails()">Détails →</button>
           </header>
-          <div class="d2-pipeline-full-scroll" *ngIf="latestDeployment.jobs && latestDeployment.jobs.length > 0">
+          <div class="d2-pipeline-status-row">
+            <span class="d2-deploy-status-pill" [ngClass]="statusClass(deployPipe.pipelineStatus || '')">
+              {{ (deployPipe.pipelineStatus || '—') | uppercase }}
+            </span>
+            <span class="d2-pipeline-sync-hint" *ngIf="loadingPipelineDetails">Synchronisation GitLab…</span>
+          </div>
+          <div class="d2-pipeline-full-scroll" *ngIf="deployPipe.jobs && deployPipe.jobs.length > 0">
             <ol class="d2-stepper d2-stepper--pipeline">
-              <li *ngFor="let stage of getPipelineStagesWithStatus()" class="d2-step" [ngClass]="stage.status">
+              <li *ngFor="let stage of pipelineStagesWithStatus" class="d2-step" [ngClass]="stage.status">
                 <div class="d2-step-icon">
                   <span *ngIf="stage.status === 'done'">✓</span>
                   <span *ngIf="stage.status === 'active'">⏳</span>
@@ -327,16 +353,16 @@
               </li>
             </ol>
           </div>
-          <div *ngIf="loadingPipelineDetails" class="d2-deploy-pipeline-loading">
+          <div *ngIf="loadingPipelineDetails && (!deployPipe.jobs || !deployPipe.jobs.length)" class="d2-deploy-pipeline-loading">
             <span class="d2-spinner"></span><span>Chargement des stages…</span>
           </div>
-          <p *ngIf="!loadingPipelineDetails && (!latestDeployment.jobs || latestDeployment.jobs.length === 0)"
+          <p *ngIf="!loadingPipelineDetails && (!deployPipe.jobs || deployPipe.jobs.length === 0)"
             class="d2-empty-inline">Aucune information de pipeline disponible.</p>
         </article>
       </section>
 
       <!-- ════════════════ SECTION 02 · SÉCURITÉ ════════════════ -->
-      <section id="d2-security-analytics" class="d2-section d2-animate" [style.--i]="4">
+      <section id="d2-security-analytics" class="d2-section d2-animate" [style.--i]="4" *ngIf="showSecuritySection">
         <header class="d2-section-head">
           <span class="d2-section-num">02</span>
           <div class="d2-section-heading">
@@ -345,7 +371,12 @@
           </div>
           <button type="button" class="d2-section-link" (click)="viewQualityGate()">Quality Gate →</button>
           <button type="button" class="d2-section-link" (click)="viewSecurityDashboard()">Analyse complète →</button>
+          <button type="button" class="d2-btn-orange d2-btn-orange--sm" (click)="launchScanPipeline()" [disabled]="scanLaunching">
+            {{ scanLaunching ? 'Lancement…' : '🔎 Lancer un scan' }}
+          </button>
         </header>
+
+        <div class="d2-alert d2-alert--error" *ngIf="scanLaunchError">{{ scanLaunchError }}</div>
 
         <div class="d2-alert d2-alert--error" *ngIf="error">{{ error }}</div>
         <div class="d2-alert d2-alert--info" *ngIf="infoMessage && !error">{{ infoMessage }}</div>
@@ -418,35 +449,7 @@
           </article>
 
           <!-- Grille inférieure -->
-          <div class="d2-sec-bottom">
-            <!-- Vulnérabilités par sévérité -->
-            <article class="d2-card d2-sec-severity-card">
-              <header class="d2-sec-card-head">
-                <div>
-                  <h3 class="d2-sec-card-title">Répartition par sévérité</h3>
-                  <p class="d2-sec-card-sub">Dernière analyse · {{ deploymentScopeLabel }}</p>
-                </div>
-                <span class="d2-sec-total-pill" *ngIf="!loading">{{ totalSecurityOpen }} au total</span>
-              </header>
-
-              <div class="d2-sec-sev-list" *ngIf="!loading; else sevSkel">
-                <button type="button" class="d2-sec-sev-item" *ngFor="let sev of severities; let i = index"
-                  [class.d2-sec-sev-item--hover]="hoveredSeverity === sev"
-                  [style.--sev-color]="severityBarColor(sev)"
-                  [style.--sev-width]="severityBarWidth(sev) + '%'"
-                  [style.--sev-delay]="(i * 60) + 'ms'"
-                  (mouseenter)="hoveredSeverity = sev" (mouseleave)="hoveredSeverity = null"
-                  (click)="navigateToSeverity(sev)">
-                  <span class="d2-sec-sev-rank">{{ sev }}</span>
-                  <div class="d2-sec-sev-track">
-                    <div class="d2-sec-sev-fill"></div>
-                  </div>
-                  <span class="d2-sec-sev-count">{{ openSeverityCount(sev) }}</span>
-                </button>
-              </div>
-              <ng-template #sevSkel><div class="d2-skeleton d2-skeleton--bars"></div></ng-template>
-            </article>
-
+          <div class="d2-sec-bottom d2-sec-bottom--two">
             <!-- Outils de détection -->
             <article class="d2-card d2-sec-scanners-card">
               <header class="d2-sec-card-head">
@@ -590,6 +593,53 @@
             </article>
           </div>
         </div>
+
+        <!-- Dernier pipeline SCAN -->
+        <article class="d2-card d2-card--pipeline-full d2-card--pipeline-scan" *ngIf="latestScanPipeline as scanPipe">
+          <header class="d2-card-head d2-card-head--row">
+            <div>
+              <h2 class="d2-card-title">Dernier pipeline <span class="d2-pipeline-kind-inline d2-pipeline-kind-inline--scan">SCAN</span></h2>
+              <p class="d2-card-sub">
+                Pipeline #{{ scanPipe.pipelineId }} · {{ scanPipe.gitBranch || scanPipe.ref || '—' }}
+                <span class="d2-pipeline-kind-badge d2-pipeline-kind-badge--scan">SCAN</span>
+              </p>
+            </div>
+            <button type="button" class="d2-link-right" (click)="viewScanPipelineDetails()">Détails →</button>
+          </header>
+          <div class="d2-pipeline-status-row">
+            <span class="d2-deploy-status-pill" [ngClass]="statusClass(scanPipe.pipelineStatus || '')">
+              {{ (scanPipe.pipelineStatus || '—') | uppercase }}
+            </span>
+            <span class="d2-pipeline-sync-hint" *ngIf="loadingScanPipelineDetails">Synchronisation GitLab…</span>
+          </div>
+          <div class="d2-pipeline-full-scroll" *ngIf="scanPipe.jobs && scanPipe.jobs.length > 0">
+            <ol class="d2-stepper d2-stepper--pipeline">
+              <li *ngFor="let stage of scanPipelineStagesWithStatus" class="d2-step" [ngClass]="stage.status">
+                <div class="d2-step-icon">
+                  <span *ngIf="stage.status === 'done'">✓</span>
+                  <span *ngIf="stage.status === 'active'">⏳</span>
+                  <span *ngIf="stage.status === 'pending'">○</span>
+                  <span *ngIf="stage.status === 'failed'">✗</span>
+                </div>
+                <span class="d2-step-label">{{ stage.name }}</span>
+              </li>
+            </ol>
+          </div>
+          <div *ngIf="loadingScanPipelineDetails && (!scanPipe.jobs || !scanPipe.jobs.length)" class="d2-deploy-pipeline-loading">
+            <span class="d2-spinner"></span><span>Chargement des stages…</span>
+          </div>
+          <p *ngIf="!loadingScanPipelineDetails && (!scanPipe.jobs || !scanPipe.jobs.length)"
+            class="d2-empty-inline">Aucun scan en cours — lancez un pipeline scan.</p>
+        </article>
+
+        <article class="d2-card d2-card--pipeline-empty" *ngIf="!latestScanPipeline">
+          <div class="d2-empty-block d2-empty-block--compact">
+            <p>Aucun pipeline scan sur ce périmètre.</p>
+            <button type="button" class="d2-btn-orange" (click)="launchScanPipeline()" [disabled]="scanLaunching">
+              {{ scanLaunching ? 'Lancement…' : '🔎 Lancer un scan' }}
+            </button>
+          </div>
+        </article>
       </section>
 
       <!-- ════════════════ SECTION 03 · ENVIRONNEMENTS ════════════════ -->
@@ -603,15 +653,28 @@
           <button type="button" class="d2-section-link" (click)="viewAllEnvironments()">Historique →</button>
         </header>
 
+        <div class="d2-env-status-filters" *ngIf="!overviewLoading">
+          <button
+            *ngFor="let opt of envStatusFilterOptions"
+            type="button"
+            class="d2-env-filter-chip"
+            [title]="opt.title"
+            (click)="viewDeploymentsWithStatusFilter(opt.id)">
+            <span *ngIf="opt.icon">{{ opt.icon }}</span>
+            {{ opt.label }}
+          </button>
+        </div>
+
         <div class="d2-card d2-card--full">
           <div class="d2-env-bottom-grid" *ngIf="allActiveEnvironmentCards.length; else noEnv">
             <article class="d2-env-bottom-card" *ngFor="let env of allActiveEnvironmentCards">
               <code class="d2-mono-tag">{{ env.name }}</code>
+              <span class="d2-env-status-pill" [ngClass]="environmentStatusClass(env.status)">{{ env.statusLabel }}</span>
               <span class="d2-pipe-branch">{{ env.branch }}</span>
               <span class="d2-env-timer">{{ env.timeRemaining }}</span>
               <div class="d2-env-bottom-actions">
                 <button type="button" class="d2-ghost-sm" (click)="viewEnvironment(env.id)">Ouvrir</button>
-                <button type="button" class="d2-ghost-sm" (click)="viewEnvSecurityAnalysis({ id: env.id, branch: env.branch })">Voir les scans</button>
+                <button type="button" class="d2-ghost-sm" *ngIf="showSecuritySection" (click)="viewEnvSecurityAnalysis({ id: env.id, branch: env.branch })">Voir les scans</button>
               </div>
             </article>
           </div>
