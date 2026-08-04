@@ -21,9 +21,17 @@
     Environnement inactif — pas de métriques live. Redéploie pour activer le dashboard.
   </div>
   <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
-  <div class="am-empty" *ngIf="loading && !data">Chargement du dashboard…</div>
+  <div class="am-loading" *ngIf="loading && !data">Chargement du dashboard…</div>
 
   <ng-container *ngIf="data && !isInactive">
+    <div class="md-service-filter" *ngIf="appServices?.length">
+      <label class="am-label" for="md-svc-filter">Service</label>
+      <select id="md-svc-filter" class="am-input md-filter" [(ngModel)]="serviceFilter">
+        <option value="">Tous les services</option>
+        <option *ngFor="let s of appServices" [value]="s.name">{{ s.name }}</option>
+      </select>
+    </div>
+
     <!-- KPI strip -->
     <div class="md-kpis">
       <div class="md-kpi">

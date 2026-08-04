@@ -1,0 +1,44 @@
+# Hot-reload frontend — no rebuild on each edit.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build frontend
+# Then edit files under src/ ; the browser refreshes automatically.
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: envirotest-frontend
+    depends_on:
+      - backend
+    # !override: replace prod "4200:80" (nginx) — do not merge both bindings
+    ports: !override
+      - "4200:4200"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # Live source from the host — edits apply without rebuild
+      - ./src:/app/src
+      - ./angular.json:/app/angular.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tsconfig.app.json:/app/tsconfig.app.json:ro
+      # Keep container node_modules (do not overwrite with empty host folder)
+      - frontend_node_modules:/app/node_modules
+    command:
+      [
+        "npx",
+        "ng",
+        "serve",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "4200",
+        "--poll",
+        "2000",
+        "--disable-host-check",
+        "--configuration",
+        "development"
+      ]
+
+volumes:
+  frontend_node_modules:

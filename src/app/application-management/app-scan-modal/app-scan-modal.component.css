@@ -1,0 +1,52 @@
+.asm-modal {
+  max-width: 520px;
+}
+
+.asm-services {
+  margin-top: 1rem;
+}
+
+.asm-services-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .55rem;
+}
+
+.asm-services-actions {
+  display: flex;
+  gap: .35rem;
+}
+
+.asm-svc {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .55rem .65rem;
+  border: 1px solid var(--am-border, #E7E6F2);
+  border-radius: 10px;
+  margin-bottom: .4rem;
+  cursor: pointer;
+  background: #fff;
+}
+
+.asm-svc:hover {
+  border-color: rgba(249, 115, 22, .4);
+}
+
+.asm-svc-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.asm-svc-branch {
+  font-size: .72rem;
+  color: var(--am-muted, #6E6E86);
+}
+
+.asm-hint {
+  margin: .5rem 0 0;
+  font-size: .82rem;
+}

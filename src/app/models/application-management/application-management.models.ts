@@ -342,3 +342,109 @@ export const ENGINES_BY_FAMILY: Record<DbFamily, DbEngine[]> = {
   SQL: ['MARIADB', 'POSTGRES', 'MYSQL'],
   NOSQL: ['MONGODB', 'REDIS', 'CASSANDRA']
 };
+
+/** Posture sécurité application (dernier lot COMPLETE + rollup DefectDojo). */
+export interface SecurityPostureResponse {
+  managedApplicationId: string;
+  hasCompleteBatch: boolean;
+  /** PENDING | RUNNING | PARTIAL | COMPLETE | FAILED */
+  batchStatus?: string;
+  batchId?: string;
+  batchFinishedAt?: string;
+  batchCreatedAt?: string;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  gitlabPipelineId?: number;
+  expectedServiceCount?: number;
+  finishedServiceCount?: number;
+  obsolete: boolean;
+  obsoleteServices?: ObsoleteServicePosture[];
+  message?: string;
+  bySeverity?: Record<string, number>;
+  topBlockingFindings?: TopBlockingFinding[];
+  dimensioningService?: DimensioningServicePosture | null;
+  services?: ServicePostureSummary[];
+  qualityGates?: QualityGateItem[];
+}
+
+export interface QualityGateItem {
+  id: string;
+  label: string;
+  /** PASS | FAIL | UNKNOWN | WARN */
+  status: string;
+  message?: string;
+  scope?: string;
+}
+
+export interface ObsoleteServicePosture {
+  serviceId: string;
+  serviceName?: string;
+  gitBranch?: string;
+  scannedCommitSha?: string;
+  headCommitSha?: string;
+}
+
+export interface TopBlockingFinding {
+  findingId: number;
+  title?: string;
+  severity?: string;
+  serviceId?: string;
+  serviceName?: string;
+  scanType?: string;
+  filePath?: string;
+  cve?: string;
+}
+
+export interface DimensioningServicePosture {
+  serviceId?: string;
+  serviceName?: string;
+  serviceRole?: string;
+  publiclyExposed?: boolean;
+  securityScore?: number;
+  grade?: string;
+  adjustedScoreForSelection?: number;
+}
+
+export interface ServicePostureSummary {
+  serviceId: string;
+  serviceName?: string;
+  serviceRole?: string;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  bySeverity?: Record<string, number>;
+  hardGateViolated?: boolean;
+  indeterminate?: boolean;
+  hardGateIds?: string[];
+  indeterminateSources?: string[];
+}
+
+export interface ScanBatchServiceState {
+  pipelineExecutionId?: string;
+  serviceId?: string;
+  serviceName?: string;
+  serviceRole?: string;
+  gitBranch?: string;
+  commitSha?: string;
+  status?: string;
+  finished?: boolean;
+  qualityGateJson?: Record<string, unknown>;
+}
+
+export interface ScanBatchState {
+  batchId: string;
+  id?: string;
+  managedApplicationId?: string;
+  status: string;
+  gitlabPipelineId?: number | null;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  expectedServiceCount?: number;
+  finishedServiceCount?: number;
+  createdAt?: string;
+  finishedAt?: string;
+  services?: ScanBatchServiceState[];
+  verdictPayload?: Record<string, unknown>;
+}

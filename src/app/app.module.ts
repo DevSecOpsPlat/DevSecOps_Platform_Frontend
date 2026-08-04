@@ -44,6 +44,8 @@ import { AdminAuditComponent } from './admin/admin-audit/admin-audit.component';
 import { ActivateAccountComponent } from './User/activate-account/activate-account.component';
 import { PasswordRequirementsComponent } from './shared/password/password-requirements.component';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { EnvirotestNavSidebarComponent } from './shared/envirotest-nav-sidebar/envirotest-nav-sidebar.component';
+import { ServiceContextBarComponent } from './shared/service-context-bar/service-context-bar.component';
 
 @NgModule({
   declarations: [
@@ -92,7 +94,9 @@ import { AuthInterceptor } from './interceptors/auth.interceptor';
     FormsModule,
     SecurityDashboardComponent,
     ProjectOverviewComponent,
-    DefectDojoFindingDetailsComponent
+    DefectDojoFindingDetailsComponent,
+    EnvirotestNavSidebarComponent,
+    ServiceContextBarComponent
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },

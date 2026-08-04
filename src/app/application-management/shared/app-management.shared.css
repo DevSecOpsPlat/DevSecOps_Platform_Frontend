@@ -84,6 +84,17 @@
   animation: am-fade-in .35s var(--am-ease);
 }
 
+/* Inside managed-app shell: page fills the main column (no auto-center) */
+:host-context(.mal-main) .am-page,
+.mal-main .am-page {
+  max-width: none;
+  margin: 0;
+  margin-top: 0;
+  padding: 0 0 2rem;
+  min-height: auto;
+  background: transparent;
+}
+
 .am-header {
   display: flex;
   justify-content: space-between;
@@ -247,11 +258,17 @@
 
 /* ---------- Vides / chargement ---------- */
 .am-empty {
+  color: var(--am-muted); padding: 2.25rem 0; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  animation: am-fade-in .3s var(--am-ease);
+}
+/* Spinner uniquement pour un vrai chargement — pas pour un état vide. */
+.am-loading {
   color: var(--am-muted); padding: 3rem 0; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: .75rem;
   animation: am-fade-in .3s var(--am-ease);
 }
-.am-empty::before {
+.am-loading::before {
   content: '';
   width: 26px; height: 26px; border-radius: 50%;
   border: 3px solid var(--am-border);
@@ -654,4 +671,240 @@
   text-transform: uppercase;
   letter-spacing: .04em;
   margin-right: .25rem;
+}
+
+/* Deployment status — variant banner (dashboard app) */
+.ds-banner-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem 1.25rem;
+  margin-bottom: .75rem;
+}
+.ds-banner-status {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  flex-wrap: wrap;
+}
+.ds-ns {
+  font-size: .78rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: .15rem .45rem;
+  border-radius: 6px;
+}
+.ds-banner-url {
+  color: #1d4ed8;
+  font-size: .8rem;
+  text-decoration: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ds-banner-url:hover { text-decoration: underline; }
+
+.ds-ttl-chip {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+.ds-ttl-chip--urgent {
+  color: #9a3412;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.ds-live {
+  margin: 0.15rem 0 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+/* Infos à gauche, aperçu pleine hauteur à droite */
+.ds-live-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1.15fr);
+  gap: 0.85rem 1rem;
+  align-items: stretch;
+}
+.ds-live-grid--solo {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 900px) {
+  .ds-live-grid { grid-template-columns: 1fr; }
+}
+.ds-live-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ds-live-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.ds-pipe-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  text-decoration: none;
+  margin-left: auto;
+}
+.ds-pipe-link:hover { color: #ea580c; }
+.ds-live-urls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+.ds-live-url { margin: 0; }
+.ds-live-url--api { opacity: 0.92; }
+.ds-live-url-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.22rem;
+}
+.ds-live-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.35rem 0.45rem;
+}
+.ds-live-url-link {
+  flex: 0 1 auto;
+  max-width: min(100%, 28rem);
+  color: #ea580c;
+  font-size: 0.78rem;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ds-live-url-link:hover { text-decoration: underline; }
+.ds-live-empty {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 0.55rem;
+}
+.ds-live-ttl {
+  margin: 0.35rem 0 0;
+  padding: 0.65rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-sizing: border-box;
+  margin-top: auto;
+}
+.ds-live-aside {
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+  align-self: stretch;
+}
+.ds-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.ds-preview-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.32rem 0.55rem;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.ds-preview-bar a {
+  color: #fdba74;
+  text-decoration: none;
+}
+.ds-preview-bar a:hover { text-decoration: underline; }
+.ds-preview-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 360px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+/* Desktop virtuel : scale JS (cover) pour remplir tout le stage */
+.ds-preview-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  background: #fff;
+  transform-origin: top left;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ds-preview-hint {
+  display: none;
+}
+
+/* Ancien bas TTL|preview (plus utilisé) */
+.ds-live-bottom { display: contents; }
+
+.ds-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+  margin-top: 1rem;
+}
+.ds-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .15rem;
+  padding: .75rem .85rem;
+  border-radius: 12px;
+  border: 1px solid var(--am-border, #E7E6F2);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease;
+}
+.ds-tile:hover { border-color: rgba(249, 115, 22, .45); }
+.ds-tile-n {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--am-navy, #1C1C2E);
+}
+.ds-tile-l {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--am-muted, #6E6E86);
+}
+@media (max-width: 640px) {
+  .ds-tiles { grid-template-columns: 1fr; }
 }

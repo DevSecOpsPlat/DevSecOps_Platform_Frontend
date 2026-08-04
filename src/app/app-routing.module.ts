@@ -18,8 +18,6 @@ import { AdminGuard } from './guards/admin.guard';
 import { ProjectLayoutComponent } from './project/project-layout/project-layout.component';
 import { ProjectOverviewComponent } from './project/overview/project-overview.component';
 import { ProjectDeploymentsComponent } from './project/deployments/project-deployments.component';
-import { ProjectLogsComponent } from './project/logs/project-logs.component';
-import { ProjectSecurityComponent } from './project/security/project-security.component';
 import { EnvironmentDetailsComponent } from './project/environments/environment-details/environment-details.component';
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
@@ -50,9 +48,12 @@ const routes: Routes = [
       { path: 'security-center', redirectTo: 'overview', pathMatch: 'full' },
       { path: 'security-center/finding/:findingId', redirectTo: 'overview/finding/:findingId' },
       { path: 'deployments', component: ProjectDeploymentsComponent },
-      { path: 'logs', component: ProjectLogsComponent },
-      { path: 'security', component: ProjectSecurityComponent },
+      // ProjectLogsComponent = placeholder ; logs réels dans deployment-status
+      { path: 'logs', redirectTo: 'deployments', pathMatch: 'full' },
+      // ProjectSecurityComponent legacy → DefectDojo service (dashboard2)
+      { path: 'security', redirectTo: 'security-dashboard', pathMatch: 'full' },
       { path: 'pipelines', component: PipelinesListComponent },
+      // activity mélange pipelines + déploiements + environnements — route conservée hors sidebar
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
       { path: 'quality-gate', loadComponent: () => import('./project/quality-gate/quality-gate.component').then(m => m.QualityGateComponent) },
@@ -82,7 +83,7 @@ const routes: Routes = [
   { path: 'pipeline/id/:pipelineId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
 
   // Projets = liste unifiée (services + bases + scan/deploy).
-  // Routes à plat (évite parent sans component / router-outlet).
+  // Layout sidebar + sections (dashboard / services / monitoring / alertes / historique).
   {
     path: 'projects',
     canActivate: [AuthGuard],
@@ -101,8 +102,17 @@ const routes: Routes = [
     path: 'projects/:id',
     canActivate: [AuthGuard],
     loadComponent: () =>
-      import('./application-management/application-detail/application-detail.component')
-        .then(m => m.ApplicationDetailComponent)
+      import('./application-management/managed-app-layout/managed-app-layout.component')
+        .then(m => m.ManagedAppLayoutComponent),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+      {
+        path: ':section',
+        loadComponent: () =>
+          import('./application-management/application-detail/application-detail.component')
+            .then(m => m.ApplicationDetailComponent)
+      }
+    ]
   },
   { path: 'app-management', redirectTo: 'projects', pathMatch: 'full' },
   { path: 'app-management/create', redirectTo: 'projects/create', pathMatch: 'full' },

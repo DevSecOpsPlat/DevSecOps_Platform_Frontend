@@ -9,12 +9,14 @@ import {
   ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import Chart from 'chart.js/auto';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import {
   AppDeployment,
+  AppServiceModel,
   DeploymentMonitorAlert,
   DeploymentMonitoringResponse,
   DeploymentPodInfo,
@@ -39,7 +41,7 @@ const POLL_MS = 15000;
 @Component({
   selector: 'app-monitoring-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './monitoring-dashboard.component.html',
   styleUrls: ['./monitoring-dashboard.component.css', '../shared/app-management.shared.css']
 })
@@ -47,6 +49,8 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   @Input() appId!: string;
   @Input() deployment!: AppDeployment;
   @Input() appName = '';
+  /** Services de l'app — filtre workload (annexe §5). */
+  @Input() appServices: AppServiceModel[] = [];
 
   @ViewChild('cpuTimeCanvas') cpuTimeCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('memTimeCanvas') memTimeCanvas?: ElementRef<HTMLCanvasElement>;
@@ -66,6 +70,8 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   historyLoading = false;
 
   filter = '';
+  /** Filtre par nom de service (match workload). */
+  serviceFilter = '';
   selectedPod: string | null = null;
   logs = '';
   logsLoading = false;
@@ -170,7 +176,14 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   }
 
   get pods(): DeploymentPodInfo[] {
-    const all = this.data?.pods || [];
+    let all = this.data?.pods || [];
+    const sf = this.serviceFilter.trim().toLowerCase();
+    if (sf) {
+      all = all.filter(p => {
+        const wl = (p.workload || p.name || '').toLowerCase();
+        return wl.includes(sf);
+      });
+    }
     const q = this.filter.trim().toLowerCase();
     if (!q) return all;
     return all.filter(p =>
@@ -183,20 +196,27 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   get workloads(): MonitoringWorkload[] {
     const fromApi = this.data?.workloads || [];
-    if (fromApi.length) return fromApi;
-    const map = new Map<string, MonitoringWorkload>();
-    for (const p of this.data?.pods || []) {
-      const name = p.workload || p.name;
-      const cur = map.get(name) || {
-        kind: 'Workload', name, desired: 0, ready: 0, available: 0, updated: 0, healthy: false
-      };
-      cur.desired++;
-      if (p.ready && p.phase === 'Running') cur.ready++;
-      cur.available = cur.ready;
-      cur.healthy = cur.desired > 0 && cur.ready >= cur.desired;
-      map.set(name, cur);
+    let list: MonitoringWorkload[];
+    if (fromApi.length) {
+      list = fromApi;
+    } else {
+      const map = new Map<string, MonitoringWorkload>();
+      for (const p of this.data?.pods || []) {
+        const name = p.workload || p.name;
+        const cur = map.get(name) || {
+          kind: 'Workload', name, desired: 0, ready: 0, available: 0, updated: 0, healthy: false
+        };
+        cur.desired++;
+        if (p.ready && p.phase === 'Running') cur.ready++;
+        cur.available = cur.ready;
+        cur.healthy = cur.desired > 0 && cur.ready >= cur.desired;
+        map.set(name, cur);
+      }
+      list = [...map.values()];
     }
-    return [...map.values()];
+    const sf = this.serviceFilter.trim().toLowerCase();
+    if (!sf) return list;
+    return list.filter(w => (w.name || '').toLowerCase().includes(sf));
   }
 
   get services(): MonitoringServiceInfo[] {

@@ -1,71 +1,305 @@
-<div class="am-page ad-page">
-  <div class="ad-breadcrumb" (click)="back()">← Applications managées</div>
-
-  <div *ngIf="loading" class="am-empty">Chargement…</div>
+<div class="am-page ad-page"
+     [class.ad-page--wide]="activeTab === 'deployments' || activeTab === 'history' || activeTab === 'pipelines' || activeTab === 'defectdojo' || activeTab === 'security' || activeTab === 'quality-gate'">
+  <div *ngIf="loading" class="am-loading">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
   <ng-container *ngIf="app && !loading">
-    <section class="ad-hero">
-      <div class="ad-hero-glow"></div>
-      <div class="ad-hero-content">
-        <div class="ad-hero-main">
-          <h1 class="ad-title">{{ app.name }}</h1>
-          <p class="ad-subtitle">{{ app.description || 'Sans description' }}</p>
-          <code class="ad-slug">{{ app.slug }}</code>
+    <header class="ad-hero ad-hero--identity" *ngIf="activeTab === 'dashboard'">
+      <div class="ad-hero-glow" aria-hidden="true"></div>
+      <button type="button" class="ad-hero-back" (click)="back()">← Projets</button>
+
+      <div class="ad-id-top">
+        <div class="ad-id-main">
+          <span class="ad-hero-eyebrow">Application</span>
+          <h1 class="ad-hero-title">{{ app.name }}</h1>
+          <p class="ad-id-slugline" *ngIf="app.slug"><code>{{ app.slug }}</code></p>
+          <p class="ad-id-desc" *ngIf="app.description">{{ app.description }}</p>
+          <p class="ad-id-desc ad-id-desc--muted" *ngIf="!app.description">
+            Composez vos services, scannez, puis déployez un environnement de test.
+          </p>
         </div>
-        <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
-          <button class="am-btn am-btn-primary" (click)="openDeployModal()" [disabled]="deploying">
-            {{ deploying ? 'Déploiement…' : 'Déployer' }}
+        <div class="ad-hero-actions">
+          <button type="button" class="ad-hero-icon-btn" (click)="load(true)" title="Actualiser" [disabled]="loading">↻</button>
+          <button type="button" class="ad-hero-btn ad-hero-btn--ghost"
+                  (click)="openAppScanModal()" [disabled]="appScanRunning">
+            {{ appScanRunning ? 'Scan…' : 'Scanner' }}
           </button>
-          <button class="am-btn am-btn-danger ad-delete-btn" (click)="deleteApp()">
-            Supprimer l'application
+          <button type="button" class="ad-hero-btn ad-hero-btn--primary"
+                  (click)="openDeployModal()" [disabled]="deploying">
+            {{ deploying ? 'Déploiement…' : 'Déployer' }}
           </button>
         </div>
       </div>
-    </section>
+
+      <p class="ad-id-statusline">
+        <span>{{ app.services.length }} service{{ app.services.length === 1 ? '' : 's' }}</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span>{{ app.databases.length }} base{{ app.databases.length === 1 ? '' : 's' }}</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span *ngIf="app.lastDeployment as dep" class="ad-id-live" [attr.data-status]="(dep.status || '').toLowerCase()">{{ dep.status }}</span>
+        <span *ngIf="!app.lastDeployment" class="ad-id-muted">Non déployé</span>
+        <ng-container *ngIf="posture?.verdict || activeBatchRunning">
+          <span class="ad-id-dot" aria-hidden="true"></span>
+          <span *ngIf="activeBatchRunning">Scan en cours</span>
+          <span *ngIf="!activeBatchRunning">{{ securityPathLabel }}</span>
+        </ng-container>
+      </p>
+    </header>
+
+    <header class="ad-hero ad-hero--compact" *ngIf="activeTab !== 'dashboard'">
+      <div class="ad-hero-inner">
+        <div class="ad-hero-left">
+          <div class="ad-hero-app">
+            <span class="ad-hero-eyebrow">Application · {{ app.name }}</span>
+            <h1 class="ad-hero-title">{{ sectionTitle }}</h1>
+          </div>
+        </div>
+        <div class="ad-hero-actions">
+          <button type="button" class="ad-hero-icon-btn" (click)="load(true)" title="Actualiser" [disabled]="loading">↻</button>
+        </div>
+      </div>
+    </header>
 
     <div class="am-alert am-alert-error" *ngIf="deployError">{{ deployError }}</div>
     <div class="am-alert" *ngIf="syncMessage"
-         [class.am-alert-warn]="syncMessage.includes('échou') || syncMessage.includes('impossible')"
-         style="background:#e8f5e9;border-color:#a5d6a7;">{{ syncMessage }}</div>
-
+         [class.am-alert-warn]="syncMessage.includes('échou') || syncMessage.includes('impossible')">{{ syncMessage }}</div>
     <div class="am-alert am-alert-warn" *ngFor="let w of app.warnings">{{ w }}</div>
 
-    <!-- État du dernier déploiement -->
-    <div class="ad-panel" *ngIf="app.lastDeployment" style="margin-bottom:1.25rem;">
-      <app-managed-deployment-status
-        [appId]="appId"
-        [deployment]="app.lastDeployment"
-        [services]="app.services || []">
-      </app-managed-deployment-status>
-      <div class="am-form-actions" *ngIf="app.lastDeployment.status !== 'STOPPED'">
-        <button class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">Supprimer le déploiement (teardown)</button>
+    <ng-container *ngIf="activeTab === 'dashboard'">
+      <div class="ad-dash">
+
+        <!-- Composition -->
+        <section class="ad-compose-wrap ad-reveal">
+          <div class="ad-section-head">
+            <div>
+              <h2 class="ad-section-title">Composition</h2>
+              <p class="ad-section-sub">Les services et bases qui forment cette application.</p>
+            </div>
+          </div>
+
+          <div class="ad-compose">
+            <div class="ad-compose-col">
+              <div class="ad-compose-head">
+                <div>
+                  <h3>Services</h3>
+                  <p>{{ app.services.length }} configuré{{ app.services.length === 1 ? '' : 's' }}</p>
+                </div>
+                <button type="button" class="am-btn am-btn-primary am-btn-sm" (click)="openAddService()">+ Service</button>
+              </div>
+
+              <div class="ad-compose-empty" *ngIf="!app.services.length">
+                <p>Aucun service pour l'instant.</p>
+                <button type="button" class="am-btn am-btn-primary am-btn-sm" (click)="openAddService()">Ajouter un service</button>
+              </div>
+
+              <ul class="ad-compose-list" *ngIf="app.services.length">
+                <li class="ad-compose-row" *ngFor="let s of app.services; let i = index" [style.--i]="i">
+                  <div class="ad-compose-row-main">
+                    <span class="ad-compose-mark" [ngClass]="roleClass(s.role)" aria-hidden="true"></span>
+                    <div class="ad-compose-id">
+                      <div class="ad-compose-name-row">
+                        <strong>{{ s.name }}</strong>
+                        <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
+                        <span class="ad-compose-grade" *ngIf="serviceGrade(s) as g">{{ g }}</span>
+                      </div>
+                      <span class="ad-compose-meta">
+                        <span>{{ s.gitBranch || 'main' }}</span>
+                        <span *ngIf="s.exposedPort">port {{ s.exposedPort }}</span>
+                        <span *ngIf="s.gitRepositoryUrl" class="am-mono">{{ repoDisplayName(s.gitRepositoryUrl) }}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="ad-compose-actions">
+                    <button type="button" class="am-btn am-btn-primary am-btn-sm" (click)="openDashboard(s)">Ouvrir</button>
+                    <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="openEditService(s)">Éditer</button>
+                    <button type="button" class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Suppr.</button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="ad-compose-col ad-compose-col--db">
+              <div class="ad-compose-head">
+                <div>
+                  <h3>Bases de données</h3>
+                  <p>{{ app.databases.length }} instance{{ app.databases.length === 1 ? '' : 's' }}</p>
+                </div>
+                <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openAddDatabase()">+ Base</button>
+              </div>
+
+              <div class="ad-compose-empty" *ngIf="!app.databases.length">
+                <p>Aucune base configurée.</p>
+                <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openAddDatabase()">Ajouter une base</button>
+              </div>
+
+              <ul class="ad-compose-list" *ngIf="app.databases.length">
+                <li class="ad-compose-row ad-compose-row--db" *ngFor="let d of app.databases; let i = index" [style.--i]="i">
+                  <div class="ad-compose-row-main">
+                    <span class="ad-compose-mark ad-compose-mark--db" aria-hidden="true"></span>
+                    <div class="ad-compose-id">
+                      <div class="ad-compose-name-row">
+                        <strong>{{ d.name }}</strong>
+                        <span class="ad-db-engine-pill">{{ d.engine }} {{ d.version }}</span>
+                      </div>
+                      <span class="ad-compose-meta">
+                        <span class="am-mono">{{ d.dbName }}</span>
+                        <span *ngIf="d.exposedPort">port {{ d.exposedPort }}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="ad-compose-actions">
+                    <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="openEditDatabase(d)">Éditer</button>
+                    <button type="button" class="am-btn am-btn-danger am-btn-sm" (click)="deleteDatabase(d)">Suppr.</button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Environnement actif (après composition) -->
+        <section class="ad-block ad-reveal ad-block--live">
+          <div class="ad-block-head">
+            <h2>Environnement actif</h2>
+            <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('deployments')">Gérer →</button>
+          </div>
+          <app-managed-deployment-status
+            *ngIf="app.lastDeployment"
+            [appId]="appId"
+            [deployment]="app.lastDeployment"
+            [services]="app.services || []"
+            variant="banner"
+            (navigateSection)="goSection($event)">
+          </app-managed-deployment-status>
+          <div class="ad-live-empty" *ngIf="!app.lastDeployment">
+            <p class="ad-live-empty-title">Aucun environnement actif pour le moment.</p>
+            <p class="ad-live-empty-sub">Déploie l’application pour obtenir une URL publique, un aperçu et le suivi TTL.</p>
+            <button type="button" class="am-btn am-btn-primary am-btn-sm" (click)="openDeployModal()" [disabled]="deploying">
+              Déployer l'application
+            </button>
+          </div>
+        </section>
+
+        <!-- Scan live -->
+        <section class="ad-block ad-block--verdict ad-reveal" *ngIf="activeBatchRunning">
+          <div class="ad-block-head">
+            <h2>Scan en cours</h2>
+            <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('pipelines', { kind: 'SCAN' })">Pipelines →</button>
+          </div>
+          <div class="ad-scan-live">
+            <div class="ad-verdict-line1">
+              <span class="ad-verdict-pill ad-verdict-unknown">Scan en cours</span>
+              <span class="ad-verdict-meta">
+                {{ activeBatch?.finishedServiceCount || 0 }}/{{ activeBatch?.expectedServiceCount || app.services.length || 0 }} services
+                <span *ngIf="activeBatch?.gitlabPipelineId"> · pipeline #{{ activeBatch?.gitlabPipelineId }}</span>
+              </span>
+            </div>
+            <div class="ad-progress-bar">
+              <div class="ad-progress-fill" [style.width.%]="batchProgressPct"></div>
+            </div>
+            <p class="ad-scan-current" *ngIf="currentScanningService">
+              Service en cours :
+              <strong>{{ currentScanningService.serviceName || '—' }}</strong>
+              <span class="am-mono" *ngIf="currentScanningService.gitBranch"> · {{ currentScanningService.gitBranch }}</span>
+            </p>
+            <div class="ad-scan-svcs" *ngIf="batchServices.length">
+              <div class="ad-scan-svc" *ngFor="let s of batchServices" [ngClass]="serviceScanStatusClass(s)">
+                <span class="ad-scan-svc-name">{{ s.serviceName || s.serviceId }}</span>
+                <span class="ad-scan-svc-role" *ngIf="s.serviceRole">{{ s.serviceRole }}</span>
+                <span class="ad-branch-pill" *ngIf="s.gitBranch">{{ s.gitBranch }}</span>
+                <span class="ad-scan-svc-status">{{ serviceScanStatusLabel(s) }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sécurité résumé -->
+        <section class="ad-block ad-block--verdict ad-reveal" *ngIf="!activeBatchRunning">
+          <div class="ad-block-head">
+            <h2>Sécurité &amp; qualité</h2>
+            <div class="ad-block-head-actions">
+              <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('quality-gate')">Quality Gate</button>
+              <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('defectdojo')">DefectDojo</button>
+              <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openAppScanModal()" [disabled]="appScanRunning">
+                Scanner
+              </button>
+            </div>
+          </div>
+
+          <div class="am-alert am-alert-error" *ngIf="postureError">{{ postureError }}</div>
+          <div class="ad-verdict-empty" *ngIf="postureLoading && !posture"><p>Chargement du verdict…</p></div>
+
+          <div *ngIf="!postureLoading && showEmptyScan" class="ad-verdict-empty">
+            <p>Aucun scan applicatif — lancez un scan pour obtenir un verdict et une recommandation de déploiement.</p>
+            <button class="am-btn am-btn-primary" (click)="openAppScanModal()">Scanner l'application</button>
+          </div>
+
+          <ng-container *ngIf="!postureLoading && showPostureResult">
+            <div class="ad-verdict-line1">
+              <span class="ad-verdict-pill" [ngClass]="'ad-verdict-' + verdictTone(posture!.verdict)">
+                {{ verdictLabel(posture!.verdict) }}
+              </span>
+              <span class="ad-verdict-score" *ngIf="posture!.securityScore != null">
+                {{ posture!.securityScore }}<span *ngIf="posture!.grade"> · {{ posture!.grade }}</span>
+              </span>
+              <span class="ad-obsolete-badge" *ngIf="posture!.obsolete">Obsolète</span>
+              <span class="ad-verdict-meta" *ngIf="posture!.batchFinishedAt">
+                {{ posture!.batchFinishedAt | date:'short' }}
+                <span *ngIf="posture!.finishedServiceCount != null">
+                  · {{ posture!.finishedServiceCount }}/{{ posture!.expectedServiceCount }} services
+                </span>
+              </span>
+            </div>
+            <p class="ad-posture-msg" *ngIf="posture!.message">{{ posture!.message }}</p>
+
+            <article class="ad-deploy-rec" *ngIf="appDeployRecommendation as rec" [attr.data-tone]="rec.tone">
+              <div class="ad-deploy-rec-head">
+                <span class="ad-deploy-rec-eyebrow">Recommandation de déploiement</span>
+                <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
+              </div>
+              <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
+              <div class="ad-deploy-rec-sev" *ngIf="rec.hasData">
+                <span data-sev="critical">C {{ severityCount('critical') }}</span>
+                <span data-sev="high">H {{ severityCount('high') }}</span>
+                <span data-sev="medium">M {{ severityCount('medium') }}</span>
+                <span data-sev="low">L {{ severityCount('low') }}</span>
+              </div>
+              <div class="ad-deploy-rec-actions">
+                <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                        *ngIf="rec.canDeploy" (click)="openDeployModal()" [disabled]="deploying">
+                  Déployer l'application
+                </button>
+                <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                        *ngIf="!rec.canDeploy && rec.hasData" (click)="goSection('defectdojo')">
+                  Voir DefectDojo →
+                </button>
+                <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('quality-gate')">
+                  Détail Quality Gate →
+                </button>
+              </div>
+            </article>
+
+            <div class="ad-blockers" *ngIf="posture!.topBlockingFindings?.length">
+              <p class="ad-blockers-label">Findings bloquants</p>
+              <button type="button" class="ad-blocker-row" *ngFor="let f of posture!.topBlockingFindings"
+                      (click)="openBlockingFinding(f)">
+                <span class="ad-blocker-sev" [attr.data-sev]="(f.severity || '').toLowerCase()">{{ f.severity || 'GATE' }}</span>
+                <span class="ad-blocker-main">
+                  <span class="ad-blocker-title">{{ f.title || ('Finding #' + f.findingId) }}</span>
+                </span>
+                <code class="am-mono ad-blocker-svc">{{ f.serviceName || f.serviceId }}</code>
+              </button>
+            </div>
+          </ng-container>
+        </section>
+
+        <div class="ad-danger-zone">
+          <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteApp()">Supprimer l'application</button>
+        </div>
       </div>
-    </div>
+    </ng-container>
 
-    <!-- Onglets -->
-    <div class="ad-tabs">
-      <button type="button" class="ad-tab" [class.active]="activeTab === 'services'" (click)="setTab('services')">
-        Services
-        <span class="ad-tab-count">{{ app.services.length }}</span>
-      </button>
-      <button type="button" class="ad-tab" [class.active]="activeTab === 'databases'" (click)="setTab('databases')">
-        Bases de données
-        <span class="ad-tab-count">{{ app.databases.length }}</span>
-      </button>
-      <button type="button" class="ad-tab" [class.active]="activeTab === 'monitoring'" (click)="setTab('monitoring')">
-        Monitoring
-      </button>
-      <button type="button" class="ad-tab" [class.active]="activeTab === 'alerts'" (click)="setTab('alerts')">
-        Alertes
-        <span class="ad-tab-count" *ngIf="alertsData?.liveCount">{{ alertsData!.liveCount }}</span>
-      </button>
-      <button type="button" class="ad-tab" [class.active]="activeTab === 'history'" (click)="setTab('history')">
-        Historique
-      </button>
-    </div>
-
-    <!-- Alertes runtime -->
+    <!-- ========== Alertes ========== -->
     <div class="ad-panel" *ngIf="activeTab === 'alerts'">
       <div class="ad-panel-head">
         <h2 class="ad-panel-title">Alertes runtime</h2>
@@ -75,11 +309,12 @@
       </div>
       <p class="am-subtitle" style="margin-top:0;">
         CrashLoop, OOM, pods Failed, health KO — détection live + historique 24&nbsp;h (e-mail propriétaire).
+        Portée : application complète (namespace), pas un seul service.
       </p>
 
       <div class="am-empty" *ngIf="!app.lastDeployment">Aucun déploiement actif.</div>
       <div class="am-alert am-alert-error" *ngIf="alertsError">{{ alertsError }}</div>
-      <div class="am-empty" *ngIf="alertsLoading && !alertsData">Chargement…</div>
+      <div class="am-loading" *ngIf="alertsLoading && !alertsData">Chargement…</div>
 
       <ng-container *ngIf="alertsData && !alertsLoading">
         <h4 class="am-label">En cours (live)</h4>
@@ -111,197 +346,723 @@
       </ng-container>
     </div>
 
-    <!-- Historique des déploiements -->
-    <div class="ad-panel" *ngIf="activeTab === 'history'">
-      <div class="ad-panel-head">
-        <h2 class="ad-panel-title">Historique des déploiements</h2>
-        <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadHistory()" [disabled]="historyLoading">
+    <!-- ========== Déploiements (Runtime / Environnements) ========== -->
+    <div class="ad-deploys" *ngIf="activeTab === 'deployments'">
+      <header class="ad-deploys-header">
+        <div class="ad-deploys-title-wrap">
+          <h1 class="ad-deploys-title">
+            Déploiements
+            <span class="ad-deploys-app">• {{ app.name }}</span>
+          </h1>
+          <p class="ad-deploys-sub">Runtime actuel et environnements éphémères de l'application</p>
+        </div>
+        <div class="ad-deploys-stats">
+          <div class="ad-dstat">
+            <span class="ad-dstat-v">{{ deployStatTotal }}</span>
+            <span class="ad-dstat-l">Total</span>
+          </div>
+          <div class="ad-dstat">
+            <span class="ad-dstat-v ad-dstat-v--ok">{{ deployStatRunning }}</span>
+            <span class="ad-dstat-l">En ligne</span>
+          </div>
+          <div class="ad-dstat">
+            <span class="ad-dstat-v ad-dstat-v--run">{{ deployStatInProgress }}</span>
+            <span class="ad-dstat-l">En cours</span>
+          </div>
+          <div class="ad-dstat">
+            <span class="ad-dstat-v ad-dstat-v--fail">{{ deployStatFailed }}</span>
+            <span class="ad-dstat-l">Échec</span>
+          </div>
+          <div class="ad-dstat">
+            <span class="ad-dstat-v ad-dstat-v--ended">{{ deployStatStopped }}</span>
+            <span class="ad-dstat-l">Terminés</span>
+          </div>
+        </div>
+      </header>
+
+      <article class="ad-deploy-rec ad-deploy-rec--panel" *ngIf="appDeployRecommendation as rec"
+               [attr.data-tone]="rec.tone">
+        <div class="ad-deploy-rec-head">
+          <span class="ad-deploy-rec-eyebrow">Recommandation de déploiement · app complète</span>
+          <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
+        </div>
+        <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
+        <div class="ad-deploy-rec-sev" *ngIf="rec.hasData && !postureLoading">
+          <span data-sev="critical">Critical {{ severityCount('critical') }}</span>
+          <span data-sev="high">High {{ severityCount('high') }}</span>
+          <span data-sev="medium">Medium {{ severityCount('medium') }}</span>
+          <span data-sev="low">Low {{ severityCount('low') }}</span>
+        </div>
+        <div class="ad-deploy-rec-actions">
+          <button type="button" class="ad-env-btn ad-env-btn--primary"
+                  *ngIf="rec.canDeploy"
+                  (click)="openDeployModal()" [disabled]="deploying">
+            Déployer l'application
+          </button>
+          <button type="button" class="ad-env-btn ad-env-btn--secondary"
+                  *ngIf="!rec.canDeploy"
+                  (click)="goSection(rec.hasData ? 'defectdojo' : 'dashboard')">
+            {{ rec.hasData ? 'Corriger via DefectDojo →' : 'Voir le verdict →' }}
+          </button>
+          <button type="button" class="ad-env-btn ad-env-btn--ghost"
+                  (click)="loadSecurityPosture()" [disabled]="postureLoading">
+            {{ postureLoading ? '…' : 'Actualiser le verdict' }}
+          </button>
+        </div>
+      </article>
+
+      <div class="ad-subtabs" role="tablist" aria-label="Sous-sections déploiements">
+        <button type="button" role="tab" class="ad-subtab"
+                [class.ad-subtab--active]="deploySubTab === 'runtime'"
+                [attr.aria-selected]="deploySubTab === 'runtime'"
+                (click)="setDeploySubTab('runtime')">Runtime</button>
+        <button type="button" role="tab" class="ad-subtab"
+                [class.ad-subtab--active]="deploySubTab === 'environments'"
+                [attr.aria-selected]="deploySubTab === 'environments'"
+                (click)="setDeploySubTab('environments')">Environnements</button>
+      </div>
+
+      <section class="ad-runtime-banner" *ngIf="app.lastDeployment && deploySubTab === 'runtime'">
+        <div class="ad-runtime-banner-head">
+          <span class="ad-runtime-eyebrow">Runtime actuel</span>
+          <h2>{{ app.lastDeployment.namespace }}</h2>
+        </div>
+        <app-managed-deployment-status
+          [appId]="appId"
+          [deployment]="app.lastDeployment"
+          [services]="app.services || []"
+          variant="banner"
+          (navigateSection)="goSection($event)">
+        </app-managed-deployment-status>
+      </section>
+      <section class="ad-runtime-empty" *ngIf="!app.lastDeployment && deploySubTab === 'runtime'">
+        <div class="ad-runtime-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Aucun déploiement actif</h3>
+          <p>Lance un déploiement pour créer un environnement de test.</p>
+        </div>
+        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
+          + Déployer
+        </button>
+      </section>
+
+      <ng-container *ngIf="deploySubTab === 'environments'">
+      <div class="ad-deploys-filters">
+        <div class="ad-filter-group">
+          <div class="ad-filter-search">
+            <span class="ad-filter-icon" aria-hidden="true">⌕</span>
+            <input type="text" [value]="deployBranchFilter"
+                   (input)="deployBranchFilter = $any($event.target).value"
+                   placeholder="Filtrer namespace / id…"
+                   class="ad-filter-input" />
+            <button type="button" class="ad-filter-clear" *ngIf="deployBranchFilter"
+                    (click)="deployBranchFilter = ''">✕</button>
+          </div>
+        </div>
+        <div class="ad-filter-group">
+          <span class="ad-filter-label">Statut:</span>
+          <div class="ad-status-pills">
+            <button type="button" class="ad-status-pill" [class.active]="deployStatusFilter === 'ALL'"
+                    (click)="setDeployStatusFilter('ALL')">Tous</button>
+            <button type="button" class="ad-status-pill ad-status-pill--ok"
+                    [class.active]="deployStatusFilter === 'RUNNING'"
+                    (click)="setDeployStatusFilter('RUNNING')">● En ligne</button>
+            <button type="button" class="ad-status-pill ad-status-pill--run"
+                    [class.active]="deployStatusFilter === 'DEPLOYING'"
+                    (click)="setDeployStatusFilter('DEPLOYING')">◌ En cours</button>
+            <button type="button" class="ad-status-pill ad-status-pill--fail"
+                    [class.active]="deployStatusFilter === 'FAILED'"
+                    (click)="setDeployStatusFilter('FAILED')">✕ Échec</button>
+            <button type="button" class="ad-status-pill"
+                    [class.active]="deployStatusFilter === 'STOPPED'"
+                    (click)="setDeployStatusFilter('STOPPED')">Terminés</button>
+          </div>
+        </div>
+        <button type="button" class="ad-clear-filters"
+                *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter"
+                (click)="clearDeployFilters()">Effacer les filtres</button>
+        <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="loadHistory()" [disabled]="historyLoading">
           {{ historyLoading ? '…' : 'Actualiser' }}
         </button>
       </div>
-      <p class="am-subtitle" style="margin-top:0;">Tous les cycles deploy / rebuild / teardown de cette application.</p>
 
-      <div class="am-alert am-alert-error" *ngIf="historyError">{{ historyError }}</div>
-      <div class="am-empty" *ngIf="historyLoading && !history.length">Chargement…</div>
-      <div class="am-empty" *ngIf="!historyLoading && !history.length">Aucun déploiement encore.</div>
+      <div class="ad-env-error" *ngIf="historyError && !historyLoading">
+        <span>⚠️</span>
+        <p>{{ historyError }}</p>
+        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="loadHistory()">Réessayer</button>
+      </div>
 
-      <div class="am-list" *ngIf="history.length">
-        <div class="am-list-item"
-             *ngFor="let d of history"
-             [style.outline]="selectedHistoryId === d.id ? '2px solid #F97316' : null"
-             [style.outline-offset]="'2px'"
-             style="cursor:pointer;"
-             (click)="selectHistory(d)">
-          <div class="am-list-item-main">
-            <div class="am-list-item-title">
-              <span class="am-badge" [ngClass]="historyStatusClass(d.status)">{{ d.status }}</span>
-              <span *ngIf="isCurrentDeployment(d)" class="am-chip" style="margin-left:.4rem;">actuel</span>
-            </div>
-            <div class="am-list-item-sub am-mono">
-              {{ d.namespace }}
-              <span *ngIf="d.gitlabPipelineId"> · pipeline #{{ d.gitlabPipelineId }}</span>
-            </div>
-            <div class="am-list-item-sub">
-              créé {{ d.createdAt | date:'short' }}
-              <span *ngIf="d.deployedAt"> · prêt {{ d.deployedAt | date:'short' }}</span>
-              <span *ngIf="d.ttlHours"> · TTL {{ d.ttlHours }}h</span>
-              <span *ngIf="d.expiresAt"> · expire {{ d.expiresAt | date:'short' }}</span>
-              · {{ serviceReadySummary(d) }}
-            </div>
-          </div>
-          <div class="am-list-actions">
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="selectHistory(d); $event.stopPropagation()">
-              Voir
-            </button>
+      <div class="ad-env-loading" *ngIf="historyLoading && !history.length">
+        <div class="ad-skel-list">
+          <div class="ad-skel-card" *ngFor="let i of [1,2,3]">
+            <div class="ad-skel-line w-60"></div>
+            <div class="ad-skel-line w-40"></div>
+            <div class="ad-skel-line w-70"></div>
           </div>
         </div>
       </div>
 
-      <div *ngIf="selectedHistory" style="margin-top:1.25rem;">
-        <h4 class="am-label">Détail · {{ selectedHistory.namespace }}</h4>
+      <div class="ad-env-empty" *ngIf="!historyLoading && !historyError && !filteredHistory.length">
+        <div class="ad-env-empty-icon">🌍</div>
+        <h3>Aucun environnement trouvé</h3>
+        <p *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter">
+          Aucun environnement ne correspond à vos filtres.
+          <button type="button" class="ad-link-btn" (click)="clearDeployFilters()">Effacer les filtres</button>
+        </p>
+        <p *ngIf="deployStatusFilter === 'ALL' && !deployBranchFilter">
+          Commencez par créer un nouvel environnement de test.
+        </p>
+        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
+          + Créer un environnement
+        </button>
+      </div>
+
+      <div class="ad-env-list" *ngIf="!historyLoading && filteredHistory.length">
+        <article class="ad-env-card" *ngFor="let d of filteredHistory"
+                 [class.ad-env-card--active]="isDeployOnline(d)"
+                 [class.ad-env-card--selected]="selectedHistoryId === d.id"
+                 [class.ad-env-card--expired]="isDeployExpired(d)"
+                 (click)="selectHistory(d)">
+          <div class="ad-env-card-header">
+            <div class="ad-env-card-left">
+              <span class="ad-env-indicator" [ngClass]="deployStatusTone(d.status)">
+                {{ deployStatusIcon(d.status) }}
+              </span>
+              <div class="ad-env-title">
+                <h3>{{ d.namespace }}</h3>
+                <span class="ad-env-actif" *ngIf="isCurrentDeployment(d) && isDeployOnline(d)">ACTIF</span>
+              </div>
+            </div>
+            <span class="ad-env-time">{{ formatPipelineAgo(d.createdAt) }}</span>
+          </div>
+
+          <div class="ad-env-card-body">
+            <div class="ad-env-info-row">
+              <span class="ad-env-info-icon">⏱️</span>
+              <span class="ad-env-info-label">Environnement:</span>
+              <span class="ad-env-info-value">
+                <span class="ad-env-status-badge" [ngClass]="deployStatusTone(d.status)">
+                  {{ deployStatusLabel(d.status) }}
+                </span>
+              </span>
+            </div>
+            <div class="ad-env-info-row" *ngIf="d.gitlabPipelineId">
+              <span class="ad-env-info-icon">⚙️</span>
+              <span class="ad-env-info-label">Pipeline:</span>
+              <span class="ad-env-info-value">
+                <span class="ad-pipe-id-chip">#{{ d.gitlabPipelineId }}</span>
+              </span>
+            </div>
+            <div class="ad-env-info-row">
+              <span class="ad-env-info-icon">📦</span>
+              <span class="ad-env-info-label">Services:</span>
+              <span class="ad-env-info-value">{{ serviceReadySummary(d) }}</span>
+            </div>
+            <div class="ad-env-info-row">
+              <span class="ad-env-info-icon">📅</span>
+              <span class="ad-env-info-label">Créé le:</span>
+              <span class="ad-env-info-value">
+                {{ d.createdAt | date:'dd/MM/yyyy HH:mm' }}
+                <span class="ad-env-ago" *ngIf="d.createdAt">({{ formatPipelineAgo(d.createdAt) }})</span>
+              </span>
+            </div>
+            <div class="ad-env-info-row" *ngIf="d.expiresAt">
+              <span class="ad-env-info-icon">⏳</span>
+              <span class="ad-env-info-label">Expire le:</span>
+              <span class="ad-env-info-value" [class.ad-env-expired]="isDeployExpired(d)">
+                {{ d.expiresAt | date:'dd/MM/yyyy HH:mm' }}
+                <span class="ad-env-ttl" *ngIf="d.ttlHours && !isDeployExpired(d)">· TTL {{ d.ttlHours }} h</span>
+                <span class="ad-env-expired-badge" *ngIf="isDeployExpired(d)">TTL atteint</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="ad-env-card-actions" (click)="$event.stopPropagation()">
+            <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="selectHistory(d)">
+              <span>🔍</span> Voir l'environnement
+            </button>
+            <button type="button" class="ad-env-btn ad-env-btn--secondary"
+                    *ngIf="d.gitlabPipelineId"
+                    (click)="openDeployPipeline(d)">
+              <span>⚙️</span> Voir le pipeline
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div *ngIf="selectedHistory" class="ad-env-detail">
+        <div class="ad-env-detail-head">
+          <div>
+            <span class="ad-runtime-eyebrow">Détail</span>
+            <h2>{{ selectedHistory.namespace }}</h2>
+          </div>
+          <span class="ad-env-status-badge" [ngClass]="deployStatusTone(selectedHistory.status)">
+            {{ deployStatusLabel(selectedHistory.status) }}
+          </span>
+        </div>
         <app-managed-deployment-status
           [appId]="appId"
           [deployment]="selectedHistory"
           [services]="app.services || []">
         </app-managed-deployment-status>
-        <div class="am-form-actions"
+        <div class="ad-env-detail-actions"
              *ngIf="isCurrentDeployment(selectedHistory) && selectedHistory.status !== 'STOPPED'">
-          <button class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">
+          <button type="button" class="ad-env-btn ad-env-btn--danger" (click)="teardown()">
             Supprimer le déploiement (teardown)
           </button>
         </div>
       </div>
+      </ng-container>
     </div>
 
-    <!-- Monitoring -->
+    <!-- ========== Historique (déploiements + lots de scan) ========== -->
+    <div class="ad-history" *ngIf="activeTab === 'history'">
+      <header class="ad-deploys-header">
+        <div class="ad-deploys-title-wrap">
+          <h1 class="ad-deploys-title">
+            Historique
+            <span class="ad-deploys-app">• {{ app.name }}</span>
+          </h1>
+          <p class="ad-deploys-sub">Cycles de déploiement et lots de scan, triés du plus récent</p>
+        </div>
+        <button type="button" class="ad-env-btn ad-env-btn--ghost"
+                (click)="loadHistoryTimeline()" [disabled]="historyTimelineLoading">
+          {{ historyTimelineLoading ? '…' : 'Actualiser' }}
+        </button>
+      </header>
+
+      <div class="ad-env-loading" *ngIf="historyTimelineLoading">
+        <div class="ad-skel-list">
+          <div class="ad-skel-card" *ngFor="let i of [1,2,3]">
+            <div class="ad-skel-line w-60"></div>
+            <div class="ad-skel-line w-40"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ad-env-empty" *ngIf="!historyTimelineLoading && !historyTimeline.length">
+        <h3>Aucun événement</h3>
+        <p>Lance un déploiement ou un scan applicatif pour alimenter l'historique.</p>
+        <div class="ad-env-empty-actions">
+          <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
+            Déployer
+          </button>
+          <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="openAppScanModal()" [disabled]="appScanRunning">
+            Scanner
+          </button>
+        </div>
+      </div>
+
+      <div class="ad-history-list" *ngIf="!historyTimelineLoading && historyTimeline.length">
+        <article class="ad-history-row" *ngFor="let row of historyTimeline">
+          <div class="ad-history-row-main">
+            <span class="am-badge ad-history-kind"
+                  [class.ad-history-kind--scan]="row.kind === 'scan'"
+                  [class.ad-history-kind--deploy]="row.kind === 'deploy'">
+              {{ row.kind === 'scan' ? 'Scan' : 'Déploiement' }}
+            </span>
+            <div class="ad-history-text">
+              <strong>{{ row.title }}</strong>
+              <span class="ad-history-meta">{{ row.meta }}</span>
+            </div>
+            <span class="am-badge" [ngClass]="historyStatusTone(row.status)">{{ row.status }}</span>
+            <span class="ad-verdict-pill ad-verdict-pill--sm"
+                  *ngIf="row.kind === 'scan' && row.verdict && (row.status | uppercase) === 'COMPLETE'"
+                  [ngClass]="'ad-verdict-' + verdictTone(row.verdict)">
+              {{ verdictLabel(row.verdict) }}
+            </span>
+            <span class="ad-history-ago">{{ formatPipelineAgo(row.at) }}</span>
+          </div>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                  *ngIf="row.gitlabPipelineId != null"
+                  (click)="openPipelinesFromHistory(row)">
+            Voir les pipelines
+          </button>
+        </article>
+      </div>
+    </div>
+
+    <!-- ========== Pipelines (même UI hub + filtre service) ========== -->
+    <div class="ad-pipes" *ngIf="activeTab === 'pipelines'">
+      <header class="ad-pipes-header">
+        <div>
+          <p class="ad-pipes-eyebrow">CI/CD</p>
+          <h1 class="ad-pipes-title">
+            Pipelines — {{ app.name }}
+          </h1>
+          <p class="ad-pipes-sub">Historique scan et déploiement de tous les services</p>
+        </div>
+        <div class="ad-pipes-stats-badge">
+          <span class="ad-pipes-stat-v">{{ filteredAppPipelines.length }}</span>
+          <span class="ad-pipes-stat-l">pipelines</span>
+        </div>
+      </header>
+
+      <div class="ad-pipe-drill" *ngIf="pipelineIdFilter != null">
+        <span>Filtré sur pipeline GitLab <span class="am-mono">#{{ pipelineIdFilter }}</span></span>
+        <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="clearPipelineIdFilter()">Effacer le filtre</button>
+      </div>
+      <div class="ad-pipe-drill ad-pipe-drill--kind" *ngIf="pipelineIdFilter == null && pipelineKindFilter !== 'ALL'">
+        <span>Filtré sur pipelines <strong>{{ pipelineKindFilter }}</strong></span>
+        <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="clearPipelineKindFilter()">Effacer</button>
+      </div>
+
+      <div class="ad-pipes-filters" *ngIf="!appPipelinesLoading || appPipelines.length">
+        <label class="ad-pipe-filter">
+          <span class="ad-pipe-filter-label">Service</span>
+          <select class="ad-pipe-filter-select" [value]="pipelineServiceFilter"
+                  (change)="onPipelineServiceChange($any($event.target).value)">
+            <option value="ALL">Tous</option>
+            <option *ngFor="let s of app.services" [value]="s.id">{{ s.name }}</option>
+          </select>
+        </label>
+        <label class="ad-pipe-filter">
+          <span class="ad-pipe-filter-label">Type</span>
+          <select class="ad-pipe-filter-select" [value]="pipelineKindFilter"
+                  (change)="onPipelineKindChange($any($event.target).value)">
+            <option value="ALL">Tous</option>
+            <option value="SCAN">Pipelines scan</option>
+            <option value="DEPLOY">Pipelines déploiement</option>
+          </select>
+        </label>
+        <label class="ad-pipe-filter">
+          <span class="ad-pipe-filter-label">Statut</span>
+          <select class="ad-pipe-filter-select" [value]="pipelineStatusFilter"
+                  (change)="onPipelineStatusChange($any($event.target).value)">
+            <option value="ALL">Tous</option>
+            <option value="SUCCESS">Réussis</option>
+            <option value="FAILED">Échoués</option>
+            <option value="RUNNING">En cours</option>
+          </select>
+        </label>
+        <button type="button" class="ad-env-btn ad-env-btn--ghost ad-pipes-refresh"
+                (click)="loadAppPipelines()" [disabled]="appPipelinesLoading">
+          {{ appPipelinesLoading ? '…' : 'Actualiser' }}
+        </button>
+      </div>
+
+      <div class="ad-pipes-error" *ngIf="appPipelinesError">
+        <span>⚠</span>
+        <span>{{ appPipelinesError }}</span>
+      </div>
+
+      <div class="ad-pipes-loading" *ngIf="appPipelinesLoading && !appPipelines.length">
+        <div class="ad-pipes-spinner"></div>
+        <span>Chargement des pipelines…</span>
+      </div>
+
+      <div class="ad-pipes-grid" *ngIf="!appPipelinesLoading || appPipelines.length">
+        <div class="ad-pipes-empty" *ngIf="!appPipelinesLoading && !filteredAppPipelines.length">
+          <h3>Aucun pipeline</h3>
+          <p *ngIf="pipelineIdFilter != null || pipelineKindFilter !== 'ALL'">
+            Aucun résultat pour ce filtre.
+            <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="clearAllPipelineFilters()">Effacer les filtres</button>
+          </p>
+          <p *ngIf="pipelineIdFilter == null && pipelineKindFilter === 'ALL'">
+            Lance un scan ou un déploiement pour alimenter l'historique CI.
+          </p>
+          <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                  *ngIf="pipelineIdFilter == null && pipelineKindFilter === 'ALL'"
+                  (click)="openAppScanModal()" [disabled]="appScanRunning">
+            Scanner l'application
+          </button>
+        </div>
+
+        <article class="ad-pipe-card" *ngFor="let item of filteredAppPipelines"
+                 [ngClass]="'status-' + pipelineItemStatus(item).toLowerCase()">
+          <div class="ad-pipe-rail"></div>
+          <div class="ad-pipe-topline"></div>
+
+          <div class="ad-pipe-card-header">
+            <div class="ad-pipe-header-left">
+              <div class="ad-pipe-badge">
+                <span class="ad-pipe-dot"></span>
+                <span class="ad-pipe-badge-txt">{{ pipelineItemStatus(item) }}</span>
+              </div>
+              <div class="ad-pipe-kind-badge"
+                   [class.ad-pipe-kind-badge--deploy]="pipelineKindLabel(item) === 'DEPLOY'">
+                {{ pipelineKindLabel(item) }}
+              </div>
+              <span class="ad-pipe-dur" *ngIf="item.duration != null && !isPipelineRunning(item)">
+                {{ formatPipelineDuration(item.duration) }}
+              </span>
+            </div>
+            <span class="ad-pipe-ago">{{ formatPipelineAgo(item.createdAt) }}</span>
+          </div>
+
+          <div class="ad-pipe-card-body">
+            <div class="ad-pipe-main">
+              <div class="ad-pipe-avatar" [ngClass]="'avatar-' + pipelineItemStatus(item).toLowerCase()">
+                ⚙️
+              </div>
+              <div class="ad-pipe-info">
+                <div class="ad-pipe-info-row">
+                  <span class="ad-pipe-id">#{{ item.pipelineId }}</span>
+                  <span class="ad-pipe-name">{{ pipelineDisplayName(item) }}</span>
+                </div>
+                <div class="ad-pipe-info-row">
+                  <span class="ad-pipe-lab">Service</span>
+                  <span class="ad-pipe-val">{{ pipelineServiceName(item) }}</span>
+                </div>
+                <div class="ad-pipe-info-row">
+                  <span class="ad-pipe-lab">Branche</span>
+                  <span class="ad-pipe-val">{{ item.gitBranch || item.ref || 'main' }}</span>
+                </div>
+                <div class="ad-pipe-info-row" *ngIf="item.shortSha">
+                  <span class="ad-pipe-lab">Commit</span>
+                  <span class="ad-pipe-val ad-pipe-val--mono">{{ item.shortSha }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="ad-pipe-stages" *ngIf="item.jobs?.length">
+              <div class="ad-pipe-stages-head">
+                <span>Stages</span>
+                <span class="ad-pipe-stages-n">{{ item.jobs!.length }}</span>
+              </div>
+              <div class="ad-pipe-stages-list" *ngIf="!isPipelineExpanded(item)">
+                <div class="ad-pipe-stage" *ngFor="let job of item.jobs"
+                     [ngClass]="'stage-' + (job.status || '').toLowerCase()">
+                  <span class="ad-pipe-stage-dot"></span>
+                  <span class="ad-pipe-stage-name">{{ job.stage || job.name }}</span>
+                  <span class="ad-pipe-stage-st">{{ job.status }}</span>
+                </div>
+              </div>
+              <div class="ad-pipe-jobs-detail" *ngIf="isPipelineExpanded(item)">
+                <div class="ad-pipe-job-row" *ngFor="let job of item.jobs"
+                     [ngClass]="'stage-' + (job.status || '').toLowerCase()">
+                  <span class="ad-pipe-stage-dot"></span>
+                  <div class="ad-pipe-job-main">
+                    <strong class="ad-pipe-job-name">{{ job.name || job.stage }}</strong>
+                    <span class="ad-pipe-job-meta">
+                      <span *ngIf="job.stage">stage {{ job.stage }}</span>
+                      <span *ngIf="jobDurationLabel(job)"> · {{ jobDurationLabel(job) }}</span>
+                    </span>
+                  </div>
+                  <span class="ad-pipe-stage-st">{{ job.status }}</span>
+                  <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" rel="noopener noreferrer"
+                     class="ad-pipe-job-link" (click)="$event.stopPropagation()">Job</a>
+                </div>
+              </div>
+            </div>
+            <div class="ad-pipe-stages ad-pipe-stages--empty" *ngIf="!item.jobs?.length">
+              <div class="ad-pipe-stages-head">
+                <span>Stages</span>
+                <span class="ad-pipe-stages-n">0</span>
+              </div>
+              <p class="ad-pipe-stages-empty-msg">
+                Stages non encore synchronisés pour ce service — actualise la liste
+                (même pipeline GitLab #{{ item.pipelineId }}).
+              </p>
+            </div>
+          </div>
+
+          <div class="ad-pipe-card-footer">
+            <button type="button" class="ad-pipe-action ad-pipe-action--view"
+                    (click)="togglePipelineDetails(item)">
+              {{ isPipelineExpanded(item) ? 'Masquer détails' : 'Détails' }}
+            </button>
+            <button type="button" class="ad-pipe-action ad-pipe-action--view"
+                    *ngIf="item.pipelineId"
+                    (click)="openPipelineFullPage(item, $event)">
+              Page pipeline
+            </button>
+            <button type="button" class="ad-pipe-action ad-pipe-action--cancel"
+                    *ngIf="isPipelineRunning(item) && item.pipelineId"
+                    [disabled]="pipelineCancelingId === item.pipelineId"
+                    (click)="cancelAppPipeline(item)">
+              {{ pipelineCancelingId === item.pipelineId ? 'Annulation…' : 'Annuler' }}
+            </button>
+            <a *ngIf="item.webUrl" [href]="item.webUrl" target="_blank" rel="noopener noreferrer"
+               class="ad-pipe-action ad-pipe-action--gitlab">
+              GitLab
+            </a>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ========== Quality Gate (app) ========== -->
+    <div class="ad-qg-page" *ngIf="activeTab === 'quality-gate'">
+      <header class="ad-qg-page-header">
+        <div>
+          <p class="ad-qg-page-eyebrow">Analyse · application</p>
+          <h1 class="ad-qg-page-title">Quality Gate — {{ app.name }}</h1>
+          <p class="ad-qg-page-sub">
+            Verdict et hard gates du dernier lot de scan. Le détail Sonar / outils par service reste dans le hub service.
+          </p>
+        </div>
+        <div class="ad-qg-page-actions">
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                  (click)="loadSecurityPosture()" [disabled]="postureLoading">
+            {{ postureLoading ? '…' : 'Actualiser' }}
+          </button>
+          <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                  (click)="openAppScanModal()" [disabled]="appScanRunning">
+            Scanner l'app
+          </button>
+        </div>
+      </header>
+
+      <div class="am-alert am-alert-error" *ngIf="postureError">{{ postureError }}</div>
+      <div class="am-loading" *ngIf="postureLoading && !posture">Chargement du Quality Gate…</div>
+
+          <div *ngIf="!postureLoading && posture && showEmptyScan" class="ad-qg-empty">
+        <p>Aucun scan applicatif — lance un scan pour évaluer le Quality Gate.</p>
+        <button type="button" class="am-btn am-btn-primary" (click)="openAppScanModal()">Scanner l'application</button>
+      </div>
+
+      <div class="ad-qg-empty" *ngIf="!postureLoading && !posture && !postureError">
+        <p>Impossible d'afficher le Quality Gate pour le moment.</p>
+        <button type="button" class="am-btn am-btn-secondary" (click)="loadSecurityPosture()">Réessayer</button>
+      </div>
+
+      <ng-container *ngIf="!postureLoading && posture && (posture.hasCompleteBatch || posture.batchId || qualityGates.length)">
+        <div class="ad-dojo-verdict">
+          <span class="ad-verdict-pill" [ngClass]="'ad-verdict-' + verdictTone(posture.verdict)">
+            {{ verdictLabel(posture.verdict) }}
+          </span>
+          <span class="ad-verdict-score" *ngIf="posture.securityScore != null">
+            {{ posture.securityScore }}<span *ngIf="posture.grade"> · {{ posture.grade }}</span>
+          </span>
+          <span class="ad-batch-status" *ngIf="posture.batchStatus && !posture.hasCompleteBatch"
+                [attr.data-status]="(posture.batchStatus || '').toLowerCase()">
+            {{ posture.batchStatus }}
+          </span>
+          <span class="ad-obsolete-badge" *ngIf="posture.obsolete">Obsolète</span>
+        </div>
+        <p class="ad-posture-msg" *ngIf="posture.message">{{ posture.message }}</p>
+
+        <article class="ad-dim-card" *ngIf="posture.dimensioningService as dim">
+          <span class="ad-dim-eyebrow">Service dimensionnant</span>
+          <strong>{{ dim.serviceName || dim.serviceId }}</strong>
+          <p>C'est ce service qui détermine le score de l'application
+            <span *ngIf="dim.securityScore != null">({{ dim.securityScore }}<span *ngIf="dim.grade"> · {{ dim.grade }}</span>)</span>.
+          </p>
+        </article>
+
+        <article class="ad-deploy-rec" *ngIf="appDeployRecommendation as rec" [attr.data-tone]="rec.tone">
+          <div class="ad-deploy-rec-head">
+            <span class="ad-deploy-rec-eyebrow">Impact déploiement</span>
+            <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
+          </div>
+          <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
+        </article>
+
+        <section class="ad-qg ad-qg--page">
+          <div class="ad-qg-head">
+            <h3>Checklist hard gates</h3>
+            <p>
+              « Bloqué » = Critical DefectDojo (tolérance zéro). Sonar indisponible = Inconnu, pas un FAIL seul.
+            </p>
+          </div>
+          <ul class="ad-qg-list" *ngIf="qualityGates.length; else noQg">
+            <li class="ad-qg-item" *ngFor="let g of qualityGates" [attr.data-status]="(g.status || '').toLowerCase()">
+              <span class="ad-qg-status">{{ qualityGateStatusLabel(g.status) }}</span>
+              <div class="ad-qg-body">
+                <strong>{{ g.label }}</strong>
+                <p>{{ g.message }}</p>
+                <span class="ad-qg-scope" *ngIf="g.scope">{{ g.scope }}</span>
+              </div>
+            </li>
+          </ul>
+          <ng-template #noQg>
+            <p class="ad-qg-empty-inline">Aucune checklist encore — attends la fin du lot ou relance un scan.</p>
+          </ng-template>
+        </section>
+
+        <section class="ad-block" *ngIf="posture.services?.length">
+          <div class="ad-block-head">
+            <h2>Par service</h2>
+            <p class="ad-block-hint">Ouvre le Quality Gate détaillé (Sonar, outils) dans le hub du service.</p>
+          </div>
+          <div class="ad-dojo-svc-grid">
+            <article class="ad-dojo-svc" *ngFor="let s of posture.services"
+                     [class.ad-dojo-svc--blocked]="isBlocked(s.verdict)">
+              <div class="ad-dojo-svc-top">
+                <div>
+                  <strong>{{ s.serviceName || s.serviceId }}</strong>
+                  <span class="ad-role" *ngIf="s.serviceRole">{{ s.serviceRole }}</span>
+                </div>
+                <span class="ad-verdict-pill ad-verdict-pill--sm" [ngClass]="'ad-verdict-' + verdictTone(s.verdict)">
+                  {{ verdictLabel(s.verdict) }}
+                </span>
+              </div>
+              <p class="ad-dojo-svc-reason" *ngIf="isBlocked(s.verdict) || s.hardGateViolated">
+                {{ serviceBarLabel(s) }}
+                <ng-container *ngIf="serviceHardGateLabels(s) as gates">
+                  <span *ngIf="gates"> · {{ gates }}</span>
+                </ng-container>
+              </p>
+              <div class="ad-dojo-svc-actions">
+                <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                        (click)="openServiceQualityGate(s.serviceId)">
+                  Quality Gate service →
+                </button>
+                <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                        *ngIf="s.serviceId"
+                        (click)="openServiceDojo(s)">
+                  DefectDojo →
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </ng-container>
+    </div>
+
+    <!-- ========== DefectDojo centralisé (même UX que hub service) ========== -->
+    <div class="ad-panel ad-panel--flush" *ngIf="(activeTab === 'defectdojo' || activeTab === 'security') && app">
+      <article class="ad-deploy-rec ad-deploy-rec--security" *ngIf="appDeployRecommendation as rec" [attr.data-tone]="rec.tone">
+        <div class="ad-deploy-rec-head">
+          <span class="ad-deploy-rec-eyebrow">Recommandation · application complète</span>
+          <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
+        </div>
+        <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
+        <div class="ad-deploy-rec-actions">
+          <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                  *ngIf="rec.canDeploy"
+                  (click)="openDeployModal()" [disabled]="deploying">
+            Déployer l'application
+          </button>
+          <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                  (click)="openAppScanModal()" [disabled]="appScanRunning">
+            Scanner l'app
+          </button>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                  (click)="goSection('deployments')">
+            Voir les déploiements →
+          </button>
+        </div>
+      </article>
+
+      <app-managed-security-dashboard
+        [managedAppId]="appId"
+        [appName]="app.name"
+        [services]="app.services || []"
+        [posture]="posture">
+      </app-managed-security-dashboard>
+    </div>
+
+    <!-- ========== Monitoring ========== -->
     <div class="ad-panel" *ngIf="activeTab === 'monitoring'">
       <app-monitoring-dashboard
         *ngIf="app.lastDeployment"
         [appId]="appId"
         [deployment]="app.lastDeployment"
-        [appName]="app.name">
+        [appName]="app.name"
+        [appServices]="app.services || []">
       </app-monitoring-dashboard>
       <div class="am-empty" *ngIf="!app.lastDeployment">
-        Aucun déploiement — lance un déploiement pour voir le dashboard Monitoring de cette app.
+        <p>Aucun déploiement — lance un déploiement pour voir le dashboard Monitoring de cette app.</p>
+        <button type="button" class="am-btn am-btn-primary am-btn-sm" (click)="openDeployModal()" [disabled]="deploying">Déployer</button>
       </div>
     </div>
 
-    <!-- Services -->
-    <div class="ad-panel ad-panel--services" *ngIf="activeTab === 'services'">
-      <div class="ad-panel-glow"></div>
-      <div class="ad-panel-head">
-        <h2 class="ad-panel-title">Services du projet</h2>
-        <button class="am-btn am-btn-primary" (click)="openAddService()">+ Ajouter un service</button>
-      </div>
-
-      <div class="ad-empty-inline" *ngIf="app.services.length === 0">
-        <p>Aucun service configuré.</p>
-        <button class="am-btn am-btn-secondary" (click)="openAddService()">Ajouter le premier service</button>
-      </div>
-
-      <div class="ad-service-list">
-        <article
-          class="ad-service-card"
-          *ngFor="let s of app.services; let i = index"
-          [style.animation-delay]="(i * 0.06) + 's'">
-          <div class="ad-service-glow"></div>
-          <div class="ad-service-stripe"></div>
-
-          <div class="ad-service-body">
-            <div class="ad-service-main">
-              <div class="ad-service-icon">{{ roleIcon(s.role) }}</div>
-              <div class="ad-service-info">
-                <div class="ad-service-top">
-                  <div class="ad-service-identity">
-                    <h3 class="ad-service-name">{{ s.name }}</h3>
-                    <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
-                  </div>
-                </div>
-
-                <div class="ad-service-details">
-                  <span class="ad-detail-pill" *ngIf="s.exposedPort">
-                    <span class="ad-detail-pill-label">Port</span>
-                    <span class="am-mono">{{ s.exposedPort }}</span>
-                  </span>
-                  <span class="ad-detail-pill ad-detail-pill--repo">
-                    <span class="ad-detail-pill-label">Repo</span>
-                    <span class="am-mono">{{ s.gitRepositoryUrl }}</span>
-                  </span>
-                  <span class="ad-detail-pill" *ngIf="s.contextPath">
-                    <span class="ad-detail-pill-label">/api →</span>
-                    <span class="am-mono">{{ s.contextPath }}</span>
-                  </span>
-                  <span class="ad-detail-pill" *ngIf="s.dependsOnDatabaseId">
-                    <span class="ad-detail-pill-label">BD</span>
-                    {{ databaseName(s.dependsOnDatabaseId) }}
-                  </span>
-                  <span class="ad-detail-pill" *ngIf="s.dependsOnServiceId">
-                    <span class="ad-detail-pill-label">Dépend de</span>
-                    {{ serviceName(s.dependsOnServiceId) }}
-                  </span>
-                </div>
-
-                <div class="ad-service-stats" *ngIf="s.id">
-                  <ng-container *ngIf="statsFor(s) as st">
-                    <span class="ad-stat" *ngIf="!st.loading">{{ st.deployCount }} DÉPLOIEMENTS</span>
-                    <span class="ad-stat" *ngIf="!st.loading">{{ st.scanCount }} SCANS</span>
-                    <span class="ad-stat ad-stat--muted" *ngIf="!st.loading && st.lastScanAt">
-                      DERNIER SCAN {{ st.lastScanAt | date:'d MMM y' }}
-                    </span>
-                    <span class="ad-stat ad-stat--muted" *ngIf="st.loading">Chargement stats…</span>
-                  </ng-container>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <footer class="ad-service-actions" (click)="$event.stopPropagation()">
-            <button class="am-btn am-btn-primary am-btn-sm" (click)="openScanModal(s)">Scanner</button>
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openDashboard(s)">Dashboard</button>
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditService(s)">Éditer</button>
-            <button
-              class="am-btn am-btn-ghost am-btn-sm"
-              (click)="syncServiceToCluster(s)"
-              [disabled]="syncingServiceId === s.id || app.lastDeployment?.status !== 'RUNNING'"
-              title="Appliquer les variables sur le cluster sans rebuild">
-              {{ syncingServiceId === s.id ? 'Sync…' : 'Appliquer au cluster' }}
-            </button>
-            <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteService(s)">Supprimer</button>
-          </footer>
-        </article>
-      </div>
-    </div>
-
-    <!-- Bases de données -->
-    <div class="ad-panel" *ngIf="activeTab === 'databases'">
-      <div class="ad-panel-head">
-        <h2 class="ad-panel-title">Bases de données</h2>
-        <button class="am-btn am-btn-primary" (click)="openAddDatabase()">+ Ajouter une base</button>
-      </div>
-
-      <div class="ad-empty-inline" *ngIf="app.databases.length === 0">
-        <p>Aucune base de données configurée.</p>
-        <button class="am-btn am-btn-secondary" (click)="openAddDatabase()">Ajouter une base</button>
-      </div>
-
-      <div class="ad-db-grid">
-        <article class="ad-db-card" *ngFor="let d of app.databases; let i = index" [style.animation-delay]="(i * 0.05) + 's'">
-          <div class="ad-db-head">
-            <h3 class="ad-db-name">{{ d.name }}</h3>
-            <span class="ad-db-engine">{{ d.engine }} {{ d.version }}</span>
-          </div>
-          <div class="ad-db-details">
-            <span>Base <strong class="am-mono">{{ d.dbName }}</strong></span>
-            <span>Port <strong>{{ d.exposedPort }}</strong></span>
-            <span *ngIf="d.storageSize">Stockage <strong>{{ d.storageSize }}</strong></span>
-          </div>
-          <div class="ad-db-actions">
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openEditDatabase(d)">Éditer</button>
-            <button class="am-btn am-btn-danger am-btn-sm" (click)="deleteDatabase(d)">Supprimer</button>
-          </div>
-        </article>
-      </div>
-    </div>
   </ng-container>
 </div>
 
@@ -348,6 +1109,17 @@
   (cancel)="closeScanModal()"
   (confirm)="confirmScan($event)">
 </app-deploy-run-modal>
+
+<!-- Modal : scan application (lot + sélection services) -->
+<app-app-scan-modal
+  *ngIf="showAppScanModal && app"
+  [services]="app.services || []"
+  [defaultBranch]="(app.services[0].gitBranch || 'main')"
+  [running]="appScanRunning"
+  [error]="appScanError"
+  (cancel)="closeAppScanModal()"
+  (confirm)="confirmAppScan($event)">
+</app-app-scan-modal>
 
 <!-- Modal : déploiement projet -->
 <app-project-deploy-modal

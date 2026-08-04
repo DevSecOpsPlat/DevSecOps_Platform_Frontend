@@ -17,7 +17,9 @@ import {
   MetricsHistoryResponse,
   EnvVar,
   ManagedApp,
-  RuntimeSyncResult
+  RuntimeSyncResult,
+  SecurityPostureResponse,
+  ScanBatchState
 } from '../../models/application-management/application-management.models';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 
@@ -65,6 +67,21 @@ export class ApplicationManagementService {
 
   get(id: string): Observable<ManagedApp> {
     return this.http.get<ManagedApp>(`${API}/${id}`, { headers: this.headers() });
+  }
+
+  /** Projet parent + capacité deploy-single pour un service (hub / bouton Déployer). */
+  getDeployContext(serviceId: string): Observable<{
+    applicationId: string;
+    managedApplicationId: string | null;
+    canDeploySingle: boolean;
+    serviceName: string;
+  }> {
+    return this.http.get<{
+      applicationId: string;
+      managedApplicationId: string | null;
+      canDeploySingle: boolean;
+      serviceName: string;
+    }>(`${SCAN_API}/${serviceId}/deploy-context`, { headers: this.headers() });
   }
 
   create(body: { name: string; description?: string }): Observable<ManagedApp> {
@@ -260,6 +277,37 @@ export class ApplicationManagementService {
     return this.http.post<AppDeployment>(
       `${API}/${appId}/services/${serviceId}/rebuild`,
       {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Posture sécurité app = dernier lot COMPLETE (verdict D5 + rollup DefectDojo). */
+  getSecurityPosture(appId: string): Observable<SecurityPostureResponse> {
+    return this.http.get<SecurityPostureResponse>(
+      `${API}/${appId}/security-posture`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Lance un scan multi-services (lot). */
+  scanApplication(appId: string, body?: { branch?: string; serviceIds?: string[] }): Observable<ScanBatchState> {
+    return this.http.post<ScanBatchState>(
+      `${API}/${appId}/scan`,
+      body || {},
+      { headers: this.headers() }
+    );
+  }
+
+  listScanBatches(appId: string): Observable<ScanBatchState[]> {
+    return this.http.get<ScanBatchState[]>(
+      `${API}/${appId}/scan-batches`,
+      { headers: this.headers() }
+    );
+  }
+
+  getScanBatch(appId: string, batchId: string): Observable<ScanBatchState> {
+    return this.http.get<ScanBatchState>(
+      `${API}/${appId}/scan-batches/${batchId}`,
       { headers: this.headers() }
     );
   }

@@ -2221,7 +2221,14 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   goToApplications(): void {
-    this.router.navigate(['/my-applications']);
+    try {
+      const managedId = localStorage.getItem('envirotest-last-managed-app-id');
+      if (managedId) {
+        this.router.navigate(['/projects', managedId, 'dashboard']);
+        return;
+      }
+    } catch { /* ignore */ }
+    this.router.navigate(['/projects']);
   }
 
   navigateToSeverity(sev: string): void {

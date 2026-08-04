@@ -1,5 +1,6 @@
-import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
@@ -20,7 +21,12 @@ interface StateEntry {
   wave: number;
   internalHost: string;
   externalUrl?: string | null;
+  role?: string | null;
 }
+
+/** Viewport virtuel de l’aperçu (rendu desktop réduit pour remplir le cadre). */
+const PREVIEW_VW = 1280;
+const PREVIEW_VH = 800;
 
 @Component({
   selector: 'app-managed-deployment-status',
@@ -33,6 +39,17 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   @Input() appId!: string;
   @Input() deployment!: AppDeployment;
   @Input() services: AppServiceModel[] = [];
+  /** full = historique (CI, pods, DBs) ; banner = dashboard app (annexe §3.3). */
+  @Input() variant: 'full' | 'banner' = 'full';
+  @Output() navigateSection = new EventEmitter<'monitoring' | 'alerts' | 'history' | 'deployments'>();
+
+  /** Stage aperçu — scale dynamique pour remplir le conteneur. */
+  @ViewChild('previewStage') set previewStageEl(el: ElementRef<HTMLElement> | undefined) {
+    this.teardownPreviewScale();
+    if (el?.nativeElement) {
+      this.setupPreviewScale(el.nativeElement);
+    }
+  }
 
   /** Copie locale (mise à jour par le polling). */
   dep!: AppDeployment;
@@ -90,7 +107,11 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   readyAtMs: number | null = null;
   private ttlHours = 0;
 
-  constructor(private api: ApplicationManagementService) {}
+  constructor(
+    private api: ApplicationManagementService,
+    private sanitizer: DomSanitizer,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['deployment'] && this.deployment) {
@@ -99,23 +120,119 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       this.closeCiLogs();
       this.setupPolling();
       this.setupPodsPolling();
-      this.setupCiPolling();
+      if (this.variant === 'full') {
+        this.setupCiPolling();
+      } else {
+        this.ciPoll?.unsubscribe();
+        this.ciPipeline = null;
+      }
       this.setupTtlCountdown();
+      this.syncPreviewUrl();
       if (this.isStopped) {
         this.pods = [];
         this.podsError = null;
         this.podsLoading = false;
         this.rebuildMessage = null;
         this.ciPipeline = null;
+        this.ciLoading = false;
+        this.ciError = null;
+        this.ciPoll?.unsubscribe();
+        this.closeCiLogs();
       } else {
         this.refreshPods();
-        this.refreshCiPipeline();
+        if (this.variant === 'full') {
+          this.refreshCiPipeline();
+        }
       }
     }
   }
 
   get isStopped(): boolean {
     return this.dep?.status === 'STOPPED';
+  }
+
+  get isRunning(): boolean {
+    return (this.dep?.status || '').toUpperCase() === 'RUNNING';
+  }
+
+  /** URL front : health/monitor, sinon service FRONTEND. */
+  get frontendUrl(): string | null {
+    const fromMonitor = (this.monitorAppUrl || '').trim();
+    if (fromMonitor) return fromMonitor;
+    const front = this.serviceEntries.find(s => (s.role || '').toUpperCase() === 'FRONTEND' && s.externalUrl);
+    if (front?.externalUrl) return front.externalUrl.trim();
+    // Fallback : première URL qui ne finit pas par /api
+    const any = this.serviceEntries.find(s => {
+      const u = (s.externalUrl || '').replace(/\/$/, '');
+      return u && !u.endsWith('/api');
+    });
+    return any?.externalUrl?.trim() || null;
+  }
+
+  get backendUrl(): string | null {
+    const back = this.serviceEntries.find(s => (s.role || '').toUpperCase() === 'BACKEND' && s.externalUrl);
+    if (back?.externalUrl) return back.externalUrl.trim();
+    const api = this.serviceEntries.find(s => (s.externalUrl || '').replace(/\/$/, '').endsWith('/api'));
+    const url = api?.externalUrl?.trim() || null;
+    if (url && url === this.frontendUrl) return null;
+    return url;
+  }
+
+  canEmbedPreview(url: string | null | undefined): boolean {
+    const u = (url || '').trim().toLowerCase();
+    return u.startsWith('http://') || u.startsWith('https://');
+  }
+
+  /**
+   * URL iframe stable (propriété, pas getter).
+   * Sinon le tick TTL (1s) recrée un SafeResourceUrl → reload / scintillement.
+   * On conserve la dernière URL valide tant que l'env tourne.
+   */
+  previewSafeUrl: SafeResourceUrl | null = null;
+  private previewRawUrl = '';
+  /** Scale pour que l’iframe desktop couvre tout le stage. */
+  previewScale = 1;
+  readonly previewVw = PREVIEW_VW;
+  readonly previewVh = PREVIEW_VH;
+  private previewResizeObs?: ResizeObserver;
+
+  private syncPreviewUrl(): void {
+    if (!this.isRunning) {
+      this.previewSafeUrl = null;
+      this.previewRawUrl = '';
+      this.teardownPreviewScale();
+      return;
+    }
+    const url = this.frontendUrl;
+    if (!url || !this.canEmbedPreview(url)) {
+      return;
+    }
+    if (url === this.previewRawUrl && this.previewSafeUrl) {
+      return;
+    }
+    this.previewRawUrl = url;
+    this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  private setupPreviewScale(stage: HTMLElement): void {
+    const apply = () => {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      if (w < 8 || h < 8) return;
+      // cover : remplit tout le conteneur (peut rogner un peu les bords)
+      const next = Math.max(w / PREVIEW_VW, h / PREVIEW_VH);
+      if (Math.abs(next - this.previewScale) < 0.001) return;
+      this.previewScale = next;
+      this.cdr.detectChanges();
+    };
+    apply();
+    this.previewResizeObs = new ResizeObserver(() => apply());
+    this.previewResizeObs.observe(stage);
+  }
+
+  private teardownPreviewScale(): void {
+    this.previewResizeObs?.disconnect();
+    this.previewResizeObs = undefined;
   }
 
   /** Ingress manquant alors que le déploiement est RUNNING. */
@@ -148,6 +265,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.podsPoll?.unsubscribe();
     this.ciPoll?.unsubscribe();
     this.clearTtlTimer();
+    this.teardownPreviewScale();
   }
 
   private setupTtlCountdown(): void {
@@ -303,6 +421,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         next: (updated) => {
           this.dep = updated;
           this.setupTtlCountdown();
+          this.syncPreviewUrl();
           if (updated.gitlabPipelineId) {
             this.refreshCiPipeline(true);
             this.setupCiPolling();
@@ -362,6 +481,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.metricsAvailable = !!res.summary?.metricsAvailable;
         this.podsLoading = false;
         this.podsError = null;
+        this.syncPreviewUrl();
       },
       error: (e) => {
         this.podsLoading = false;
@@ -412,7 +532,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   private setupCiPolling(): void {
     this.ciPoll?.unsubscribe();
-    if (!this.dep?.gitlabPipelineId || !this.appId) return;
+    if (!this.dep?.gitlabPipelineId || !this.appId || this.isStopped) return;
 
     this.ciPoll = interval(5000).subscribe(() => {
       if (!this.shouldPollCi()) {
@@ -425,15 +545,24 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   private shouldPollCi(): boolean {
     if (!this.dep?.gitlabPipelineId) return false;
+    if (this.isStopped || this.dep.status === 'FAILED') return false;
     if (this.dep.status === 'DEPLOYING' || this.dep.status === 'PENDING') return true;
     const st = (this.ciPipeline?.status || '').toLowerCase();
     return st === 'running' || st === 'pending' || st === 'created' || st === 'waiting_for_resource';
   }
 
   refreshCiPipeline(silent = false): void {
+    if (this.isStopped) {
+      this.ciPipeline = null;
+      this.ciLoading = false;
+      this.ciError = null;
+      this.ciPoll?.unsubscribe();
+      return;
+    }
     if (!this.appId || !this.dep?.id || !this.dep.gitlabPipelineId) {
       this.ciPipeline = null;
       this.ciError = null;
+      this.ciLoading = false;
       return;
     }
     if (!silent) {
@@ -571,17 +700,32 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   private entries(section: 'services' | 'databases'): StateEntry[] {
     const state = this.dep?.servicesState?.[section];
     if (!state) return [];
-    return Object.keys(state).map((name) => ({
-      name,
-      status: state[name]?.status || 'NotReady',
-      wave: state[name]?.wave ?? 0,
-      internalHost: state[name]?.internalHost || '',
-      externalUrl: state[name]?.externalUrl || null
-    }));
+    return Object.keys(state).map((name) => {
+      const roleFromState = state[name]?.role || null;
+      const roleFromApp = this.services?.find(s => s.name === name)?.role || null;
+      return {
+        name,
+        status: state[name]?.status || 'NotReady',
+        wave: state[name]?.wave ?? 0,
+        internalHost: state[name]?.internalHost || '',
+        externalUrl: state[name]?.externalUrl || null,
+        role: roleFromState || roleFromApp
+      };
+    });
   }
 
   get serviceEntries(): StateEntry[] {
     return this.entries('services');
+  }
+
+  /** Libellé clair : URL app vs API backend (path /api). */
+  externalUrlLabel(s: StateEntry): string {
+    const role = (s.role || '').toUpperCase();
+    if (role === 'FRONTEND') return 'URL app (frontend)';
+    if (role === 'BACKEND') return 'URL API (backend)';
+    const url = (s.externalUrl || '').replace(/\/$/, '');
+    if (url.endsWith('/api')) return 'URL API (backend)';
+    return 'URL externe';
   }
 
   get databaseEntries(): StateEntry[] {

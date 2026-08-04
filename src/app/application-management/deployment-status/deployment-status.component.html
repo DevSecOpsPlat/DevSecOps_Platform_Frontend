@@ -1,5 +1,5 @@
-<div *ngIf="dep">
-  <div class="am-section-head">
+<div *ngIf="dep" [class.ds-banner]="variant === 'banner'">
+  <div class="am-section-head" *ngIf="variant === 'full'">
     <div>
       <h3 class="am-section-title">Déploiement</h3>
       <span class="am-mono" style="color:#64748b;">namespace : {{ dep.namespace }}</span>
@@ -24,8 +24,104 @@
     {{ ingressWarning }}
   </div>
 
-  <!-- Chrono TTL réel (horloge serveur) -->
-  <div class="am-ttl" *ngIf="ttlLabel && dep.status !== 'STOPPED'">
+  <div class="ds-banner-head" *ngIf="variant === 'banner' && !isRunning">
+    <div class="ds-banner-status">
+      <span class="am-badge" [ngClass]="'status-' + (dep.status || '').toLowerCase()">{{ dep.status }}</span>
+      <code class="am-mono ds-ns">{{ dep.namespace }}</code>
+    </div>
+  </div>
+
+  <!-- Application déployée : gauche infos, droite aperçu pleine hauteur -->
+  <div class="ds-live" *ngIf="variant === 'banner' && isRunning && !ingressBroken">
+    <div class="ds-live-grid" [class.ds-live-grid--solo]="!previewSafeUrl">
+      <div class="ds-live-main">
+        <div class="ds-live-top">
+          <span class="am-badge" [ngClass]="'status-' + (dep.status || '').toLowerCase()">{{ dep.status }}</span>
+          <code class="am-mono ds-ns">{{ dep.namespace }}</code>
+          <a *ngIf="dep.gitlabPipelineId"
+             class="ds-pipe-link"
+             (click)="navigateSection.emit('deployments'); $event.preventDefault()"
+             href="#">Pipeline #{{ dep.gitlabPipelineId }}</a>
+        </div>
+
+        <div class="ds-live-urls" *ngIf="frontendUrl || backendUrl">
+          <div class="ds-live-url" *ngIf="frontendUrl as url">
+            <span class="ds-live-url-label">Frontend</span>
+            <div class="ds-live-url-row">
+              <a class="ds-live-url-link am-mono" [href]="url" target="_blank" rel="noopener noreferrer">{{ url }}</a>
+              <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="copy(url)">Copier</button>
+              <a class="am-btn am-btn-primary am-btn-sm" [href]="url" target="_blank" rel="noopener noreferrer">Ouvrir</a>
+            </div>
+          </div>
+          <div class="ds-live-url ds-live-url--api" *ngIf="backendUrl as apiUrl">
+            <span class="ds-live-url-label">API</span>
+            <div class="ds-live-url-row">
+              <a class="ds-live-url-link am-mono" [href]="apiUrl" target="_blank" rel="noopener noreferrer">{{ apiUrl }}</a>
+              <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="copy(apiUrl)">Copier</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ds-live-empty" *ngIf="!frontendUrl && !backendUrl">
+          En ligne, mais URL publique pas encore disponible.
+        </div>
+
+        <div class="am-ttl ds-live-ttl" *ngIf="ttlLabel && !isStopped">
+          <div class="am-ttl-head">
+            <span class="am-label" style="margin:0;">Temps restant</span>
+            <span class="am-ttl-clock" [class.am-ttl-urgent]="ttlUrgent" [class.am-ttl-expired]="ttlExpired">
+              {{ ttlLabel }}
+            </span>
+          </div>
+          <div class="am-ttl-meta" *ngIf="dep.ttlHours || expiresAtMs">
+            <span *ngIf="dep.ttlHours">TTL {{ dep.ttlHours }}h</span>
+            <span *ngIf="expiresAtMs"> · expire {{ expiresAtMs | date:'short' }}</span>
+          </div>
+          <div class="am-ttl-bar" *ngIf="expiresAtMs">
+            <div class="am-ttl-fill"
+                 [class.am-ttl-fill-urgent]="ttlUrgent"
+                 [style.width.%]="ttlProgress"></div>
+          </div>
+          <div class="am-ttl-extend" *ngIf="canExtendTtl">
+            <span class="am-ttl-extend-label">Prolonger</span>
+            <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                    [disabled]="extendingTtl" (click)="extendTtl(1)">+1 h</button>
+            <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                    [disabled]="extendingTtl" (click)="extendTtl(2)">+2 h</button>
+            <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                    [disabled]="extendingTtl" (click)="extendTtl(4)">+4 h</button>
+          </div>
+          <div class="am-alert am-alert-info" *ngIf="extendTtlMessage" style="margin-top:.5rem;">{{ extendTtlMessage }}</div>
+          <div class="am-alert am-alert-error" *ngIf="extendTtlError" style="margin-top:.5rem;">{{ extendTtlError }}</div>
+        </div>
+      </div>
+
+      <aside class="ds-live-aside" *ngIf="previewSafeUrl as embed">
+        <div class="ds-preview">
+          <div class="ds-preview-bar">
+            <span>Aperçu</span>
+            <a *ngIf="frontendUrl" [href]="frontendUrl" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a>
+          </div>
+          <div class="ds-preview-stage" #previewStage>
+            <iframe
+              class="ds-preview-frame"
+              [src]="embed"
+              [style.width.px]="previewVw"
+              [style.height.px]="previewVh"
+              [style.transform]="'scale(' + previewScale + ')'"
+              title="Aperçu — si l’écran reste blanc, ouvre le lien (intégration bloquée)"
+              loading="lazy"
+              scrolling="no"
+              tabindex="-1"
+              referrerpolicy="no-referrer"></iframe>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Chrono TTL (vue full uniquement — banner a son bloc ci-dessus) -->
+  <div class="am-ttl" *ngIf="variant === 'full' && ttlLabel && dep.status !== 'STOPPED'">
     <div class="am-ttl-head">
       <span class="am-label" style="margin:0;">Cycle de vie cluster</span>
       <span class="am-ttl-clock" [class.am-ttl-urgent]="ttlUrgent" [class.am-ttl-expired]="ttlExpired">
@@ -55,11 +151,24 @@
     <div class="am-alert am-alert-error" *ngIf="extendTtlError" style="margin-top:.5rem;">{{ extendTtlError }}</div>
   </div>
 
+  <!-- Tuiles compteurs (banner) -->
+  <div class="ds-tiles" *ngIf="variant === 'banner' && !isStopped">
+    <button type="button" class="ds-tile" (click)="navigateSection.emit('monitoring')">
+      <span class="ds-tile-n">{{ monitorSummary?.readyPods ?? '—' }}<span *ngIf="monitorSummary">/{{ monitorSummary.totalPods }}</span></span>
+      <span class="ds-tile-l">Pods ready</span>
+    </button>
+    <button type="button" class="ds-tile" (click)="navigateSection.emit('alerts')">
+      <span class="ds-tile-n">{{ monitorSummary?.alertCount ?? monitorAlerts.length }}</span>
+      <span class="ds-tile-l">Alertes</span>
+    </button>
+  </div>
+
+  <ng-container *ngIf="variant === 'full'">
   <div class="am-alert am-alert-info" *ngIf="rebuildMessage">{{ rebuildMessage }}</div>
   <div class="am-alert am-alert-error" *ngIf="rebuildError">{{ rebuildError }}</div>
 
-  <!-- Pipeline CI -->
-  <div style="margin-top:1rem;" *ngIf="dep.gitlabPipelineId">
+  <!-- Pipeline CI (masqué si STOPPED — pas de faux « load ») -->
+  <div style="margin-top:1rem;" *ngIf="dep.gitlabPipelineId && !isStopped">
     <div class="am-section-head" style="margin-bottom:.5rem;">
       <div>
         <h4 class="am-label" style="margin:0;">Pipeline CI</h4>
@@ -77,6 +186,7 @@
       </div>
     </div>
     <div class="am-alert am-alert-error" *ngIf="ciError">{{ ciError }}</div>
+    <div class="am-loading" *ngIf="ciLoading && !ciPipeline">Chargement des jobs CI…</div>
     <div class="am-empty" *ngIf="!ciLoading && !ciError && (!ciPipeline?.jobs || ciPipeline!.jobs.length === 0)">
       Aucun job CI pour l’instant.
     </div>
@@ -101,6 +211,10 @@
         </div>
       </div>
     </div>
+  </div>
+  <div class="am-empty" *ngIf="isStopped && dep.gitlabPipelineId" style="padding:1rem 0;">
+    Dernier pipeline #{{ dep.gitlabPipelineId }} — environnement arrêté, jobs CI non suivis.
+    Consulte <strong>Historique</strong> pour le détail d’un cycle passé.
   </div>
 
   <!-- Panneau logs CI -->
@@ -132,7 +246,7 @@
         </div>
         <div class="am-list-item-sub am-mono" *ngIf="!isStopped">vague {{ s.wave }} · {{ s.internalHost }}</div>
         <div class="am-list-item-sub" *ngIf="!isStopped && s.externalUrl && !ingressBroken">
-          URL externe :
+          {{ externalUrlLabel(s) }} :
           <a [href]="s.externalUrl" target="_blank" rel="noopener" style="color:#f36c21;">{{ s.externalUrl }}</a>
         </div>
         <div class="am-list-item-sub" *ngIf="!isStopped && ingressBroken" style="color:#9a3412;">
@@ -188,7 +302,7 @@
     <div class="am-list-item" *ngIf="monitorHealth" style="margin-bottom:.5rem;">
       <div class="am-list-item-main">
         <div class="am-list-item-title">
-          Health URL
+          Health URL (entrée app)
           <span class="am-badge" [ngClass]="healthBadgeClass()">
             {{ monitorHealth.checked ? (monitorHealth.ok ? 'OK' : 'KO') : 'N/A' }}
           </span>
@@ -289,4 +403,5 @@
       </div>
     </div>
   </div>
+  </ng-container>
 </div>

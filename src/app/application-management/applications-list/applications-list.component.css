@@ -305,3 +305,38 @@
   .pj-hero-stats { gap: 1.25rem; }
   .pj-grid { grid-template-columns: 1fr; }
 }
+
+.pj-open-cta {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--am-primary-dark);
+  padding: .28rem .65rem;
+  border-radius: 8px;
+  background: var(--am-primary-soft);
+  flex-shrink: 0;
+}
+
+.pj-chip--status[data-status='running'] {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.pj-chip--status[data-status='failed'] {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.pj-chip--status[data-status='deploying'],
+.pj-chip--status[data-status='pending'] {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.pj-chip--muted { color: var(--am-muted); }
+
+.pj-empty-icon {
+  display: flex;
+  justify-content: center;
+  color: var(--am-muted);
+  margin-bottom: .75rem;
+}

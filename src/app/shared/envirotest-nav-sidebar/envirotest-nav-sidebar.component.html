@@ -1,0 +1,84 @@
+<aside class="et-sidebar" aria-label="Navigation EnviroTest">
+  <div class="et-sidebar-brand">
+    <div class="et-brand-row">
+      <span class="et-brand-title">EnviroTest</span>
+      <span class="et-brand-badge">beta</span>
+    </div>
+    <div class="et-brand-sub">On‑Demand Environments</div>
+  </div>
+
+  <div class="et-sidebar-ctx">
+    <button type="button" class="et-back" (click)="backToProjects()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+      Projets
+    </button>
+
+    <div class="et-entity" *ngIf="!loading || managedApp || serviceApp">
+      <div class="et-entity-name">{{ titleName }}</div>
+      <div class="et-entity-meta">{{ subtitle }}</div>
+      <span class="et-status" *ngIf="context === 'app' && deployStatus" [attr.data-status]="deployStatus.toLowerCase()">
+        {{ deployStatus }}
+      </span>
+      <span class="et-status et-status--idle" *ngIf="context === 'app' && !deployStatus">Pas de déploiement</span>
+      <span class="et-ctx-pill" *ngIf="context === 'service'">Service</span>
+      <span class="et-ctx-pill et-ctx-pill--app" *ngIf="context === 'app'">Application</span>
+    </div>
+    <div class="et-entity et-entity--skel" *ngIf="loading && !managedApp && !serviceApp">
+      <div class="et-skel"></div>
+      <div class="et-skel et-skel--sm"></div>
+    </div>
+
+    <!-- Contexte service : retour app + sélecteur frères -->
+    <div class="et-svc-switch" *ngIf="context === 'service'" (click)="$event.stopPropagation()">
+      <button type="button" class="et-svc-app-link" (click)="goToApplication()">
+        Application · {{ managedApp?.name || 'Retour' }}
+      </button>
+      <button type="button" class="et-svc-trigger" (click)="toggleServiceMenu($event)" [attr.aria-expanded]="serviceMenuOpen">
+        <span>{{ currentService?.name || titleName }}</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="et-svc-menu" *ngIf="serviceMenuOpen" role="listbox">
+        <button type="button" class="et-svc-opt" *ngFor="let s of siblings"
+                [class.et-svc-opt--active]="s.id === serviceId"
+                (click)="selectService(s)">
+          <strong>{{ s.name }}</strong>
+          <span>{{ (s.role || '') | lowercase }} · {{ s.gitBranch || 'main' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Contexte app : raccourcis services -->
+    <div class="et-svc-list" *ngIf="context === 'app' && siblings.length">
+      <p class="et-group-label">Services</p>
+      <button type="button" class="et-svc-chip" *ngFor="let s of siblings"
+              (click)="openServiceFromApp(s)" [disabled]="!s.id">
+        {{ s.name }}
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+
+  <nav class="et-nav" [attr.aria-label]="context === 'app' ? 'Navigation application' : 'Navigation service'">
+    <ng-container *ngFor="let group of groups">
+      <p class="et-group-label" *ngIf="group.label">{{ group.label }}</p>
+      <a
+        class="et-nav-item"
+        *ngFor="let item of group.items"
+        [routerLink]="linkFor(item)"
+        [queryParams]="queryFor(item)"
+        [class.active]="isActive(item)">
+        <span class="et-nav-accent" aria-hidden="true"></span>
+        <span class="et-nav-label">{{ item.label }}</span>
+        <span class="et-nav-badge" *ngIf="badgeFor(item) as n">{{ n }}</span>
+      </a>
+    </ng-container>
+  </nav>
+
+  <p class="et-footnote">
+    Même menu en Application et Service — Scan à gauche, Déploiement en dessous.
+  </p>
+</aside>

@@ -56,7 +56,11 @@ export class ApplicationsListComponent implements OnInit {
   }
 
   open(app: ManagedApp): void {
-    this.router.navigate(['/projects', app.id]);
+    this.router.navigate(['/projects', app.id, 'dashboard']);
+  }
+
+  deployStatus(app: ManagedApp): string | null {
+    return app.lastDeployment?.status || null;
   }
 
   create(): void {

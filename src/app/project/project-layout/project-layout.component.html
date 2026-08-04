@@ -1,14 +1,11 @@
-<div class="user-shell" *ngIf="isLoggedIn">
-  <app-user-sidebar></app-user-sidebar>
-
-  <main class="user-main">
-    <div class="project-main">
-      <div *ngIf="loading" class="loading-state">
-        <div class="spinner"></div>
-        <span>Chargement du projet...</span>
-      </div>
-      <div *ngIf="error" class="error-banner">{{ error }}</div>
+<div class="mal-shell" *ngIf="isLoggedIn">
+  <app-envirotest-nav-sidebar></app-envirotest-nav-sidebar>
+  <div class="mal-body">
+    <app-service-context-bar></app-service-context-bar>
+    <main class="mal-main">
+      <div class="am-loading" *ngIf="loading">Chargement…</div>
+      <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
       <router-outlet *ngIf="!loading && !error"></router-outlet>
-    </div>
-  </main>
+    </main>
+  </div>
 </div>
