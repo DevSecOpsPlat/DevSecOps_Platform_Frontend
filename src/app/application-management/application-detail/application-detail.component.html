@@ -1,5 +1,5 @@
 <div class="am-page ad-page"
-     [class.ad-page--wide]="activeTab === 'deployments' || activeTab === 'history' || activeTab === 'pipelines' || activeTab === 'defectdojo' || activeTab === 'security' || activeTab === 'quality-gate'">
+     [class.ad-page--wide]="activeTab === 'deployments' || activeTab === 'history' || activeTab === 'pipelines' || activeTab === 'defectdojo' || activeTab === 'security' || activeTab === 'quality-gate' || activeTab === 'monitoring'">
   <div *ngIf="loading" class="am-loading">Chargement…</div>
   <div *ngIf="error" class="am-alert am-alert-error">{{ error }}</div>
 
@@ -46,7 +46,109 @@
       </p>
     </header>
 
-    <header class="ad-hero ad-hero--compact" *ngIf="activeTab !== 'dashboard'">
+    <header class="ad-hero ad-hero--identity ad-hero--runtime" *ngIf="activeTab === 'deployments'">
+      <div class="ad-hero-glow" aria-hidden="true"></div>
+      <div class="ad-id-top">
+        <div class="ad-id-main">
+          <span class="ad-hero-eyebrow">Application · {{ app.name }}</span>
+          <h1 class="ad-hero-title">Runtime &amp; environnements</h1>
+          <p class="ad-id-desc ad-id-desc--muted">
+            Environnement actif, détails techniques et historique des déploiements.
+          </p>
+        </div>
+        <div class="ad-hero-actions">
+          <button type="button" class="ad-hero-icon-btn" (click)="load(true); loadHistory()" title="Actualiser" [disabled]="loading">↻</button>
+          <button type="button" class="ad-hero-btn ad-hero-btn--primary"
+                  (click)="openDeployModal()" [disabled]="deploying">
+            {{ deploying ? 'Déploiement…' : 'Déployer' }}
+          </button>
+        </div>
+      </div>
+      <p class="ad-id-statusline ad-rt-hero-stats">
+        <span><strong>{{ deployStatTotal }}</strong> total</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span class="ad-rt-stat-ok"><strong>{{ deployStatRunning }}</strong> en ligne</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span><strong>{{ deployStatInProgress }}</strong> en cours</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span class="ad-rt-stat-fail"><strong>{{ deployStatFailed }}</strong> échec</span>
+        <span class="ad-id-dot" aria-hidden="true"></span>
+        <span><strong>{{ deployStatStopped }}</strong> terminés</span>
+        <ng-container *ngIf="app.lastDeployment as dep">
+          <span class="ad-id-dot" aria-hidden="true"></span>
+          <span class="ad-id-live" [attr.data-status]="(dep.status || '').toLowerCase()">{{ dep.status }}</span>
+          <span class="ad-id-muted am-mono">{{ dep.namespace }}</span>
+        </ng-container>
+        <span *ngIf="!app.lastDeployment" class="ad-id-muted"> · Non déployé</span>
+      </p>
+    </header>
+
+    <header class="ad-hero ad-hero--identity ad-hero--runtime ad-hero--dojo"
+            *ngIf="activeTab === 'defectdojo' || activeTab === 'security'">
+      <div class="ad-hero-glow" aria-hidden="true"></div>
+      <div class="ad-id-top">
+        <div class="ad-id-main">
+          <span class="ad-hero-eyebrow">DefectDojo · analyse centralisée</span>
+          <h1 class="ad-hero-title">{{ app.name }}</h1>
+          <p class="ad-id-desc ad-id-desc--muted">
+            Rollup live des findings par service — filtre services, branches et pipelines.
+          </p>
+        </div>
+        <div class="ad-hero-actions">
+          <button type="button" class="ad-hero-icon-btn"
+                  (click)="load(true); loadSecurityPosture(); bumpDojoRefresh()"
+                  title="Actualiser" [disabled]="loading">↻</button>
+          <button type="button" class="ad-hero-btn ad-hero-btn--ghost"
+                  (click)="openAppScanModal()" [disabled]="appScanRunning">
+            {{ appScanRunning ? 'Scan…' : 'Scanner' }}
+          </button>
+        </div>
+      </div>
+      <div class="ad-dojo-hero-foot">
+        <p class="ad-id-statusline ad-rt-hero-stats">
+          <span><strong>{{ app.services.length }}</strong> service{{ app.services.length === 1 ? '' : 's' }}</span>
+          <span class="ad-id-dot" aria-hidden="true"></span>
+          <span *ngIf="dojoOpenTotal > 0 || posture?.bySeverity">
+            <strong>{{ dojoOpenTotal || ((posture?.bySeverity?.['critical'] || 0)
+              + (posture?.bySeverity?.['high'] || 0)
+              + (posture?.bySeverity?.['medium'] || 0)
+              + (posture?.bySeverity?.['low'] || 0)
+              + (posture?.bySeverity?.['info'] || 0)) }}</strong> open
+          </span>
+          <span *ngIf="!(dojoOpenTotal > 0 || posture?.bySeverity)" class="ad-id-muted">Rollup live ci-dessous</span>
+        </p>
+        <span class="ad-dojo-deploy-badge"
+              *ngIf="appDeployRecommendation as rec"
+              [class.ad-dojo-deploy-badge--ok]="rec.canDeploy"
+              [class.ad-dojo-deploy-badge--bad]="!rec.canDeploy && rec.hasData"
+              [class.ad-dojo-deploy-badge--unk]="!rec.hasData">
+          {{ rec.canDeploy ? 'Déploiement possible' : (rec.hasData ? 'Déploiement non recommandé' : 'Scan requis') }}
+        </span>
+      </div>
+    </header>
+
+    <header class="ad-hero ad-hero--identity ad-hero--runtime ad-hero--monitoring"
+            *ngIf="activeTab === 'monitoring' && !app.lastDeployment">
+      <div class="ad-hero-glow" aria-hidden="true"></div>
+      <div class="ad-id-top">
+        <div class="ad-id-main">
+          <span class="ad-hero-eyebrow">Application · {{ app.name }}</span>
+          <h1 class="ad-hero-title">Monitoring</h1>
+          <p class="ad-id-desc ad-id-desc--muted">
+            Déploie un environnement pour voir les métriques live du namespace.
+          </p>
+        </div>
+        <div class="ad-hero-actions">
+          <button type="button" class="ad-hero-btn ad-hero-btn--primary"
+                  (click)="openDeployModal()" [disabled]="deploying">
+            {{ deploying ? 'Déploiement…' : 'Déployer' }}
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <header class="ad-hero ad-hero--compact"
+            *ngIf="activeTab !== 'dashboard' && activeTab !== 'deployments' && activeTab !== 'defectdojo' && activeTab !== 'security' && activeTab !== 'monitoring'">
       <div class="ad-hero-inner">
         <div class="ad-hero-left">
           <div class="ad-hero-app">
@@ -300,391 +402,554 @@
     </ng-container>
 
     <!-- ========== Alertes ========== -->
-    <div class="ad-panel" *ngIf="activeTab === 'alerts'">
-      <div class="ad-panel-head">
-        <h2 class="ad-panel-title">Alertes runtime</h2>
-        <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadAlerts()" [disabled]="alertsLoading || !app.lastDeployment">
-          {{ alertsLoading ? '…' : 'Actualiser' }}
-        </button>
+    <div class="ad-panel ad-alerts-panel" *ngIf="activeTab === 'alerts'">
+      <div class="ad-panel-glow" aria-hidden="true"></div>
+      <div class="ad-panel-head ad-alerts-head">
+        <div class="ad-alerts-title-block">
+          <h2 class="ad-panel-title">Alertes runtime</h2>
+          <span class="ad-alerts-live" *ngIf="app?.lastDeployment" title="Rafraîchissement automatique toutes les 10 s">
+            <span class="ad-alerts-live-dot" aria-hidden="true"></span>
+            Temps réel
+          </span>
+        </div>
+        <div class="ad-alerts-actions">
+          <span class="ad-alerts-refresh-meta" *ngIf="alertsLastRefresh">
+            MAJ {{ alertsLastRefresh | date:'HH:mm:ss' }}
+          </span>
+          <button class="am-btn am-btn-ghost am-btn-sm" (click)="loadAlerts()"
+                  [disabled]="alertsLoading || !app.lastDeployment">
+            {{ alertsLoading && !alertsData ? '…' : 'Actualiser' }}
+          </button>
+        </div>
       </div>
-      <p class="am-subtitle" style="margin-top:0;">
-        CrashLoop, OOM, pods Failed, health KO — détection live + historique 24&nbsp;h (e-mail propriétaire).
-        Portée : application complète (namespace), pas un seul service.
+
+      <p class="ad-alerts-subtitle">
+        Toutes les alertes : pods, événements Kubernetes Warning
+        (<span class="am-mono">FailedCreate</span>…), health check HTTP et ingress —
+        live + historique 24&nbsp;h.
       </p>
 
       <div class="am-empty" *ngIf="!app.lastDeployment">Aucun déploiement actif.</div>
       <div class="am-alert am-alert-error" *ngIf="alertsError">{{ alertsError }}</div>
-      <div class="am-loading" *ngIf="alertsLoading && !alertsData">Chargement…</div>
+      <div class="am-loading" *ngIf="alertsLoading && !alertsData">Chargement des alertes…</div>
 
-      <ng-container *ngIf="alertsData && !alertsLoading">
-        <h4 class="am-label">En cours (live)</h4>
-        <div class="am-empty" *ngIf="!alertsData.live?.length">Aucune alerte active.</div>
-        <div *ngFor="let a of alertsData.live" class="am-alert" [ngClass]="alertClass(a.severity)"
-             style="margin-bottom:.4rem;"
-             [style.background]="a.severity === 'warn' ? '#fff7ed' : null"
-             [style.border-color]="a.severity === 'warn' ? '#fdba74' : null"
-             [style.color]="a.severity === 'warn' ? '#9a3412' : null">
-          <span *ngIf="a.workload || a.pod" class="am-mono">{{ a.workload || a.pod }} — </span>{{ a.message }}
-        </div>
-
-        <h4 class="am-label" style="margin-top:1.25rem;">Historique (24 h)</h4>
-        <div class="am-empty" *ngIf="!alertsData.history?.length">Aucune alerte enregistrée.</div>
-        <div class="am-list" *ngIf="alertsData.history?.length">
-          <div class="am-list-item" *ngFor="let a of alertsData.history">
-            <div class="am-list-item-main">
-              <div class="am-list-item-title">
-                <span class="am-badge" [ngClass]="a.type?.includes('HEALTH') || a.type?.includes('OOM') || a.type?.includes('CRASH') || a.type?.includes('FAILED') ? 'status-failed' : 'status-pending'">
-                  {{ a.type || 'ALERT' }}
-                </span>
-                <span class="am-badge status-pending" *ngIf="a.status">{{ a.status }}</span>
-              </div>
-              <div class="am-list-item-sub">{{ a.message }}</div>
-              <div class="am-list-item-sub am-mono" *ngIf="a.createdAt">{{ a.createdAt | date:'short' }}</div>
-            </div>
+      <ng-container *ngIf="alertsData">
+        <!-- Health check snapshot -->
+        <div class="ad-alerts-health" [attr.data-tone]="healthStatusTone()">
+          <div class="ad-alerts-health-main">
+            <span class="ad-alerts-health-label">Health check</span>
+            <span class="ad-alerts-health-status">
+              <ng-container [ngSwitch]="healthStatusTone()">
+                <ng-container *ngSwitchCase="'ok'">OK</ng-container>
+                <ng-container *ngSwitchCase="'ko'">KO</ng-container>
+                <ng-container *ngSwitchDefault>Non vérifié</ng-container>
+              </ng-container>
+            </span>
+          </div>
+          <p class="ad-alerts-health-msg" *ngIf="alertsData.health?.message">{{ alertsData.health?.message }}</p>
+          <div class="ad-alerts-health-meta">
+            <a *ngIf="alertsData.health?.probedUrl || alertsData.health?.url || alertsData.appUrl"
+               class="ad-alerts-health-link am-mono"
+               [href]="alertsData.health?.probedUrl || alertsData.health?.url || alertsData.appUrl"
+               target="_blank" rel="noopener">
+              {{ alertsData.health?.probedUrl || alertsData.health?.url || alertsData.appUrl }}
+            </a>
+            <span *ngIf="alertsData.health?.statusCode != null">HTTP {{ alertsData.health?.statusCode }}</span>
           </div>
         </div>
+
+        <!-- KPI severity + category -->
+        <div class="ad-alerts-kpis">
+          <button type="button" class="ad-alerts-kpi"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'all'"
+                  (click)="setAlertsFilter('all')">
+            <span class="ad-alerts-kpi-n">{{ alertsData.liveCount ?? alertsData.live?.length ?? 0 }}</span>
+            <span class="ad-alerts-kpi-l">Actives</span>
+          </button>
+          <button type="button" class="ad-alerts-kpi ad-alerts-kpi--error"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'error'"
+                  (click)="setAlertsFilter('error')">
+            <span class="ad-alerts-kpi-n">{{ alertsErrorCount }}</span>
+            <span class="ad-alerts-kpi-l">Erreurs</span>
+          </button>
+          <button type="button" class="ad-alerts-kpi ad-alerts-kpi--warn"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'warn'"
+                  (click)="setAlertsFilter('warn')">
+            <span class="ad-alerts-kpi-n">{{ alertsWarnCount }}</span>
+            <span class="ad-alerts-kpi-l">Warnings</span>
+          </button>
+          <button type="button" class="ad-alerts-kpi ad-alerts-kpi--k8s"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'k8s'"
+                  (click)="setAlertsFilter('k8s')">
+            <span class="ad-alerts-kpi-n">{{ alertsK8sCount }}</span>
+            <span class="ad-alerts-kpi-l">Kubernetes</span>
+          </button>
+          <button type="button" class="ad-alerts-kpi ad-alerts-kpi--health"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'health'"
+                  (click)="setAlertsFilter('health')">
+            <span class="ad-alerts-kpi-n">{{ alertsHealthCount }}</span>
+            <span class="ad-alerts-kpi-l">Health</span>
+          </button>
+          <button type="button" class="ad-alerts-kpi ad-alerts-kpi--pod"
+                  [class.ad-alerts-kpi--active]="alertsFilter === 'pod'"
+                  (click)="setAlertsFilter('pod')">
+            <span class="ad-alerts-kpi-n">{{ alertsPodCount }}</span>
+            <span class="ad-alerts-kpi-l">Pods</span>
+          </button>
+        </div>
+
+        <!-- Toolbar: search + scope + view mode -->
+        <div class="ad-alerts-toolbar">
+          <label class="ad-alerts-search">
+            <span class="ad-alerts-search-ico" aria-hidden="true">⌕</span>
+            <input type="search"
+                   placeholder="Rechercher un nom d'erreur / warning…"
+                   [value]="alertsSearch"
+                   (input)="alertsSearch = $any($event.target).value"
+                   autocomplete="off" />
+          </label>
+          <div class="ad-alerts-scope" role="group" aria-label="Périmètre">
+            <button type="button" [class.active]="alertsScope === 'all'" (click)="alertsScope = 'all'">Tout</button>
+            <button type="button" [class.active]="alertsScope === 'live'" (click)="alertsScope = 'live'">Live</button>
+            <button type="button" [class.active]="alertsScope === 'history'" (click)="alertsScope = 'history'">Historique</button>
+          </div>
+          <div class="ad-alerts-scope" role="group" aria-label="Vue">
+            <button type="button" [class.active]="alertsViewMode === 'grouped'" (click)="alertsViewMode = 'grouped'">Par nom</button>
+            <button type="button" [class.active]="alertsViewMode === 'list'" (click)="alertsViewMode = 'list'">Liste</button>
+          </div>
+          <button type="button" class="ad-alerts-clear"
+                  *ngIf="alertsFilter !== 'all' || alertsSearch || alertsScope !== 'all'"
+                  (click)="clearAlertsFilters()">
+            Réinitialiser
+          </button>
+        </div>
+
+        <!-- Agrégation par nom d'erreur / warning -->
+        <section class="ad-alerts-agg" *ngIf="alertsViewMode === 'grouped'">
+          <div class="ad-alerts-section-label">
+            <h4>Agrégation par nom</h4>
+            <span class="ad-alerts-section-count">{{ filteredAggregations.length }} type(s)</span>
+          </div>
+
+          <div class="ad-alerts-empty" *ngIf="!filteredAggregations.length">
+            <div class="ad-alerts-empty-icon" aria-hidden="true">✓</div>
+            <p>Aucun type d'erreur / warning pour ce filtre.</p>
+          </div>
+
+          <div class="ad-alerts-agg-table" *ngIf="filteredAggregations.length">
+            <div class="ad-alerts-agg-head" aria-hidden="true">
+              <span>Nom</span>
+              <span>Sévérité</span>
+              <span>Source</span>
+              <span>Live</span>
+              <span>Hist.</span>
+              <span>Total</span>
+            </div>
+            <button type="button"
+                    class="ad-alerts-agg-row"
+                    *ngFor="let g of filteredAggregations; trackBy: trackAgg"
+                    [class.ad-alerts-agg-row--active]="selectedReasonName === g.name"
+                    [attr.data-sev]="g.severity"
+                    [attr.data-cat]="g.category"
+                    (click)="filterByAlertName(g.name)">
+              <span class="ad-alerts-agg-name">
+                <code class="am-mono">{{ g.name }}</code>
+                <span class="ad-alert-kind" [attr.data-cat]="g.category">{{ categoryLabel(g.category) }}</span>
+              </span>
+              <span class="ad-alerts-agg-sev">
+                <span class="ad-alert-sev" *ngIf="g.errors" data-sev="error">{{ g.errors }} err</span>
+                <span class="ad-alert-sev" *ngIf="g.warnings" data-sev="warn">{{ g.warnings }} warn</span>
+              </span>
+              <span class="ad-alerts-agg-src">{{ categoryLabel(g.category) }}</span>
+              <span class="ad-alerts-agg-n">{{ g.live }}</span>
+              <span class="ad-alerts-agg-n">{{ g.history }}</span>
+              <span class="ad-alerts-agg-total">{{ g.total }}</span>
+            </button>
+          </div>
+
+          <p class="ad-alerts-agg-hint" *ngIf="filteredAggregations.length">
+            Clique un nom (ex. <span class="am-mono">FailedCreate</span>) pour voir le détail.
+          </p>
+        </section>
+
+        <!-- Détail filtré (liste) -->
+        <ng-container *ngIf="alertsViewMode === 'list' || selectedReasonName">
+          <div class="ad-alerts-section-label" *ngIf="selectedReasonName" style="margin-top:1.25rem;">
+            <h4>Détail — <span class="am-mono">{{ selectedReasonName }}</span></h4>
+            <button type="button" class="ad-alerts-clear" (click)="backToAlertAggregation()">
+              ← Retour agrégation
+            </button>
+          </div>
+
+          <!-- Live -->
+          <ng-container *ngIf="showLiveSection">
+            <div class="ad-alerts-section-label" [style.margin-top]="selectedReasonName ? '.75rem' : '0'">
+              <h4>En cours (live)</h4>
+              <span class="ad-alerts-section-count">{{ filteredLiveAlerts.length }}</span>
+              <span *ngIf="alertsLoading && alertsData" class="ad-alerts-sync">sync…</span>
+            </div>
+
+            <div class="ad-alerts-empty" *ngIf="!filteredLiveAlerts.length">
+              <div class="ad-alerts-empty-icon" aria-hidden="true">✓</div>
+              <p *ngIf="alertsFilter === 'all' && !alertsSearch">Aucune alerte active — namespace sain.</p>
+              <p *ngIf="alertsFilter !== 'all' || alertsSearch">Aucune alerte live pour ce filtre.</p>
+            </div>
+
+            <ul class="ad-alerts-list" *ngIf="filteredLiveAlerts.length">
+              <li *ngFor="let a of filteredLiveAlerts; trackBy: trackAlert"
+                  class="ad-alert-card"
+                  [class.ad-alert-card--error]="a.severity === 'error'"
+                  [class.ad-alert-card--warn]="a.severity === 'warn'"
+                  [attr.data-cat]="alertCategory(a)">
+                <div class="ad-alert-card-rail" aria-hidden="true"></div>
+                <div class="ad-alert-card-body">
+                  <div class="ad-alert-card-top">
+                    <button type="button" class="ad-alert-reason ad-alert-reason--btn"
+                            (click)="filterByAlertName(alertReasonLabel(a))"
+                            [title]="'Filtrer : ' + alertReasonLabel(a)">
+                      {{ alertReasonLabel(a) }}
+                    </button>
+                    <span class="ad-alert-sev" [attr.data-sev]="a.severity || 'warn'">
+                      {{ a.severity === 'error' ? 'ERROR' : 'WARNING' }}
+                    </span>
+                    <span class="ad-alert-kind" [attr.data-cat]="alertCategory(a)">{{ alertCategoryLabel(a) }}</span>
+                    <span class="ad-alert-count" *ngIf="a.count && a.count > 1">×{{ a.count }}</span>
+                  </div>
+                  <p class="ad-alert-msg">{{ a.message }}</p>
+                  <div class="ad-alert-card-meta">
+                    <span class="am-mono" *ngIf="alertTarget(a)">{{ alertTarget(a) }}</span>
+                    <span *ngIf="a.lastTimestamp">{{ a.lastTimestamp | date:'short' }}</span>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </ng-container>
+
+          <!-- History -->
+          <ng-container *ngIf="showHistorySection">
+            <div class="ad-alerts-section-label" [style.margin-top]="showLiveSection ? '1.75rem' : '0'">
+              <h4>Historique (24 h)</h4>
+              <span class="ad-alerts-section-count">{{ filteredHistoryAlerts.length }}</span>
+            </div>
+            <div class="ad-alerts-empty ad-alerts-empty--compact" *ngIf="!filteredHistoryAlerts.length">
+              <p *ngIf="!(alertsData.history?.length)">Aucune alerte enregistrée sur les dernières 24 heures.</p>
+              <p *ngIf="alertsData.history?.length">Aucune entrée historique pour ce filtre.</p>
+            </div>
+            <ul class="ad-alerts-history" *ngIf="filteredHistoryAlerts.length">
+              <li *ngFor="let a of filteredHistoryAlerts; trackBy: trackAlert" class="ad-alert-hist"
+                  [attr.data-cat]="alertCategory(a)">
+                <div class="ad-alert-hist-main">
+                  <button type="button" class="ad-alert-reason ad-alert-reason--btn"
+                          (click)="filterByAlertName(alertReasonLabel(a))">
+                    {{ alertReasonLabel(a) }}
+                  </button>
+                  <span class="ad-alert-sev" [attr.data-sev]="a.severity || 'warn'">
+                    {{ a.severity === 'error' ? 'ERROR' : 'WARNING' }}
+                  </span>
+                  <span class="ad-alert-kind" [attr.data-cat]="alertCategory(a)">{{ alertCategoryLabel(a) }}</span>
+                  <span class="ad-alert-hist-type"
+                        [class.ad-alert-hist-type--bad]="a.type?.includes('HEALTH') || a.type?.includes('OOM') || a.type?.includes('CRASH') || a.type?.includes('FAILED') || a.type?.includes('WARNING')">
+                    {{ a.type || 'ALERT' }}
+                  </span>
+                  <span class="ad-alert-hist-status" *ngIf="a.status">{{ a.status }}</span>
+                </div>
+                <p class="ad-alert-hist-msg">{{ a.message }}</p>
+                <time class="ad-alert-hist-time am-mono" *ngIf="a.createdAt">{{ a.createdAt | date:'short' }}</time>
+              </li>
+            </ul>
+          </ng-container>
+        </ng-container>
       </ng-container>
     </div>
 
-    <!-- ========== Déploiements (Runtime / Environnements) ========== -->
+    <!-- ========== Runtime & environnements (page unifiée) ========== -->
     <div class="ad-deploys" *ngIf="activeTab === 'deployments'">
-      <header class="ad-deploys-header">
-        <div class="ad-deploys-title-wrap">
-          <h1 class="ad-deploys-title">
-            Déploiements
-            <span class="ad-deploys-app">• {{ app.name }}</span>
-          </h1>
-          <p class="ad-deploys-sub">Runtime actuel et environnements éphémères de l'application</p>
-        </div>
-        <div class="ad-deploys-stats">
-          <div class="ad-dstat">
-            <span class="ad-dstat-v">{{ deployStatTotal }}</span>
-            <span class="ad-dstat-l">Total</span>
-          </div>
-          <div class="ad-dstat">
-            <span class="ad-dstat-v ad-dstat-v--ok">{{ deployStatRunning }}</span>
-            <span class="ad-dstat-l">En ligne</span>
-          </div>
-          <div class="ad-dstat">
-            <span class="ad-dstat-v ad-dstat-v--run">{{ deployStatInProgress }}</span>
-            <span class="ad-dstat-l">En cours</span>
-          </div>
-          <div class="ad-dstat">
-            <span class="ad-dstat-v ad-dstat-v--fail">{{ deployStatFailed }}</span>
-            <span class="ad-dstat-l">Échec</span>
-          </div>
-          <div class="ad-dstat">
-            <span class="ad-dstat-v ad-dstat-v--ended">{{ deployStatStopped }}</span>
-            <span class="ad-dstat-l">Terminés</span>
-          </div>
-        </div>
-      </header>
 
-      <article class="ad-deploy-rec ad-deploy-rec--panel" *ngIf="appDeployRecommendation as rec"
-               [attr.data-tone]="rec.tone">
-        <div class="ad-deploy-rec-head">
-          <span class="ad-deploy-rec-eyebrow">Recommandation de déploiement · app complète</span>
-          <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
-        </div>
-        <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
-        <div class="ad-deploy-rec-sev" *ngIf="rec.hasData && !postureLoading">
-          <span data-sev="critical">Critical {{ severityCount('critical') }}</span>
-          <span data-sev="high">High {{ severityCount('high') }}</span>
-          <span data-sev="medium">Medium {{ severityCount('medium') }}</span>
-          <span data-sev="low">Low {{ severityCount('low') }}</span>
-        </div>
-        <div class="ad-deploy-rec-actions">
-          <button type="button" class="ad-env-btn ad-env-btn--primary"
-                  *ngIf="rec.canDeploy"
-                  (click)="openDeployModal()" [disabled]="deploying">
-            Déployer l'application
-          </button>
-          <button type="button" class="ad-env-btn ad-env-btn--secondary"
-                  *ngIf="!rec.canDeploy"
-                  (click)="goSection(rec.hasData ? 'defectdojo' : 'dashboard')">
-            {{ rec.hasData ? 'Corriger via DefectDojo →' : 'Voir le verdict →' }}
-          </button>
-          <button type="button" class="ad-env-btn ad-env-btn--ghost"
-                  (click)="loadSecurityPosture()" [disabled]="postureLoading">
-            {{ postureLoading ? '…' : 'Actualiser le verdict' }}
-          </button>
-        </div>
-      </article>
-
-      <div class="ad-subtabs" role="tablist" aria-label="Sous-sections déploiements">
-        <button type="button" role="tab" class="ad-subtab"
-                [class.ad-subtab--active]="deploySubTab === 'runtime'"
-                [attr.aria-selected]="deploySubTab === 'runtime'"
-                (click)="setDeploySubTab('runtime')">Runtime</button>
-        <button type="button" role="tab" class="ad-subtab"
-                [class.ad-subtab--active]="deploySubTab === 'environments'"
-                [attr.aria-selected]="deploySubTab === 'environments'"
-                (click)="setDeploySubTab('environments')">Environnements</button>
-      </div>
-
-      <section class="ad-runtime-banner" *ngIf="app.lastDeployment && deploySubTab === 'runtime'">
-        <div class="ad-runtime-banner-head">
-          <span class="ad-runtime-eyebrow">Runtime actuel</span>
-          <h2>{{ app.lastDeployment.namespace }}</h2>
-        </div>
-        <app-managed-deployment-status
-          [appId]="appId"
-          [deployment]="app.lastDeployment"
-          [services]="app.services || []"
-          variant="banner"
-          (navigateSection)="goSection($event)">
-        </app-managed-deployment-status>
-      </section>
-      <section class="ad-runtime-empty" *ngIf="!app.lastDeployment && deploySubTab === 'runtime'">
-        <div class="ad-runtime-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>
-          </svg>
-        </div>
-        <div>
-          <h3>Aucun déploiement actif</h3>
-          <p>Lance un déploiement pour créer un environnement de test.</p>
-        </div>
-        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
-          + Déployer
+      <!-- Section 1 : Environnement actif (= dernier déploiement / lastDeployment) -->
+      <section class="ad-rt-section" id="ad-rt-active">
+        <button type="button" class="ad-rt-section-toggle" (click)="toggleRuntimeSection()"
+                [attr.aria-expanded]="runtimeSectionOpen">
+          <span class="ad-rt-chevron" [class.ad-rt-chevron--open]="runtimeSectionOpen" aria-hidden="true">‹</span>
+          <span class="ad-rt-section-title">Environnement actif</span>
+          <span class="am-badge status-running" *ngIf="app.lastDeployment && isDeployOnline(app.lastDeployment)">
+            {{ app.lastDeployment.status }}
+          </span>
+          <span class="am-badge status-stopped" *ngIf="app.lastDeployment && !isDeployOnline(app.lastDeployment)">
+            {{ app.lastDeployment.status }}
+          </span>
+          <span class="ad-rt-section-meta am-mono" *ngIf="app.lastDeployment">{{ app.lastDeployment.namespace }}</span>
         </button>
+
+        <div class="ad-rt-section-body" *ngIf="runtimeSectionOpen">
+          <ng-container *ngIf="app.lastDeployment as live">
+            <app-managed-deployment-status
+              [appId]="appId"
+              [deployment]="live"
+              [services]="app.services || []"
+              variant="banner"
+              (navigateSection)="goSection($event)">
+            </app-managed-deployment-status>
+            <div class="ad-rt-ops-actions" *ngIf="live.status !== 'STOPPED'" style="margin-top:.75rem;">
+              <button type="button" class="am-btn am-btn-danger am-btn-sm" (click)="teardown()">
+                Arrêter l'environnement (teardown)
+              </button>
+              <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="focusOpsSection()">
+                Détails techniques ↓
+              </button>
+            </div>
+          </ng-container>
+
+          <div class="ad-rt-empty" *ngIf="!app.lastDeployment">
+            <p class="ad-rt-empty-title">Aucun environnement actif</p>
+            <p class="ad-rt-empty-sub">Le dernier déploiement apparaîtra ici (URL, aperçu, TTL).</p>
+            <button type="button" class="am-btn am-btn-primary am-btn-sm"
+                    (click)="openDeployModal()" [disabled]="deploying">
+              Déployer l'application
+            </button>
+          </div>
+        </div>
       </section>
 
-      <ng-container *ngIf="deploySubTab === 'environments'">
-      <div class="ad-deploys-filters">
-        <div class="ad-filter-group">
-          <div class="ad-filter-search">
-            <span class="ad-filter-icon" aria-hidden="true">⌕</span>
-            <input type="text" [value]="deployBranchFilter"
-                   (input)="deployBranchFilter = $any($event.target).value"
-                   placeholder="Filtrer namespace / id…"
-                   class="ad-filter-input" />
-            <button type="button" class="ad-filter-clear" *ngIf="deployBranchFilter"
-                    (click)="deployBranchFilter = ''">✕</button>
-          </div>
-        </div>
-        <div class="ad-filter-group">
-          <span class="ad-filter-label">Statut:</span>
-          <div class="ad-status-pills">
-            <button type="button" class="ad-status-pill" [class.active]="deployStatusFilter === 'ALL'"
-                    (click)="setDeployStatusFilter('ALL')">Tous</button>
-            <button type="button" class="ad-status-pill ad-status-pill--ok"
-                    [class.active]="deployStatusFilter === 'RUNNING'"
-                    (click)="setDeployStatusFilter('RUNNING')">● En ligne</button>
-            <button type="button" class="ad-status-pill ad-status-pill--run"
-                    [class.active]="deployStatusFilter === 'DEPLOYING'"
-                    (click)="setDeployStatusFilter('DEPLOYING')">◌ En cours</button>
-            <button type="button" class="ad-status-pill ad-status-pill--fail"
-                    [class.active]="deployStatusFilter === 'FAILED'"
-                    (click)="setDeployStatusFilter('FAILED')">✕ Échec</button>
-            <button type="button" class="ad-status-pill"
-                    [class.active]="deployStatusFilter === 'STOPPED'"
-                    (click)="setDeployStatusFilter('STOPPED')">Terminés</button>
-          </div>
-        </div>
-        <button type="button" class="ad-clear-filters"
-                *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter"
-                (click)="clearDeployFilters()">Effacer les filtres</button>
-        <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="loadHistory()" [disabled]="historyLoading">
-          {{ historyLoading ? '…' : 'Actualiser' }}
+      <!-- Section séparée : Détails techniques -->
+      <section class="ad-rt-section" id="ad-rt-ops" *ngIf="app.lastDeployment as live">
+        <button type="button" class="ad-rt-section-toggle" (click)="toggleOpsSection()"
+                [attr.aria-expanded]="opsSectionOpen">
+          <span class="ad-rt-chevron" [class.ad-rt-chevron--open]="opsSectionOpen" aria-hidden="true">‹</span>
+          <span class="ad-rt-section-title">Détails techniques</span>
+          <span class="ad-rt-section-meta">pipeline · services · pods · connexions</span>
         </button>
-      </div>
+        <div class="ad-rt-section-body" *ngIf="opsSectionOpen">
+          <app-managed-deployment-status
+            [appId]="appId"
+            [deployment]="live"
+            [services]="app.services || []"
+            variant="full"
+            [embed]="true"
+            [showOpsTabs]="true"
+            (navigateSection)="goSection($event)">
+          </app-managed-deployment-status>
+        </div>
+      </section>
 
-      <div class="ad-env-error" *ngIf="historyError && !historyLoading">
-        <span>⚠️</span>
-        <p>{{ historyError }}</p>
-        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="loadHistory()">Réessayer</button>
-      </div>
-
-      <div class="ad-env-loading" *ngIf="historyLoading && !history.length">
-        <div class="ad-skel-list">
-          <div class="ad-skel-card" *ngFor="let i of [1,2,3]">
-            <div class="ad-skel-line w-60"></div>
-            <div class="ad-skel-line w-40"></div>
-            <div class="ad-skel-line w-70"></div>
+      <!-- Courbe succès / échecs — conteneur dédié -->
+      <section class="ad-rt-section ad-rt-section--chart" *ngIf="!historyLoading && history.length">
+        <div class="ad-env-chart-card ad-env-chart-card--solo">
+          <div class="ad-env-chart-head">
+            <div>
+              <h3 class="ad-env-chart-title">Évolution des déploiements</h3>
+              <p class="ad-env-chart-sub">Succès vs échecs par date de création</p>
+            </div>
+          </div>
+          <div class="ad-env-chart-wrap">
+            <canvas #envHistoryChart></canvas>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="ad-env-empty" *ngIf="!historyLoading && !historyError && !filteredHistory.length">
-        <div class="ad-env-empty-icon">🌍</div>
-        <h3>Aucun environnement trouvé</h3>
-        <p *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter">
-          Aucun environnement ne correspond à vos filtres.
-          <button type="button" class="ad-link-btn" (click)="clearDeployFilters()">Effacer les filtres</button>
-        </p>
-        <p *ngIf="deployStatusFilter === 'ALL' && !deployBranchFilter">
-          Commencez par créer un nouvel environnement de test.
-        </p>
-        <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
-          + Créer un environnement
+      <!-- Section : Historique (ancien design cartes) -->
+      <section class="ad-rt-section ad-rt-section--history">
+        <button type="button" class="ad-rt-section-toggle" (click)="toggleHistorySection()"
+                [attr.aria-expanded]="historySectionOpen">
+          <span class="ad-rt-chevron" [class.ad-rt-chevron--open]="historySectionOpen" aria-hidden="true">‹</span>
+          <span class="ad-rt-section-title">Historique des environnements</span>
+          <span class="ad-rt-section-meta" *ngIf="history.length">{{ filteredHistory.length }} / {{ history.length }}</span>
         </button>
-      </div>
 
-      <div class="ad-env-list" *ngIf="!historyLoading && filteredHistory.length">
-        <article class="ad-env-card" *ngFor="let d of filteredHistory"
-                 [class.ad-env-card--active]="isDeployOnline(d)"
-                 [class.ad-env-card--selected]="selectedHistoryId === d.id"
-                 [class.ad-env-card--expired]="isDeployExpired(d)"
-                 (click)="selectHistory(d)">
-          <div class="ad-env-card-header">
-            <div class="ad-env-card-left">
-              <span class="ad-env-indicator" [ngClass]="deployStatusTone(d.status)">
-                {{ deployStatusIcon(d.status) }}
-              </span>
-              <div class="ad-env-title">
-                <h3>{{ d.namespace }}</h3>
-                <span class="ad-env-actif" *ngIf="isCurrentDeployment(d) && isDeployOnline(d)">ACTIF</span>
+        <div class="ad-rt-section-body" *ngIf="historySectionOpen">
+          <div class="ad-deploys-filters ad-rt-filters">
+            <div class="ad-filter-group">
+              <div class="ad-filter-search">
+                <span class="ad-filter-icon" aria-hidden="true">⌕</span>
+                <input type="text" [value]="deployBranchFilter"
+                       (input)="deployBranchFilter = $any($event.target).value"
+                       placeholder="Filtrer namespace / id…"
+                       class="ad-filter-input" />
+                <button type="button" class="ad-filter-clear" *ngIf="deployBranchFilter"
+                        (click)="deployBranchFilter = ''">✕</button>
               </div>
             </div>
-            <span class="ad-env-time">{{ formatPipelineAgo(d.createdAt) }}</span>
+            <div class="ad-filter-group">
+              <span class="ad-filter-label">Statut:</span>
+              <div class="ad-status-pills">
+                <button type="button" class="ad-status-pill" [class.active]="deployStatusFilter === 'ALL'"
+                        (click)="setDeployStatusFilter('ALL')">Tous</button>
+                <button type="button" class="ad-status-pill ad-status-pill--ok"
+                        [class.active]="deployStatusFilter === 'RUNNING'"
+                        (click)="setDeployStatusFilter('RUNNING')">En ligne</button>
+                <button type="button" class="ad-status-pill ad-status-pill--run"
+                        [class.active]="deployStatusFilter === 'DEPLOYING'"
+                        (click)="setDeployStatusFilter('DEPLOYING')">En cours</button>
+                <button type="button" class="ad-status-pill ad-status-pill--fail"
+                        [class.active]="deployStatusFilter === 'FAILED'"
+                        (click)="setDeployStatusFilter('FAILED')">Échec</button>
+                <button type="button" class="ad-status-pill"
+                        [class.active]="deployStatusFilter === 'STOPPED'"
+                        (click)="setDeployStatusFilter('STOPPED')">Terminés</button>
+              </div>
+            </div>
+            <button type="button" class="ad-clear-filters"
+                    *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter"
+                    (click)="clearDeployFilters()">Effacer les filtres</button>
+            <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="loadHistory()" [disabled]="historyLoading">
+              {{ historyLoading ? '…' : 'Actualiser' }}
+            </button>
           </div>
 
-          <div class="ad-env-card-body">
-            <div class="ad-env-info-row">
-              <span class="ad-env-info-icon">⏱️</span>
-              <span class="ad-env-info-label">Environnement:</span>
-              <span class="ad-env-info-value">
-                <span class="ad-env-status-badge" [ngClass]="deployStatusTone(d.status)">
-                  {{ deployStatusLabel(d.status) }}
+          <div class="ad-env-error" *ngIf="historyError && !historyLoading">
+            <p>{{ historyError }}</p>
+            <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="loadHistory()">Réessayer</button>
+          </div>
+
+          <div class="ad-env-loading" *ngIf="historyLoading && !history.length">
+            <div class="ad-skel-list">
+              <div class="ad-skel-card" *ngFor="let i of [1,2,3]">
+                <div class="ad-skel-line w-60"></div>
+                <div class="ad-skel-line w-40"></div>
+                <div class="ad-skel-line w-70"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ad-env-empty" *ngIf="!historyLoading && !historyError && !filteredHistory.length">
+            <h3>Aucun environnement trouvé</h3>
+            <p *ngIf="deployStatusFilter !== 'ALL' || deployBranchFilter">
+              Aucun environnement ne correspond à vos filtres.
+              <button type="button" class="ad-link-btn" (click)="clearDeployFilters()">Effacer les filtres</button>
+            </p>
+            <p *ngIf="deployStatusFilter === 'ALL' && !deployBranchFilter">
+              Commencez par créer un nouvel environnement de test.
+            </p>
+            <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
+              + Créer un environnement
+            </button>
+          </div>
+
+          <div *ngIf="selectedHistoryForDetail as detail" id="ad-env-detail" class="ad-env-detail">
+            <div class="ad-env-detail-head">
+              <div>
+                <span class="ad-runtime-eyebrow">Détail</span>
+                <h2>{{ detail.namespace }}</h2>
+              </div>
+              <div class="ad-env-detail-head-actions">
+                <span class="ad-env-status-badge" [ngClass]="deployStatusTone(detail.status)">
+                  {{ deployStatusLabel(detail.status) }}
                 </span>
-              </span>
+                <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="selectedHistoryId = null">
+                  Fermer
+                </button>
+              </div>
             </div>
-            <div class="ad-env-info-row" *ngIf="d.gitlabPipelineId">
-              <span class="ad-env-info-icon">⚙️</span>
-              <span class="ad-env-info-label">Pipeline:</span>
-              <span class="ad-env-info-value">
-                <span class="ad-pipe-id-chip">#{{ d.gitlabPipelineId }}</span>
-              </span>
-            </div>
-            <div class="ad-env-info-row">
-              <span class="ad-env-info-icon">📦</span>
-              <span class="ad-env-info-label">Services:</span>
-              <span class="ad-env-info-value">{{ serviceReadySummary(d) }}</span>
-            </div>
-            <div class="ad-env-info-row">
-              <span class="ad-env-info-icon">📅</span>
-              <span class="ad-env-info-label">Créé le:</span>
-              <span class="ad-env-info-value">
-                {{ d.createdAt | date:'dd/MM/yyyy HH:mm' }}
-                <span class="ad-env-ago" *ngIf="d.createdAt">({{ formatPipelineAgo(d.createdAt) }})</span>
-              </span>
-            </div>
-            <div class="ad-env-info-row" *ngIf="d.expiresAt">
-              <span class="ad-env-info-icon">⏳</span>
-              <span class="ad-env-info-label">Expire le:</span>
-              <span class="ad-env-info-value" [class.ad-env-expired]="isDeployExpired(d)">
-                {{ d.expiresAt | date:'dd/MM/yyyy HH:mm' }}
-                <span class="ad-env-ttl" *ngIf="d.ttlHours && !isDeployExpired(d)">· TTL {{ d.ttlHours }} h</span>
-                <span class="ad-env-expired-badge" *ngIf="isDeployExpired(d)">TTL atteint</span>
-              </span>
+            <app-managed-deployment-status
+              [appId]="appId"
+              [deployment]="detail"
+              [services]="app.services || []"
+              variant="full"
+              [showOpsTabs]="true"
+              (navigateSection)="goSection($event)">
+            </app-managed-deployment-status>
+            <div class="ad-env-detail-actions"
+                 *ngIf="isCurrentDeployment(detail) && detail.status !== 'STOPPED'">
+              <button type="button" class="ad-env-btn ad-env-btn--danger" (click)="teardown()">
+                Supprimer le déploiement (teardown)
+              </button>
             </div>
           </div>
 
-          <div class="ad-env-card-actions" (click)="$event.stopPropagation()">
-            <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="selectHistory(d)">
-              <span>🔍</span> Voir l'environnement
-            </button>
-            <button type="button" class="ad-env-btn ad-env-btn--secondary"
-                    *ngIf="d.gitlabPipelineId"
-                    (click)="openDeployPipeline(d)">
-              <span>⚙️</span> Voir le pipeline
+          <div id="ad-env-detail-hint" class="ad-rt-detail-active-hint" *ngIf="selectedHistoryIsActive" style="margin-bottom:1rem;">
+            <p class="ad-rt-empty-sub">
+              Cet environnement est l’actif — détail et logs dans la section <strong>Environnement actif</strong> ci-dessus.
+            </p>
+            <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="focusActiveEnvironment()">
+              Remonter à l'actif
             </button>
           </div>
-        </article>
-      </div>
 
-      <div *ngIf="selectedHistory" class="ad-env-detail">
-        <div class="ad-env-detail-head">
-          <div>
-            <span class="ad-runtime-eyebrow">Détail</span>
-            <h2>{{ selectedHistory.namespace }}</h2>
+          <div class="ad-env-list" *ngIf="!historyLoading && filteredHistory.length">
+            <article class="ad-env-card" *ngFor="let d of filteredHistory"
+                     [class.ad-env-card--active]="isDeployOnline(d)"
+                     [class.ad-env-card--selected]="selectedHistoryId === d.id"
+                     [class.ad-env-card--expired]="isDeployExpired(d)"
+                     (click)="selectHistory(d)">
+              <div class="ad-env-card-header">
+                <div class="ad-env-card-left">
+                  <span class="ad-env-indicator" [ngClass]="deployStatusTone(d.status)">
+                    {{ deployStatusIcon(d.status) }}
+                  </span>
+                  <div class="ad-env-title">
+                    <h3>{{ d.namespace }}</h3>
+                    <span class="ad-env-actif" *ngIf="isCurrentDeployment(d) && isDeployOnline(d)">ACTIF</span>
+                  </div>
+                </div>
+                <span class="ad-env-time">{{ formatPipelineAgo(d.createdAt) }}</span>
+              </div>
+
+              <div class="ad-env-card-body">
+                <div class="ad-env-info-row">
+                  <span class="ad-env-info-label">Statut</span>
+                  <span class="ad-env-info-value">
+                    <span class="ad-env-status-badge" [ngClass]="deployStatusTone(d.status)">
+                      {{ deployStatusLabel(d.status) }}
+                    </span>
+                  </span>
+                </div>
+                <div class="ad-env-info-row" *ngIf="d.gitlabPipelineId">
+                  <span class="ad-env-info-label">Pipeline</span>
+                  <span class="ad-env-info-value">
+                    <span class="ad-pipe-id-chip">#{{ d.gitlabPipelineId }}</span>
+                  </span>
+                </div>
+                <div class="ad-env-info-row">
+                  <span class="ad-env-info-label">Services</span>
+                  <span class="ad-env-info-value">{{ serviceReadySummary(d) }}</span>
+                </div>
+                <div class="ad-env-info-row">
+                  <span class="ad-env-info-label">Créé le</span>
+                  <span class="ad-env-info-value">
+                    {{ d.createdAt | date:'dd/MM/yyyy HH:mm' }}
+                    <span class="ad-env-ago" *ngIf="d.createdAt">({{ formatPipelineAgo(d.createdAt) }})</span>
+                  </span>
+                </div>
+                <div class="ad-env-info-row" *ngIf="d.expiresAt">
+                  <span class="ad-env-info-label">Expire le</span>
+                  <span class="ad-env-info-value" [class.ad-env-expired]="isDeployExpired(d)">
+                    {{ d.expiresAt | date:'dd/MM/yyyy HH:mm' }}
+                    <span class="ad-env-ttl" *ngIf="d.ttlHours && !isDeployExpired(d)">· TTL {{ d.ttlHours }} h</span>
+                    <span class="ad-env-expired-badge" *ngIf="isDeployExpired(d)">TTL atteint</span>
+                  </span>
+                </div>
+              </div>
+
+              <div class="ad-env-card-actions" (click)="$event.stopPropagation()">
+                <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="selectHistory(d)"
+                        *ngIf="!(isCurrentDeployment(d) && isDeployOnline(d))">
+                  Voir le détail
+                </button>
+                <button type="button" class="ad-env-btn ad-env-btn--secondary"
+                        *ngIf="isCurrentDeployment(d) && isDeployOnline(d)"
+                        (click)="focusActiveEnvironment()">
+                  Voir l'actif ↑
+                </button>
+                <button type="button" class="ad-env-btn ad-env-btn--secondary"
+                        *ngIf="d.gitlabPipelineId"
+                        (click)="openDeployPipeline(d)">
+                  Voir le pipeline
+                </button>
+              </div>
+            </article>
           </div>
-          <span class="ad-env-status-badge" [ngClass]="deployStatusTone(selectedHistory.status)">
-            {{ deployStatusLabel(selectedHistory.status) }}
-          </span>
+
         </div>
-        <app-managed-deployment-status
-          [appId]="appId"
-          [deployment]="selectedHistory"
-          [services]="app.services || []">
-        </app-managed-deployment-status>
-        <div class="ad-env-detail-actions"
-             *ngIf="isCurrentDeployment(selectedHistory) && selectedHistory.status !== 'STOPPED'">
-          <button type="button" class="ad-env-btn ad-env-btn--danger" (click)="teardown()">
-            Supprimer le déploiement (teardown)
-          </button>
-        </div>
-      </div>
-      </ng-container>
+      </section>
     </div>
 
     <!-- ========== Historique (déploiements + lots de scan) ========== -->
-    <div class="ad-history" *ngIf="activeTab === 'history'">
-      <header class="ad-deploys-header">
-        <div class="ad-deploys-title-wrap">
-          <h1 class="ad-deploys-title">
-            Historique
-            <span class="ad-deploys-app">• {{ app.name }}</span>
-          </h1>
-          <p class="ad-deploys-sub">Cycles de déploiement et lots de scan, triés du plus récent</p>
-        </div>
-        <button type="button" class="ad-env-btn ad-env-btn--ghost"
-                (click)="loadHistoryTimeline()" [disabled]="historyTimelineLoading">
-          {{ historyTimelineLoading ? '…' : 'Actualiser' }}
-        </button>
-      </header>
-
-      <div class="ad-env-loading" *ngIf="historyTimelineLoading">
-        <div class="ad-skel-list">
-          <div class="ad-skel-card" *ngFor="let i of [1,2,3]">
-            <div class="ad-skel-line w-60"></div>
-            <div class="ad-skel-line w-40"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ad-env-empty" *ngIf="!historyTimelineLoading && !historyTimeline.length">
-        <h3>Aucun événement</h3>
-        <p>Lance un déploiement ou un scan applicatif pour alimenter l'historique.</p>
-        <div class="ad-env-empty-actions">
-          <button type="button" class="ad-env-btn ad-env-btn--primary" (click)="openDeployModal()" [disabled]="deploying">
-            Déployer
-          </button>
-          <button type="button" class="ad-env-btn ad-env-btn--ghost" (click)="openAppScanModal()" [disabled]="appScanRunning">
-            Scanner
-          </button>
-        </div>
-      </div>
-
-      <div class="ad-history-list" *ngIf="!historyTimelineLoading && historyTimeline.length">
-        <article class="ad-history-row" *ngFor="let row of historyTimeline">
-          <div class="ad-history-row-main">
-            <span class="am-badge ad-history-kind"
-                  [class.ad-history-kind--scan]="row.kind === 'scan'"
-                  [class.ad-history-kind--deploy]="row.kind === 'deploy'">
-              {{ row.kind === 'scan' ? 'Scan' : 'Déploiement' }}
-            </span>
-            <div class="ad-history-text">
-              <strong>{{ row.title }}</strong>
-              <span class="ad-history-meta">{{ row.meta }}</span>
-            </div>
-            <span class="am-badge" [ngClass]="historyStatusTone(row.status)">{{ row.status }}</span>
-            <span class="ad-verdict-pill ad-verdict-pill--sm"
-                  *ngIf="row.kind === 'scan' && row.verdict && (row.status | uppercase) === 'COMPLETE'"
-                  [ngClass]="'ad-verdict-' + verdictTone(row.verdict)">
-              {{ verdictLabel(row.verdict) }}
-            </span>
-            <span class="ad-history-ago">{{ formatPipelineAgo(row.at) }}</span>
-          </div>
-          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
-                  *ngIf="row.gitlabPipelineId != null"
-                  (click)="openPipelinesFromHistory(row)">
-            Voir les pipelines
-          </button>
-        </article>
-      </div>
-    </div>
+    <app-managed-app-history
+      *ngIf="activeTab === 'history' && app"
+      [appId]="appId"
+      [appName]="app.name"
+      [services]="app.services || []"
+      (navigateSection)="goSection($event)">
+    </app-managed-app-history>
 
     <!-- ========== Pipelines (même UI hub + filtre service) ========== -->
     <div class="ad-pipes" *ngIf="activeTab === 'pipelines'">
@@ -1017,34 +1282,12 @@
 
     <!-- ========== DefectDojo centralisé (même UX que hub service) ========== -->
     <div class="ad-panel ad-panel--flush" *ngIf="(activeTab === 'defectdojo' || activeTab === 'security') && app">
-      <article class="ad-deploy-rec ad-deploy-rec--security" *ngIf="appDeployRecommendation as rec" [attr.data-tone]="rec.tone">
-        <div class="ad-deploy-rec-head">
-          <span class="ad-deploy-rec-eyebrow">Recommandation · application complète</span>
-          <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
-        </div>
-        <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
-        <div class="ad-deploy-rec-actions">
-          <button type="button" class="am-btn am-btn-primary am-btn-sm"
-                  *ngIf="rec.canDeploy"
-                  (click)="openDeployModal()" [disabled]="deploying">
-            Déployer l'application
-          </button>
-          <button type="button" class="am-btn am-btn-secondary am-btn-sm"
-                  (click)="openAppScanModal()" [disabled]="appScanRunning">
-            Scanner l'app
-          </button>
-          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
-                  (click)="goSection('deployments')">
-            Voir les déploiements →
-          </button>
-        </div>
-      </article>
-
       <app-managed-security-dashboard
         [managedAppId]="appId"
         [appName]="app.name"
-        [services]="app.services || []"
-        [posture]="posture">
+        [services]="app.services"
+        [posture]="posture"
+        [refreshTick]="dojoRefreshTick">
       </app-managed-security-dashboard>
     </div>
 

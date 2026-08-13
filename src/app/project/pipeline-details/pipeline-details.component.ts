@@ -1,13 +1,16 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { of, Subject, combineLatest } from 'rxjs';
+import { catchError, distinctUntilChanged, map, takeUntil } from 'rxjs/operators';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { PipelineScanResponse, PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
 import { ToastService } from '../../services/ui/toast.service';
 import { AiAnalysisService } from '../../services/ai/ai-analysis.service';
 import { AnalyzeArtifactResponse } from '../../models/ai/analyze-artifact.model';
+import { ExplainPipelineLogsResponse } from '../../models/ai/explain-pipeline-logs.model';
+import { ApplicationManagementService } from '../../services/application-management/application-management.service';
+import { sortStageNames } from '../../shared/ci-stage-order';
 
 @Component({
   selector: 'app-pipeline-details',
@@ -18,6 +21,12 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
   envId = '';
   pipelineIdOnly: number | null = null;
+  /** Service (/project/:appId) ou app managée (/projects/:id). */
+  contextAppId: string | null = null;
+  /** true si URL sous /projects/:id/... */
+  managedAppContext = false;
+  /** Affiché dans le layout EnviroTest (sidebar app/service) — pas de double shell. */
+  inAppShell = false;
   data?: PipelineScanResponse;
   loading = false;
   error: string | null = null;
@@ -38,10 +47,17 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   aiAnalysisLoading = false;
   aiAnalysisError: string | null = null;
 
+  /** Agent IA — explication des logs du job (testeur sans accès cluster). */
+  logAiResult: ExplainPipelineLogsResponse | null = null;
+  logAiLoading = false;
+  logAiError: string | null = null;
+  logAiQuestion = '';
+
   private pollId?: any;
   private lastAutoScrollJobId?: number;
   /** true = l'utilisateur a cliqué manuellement sur un job (pas de suivi auto). */
   private jobSelectionPinned = false;
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private route: ActivatedRoute,
@@ -49,42 +65,243 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     private pipelineService: PipelineService,
     private toastService: ToastService,
     private aiAnalysisService: AiAnalysisService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private appMgmt: ApplicationManagementService
   ) {}
 
   ngOnInit(): void {
+    combineLatest([
+      this.route.paramMap,
+      this.route.queryParamMap
+    ]).pipe(
+      map(([pm, qm]) => ({
+        pipelineId: pm.get('pipelineId') || '',
+        envId: pm.get('envId') || '',
+        kind: (qm.get('kind') || '').toUpperCase()
+      })),
+      distinctUntilChanged((a, b) =>
+        a.pipelineId === b.pipelineId && a.envId === b.envId && a.kind === b.kind
+      ),
+      takeUntil(this.destroy$)
+    ).subscribe(() => this.resolveAndLoad());
+  }
+
+  private resolveAndLoad(): void {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+      this.pollId = undefined;
+    }
+    this.data = undefined;
+    this.error = null;
+    this.selectedJob = undefined;
+    this.jobSelectionPinned = false;
+
     const kindParam = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
     if (kindParam === 'SCAN' || kindParam === 'DEPLOY') {
       this.pipelineKind = kindParam;
     }
+
+    this.contextAppId = this.resolveContextAppId();
+    this.managedAppContext = this.isManagedAppRoute();
+    this.inAppShell = this.isInAppShell();
+
     const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
+    this.pipelineIdOnly = null;
+
     if (pipelineIdParam) {
       const pid = Number(pipelineIdParam);
       if (!Number.isNaN(pid) && pid > 0) {
         this.pipelineIdOnly = pid;
+        this.rememberPipeline(pid);
         this.loadPipelineById();
         return;
       }
     }
     if (this.envId) {
       this.loadPipeline();
-    } else {
-      this.error = 'Pipeline invalide';
+      return;
     }
+    // Sidebar « Détail pipeline » sans id → dernier pipeline (filtre kind)
+    this.loadLatestForContext();
+  }
+
+  private resolveContextAppId(): string | null {
+    let r: ActivatedRoute | null = this.route;
+    while (r) {
+      const appId = r.snapshot.paramMap.get('appId');
+      if (appId) return appId;
+      const id = r.snapshot.paramMap.get('id');
+      if (id && this.router.url.includes('/projects/')) return id;
+      r = r.parent;
+    }
+    return this.route.snapshot.queryParamMap.get('appId');
+  }
+
+  private isManagedAppRoute(): boolean {
+    return this.router.url.split(/[?#]/)[0].startsWith('/projects/');
+  }
+
+  private isInAppShell(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return path.startsWith('/projects/') || path.startsWith('/project/');
+  }
+
+  private rememberPipeline(pipelineId: number): void {
+    try {
+      localStorage.setItem('envirotest-last-pipeline-id', String(pipelineId));
+      if (this.contextAppId) {
+        localStorage.setItem(`envirotest-last-pipeline-id:${this.contextAppId}`, String(pipelineId));
+      }
+      if (this.pipelineKind) {
+        localStorage.setItem('envirotest-last-pipeline-kind', this.pipelineKind);
+      }
+    } catch { /* ignore */ }
+  }
+
+  private loadLatestForContext(): void {
+    this.loading = true;
+    this.error = null;
+
+    const remembered = this.readRememberedPipelineId();
+    if (remembered) {
+      this.pipelineIdOnly = remembered;
+      this.loadPipelineById();
+      return;
+    }
+
+    if (this.managedAppContext && this.contextAppId) {
+      this.loadLatestManagedAppPipeline();
+      return;
+    }
+
+    if (this.contextAppId) {
+      this.pipelineService.listPipelines(0, 30, this.contextAppId, this.pipelineKind || null).subscribe({
+        next: list => {
+          const item = (list || [])[0];
+          if (item?.pipelineId) {
+            this.pipelineIdOnly = item.pipelineId;
+            this.rememberPipeline(item.pipelineId);
+            this.loadPipelineById();
+          } else if (item?.environmentId) {
+            this.envId = item.environmentId;
+            this.loadPipeline();
+          } else {
+            this.loading = false;
+            this.error = this.emptyPipelineMessage();
+          }
+        },
+        error: () => {
+          this.loading = false;
+          this.error = this.emptyPipelineMessage();
+        }
+      });
+      return;
+    }
+
+    this.pipelineService.getLatestPipeline().subscribe({
+      next: latest => {
+        if (latest?.pipelineId || latest?.id) {
+          const pid = Number(latest.pipelineId ?? latest.id);
+          if (!Number.isNaN(pid) && pid > 0) {
+            this.pipelineIdOnly = pid;
+            this.loadPipelineById();
+            return;
+          }
+        }
+        if (latest?.environmentId) {
+          this.envId = latest.environmentId;
+          this.loadPipeline();
+          return;
+        }
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      },
+      error: () => {
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      }
+    });
+  }
+
+  private loadLatestManagedAppPipeline(): void {
+    if (!this.contextAppId) return;
+    if (this.pipelineKind === 'DEPLOY') {
+      this.appMgmt.listDeployments(this.contextAppId).pipe(
+        catchError(() => of([])),
+        takeUntil(this.destroy$)
+      ).subscribe(deps => {
+        const withPipe = (deps || []).find(d => !!d.gitlabPipelineId);
+        if (withPipe?.gitlabPipelineId) {
+          this.pipelineIdOnly = withPipe.gitlabPipelineId;
+          this.rememberPipeline(withPipe.gitlabPipelineId);
+          this.loadPipelineById();
+        } else {
+          this.loading = false;
+          this.error = this.emptyPipelineMessage();
+        }
+      });
+      return;
+    }
+    this.appMgmt.listScanBatches(this.contextAppId).pipe(
+      catchError(() => of([])),
+      takeUntil(this.destroy$)
+    ).subscribe(batches => {
+      const withPipe = (batches || []).find(b => !!b.gitlabPipelineId);
+      if (withPipe?.gitlabPipelineId) {
+        this.pipelineIdOnly = withPipe.gitlabPipelineId!;
+        this.rememberPipeline(withPipe.gitlabPipelineId!);
+        this.loadPipelineById();
+      } else {
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      }
+    });
+  }
+
+  private readRememberedPipelineId(): number | null {
+    try {
+      const storedKind = localStorage.getItem('envirotest-last-pipeline-kind');
+      if (this.pipelineKind && storedKind && storedKind !== this.pipelineKind) {
+        return null;
+      }
+      const keyed = this.contextAppId
+        ? localStorage.getItem(`envirotest-last-pipeline-id:${this.contextAppId}`)
+        : null;
+      const raw = keyed || localStorage.getItem('envirotest-last-pipeline-id');
+      const n = raw ? Number(raw) : NaN;
+      return !Number.isNaN(n) && n > 0 ? n : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private emptyPipelineMessage(): string {
+    if (this.pipelineKind === 'DEPLOY') {
+      return 'Aucun pipeline de déploiement — lance un déploiement pour suivre les jobs ici.';
+    }
+    if (this.pipelineKind === 'SCAN') {
+      return 'Aucun pipeline de scan — lance un scan pour suivre les jobs ici.';
+    }
+    return 'Aucun pipeline disponible. Lance un scan ou un déploiement.';
   }
 
   loadPipelineById(): void {
     if (this.pipelineIdOnly == null) return;
     this.loading = true;
     this.error = null;
-    const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
-    this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
+    const appId = this.contextAppId
+      || this.route.snapshot.queryParamMap.get('appId')
+      || undefined;
+    // Pour app managée, l’API by-id préfère un serviceId — on omet l’UUID managé.
+    const appQuery = this.managedAppContext ? undefined : appId;
+    this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appQuery).subscribe({
       next: res => {
         this.applyPipelineUpdate(res);
         this.loading = false;
         this.autoFollowRunningJob();
         this.ensurePolling();
+        if (this.pipelineIdOnly) this.rememberPipeline(this.pipelineIdOnly);
       },
       error: err => {
         this.loading = false;
@@ -98,6 +315,8 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       clearInterval(this.pollId);
       this.pollId = undefined;
     }
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   /** Liste jobs normalisée pour le template. */
@@ -326,6 +545,14 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         3000
       );
     }
+    if (this.managedAppContext && this.contextAppId) {
+      this.router.navigate(['/projects', this.contextAppId, 'pipelines']);
+      return;
+    }
+    if (this.contextAppId) {
+      this.router.navigate(['/project', this.contextAppId, 'pipelines']);
+      return;
+    }
     this.router.navigate(['/pipelines']);
   }
 
@@ -352,6 +579,9 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.scanError = null;
     this.aiAnalysisResult = null;
     this.aiAnalysisError = null;
+    this.logAiResult = null;
+    this.logAiError = null;
+    this.logAiQuestion = '';
     this.loadingJob = true;
 
     this.pipelineService.getJobLogs(latest.id).subscribe({
@@ -425,19 +655,24 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   }
 
   openSecurityDashboard(): void {
-    const appId =
-      this.route.snapshot.queryParamMap.get('appId') ||
-      localStorage.getItem('envirotest-last-project-app-id');
-    if (!appId) {
-      this.router.navigate(['/my-applications']);
-      return;
-    }
     const queryParams: Record<string, string> = {};
     if (this.data?.ref) queryParams['branch'] = this.data.ref;
     if (this.data?.pipelineId) {
       queryParams['pipelineId'] = String(this.data.pipelineId);
-    } else if (this.envId) {
-      queryParams['pipelineId'] = '';
+    }
+
+    if (this.managedAppContext && this.contextAppId) {
+      this.router.navigate(['/projects', this.contextAppId, 'defectdojo'], { queryParams });
+      return;
+    }
+
+    const appId =
+      this.contextAppId ||
+      this.route.snapshot.queryParamMap.get('appId') ||
+      localStorage.getItem('envirotest-last-project-app-id');
+    if (!appId) {
+      this.router.navigate(['/projects']);
+      return;
     }
     this.router.navigate(['/project', appId, 'security-dashboard'], { queryParams });
   }
@@ -522,27 +757,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  /**
-   * Ordre des stages tel que défini dans le .gitlab-ci.yml (pipeline.md).
-   * On ne trie PAS par id de job : un retry GitLab crée un nouveau job id plus élevé
-   * et faisait remonter deploy-k8s en fin de liste après zap/reporting.
-   */
-  private static readonly CI_STAGE_ORDER: string[] = [
-    'setup',
-    'code-analysis',
-    'sca',
-    'sast',
-    'secrets-iac',
-    'build',
-    'container-scan',
-    'push-image',
-    'deploy-k8s',
-    'zap-scan',
-    'reporting',
-    'security-validation',
-    'report'
-  ];
-
   getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
     const jobs = this.normalizeJobs(this.data?.jobs);
     if (!jobs.length) return [];
@@ -559,18 +773,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     // Jobs d'un même stage : id croissant (ordre d'apparition GitLab)
     stageMap.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
 
-    const known = PipelineDetailsComponent.CI_STAGE_ORDER;
-    const stageNames = Array.from(stageMap.keys()).sort((a, b) => {
-      const ia = known.indexOf(a.toLowerCase());
-      const ib = known.indexOf(b.toLowerCase());
-      if (ia >= 0 && ib >= 0) return ia - ib;
-      if (ia >= 0) return -1;
-      if (ib >= 0) return 1;
-      // Stages inconnus : premier job id le plus bas
-      const minA = Math.min(...(stageMap.get(a) || []).map(j => j.id ?? 0));
-      const minB = Math.min(...(stageMap.get(b) || []).map(j => j.id ?? 0));
-      return minA - minB;
-    });
+    // Ordre CI (.gitlab-ci.yml) — pas l'ordre d'insertion GitLab / retry
+    const stageNames = sortStageNames(Array.from(stageMap.keys()), (stage) =>
+      Math.min(...(stageMap.get(stage) || []).map(j => j.id ?? 0))
+    );
 
     return stageNames.map((name) => {
       const stageJobs = stageMap.get(name) || [];
@@ -907,6 +1113,78 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     if (s.includes('MEDIUM')) return 'ai-sev-medium';
     if (s.includes('LOW')) return 'ai-sev-low';
     return 'ai-sev-info';
+  }
+
+  /** Agent IA : question libre ou explication de log (contexte projet + pipeline). */
+  explainLogsWithAi(customQuestion?: string): void {
+    if (customQuestion?.trim()) {
+      this.logAiQuestion = customQuestion.trim();
+    }
+    this.askPipelineAi(true);
+  }
+
+  askPipelineAi(explainLog = false): void {
+    if (this.logAiLoading) return;
+    const typed = this.logAiQuestion?.trim() || '';
+    if (!explainLog && !typed) return;
+    if (explainLog && !this.selectedJobLogs?.trim()) {
+      this.logAiError = 'Sélectionne un job avec des logs, ou pose une question libre.';
+      return;
+    }
+    this.logAiLoading = true;
+    this.logAiError = null;
+    const question = typed || (explainLog
+      ? 'Explique-moi ce log : qu\'est-ce qui a échoué et quelles sont les causes probables ?'
+      : '');
+    const stagesOverview = this.getStages()
+      .map(s => `${s.name}=${(s.status || '').toLowerCase()}`)
+      .join('; ');
+    this.aiAnalysisService.explainPipelineLogs({
+      logs: this.selectedJobLogs || undefined,
+      jobName: this.selectedJob?.name,
+      stageName: this.selectedJob?.stage,
+      jobStatus: this.selectedJob?.status,
+      pipelineKind: this.pipelineKind || undefined,
+      stagesOverview,
+      projectHint: 'EnviroTest — pipeline GitLab multi-services',
+      projectContext: this.buildAiProjectContext(),
+      userQuestion: question
+    }).subscribe({
+      next: res => {
+        this.logAiResult = res;
+        this.logAiLoading = false;
+        this.toastService?.push('success', 'Assistant pipeline', 'Réponse disponible.', 3000);
+        setTimeout(() => {
+          try {
+            document.querySelector('.log-ai-block .ai-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } catch { /* ignore */ }
+        }, 50);
+      },
+      error: err => {
+        this.logAiLoading = false;
+        this.logAiError = err.error?.message || err.message || 'Erreur lors de l\'explication IA.';
+        this.toastService?.push('error', 'Assistant pipeline', this.logAiError ?? 'Erreur', 5000);
+      }
+    });
+  }
+
+  private buildAiProjectContext(): string {
+    const lines: string[] = [];
+    lines.push(`contextAppId: ${this.contextAppId || '—'}`);
+    lines.push(`managedApp: ${this.managedAppContext}`);
+    lines.push(`envId: ${this.envId || '—'}`);
+    lines.push(`pipelineId: ${this.data?.pipelineId ?? this.pipelineIdOnly ?? '—'}`);
+    lines.push(`pipelineStatus: ${this.data?.status || '—'}`);
+    lines.push(`pipelineKind: ${this.pipelineKind || '—'}`);
+    if (this.data?.webUrl) lines.push(`gitlabPipelineUrl: ${this.data.webUrl}`);
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    if (jobs.length) {
+      lines.push('jobs:');
+      for (const j of jobs.slice(0, 40)) {
+        lines.push(`  - ${j.stage || '?'}/${j.name}=${j.status}`);
+      }
+    }
+    return lines.join('\n');
   }
 }
 

@@ -6,6 +6,10 @@ import {
   AnalyzeArtifactRequest,
   AnalyzeArtifactResponse
 } from '../../models/ai/analyze-artifact.model';
+import {
+  ExplainPipelineLogsRequest,
+  ExplainPipelineLogsResponse
+} from '../../models/ai/explain-pipeline-logs.model';
 import { UserService } from '../user/user.service';
 
 const BASE = environment.BASE_URL;
@@ -35,6 +39,17 @@ export class AiAnalysisService {
   analyzeArtifact(request: AnalyzeArtifactRequest): Observable<AnalyzeArtifactResponse> {
     return this.http.post<AnalyzeArtifactResponse>(
       BASE + 'api/ai/analyze-artifact',
+      request,
+      { headers: this.authHeaders() }
+    );
+  }
+
+  /**
+   * Explique les logs d'un job CI (causes + actions) sans suggérer d'accès cluster.
+   */
+  explainPipelineLogs(request: ExplainPipelineLogsRequest): Observable<ExplainPipelineLogsResponse> {
+    return this.http.post<ExplainPipelineLogsResponse>(
+      BASE + 'api/ai/explain-pipeline-logs',
       request,
       { headers: this.authHeaders() }
     );

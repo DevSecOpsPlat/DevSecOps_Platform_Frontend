@@ -1,43 +1,91 @@
 <div class="vuln-container dd-dashboard msd-root">
-  <header class="vuln-header">
-    <div class="vuln-header-content">
-      <div class="vuln-header-left">
-        <div class="vuln-badge"><span class="vuln-badge-dot"></span>Analyse détaillée · DefectDojo centralisé</div>
-        <h1 class="vuln-title">{{ appName || 'Application' }}</h1>
-        <p class="vuln-subtitle">
-          Rollup live de
-          <strong>{{ services.length }}</strong> service(s)
-          <span *ngIf="posture?.verdict">
-            · <span class="msd-verdict-inline" [ngClass]="verdictToneClass">{{ verdictLabel }}</span>
-          </span>
-        </p>
-        <p class="vuln-subtitle vuln-subtitle--meta">
-          Engagements configurés : <strong>{{ configuredCount }}</strong>
-          <span *ngIf="serviceFilter !== 'ALL'"> · filtre {{ serviceFilterLabel }}</span>
-        </p>
+
+  <!-- 1. Services en premier — accès rapide au hub Dojo -->
+  <section class="msd-services" *ngIf="!loading && visibleSlices.length">
+    <div class="msd-services-head">
+      <div>
+        <h2 class="msd-services-title">Services</h2>
+        <p class="msd-services-sub">Ouvre le dashboard DefectDojo d’un service (métriques, findings, bulk edit).</p>
       </div>
-      <div class="vuln-header-right">
-        <div class="vuln-header-controls">
-          <div class="vuln-env-card">
-            <span class="vuln-env-label">Service</span>
-            <div class="vuln-env-value">
-              <span class="vuln-env-icon">⬚</span>
-              <select class="vuln-env-select"
-                      [(ngModel)]="serviceFilter"
-                      (ngModelChange)="onServiceFilterChange()"
-                      [disabled]="loading">
-                <option value="ALL">Tous les services</option>
-                <option *ngFor="let s of services" [ngValue]="s.id">{{ s.name }}</option>
-              </select>
-            </div>
+      <span class="msd-services-count">{{ visibleSlices.length }} service{{ visibleSlices.length === 1 ? '' : 's' }}</span>
+    </div>
+    <div class="msd-svc-grid">
+      <article class="msd-svc-card" *ngFor="let slice of visibleSlices; trackBy: trackSlice"
+               [class.msd-svc-card--err]="!!slice.error"
+               [class.msd-svc-card--ok]="!!slice.dashboard?.engagementId && !slice.error"
+               [attr.data-role]="serviceRole(slice.serviceId)"
+               (click)="openServiceHub(slice, $event)"
+               role="button"
+               tabindex="0"
+               (keyup.enter)="openServiceHub(slice, $event)">
+        <div class="msd-svc-top">
+          <div class="msd-svc-identity">
+            <strong class="msd-svc-name">{{ slice.serviceName }}</strong>
+            <span class="msd-svc-branch">{{ slice.branch }}</span>
           </div>
-          <div class="vuln-actions">
-            <button type="button" class="vuln-btn vuln-btn-secondary" (click)="reload()" [disabled]="loading">
-              Actualiser
-            </button>
+          <div class="msd-svc-badges">
+            <span class="msd-svc-role" *ngIf="serviceRole(slice.serviceId) as role">{{ role }}</span>
+            <span class="msd-svc-pill" *ngIf="servicePostureVerdict(slice.serviceId) as v"
+                  [class.msd-svc-pill--bad]="isBlocked(v)">
+              {{ isBlocked(v) ? 'Hard gate' : 'OK' }}
+            </span>
           </div>
         </div>
-      </div>
+
+        <p class="msd-svc-meta" *ngIf="slice.dashboard?.engagementName">{{ slice.dashboard!.engagementName }}</p>
+        <p class="msd-svc-meta msd-svc-meta--warn" *ngIf="slice.error">{{ slice.error }}</p>
+        <p class="msd-svc-meta" *ngIf="!slice.error && !slice.dashboard?.engagementId">Pas d’engagement DefectDojo</p>
+
+        <div class="msd-svc-sevs" *ngIf="slice.dashboard?.bySeverity as bs">
+          <span class="msd-sev msd-sev--c">C {{ bs['critical'] || bs['Critical'] || 0 }}</span>
+          <span class="msd-sev msd-sev--h">H {{ bs['high'] || bs['High'] || 0 }}</span>
+          <span class="msd-sev msd-sev--m">M {{ bs['medium'] || bs['Medium'] || 0 }}</span>
+          <span class="msd-sev msd-sev--l">L {{ bs['low'] || bs['Low'] || 0 }}</span>
+        </div>
+
+        <button type="button" class="msd-svc-cta"
+                (click)="openServiceHub(slice, $event)">
+          Dashboard Dojo service →
+        </button>
+      </article>
+    </div>
+  </section>
+
+  <div class="msd-services msd-services--empty" *ngIf="!loading && services.length && !visibleSlices.length">
+    <p class="msd-services-sub">Aucun service pour ce filtre.</p>
+  </div>
+
+  <!-- 2. Barre de filtres (compacte, sous les services) -->
+  <header class="msd-toolbar">
+    <div class="msd-toolbar-label">
+      <span class="msd-toolbar-eyebrow">Filtres</span>
+      <p class="msd-toolbar-summary">
+        <strong>{{ configuredCount }}</strong> engagement(s) · {{ filterSummary }}
+      </p>
+    </div>
+    <div class="msd-toolbar-controls">
+      <label class="msd-field">
+        <span>Service</span>
+        <select [(ngModel)]="serviceFilter" (change)="onServiceFilterChange()" [disabled]="loading">
+          <option value="ALL">Tous</option>
+          <option *ngFor="let s of services" [ngValue]="s.id">{{ s.name }}</option>
+        </select>
+      </label>
+      <label class="msd-field">
+        <span>Branche</span>
+        <select [(ngModel)]="branchFilter" (change)="onBranchFilterChange()" [disabled]="loading">
+          <option value="ALL">Toutes</option>
+          <option *ngFor="let b of branchOptions" [ngValue]="b">{{ b }}</option>
+        </select>
+      </label>
+      <label class="msd-field">
+        <span>Pipeline</span>
+        <select [(ngModel)]="pipelineFilter" (change)="onPipelineFilterChange()" [disabled]="loading">
+          <option value="ALL">Tous</option>
+          <option *ngFor="let p of pipelineOptions" [ngValue]="p.id">{{ p.label }}</option>
+        </select>
+      </label>
+      <button type="button" class="msd-refresh" (click)="reload()" [disabled]="loading">Actualiser</button>
     </div>
   </header>
 
@@ -48,78 +96,62 @@
     <div *ngIf="!loading && !services.length" class="vuln-alert vuln-alert-warning">
       Aucun service — ajoute des services pour alimenter DefectDojo.
     </div>
-    <div *ngIf="!loading && services.length && !hasAnyEngagement && !posture?.bySeverity"
+    <div *ngIf="!loading && services.length && !hasAnyEngagement && severityTotal === 0"
          class="vuln-alert vuln-alert-info">
-      Aucun engagement DefectDojo trouvé pour ces services. Lance un scan applicatif.
+      Aucun engagement DefectDojo trouvé pour ce filtre. Lance un scan applicatif ou élargis les filtres.
     </div>
   </div>
 
-  <div *ngIf="loading" class="dd-loading">Chargement du dashboard DefectDojo centralisé…</div>
+  <div *ngIf="loading" class="dd-loading">Chargement du dashboard DefectDojo…</div>
 
-  <ng-container *ngIf="!loading && (hasAnyEngagement || severityTotal > 0)">
+  <ng-container *ngIf="!loading && (hasAnyEngagement || severityTotal > 0 || visibleSlices.length)">
 
-    <!-- Barre sévérité -->
-    <section class="dd-metrics-block">
-      <div class="dd-metrics-bar-head">
-        <span class="dd-metrics-bar-icon">◔</span>
-        <span>Métriques par sévérité (app)</span>
-        <span class="dd-metrics-bar-meta">{{ serviceFilterLabel }}</span>
-      </div>
-      <div class="dd-metrics-bar">
-        <div class="dd-metric-cell sev-critical dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('Critical')" (keyup.enter)="filterBySeverity('Critical')">
-          <span class="dd-metric-cell-value">{{ severityCount('Critical') }}</span>
-          <span class="dd-metric-cell-label">Critical</span>
+    <!-- 3. Sévérité (sans donut) -->
+    <section class="dd-metrics-block msd-metrics-row" *ngIf="severityTotal > 0 || hasAnyEngagement">
+      <div class="msd-metrics-main">
+        <div class="dd-metrics-bar-head">
+          <span class="dd-metrics-bar-icon">◔</span>
+          <span>Métriques par sévérité (app)</span>
+          <span class="dd-metrics-bar-meta">{{ filterSummary }}</span>
         </div>
-        <div class="dd-metric-cell sev-high dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('High')" (keyup.enter)="filterBySeverity('High')">
-          <span class="dd-metric-cell-value">{{ severityCount('High') }}</span>
-          <span class="dd-metric-cell-label">High</span>
-        </div>
-        <div class="dd-metric-cell sev-medium dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('Medium')" (keyup.enter)="filterBySeverity('Medium')">
-          <span class="dd-metric-cell-value">{{ severityCount('Medium') }}</span>
-          <span class="dd-metric-cell-label">Medium</span>
-        </div>
-        <div class="dd-metric-cell sev-low dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('Low')" (keyup.enter)="filterBySeverity('Low')">
-          <span class="dd-metric-cell-value">{{ severityCount('Low') }}</span>
-          <span class="dd-metric-cell-label">Low</span>
-        </div>
-        <div class="dd-metric-cell sev-info dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('Info')" (keyup.enter)="filterBySeverity('Info')">
-          <span class="dd-metric-cell-value">{{ severityCount('Info') }}</span>
-          <span class="dd-metric-cell-label">Info</span>
-        </div>
-        <div class="dd-metric-cell sev-total dd-metric-cell--clickable" role="button" tabindex="0"
-             (click)="filterBySeverity('')" (keyup.enter)="filterBySeverity('')">
-          <span class="dd-metric-cell-value">{{ severityTotal }}</span>
-          <span class="dd-metric-cell-label">Total</span>
-        </div>
-      </div>
-      <p class="dd-metrics-foot">{{ openFindingsSubtitle }}</p>
-    </section>
-
-    <!-- Quality Gate -->
-    <section class="msd-qg" *ngIf="qualityGates.length">
-      <div class="msd-qg-head">
-        <h2>Quality Gate — application</h2>
-        <p>« Bloqué » = hard gate Critical DefectDojo (tolérance zéro). Sonar indisponible = Inconnu, pas un FAIL seul.</p>
-      </div>
-      <ul class="msd-qg-list">
-        <li class="msd-qg-item" *ngFor="let g of qualityGates" [attr.data-status]="(g.status || '').toLowerCase()">
-          <span class="msd-qg-status">{{ qualityGateStatusLabel(g.status) }}</span>
-          <div>
-            <strong>{{ g.label }}</strong>
-            <p>{{ g.message }}</p>
-            <span class="msd-qg-scope" *ngIf="g.scope">{{ g.scope }}</span>
+        <div class="dd-metrics-bar msd-sev-bar">
+          <div class="dd-metric-cell sev-critical dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('Critical')" (keyup.enter)="filterBySeverity('Critical')">
+            <span class="dd-metric-cell-value">{{ severityCount('Critical') }}</span>
+            <span class="dd-metric-cell-label">Critical</span>
           </div>
-        </li>
-      </ul>
+          <div class="dd-metric-cell sev-high dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('High')" (keyup.enter)="filterBySeverity('High')">
+            <span class="dd-metric-cell-value">{{ severityCount('High') }}</span>
+            <span class="dd-metric-cell-label">High</span>
+          </div>
+          <div class="dd-metric-cell sev-medium dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('Medium')" (keyup.enter)="filterBySeverity('Medium')">
+            <span class="dd-metric-cell-value">{{ severityCount('Medium') }}</span>
+            <span class="dd-metric-cell-label">Medium</span>
+          </div>
+          <div class="dd-metric-cell sev-low dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('Low')" (keyup.enter)="filterBySeverity('Low')">
+            <span class="dd-metric-cell-value">{{ severityCount('Low') }}</span>
+            <span class="dd-metric-cell-label">Low</span>
+          </div>
+          <div class="dd-metric-cell sev-info dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('Info')" (keyup.enter)="filterBySeverity('Info')">
+            <span class="dd-metric-cell-value">{{ severityCount('Info') }}</span>
+            <span class="dd-metric-cell-label">Info</span>
+          </div>
+          <div class="dd-metric-cell sev-total dd-metric-cell--clickable" role="button" tabindex="0"
+               (click)="filterBySeverity('')" (keyup.enter)="filterBySeverity('')">
+            <span class="dd-metric-cell-value">{{ severityTotal }}</span>
+            <span class="dd-metric-cell-label">Total</span>
+          </div>
+        </div>
+        <p class="dd-metrics-foot">{{ openFindingsSubtitle }}</p>
+      </div>
     </section>
 
-    <!-- Metrics Overview -->
-    <div class="dd-section-head">
+    <!-- 4. Metrics Overview -->
+    <div class="dd-section-head" *ngIf="metricCards.length">
       <h2>Metrics Overview</h2>
       <p>Cartes DefectDojo agrégées — clique pour ouvrir la liste centralisée</p>
     </div>
@@ -138,51 +170,13 @@
         <div class="dd-overview-foot">Consulter la liste →</div>
       </button>
     </div>
-
-    <!-- Par service -->
-    <div class="dd-section-head">
-      <h2>Par service</h2>
-      <p>Chaque service a son engagement DefectDojo — ouvre le hub unitaire pour graphiques &amp; bulk edit</p>
-    </div>
-    <div class="msd-svc-grid">
-      <article class="msd-svc-card" *ngFor="let slice of slices"
-               [class.msd-svc-card--err]="!!slice.error"
-               [class.msd-svc-card--ok]="!!slice.dashboard?.engagementId">
-        <div class="msd-svc-top">
-          <div>
-            <strong>{{ slice.serviceName }}</strong>
-            <span class="msd-svc-branch">🌿 {{ slice.branch }}</span>
-          </div>
-          <span class="msd-svc-pill" *ngIf="servicePostureVerdict(slice.serviceId) as v"
-                [class.msd-svc-pill--bad]="isBlocked(v)">
-            {{ isBlocked(v) ? 'Hard gate' : 'OK' }}
-          </span>
-        </div>
-        <p class="msd-svc-meta" *ngIf="slice.dashboard?.engagementName">
-          {{ slice.dashboard!.engagementName }}
-        </p>
-        <p class="msd-svc-meta msd-svc-meta--warn" *ngIf="slice.error">{{ slice.error }}</p>
-        <p class="msd-svc-meta" *ngIf="!slice.error && !slice.dashboard?.engagementId">
-          Pas d'engagement DefectDojo
-        </p>
-        <div class="msd-svc-sevs" *ngIf="slice.dashboard?.bySeverity as bs">
-          <span>C {{ bs['critical'] || bs['Critical'] || 0 }}</span>
-          <span>H {{ bs['high'] || bs['High'] || 0 }}</span>
-          <span>M {{ bs['medium'] || bs['Medium'] || 0 }}</span>
-          <span>L {{ bs['low'] || bs['Low'] || 0 }}</span>
-        </div>
-        <button type="button" class="vuln-btn vuln-btn-secondary msd-svc-btn" (click)="openServiceHub(slice)">
-          Dashboard Dojo service →
-        </button>
-      </article>
-    </div>
   </ng-container>
 
   <!-- Findings table -->
   <div id="dd-findings-table" class="vuln-filters-panel" *ngIf="showFindingsTable">
     <div class="vuln-filters-head">
       <span class="vuln-filters-title">{{ selectedCategoryLabel }}</span>
-      <span class="vuln-filters-hint">Liste centralisée — « Détails &amp; IA » ouvre le hub du service concerné</span>
+      <span class="vuln-filters-hint">Liste centralisée — sélectionne des findings pour Bulk Edit (Verified, Mitigated…)</span>
     </div>
     <div class="vuln-filters-bar">
       <div class="vuln-filters-left">
@@ -203,19 +197,16 @@
                 *ngIf="filterSeverity || searchQuery"
                 (click)="clearFilters()">Réinitialiser</button>
       </div>
-      <div class="vuln-filters-right">
-        <div class="vuln-count-pill">
-          <span class="vuln-count-strong">{{ filteredFindings.length }}</span> / {{ totalElements }}
-        </div>
-      </div>
     </div>
   </div>
 
   <div id="vuln-table" class="vuln-table-container" *ngIf="showFindingsTable">
+    <div class="vuln-alert vuln-alert-error" *ngIf="bulkActionError">{{ bulkActionError }}</div>
+    <div class="vuln-alert vuln-alert-info" *ngIf="bulkActionMessage && !bulkActionError">{{ bulkActionMessage }}</div>
+
     <div class="vuln-table-header">
       <div class="vuln-table-title">
         <h2>Liste des vulnérabilités</h2>
-        <span class="vuln-table-scope-chip">{{ selectedCategoryLabel }} · {{ serviceFilterLabel }}</span>
       </div>
       <div class="vuln-table-pagination">
         <button type="button" class="vuln-page-btn" (click)="prevPage()" [disabled]="listLoading || page <= 0">←</button>
@@ -225,10 +216,66 @@
       </div>
     </div>
 
+    <div class="dd-findings-toolbar">
+      <div class="dd-toolbar-left">
+        <div class="dd-bulk-edit-wrap">
+          <button type="button" class="dd-bulk-edit-btn"
+                  [disabled]="!hasSelection && editTargetIds.length === 0"
+                  (click)="toggleBulkEditMenu()">
+            Bulk Edit <span class="dd-caret">▾</span>
+          </button>
+          <div class="dd-bulk-edit-panel" *ngIf="bulkEditOpen && activeEditIds.length > 0">
+            <p class="dd-bulk-edit-title">
+              Modifier {{ activeEditIds.length }} finding{{ activeEditIds.length > 1 ? 's' : '' }}
+            </p>
+            <div class="dd-row-actions-groups">
+              <div class="dd-action-group">
+                <span class="dd-action-group-label">Status</span>
+                <div class="dd-action-group-btns">
+                  <button type="button" class="dd-action-btn dd-action-btn--sm"
+                          *ngFor="let a of statusGroupActions"
+                          [disabled]="bulkActionLoading"
+                          (click)="applyBulkAction(a)">{{ a.label }}</button>
+                </div>
+              </div>
+              <div class="dd-action-group">
+                <span class="dd-action-group-label">Risk Acceptance</span>
+                <div class="dd-action-group-btns">
+                  <button type="button" class="dd-action-btn dd-action-btn--sm dd-action-btn--secondary"
+                          *ngFor="let a of riskGroupActions"
+                          [disabled]="bulkActionLoading"
+                          (click)="applyBulkAction(a)">{{ a.label }}</button>
+                </div>
+              </div>
+            </div>
+            <span class="dd-action-loading" *ngIf="bulkActionLoading">Synchronisation DefectDojo…</span>
+          </div>
+        </div>
+        <button type="button" class="dd-toolbar-delete" title="Supprimer la sélection"
+                [disabled]="!hasSelection || bulkActionLoading"
+                (click)="deleteSelected()">
+          <span class="dd-delete-icon" aria-hidden="true">🗑</span>
+        </button>
+      </div>
+      <div class="dd-toolbar-right">
+        <span class="dd-showing-entries">
+          Showing entries {{ showingFrom }} to {{ showingTo }} of {{ totalElements }}
+        </span>
+      </div>
+    </div>
+
     <div class="vuln-table-wrapper" [class.dd-table-loading]="listLoading">
       <table class="vuln-table dd-findings-table">
         <thead>
           <tr>
+            <th class="dd-col-check">
+              <input type="checkbox" class="dd-row-check"
+                     [checked]="isAllPageSelected"
+                     [disabled]="filteredFindings.length === 0"
+                     (change)="toggleSelectAllPage($event)"
+                     aria-label="Tout sélectionner sur la page" />
+            </th>
+            <th class="dd-col-menu"></th>
             <th>Sévérité</th>
             <th>Service</th>
             <th>Outil</th>
@@ -240,10 +287,27 @@
         </thead>
         <tbody>
           <tr *ngFor="let f of filteredFindings; trackBy: trackFindingRow"
-              [class]="'vuln-row severity-' + (f.severity || 'info').toLowerCase()">
+              [class.dd-row-checked]="isFindingChecked(f)">
+            <td class="dd-col-check">
+              <input type="checkbox" class="dd-row-check"
+                     [checked]="isFindingChecked(f)"
+                     (change)="toggleFindingSelection(f, $event)"
+                     [attr.aria-label]="'Sélectionner finding ' + f.id" />
+            </td>
+            <td class="dd-col-menu">
+              <div class="dd-row-menu-wrap">
+                <button type="button" class="dd-row-menu-btn"
+                        (click)="toggleRowMenu(f.id!, $event)" aria-label="Actions">⋮</button>
+                <div class="dd-row-menu" *ngIf="rowMenuOpenId === f.id" (click)="$event.stopPropagation()">
+                  <button type="button" class="dd-row-menu-item" (click)="openRowEdit(f)">Edit</button>
+                  <button type="button" class="dd-row-menu-item dd-row-menu-item--danger"
+                          (click)="deleteSingleFinding(f)">Delete</button>
+                </div>
+              </div>
+            </td>
             <td>
-              <span class="vuln-severity-badge"
-                    [class]="'severity-' + (f.severity || 'info').toLowerCase()">{{ f.severity }}</span>
+              <span class="vuln-severity-badge msd-sev-badge"
+                    [attr.data-sev]="(f.severity || 'info').toLowerCase()">{{ f.severity }}</span>
             </td>
             <td><span class="msd-svc-chip">{{ f.serviceName }}</span></td>
             <td><span class="vuln-tool-badge">{{ toolLabel(f) }}</span></td>
@@ -264,7 +328,7 @@
             </td>
           </tr>
           <tr *ngIf="!listLoading && filteredFindings.length === 0">
-            <td colspan="7" class="vuln-empty-state"><p>Aucune vulnérabilité dans cette catégorie.</p></td>
+            <td colspan="9" class="vuln-empty-state"><p>Aucune vulnérabilité dans cette catégorie.</p></td>
           </tr>
         </tbody>
       </table>

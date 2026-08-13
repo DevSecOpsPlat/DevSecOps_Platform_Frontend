@@ -1,7 +1,7 @@
 <!-- pipeline-detail.component.html -->
-<div class="user-shell">
-  <app-user-sidebar></app-user-sidebar>
-  <div class="user-main">
+<div [class.user-shell]="!inAppShell" [class.pd-embed]="inAppShell">
+  <app-user-sidebar *ngIf="!inAppShell"></app-user-sidebar>
+  <div [class.user-main]="!inAppShell" [class.pd-embed-main]="inAppShell">
 
     <!-- Loading full page -->
     <div *ngIf="loading && !data" class="loading-page">
@@ -112,7 +112,7 @@
                 <h3 class="stage-title">
                   <span class="stage-name-badge">
                     <span class="stage-dot" [ngClass]="'dot-' + (stage.status || '').toLowerCase()"></span>
-                    {{ stage.name }}
+                    <span class="stage-label">{{ stage.name }}</span>
                   </span>
                   <div class="stage-actions">
                     <button
@@ -287,6 +287,53 @@
         </div>
 
       </div><!-- /content-grid -->
+
+      <!-- Assistant IA pleine largeur sous Stages | Détails -->
+      <div class="ai-analysis-block log-ai-block log-ai-full" *ngIf="data">
+        <div class="log-ai-actions">
+          <strong class="log-ai-title">Assistant pipeline</strong>
+          <button type="button"
+                  class="ai-analyze-btn"
+                  (click)="askPipelineAi(true)"
+                  [disabled]="logAiLoading || !selectedJobLogs">
+            <span *ngIf="!logAiLoading">Expliquer ce log</span>
+            <span *ngIf="logAiLoading">Analyse en cours…</span>
+          </button>
+        </div>
+        <div class="log-ai-ask">
+          <input type="text"
+                 class="log-ai-input"
+                 [(ngModel)]="logAiQuestion"
+                 placeholder="N’importe quelle question… ex. c’est quoi l’URL / le statut ?"
+                 (keyup.enter)="askPipelineAi(false)"
+                 [disabled]="logAiLoading" />
+          <button type="button"
+                  class="ai-analyze-btn log-ai-ask-btn"
+                  (click)="askPipelineAi(false)"
+                  [disabled]="logAiLoading || !logAiQuestion.trim()">
+            Demander
+          </button>
+        </div>
+        <p class="ai-hint">Contexte : projet, pipeline, stages, logs. Pas de kubectl.</p>
+        <div *ngIf="logAiError" class="ai-error">{{ logAiError }}</div>
+        <div *ngIf="logAiResult" class="ai-result" #logAiResultEl>
+          <h5 class="ai-summary-title">Réponse</h5>
+          <p class="ai-summary">{{ logAiResult.answer || logAiResult.summary }}</p>
+          <div *ngIf="logAiResult.probableCauses?.length" class="log-ai-list">
+            <h5>Causes probables</h5>
+            <ol>
+              <li *ngFor="let c of logAiResult.probableCauses">{{ c }}</li>
+            </ol>
+          </div>
+          <div *ngIf="logAiResult.suggestedActions?.length" class="log-ai-list">
+            <h5>Que faire (sans accès cluster)</h5>
+            <ul>
+              <li *ngFor="let a of logAiResult.suggestedActions">{{ a }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /pipeline-page -->
-  </div><!-- /user-main -->
-</div><!-- /user-shell -->
+  </div><!-- /main -->
+</div><!-- /shell -->

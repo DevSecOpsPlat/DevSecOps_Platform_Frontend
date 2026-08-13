@@ -1,8 +1,9 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin, interval, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, switchMap, takeUntil, takeWhile } from 'rxjs/operators';
+import Chart from 'chart.js/auto';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { ApplicationService } from '../../services/application/application.service';
@@ -12,6 +13,7 @@ import {
   AppServiceModel,
   DeployPreview,
   DeploymentAlertsResponse,
+  DeploymentMonitorAlert,
   ManagedApp,
   ServiceCardStats,
   SecurityPostureResponse,
@@ -33,29 +35,28 @@ import {
 import { AppScanModalComponent, AppScanParams } from '../app-scan-modal/app-scan-modal.component';
 import { ManagedAppStateService } from '../managed-app-state.service';
 import { ManagedSecurityDashboardComponent } from '../managed-security-dashboard/managed-security-dashboard.component';
+import { ManagedAppHistoryComponent } from '../managed-app-history/managed-app-history.component';
 import { isHardBlocked, verdictLabelFr, verdictTone } from '../shared/verdict.util';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import { AuthService } from '../../services/auth/auth.service';
 
 type AppSection = 'dashboard' | 'services' | 'databases' | 'monitoring' | 'history' | 'alerts' | 'deployments' | 'pipelines' | 'security' | 'defectdojo' | 'quality-gate';
-type DeploySubTab = 'runtime' | 'environments';
-type HistoryRowKind = 'deploy' | 'scan';
-
-interface HistoryTimelineRow {
-  kind: HistoryRowKind;
-  id: string;
-  at: string;
-  status: string;
-  title: string;
-  meta: string;
-  gitlabPipelineId?: number | null;
-  verdict?: string | null;
-  scannedCount?: number;
-}
 type DeployStatusFilter = 'ALL' | 'RUNNING' | 'DEPLOYING' | 'FAILED' | 'STOPPED';
 type PipelineKindFilter = 'ALL' | 'SCAN' | 'DEPLOY';
 type PipelineStatusFilter = 'ALL' | 'SUCCESS' | 'FAILED' | 'RUNNING';
+
+interface AlertNameAgg {
+  name: string;
+  total: number;
+  live: number;
+  history: number;
+  errors: number;
+  warnings: number;
+  category: 'k8s' | 'health' | 'pod';
+  severity: 'error' | 'warn';
+  samples: DeploymentMonitorAlert[];
+}
 
 @Component({
   selector: 'app-managed-application-detail',
@@ -69,7 +70,8 @@ type PipelineStatusFilter = 'ALL' | 'SUCCESS' | 'FAILED' | 'RUNNING';
     DeployRunModalComponent,
     ProjectDeployModalComponent,
     AppScanModalComponent,
-    ManagedSecurityDashboardComponent
+    ManagedSecurityDashboardComponent,
+    ManagedAppHistoryComponent
   ],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
@@ -124,11 +126,27 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   selectedHistoryId: string | null = null;
   deployStatusFilter: DeployStatusFilter = 'ALL';
   deployBranchFilter = '';
-  deploySubTab: DeploySubTab = 'runtime';
+  /** Sections pliables — page Runtime & environnements unifiée. */
+  runtimeSectionOpen = true;
+  historySectionOpen = true;
+  /** Détails techniques (section séparée). */
+  opsSectionOpen = true;
+  /** @deprecated remplacé par opsSectionOpen */
+  activeOpsOpen = false;
 
-  /** Lots de scan (timeline Historique). */
-  scanBatches: ScanBatchState[] = [];
-  scanBatchesLoading = false;
+  /** Courbe succès / échec historique environnements. */
+  @ViewChild('envHistoryChart') set envHistoryChartEl(el: ElementRef<HTMLCanvasElement> | undefined) {
+    this.envHistoryCanvas = el?.nativeElement || null;
+    if (this.envHistoryCanvas && this.history.length) {
+      this.scheduleEnvHistoryChart();
+    }
+  }
+  private envHistoryCanvas: HTMLCanvasElement | null = null;
+  private envHistoryChart?: Chart;
+  private envHistoryChartTimer?: ReturnType<typeof setTimeout>;
+  hasEnvHistoryChart = false;
+
+  /** Lots de scan — polling batch actif (dashboard), pas la timeline Historique. */
 
   /** Pipelines agrégés (tous services). */
   appPipelines: PipelineListItem[] = [];
@@ -147,11 +165,22 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   alertsData: DeploymentAlertsResponse | null = null;
   alertsLoading = false;
   alertsError: string | null = null;
+  alertsLastRefresh: Date | null = null;
+  /** Filtre principal : all | error | warn | k8s | health | pod | reason:<name> */
+  alertsFilter: string = 'all';
+  alertsSearch = '';
+  alertsScope: 'live' | 'history' | 'all' = 'all';
+  /** Vue liste plate ou regroupée par nom d'erreur/warning. */
+  alertsViewMode: 'grouped' | 'list' = 'grouped';
+  private alertsPollSub?: Subscription;
+  private static readonly ALERTS_POLL_MS = 10000;
 
   /** Posture sécurité app (Option A — rollup DefectDojo). */
   posture: SecurityPostureResponse | null = null;
   postureLoading = false;
   postureError: string | null = null;
+  /** Incrémente pour forcer le reload live du dashboard Dojo. */
+  dojoRefreshTick = 0;
 
   /** Scan application (lot multi-services). */
   showAppScanModal = false;
@@ -186,7 +215,8 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     private appState: ManagedAppStateService,
     private auth: AuthService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private ngZone: NgZone
   ) {}
 
   get currentUsername(): string {
@@ -250,6 +280,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.batchPollSub?.unsubscribe();
     this.pipelinePollSub?.unsubscribe();
+    this.stopAlertsPoll();
+    this.destroyEnvHistoryChart();
+    if (this.envHistoryChartTimer) clearTimeout(this.envHistoryChartTimer);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -264,9 +297,11 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.loadServiceStats(app.services || []);
         this.loadSecurityPosture();
         this.refreshActiveBatch();
-        if (this.activeTab === 'history') this.loadHistoryTimeline();
         if (this.activeTab === 'deployments') this.loadHistory();
-        if (this.activeTab === 'alerts') this.loadAlerts();
+        if (this.activeTab === 'alerts') {
+          this.loadAlerts();
+          this.startAlertsPoll();
+        }
         if (this.activeTab === 'pipelines') this.loadAppPipelines();
       },
       error: () => {
@@ -340,6 +375,10 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.postureError = e?.error?.message || 'Impossible de charger la posture sécurité.';
       }
     });
+  }
+
+  bumpDojoRefresh(): void {
+    this.dojoRefreshTick++;
   }
 
   openBlockingFinding(f: TopBlockingFinding): void {
@@ -550,7 +589,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       monitoring: 'Monitoring',
       alerts: 'Alertes',
       history: 'Historique',
-      deployments: 'Déploiements',
+      deployments: 'Runtime & environnements',
       pipelines: 'Pipelines',
       security: 'DefectDojo',
       defectdojo: 'DefectDojo',
@@ -725,6 +764,21 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.syncMessage = `Scan lancé — ${params.serviceIds.length} service(s).`;
         this.startBatchPolling();
         this.refreshScanPipeline();
+        const pid = batch?.gitlabPipelineId;
+        if (pid) {
+          try {
+            localStorage.setItem('envirotest-last-pipeline-id', String(pid));
+            localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pid));
+            localStorage.setItem('envirotest-last-pipeline-kind', 'SCAN');
+          } catch { /* ignore */ }
+          this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(pid)], {
+            queryParams: { kind: 'SCAN' }
+          });
+        } else {
+          this.router.navigate(['/projects', this.appId, 'pipeline-detail'], {
+            queryParams: { kind: 'SCAN' }
+          });
+        }
       },
       error: (e) => {
         this.appScanRunning = false;
@@ -912,7 +966,8 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     if (!this.scanningService?.id) return;
     this.scanRunning = true;
     this.scanError = null;
-    this.api.scanService(this.scanningService.id, params.branch).subscribe({
+    const serviceId = this.scanningService.id;
+    this.api.scanService(serviceId, params.branch).subscribe({
       next: (res) => {
         this.scanRunning = false;
         this.showScanModal = false;
@@ -922,6 +977,21 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
           || `Scan lancé pour « ${name} »`
             + (res?.gitlabPipelineId ? ` (pipeline #${res.gitlabPipelineId}).` : '.');
         if (this.app) this.loadServiceStats(this.app.services || []);
+        const pid = res?.gitlabPipelineId;
+        if (pid) {
+          try {
+            localStorage.setItem('envirotest-last-pipeline-id', String(pid));
+            localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pid));
+            localStorage.setItem('envirotest-last-pipeline-kind', 'SCAN');
+          } catch { /* ignore */ }
+          this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(pid)], {
+            queryParams: { kind: 'SCAN' }
+          });
+        } else {
+          this.router.navigate(['/projects', this.appId, 'pipeline-detail'], {
+            queryParams: { kind: 'SCAN' }
+          });
+        }
       },
       error: (e) => {
         this.scanRunning = false;
@@ -1127,7 +1197,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         sessionDurationHours: params.sessionDurationHours,
         serviceIds: params.serviceIds
       }).subscribe({
-        next: () => {
+        next: (dep) => {
           this.deploying = false;
           this.showDeployModal = false;
           this.deployPreview = null;
@@ -1135,8 +1205,22 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
             ? `Déploiement lancé — domaine « ${host} ».`
             : 'Déploiement lancé.';
           this.load();
-          if (this.activeTab === 'history') this.loadHistoryTimeline();
           if (this.activeTab === 'deployments') this.loadHistory();
+          const pid = dep?.gitlabPipelineId;
+          if (pid) {
+            try {
+              localStorage.setItem('envirotest-last-pipeline-id', String(pid));
+              localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pid));
+              localStorage.setItem('envirotest-last-pipeline-kind', 'DEPLOY');
+            } catch { /* ignore */ }
+            this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(pid)], {
+              queryParams: { kind: 'DEPLOY' }
+            });
+          } else {
+            this.router.navigate(['/projects', this.appId, 'pipeline-detail'], {
+              queryParams: { kind: 'DEPLOY' }
+            });
+          }
         },
         error: (e) => {
           this.deployError = e?.error?.message || 'Déploiement impossible.';
@@ -1175,7 +1259,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       next: () => {
         this.syncMessage = 'Déploiement arrêté — environnement STOPPED.';
         this.load();
-        if (this.activeTab === 'history') this.loadHistoryTimeline();
         if (this.activeTab === 'deployments') this.loadHistory();
       },
       error: (e) => {
@@ -1280,7 +1363,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   private applySection(section: AppSection): void {
     this.activeTab = section;
     if (section === 'history') {
-      this.loadHistoryTimeline();
       this.loadSecurityPosture();
     }
     if (section === 'deployments') {
@@ -1295,77 +1377,53 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     }
     if (section === 'alerts') {
       this.loadAlerts();
+      this.startAlertsPoll();
+    } else {
+      this.stopAlertsPoll();
     }
   }
 
-  setDeploySubTab(tab: DeploySubTab): void {
-    this.deploySubTab = tab;
+  toggleRuntimeSection(): void {
+    this.runtimeSectionOpen = !this.runtimeSectionOpen;
+  }
+
+  toggleHistorySection(): void {
+    this.historySectionOpen = !this.historySectionOpen;
+  }
+
+  toggleActiveOps(): void {
+    this.opsSectionOpen = !this.opsSectionOpen;
+    this.activeOpsOpen = this.opsSectionOpen;
+  }
+
+  toggleOpsSection(): void {
+    this.opsSectionOpen = !this.opsSectionOpen;
+  }
+
+  focusActiveEnvironment(): void {
+    this.runtimeSectionOpen = true;
+    this.selectedHistoryId = null;
+    const el = document.getElementById('ad-rt-active');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  focusOpsSection(): void {
+    this.opsSectionOpen = true;
+    const el = document.getElementById('ad-rt-ops');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   loadHistoryTimeline(): void {
+    /* Conservé pour compat éventuelle — la timeline est dans managed-app-history. */
     this.loadHistory();
-    this.scanBatchesLoading = true;
-    this.api.listScanBatches(this.appId).pipe(takeUntil(this.destroy$)).subscribe({
-      next: (list) => {
-        this.scanBatches = list || [];
-        this.scanBatchesLoading = false;
-      },
-      error: () => {
-        this.scanBatches = [];
-        this.scanBatchesLoading = false;
-      }
-    });
   }
 
-  get historyTimeline(): HistoryTimelineRow[] {
-    const rows: HistoryTimelineRow[] = [];
-    for (const d of this.history) {
-      rows.push({
-        kind: 'deploy',
-        id: d.id,
-        at: d.createdAt || d.deployedAt || '',
-        status: d.status || '—',
-        title: d.namespace || d.id,
-        meta: d.ttlHours != null ? `TTL ${d.ttlHours}h` : 'Déploiement',
-        gitlabPipelineId: d.gitlabPipelineId
-      });
+  openHistoryDeployment(deploymentId: string): void {
+    this.goSection('deployments');
+    if (deploymentId) {
+      this.selectedHistoryId = deploymentId;
+      setTimeout(() => this.scrollToHistoryDetail(), 120);
     }
-    for (const b of this.scanBatches) {
-      const id = b.batchId || b.id || '';
-      const finished = b.finishedServiceCount ?? 0;
-      const expected = b.expectedServiceCount ?? (b.services?.length || 0);
-      rows.push({
-        kind: 'scan',
-        id,
-        at: b.createdAt || b.finishedAt || '',
-        status: b.status || '—',
-        title: `Lot de scan ${id ? id.slice(0, 8) : ''}`.trim(),
-        meta: `${finished}/${expected} services`,
-        gitlabPipelineId: b.gitlabPipelineId,
-        verdict: b.verdict,
-        scannedCount: finished
-      });
-    }
-    return rows.sort((a, b) => {
-      const ta = a.at ? new Date(a.at).getTime() : 0;
-      const tb = b.at ? new Date(b.at).getTime() : 0;
-      return tb - ta;
-    });
-  }
-
-  get historyTimelineLoading(): boolean {
-    return (this.historyLoading && !this.history.length)
-      || (this.scanBatchesLoading && !this.scanBatches.length);
-  }
-
-  openPipelinesFromHistory(row: HistoryTimelineRow): void {
-    const q: Record<string, string> = {};
-    if (row.gitlabPipelineId != null) {
-      q['pipelineId'] = String(row.gitlabPipelineId);
-    }
-    if (row.kind === 'scan') q['kind'] = 'SCAN';
-    if (row.kind === 'deploy') q['kind'] = 'DEPLOY';
-    this.router.navigate(['/projects', this.appId, 'pipelines'], { queryParams: q });
   }
 
   clearPipelineIdFilter(): void {
@@ -1388,15 +1446,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     this.loadAppPipelines();
   }
 
-  historyStatusTone(status: string): string {
-    const s = (status || '').toUpperCase();
-    if (s === 'RUNNING' || s === 'COMPLETE' || s === 'SUCCESS' || s === 'READY') return 'status-running';
-    if (s === 'FAILED' || s === 'CANCELED') return 'status-failed';
-    if (s === 'PENDING' || s === 'DEPLOYING' || s === 'PARTIAL') return 'status-pending';
-    if (s === 'STOPPED') return 'status-stopped';
-    return 'status-none';
-  }
-
   openServiceQualityGate(serviceId: string | null | undefined): void {
     if (!serviceId) return;
     try {
@@ -1415,49 +1464,386 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.history = list || [];
         this.historyLoading = false;
-        if (!this.selectedHistoryId && this.history.length) {
-          this.selectedHistoryId = this.history[0].id;
+        // Ne pas auto-sélectionner : évite le doublon env actif en panneau détail.
+        if (this.selectedHistoryId && !this.history.some(d => d.id === this.selectedHistoryId)) {
+          this.selectedHistoryId = null;
         }
+        this.scheduleEnvHistoryChart();
       },
       error: (e) => {
         this.historyError = e?.error?.message || 'Impossible de charger l\'historique.';
         this.historyLoading = false;
+        this.destroyEnvHistoryChart();
       }
     });
   }
 
-  loadAlerts(): void {
+  loadAlerts(silent = false): void {
     const depId = this.app?.lastDeployment?.id;
     if (!depId) {
       this.alertsData = null;
       this.alertsError = null;
+      this.stopAlertsPoll();
       return;
     }
-    this.alertsLoading = true;
+    if (!silent) {
+      this.alertsLoading = true;
+    }
     this.alertsError = null;
     this.api.getDeploymentAlerts(this.appId, depId).subscribe({
       next: (res) => {
         this.alertsData = res;
         this.alertsLoading = false;
+        this.alertsLastRefresh = new Date();
       },
       error: (e) => {
-        this.alertsError = e?.error?.message || 'Impossible de charger les alertes.';
+        if (!silent) {
+          this.alertsError = e?.error?.message || 'Impossible de charger les alertes.';
+        }
         this.alertsLoading = false;
       }
     });
   }
 
+  private startAlertsPoll(): void {
+    this.stopAlertsPoll();
+    if (!this.app?.lastDeployment?.id) return;
+    this.alertsPollSub = interval(ApplicationDetailComponent.ALERTS_POLL_MS)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (this.activeTab === 'alerts') {
+          this.loadAlerts(true);
+        }
+      });
+  }
+
+  private stopAlertsPoll(): void {
+    this.alertsPollSub?.unsubscribe();
+    this.alertsPollSub = undefined;
+  }
+
+  get filteredLiveAlerts(): DeploymentMonitorAlert[] {
+    return this.filterAlerts(this.alertsData?.live || []);
+  }
+
+  get filteredHistoryAlerts(): DeploymentMonitorAlert[] {
+    return this.filterAlerts(this.alertsData?.history || []);
+  }
+
+  get showLiveSection(): boolean {
+    return this.alertsScope === 'all' || this.alertsScope === 'live';
+  }
+
+  get showHistorySection(): boolean {
+    return this.alertsScope === 'all' || this.alertsScope === 'history';
+  }
+
+  get alertsErrorCount(): number {
+    return (this.alertsData?.live || []).filter(a => a.severity === 'error').length;
+  }
+
+  get alertsWarnCount(): number {
+    return (this.alertsData?.live || []).filter(a => a.severity === 'warn').length;
+  }
+
+  get alertsK8sCount(): number {
+    return (this.alertsData?.live || []).filter(a => this.alertCategory(a) === 'k8s').length;
+  }
+
+  get alertsHealthCount(): number {
+    return (this.alertsData?.live || []).filter(a => this.alertCategory(a) === 'health').length;
+  }
+
+  get alertsPodCount(): number {
+    return (this.alertsData?.live || []).filter(a => this.alertCategory(a) === 'pod').length;
+  }
+
+  get selectedReasonName(): string | null {
+    return this.alertsFilter.startsWith('reason:')
+      ? this.alertsFilter.slice('reason:'.length)
+      : null;
+  }
+
+  /**
+   * Agrégation par nom d'erreur/warning (FailedCreate, CrashLoopBackOff…).
+   * Respecte search + scope + filtres catégorie/sévérité (sauf reason:).
+   */
+  get alertAggregations(): AlertNameAgg[] {
+    const live = this.alertsInScope(this.alertsData?.live || [], 'live');
+    const history = this.alertsInScope(this.alertsData?.history || [], 'history');
+    const base = this.applyNonReasonFilters([...live, ...history]);
+
+    const map = new Map<string, AlertNameAgg>();
+    for (const a of base) {
+      const name = this.alertReasonLabel(a);
+      if (!name) continue;
+      let row = map.get(name);
+      if (!row) {
+        row = {
+          name,
+          total: 0,
+          live: 0,
+          history: 0,
+          errors: 0,
+          warnings: 0,
+          category: this.alertCategory(a),
+          severity: a.severity === 'error' ? 'error' : 'warn',
+          samples: []
+        };
+        map.set(name, row);
+      }
+      row.total++;
+      if (a.source === 'history') row.history++;
+      else row.live++;
+      if (a.severity === 'error') {
+        row.errors++;
+        row.severity = 'error';
+      } else {
+        row.warnings++;
+      }
+      if (row.samples.length < 3) {
+        row.samples.push(a);
+      }
+    }
+
+    return [...map.values()].sort((a, b) =>
+      b.total - a.total
+      || b.errors - a.errors
+      || a.name.localeCompare(b.name)
+    );
+  }
+
+  get filteredAggregations(): AlertNameAgg[] {
+    const q = this.alertsSearch.trim().toLowerCase();
+    let list = this.alertAggregations;
+    if (this.alertsFilter === 'error') {
+      list = list.filter(g => g.errors > 0);
+    } else if (this.alertsFilter === 'warn') {
+      list = list.filter(g => g.warnings > 0);
+    } else if (this.alertsFilter === 'k8s' || this.alertsFilter === 'health' || this.alertsFilter === 'pod') {
+      list = list.filter(g => g.category === this.alertsFilter);
+    } else if (this.selectedReasonName) {
+      list = list.filter(g => g.name === this.selectedReasonName);
+    }
+    if (q) {
+      list = list.filter(g =>
+        g.name.toLowerCase().includes(q)
+        || g.samples.some(s => (s.message || '').toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }
+
+  private alertsInScope(list: DeploymentMonitorAlert[], source: 'live' | 'history'): DeploymentMonitorAlert[] {
+    if (this.alertsScope === 'all') return list;
+    if (this.alertsScope === 'live') return source === 'live' ? list : [];
+    return source === 'history' ? list : [];
+  }
+
+  private applyNonReasonFilters(list: DeploymentMonitorAlert[]): DeploymentMonitorAlert[] {
+    const q = this.alertsSearch.trim().toLowerCase();
+    const f = this.alertsFilter;
+    return list.filter(a => {
+      if (f === 'error' || f === 'warn') {
+        if ((a.severity || '').toLowerCase() !== f) return false;
+      } else if (f === 'k8s' || f === 'health' || f === 'pod') {
+        if (this.alertCategory(a) !== f) return false;
+      }
+      // reason: filtré au niveau groupement / filterAlerts
+      if (q) {
+        const hay = [
+          a.message, a.reason, a.pod, a.workload, a.object, a.type, a.kind,
+          this.alertReasonLabel(a)
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  setAlertsFilter(filter: string): void {
+    this.alertsFilter = filter;
+  }
+
+  filterByAlertName(name: string): void {
+    const next = 'reason:' + name;
+    this.alertsFilter = this.alertsFilter === next ? 'all' : next;
+    if (this.alertsFilter.startsWith('reason:')) {
+      this.alertsViewMode = 'list';
+    } else {
+      this.alertsViewMode = 'grouped';
+    }
+  }
+
+  backToAlertAggregation(): void {
+    this.alertsFilter = 'all';
+    this.alertsViewMode = 'grouped';
+  }
+
+  clearAlertsFilters(): void {
+    this.alertsFilter = 'all';
+    this.alertsSearch = '';
+    this.alertsScope = 'all';
+    this.alertsViewMode = 'grouped';
+  }
+
+  alertCategory(a: DeploymentMonitorAlert): 'k8s' | 'health' | 'pod' {
+    const kind = (a.kind || '').toLowerCase();
+    if (kind === 'k8s-event' || kind === 'k8s') return 'k8s';
+    if (kind === 'health') return 'health';
+    if (kind === 'pod') return 'pod';
+
+    const type = (a.type || '').toUpperCase();
+    if (type.includes('HEALTH')) return 'health';
+    if (type.includes('K8S_WARNING')) {
+      const m = (a.message || '').toLowerCase();
+      if (m.includes('health') || m.includes('ingress')) return 'health';
+      if (m.includes('pending') || m.includes('crashloop') || m.includes('oom') || m.includes('pod failed')) {
+        return 'pod';
+      }
+      return 'k8s';
+    }
+
+    const msg = (a.message || '').toLowerCase();
+    const reason = (a.reason || '').toLowerCase();
+    if (msg.includes('health url') || msg.includes('ingress') || reason.includes('health') || reason.includes('ingress')) {
+      return 'health';
+    }
+    if (
+      reason.includes('failedcreate') || reason.includes('failedscheduling') || reason.includes('failedmount')
+      || reason.includes('unhealthy') || reason.includes('backoff')
+      || msg.includes('failedcreate') || msg.includes('failedscheduling')
+    ) {
+      return 'k8s';
+    }
+    return 'pod';
+  }
+
+  private filterAlerts(list: DeploymentMonitorAlert[]): DeploymentMonitorAlert[] {
+    const q = this.alertsSearch.trim().toLowerCase();
+    const f = this.alertsFilter;
+    return list.filter(a => {
+      if (f === 'error' || f === 'warn') {
+        if ((a.severity || '').toLowerCase() !== f) return false;
+      } else if (f === 'k8s' || f === 'health' || f === 'pod') {
+        if (this.alertCategory(a) !== f) return false;
+      } else if (f.startsWith('reason:')) {
+        const want = f.slice('reason:'.length).toLowerCase();
+        if (this.alertReasonLabel(a).toLowerCase() !== want) return false;
+      }
+      if (q) {
+        const hay = [
+          a.message, a.reason, a.pod, a.workload, a.object, a.type, a.kind,
+          this.alertReasonLabel(a)
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  alertReasonLabel(a: DeploymentMonitorAlert): string {
+    if (a.reason && a.reason.trim()) return a.reason.trim();
+    const msg = a.message || '';
+    // Prefixed history messages: "[slug] ns=x svc=y pod=z — FailedCreate — detail"
+    const parts = msg.split(' — ').map(p => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (part.includes('=') || part.startsWith('[')) continue;
+      if (/^[A-Za-z][A-Za-z0-9_-]{1,47}$/.test(part)) return part;
+    }
+    const dash = msg.indexOf(' — ');
+    if (dash > 0 && dash < 48) {
+      const head = msg.slice(0, dash).trim();
+      if (!head.includes('=') && !head.startsWith('[')) return head;
+    }
+    if (a.type) {
+      const t = a.type.replace(/^DEPLOYMENT_/, '');
+      if (t.includes('HEALTH')) return 'HealthCheckFailed';
+      if (t.includes('CRASH')) return 'CrashLoopBackOff';
+      if (t.includes('OOM')) return 'OOMKilled';
+      if (t.includes('POD_FAILED')) return 'PodFailed';
+      if (t.includes('K8S')) return 'K8sWarning';
+      return t.replace(/_/g, '');
+    }
+    return a.severity === 'error' ? 'Error' : 'Warning';
+  }
+
+  alertCategoryLabel(a: DeploymentMonitorAlert): string {
+    const c = this.alertCategory(a);
+    if (c === 'k8s') return 'Kubernetes';
+    if (c === 'health') return 'Health check';
+    return 'Pod';
+  }
+
+  categoryLabel(cat: 'k8s' | 'health' | 'pod'): string {
+    if (cat === 'k8s') return 'Kubernetes';
+    if (cat === 'health') return 'Health check';
+    return 'Pod';
+  }
+
+  alertTarget(a: DeploymentMonitorAlert): string {
+    return a.object || a.workload || a.pod || '';
+  }
+
   alertClass(severity: string | undefined): string {
-    return severity === 'error' ? 'am-alert-error' : 'am-alert';
+    if (severity === 'error') return 'am-alert-error';
+    if (severity === 'warn') return 'am-alert-warn';
+    return 'am-alert';
+  }
+
+  trackAlert(index: number, a: DeploymentMonitorAlert): string {
+    return `${a.id || ''}|${a.reason || ''}|${a.object || a.pod || a.workload || ''}|${a.message || ''}|${index}`;
+  }
+
+  trackAgg(_index: number, g: AlertNameAgg): string {
+    return g.name;
+  }
+
+  healthStatusTone(): 'ok' | 'ko' | 'unknown' {
+    const h = this.alertsData?.health;
+    if (!h?.checked) return 'unknown';
+    if (h.ok === true) return 'ok';
+    if (h.ok === false) return 'ko';
+    return 'unknown';
   }
 
   selectHistory(dep: AppDeployment): void {
-    this.selectedHistoryId = dep.id;
+    if (this.isCurrentDeployment(dep) && this.isDeployOnline(dep)) {
+      this.selectedHistoryId = dep.id;
+      this.scrollToHistoryDetail();
+      return;
+    }
+    const opening = this.selectedHistoryId !== dep.id;
+    this.selectedHistoryId = opening ? dep.id : null;
+    if (opening) {
+      this.scrollToHistoryDetail();
+    }
+  }
+
+  /** Après sélection : amène le panneau détail dans le viewport. */
+  private scrollToHistoryDetail(): void {
+    setTimeout(() => {
+      const el = document.getElementById('ad-env-detail')
+        || document.getElementById('ad-env-detail-hint');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
   }
 
   get selectedHistory(): AppDeployment | null {
     if (!this.selectedHistoryId) return null;
     return this.history.find(d => d.id === this.selectedHistoryId) || null;
+  }
+
+  /** Env sélectionné = celui déjà montré en section Environnement actif. */
+  get selectedHistoryIsActive(): boolean {
+    const d = this.selectedHistory;
+    return !!d && this.isCurrentDeployment(d) && this.isDeployOnline(d);
+  }
+
+  /** Détail historique à monter (pas l'actif en double). */
+  get selectedHistoryForDetail(): AppDeployment | null {
+    if (!this.selectedHistory || this.selectedHistoryIsActive) return null;
+    return this.selectedHistory;
   }
 
   get filteredHistory(): AppDeployment[] {
@@ -1551,7 +1937,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   openDeployPipeline(dep: AppDeployment): void {
     if (!dep.gitlabPipelineId) return;
-    this.router.navigate(['/pipeline/id', dep.gitlabPipelineId]);
+    this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(dep.gitlabPipelineId)], {
+      queryParams: { kind: 'DEPLOY' }
+    });
   }
 
   historyStatusClass(status: string): string {
@@ -1570,6 +1958,133 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     if (!vals.length) return '—';
     const ready = vals.filter(v => (v?.status || '').toLowerCase() === 'ready').length;
     return `${ready}/${vals.length} ready`;
+  }
+
+  private scheduleEnvHistoryChart(): void {
+    if (this.envHistoryChartTimer) clearTimeout(this.envHistoryChartTimer);
+    this.envHistoryChartTimer = setTimeout(() => {
+      this.ngZone.runOutsideAngular(() => this.renderEnvHistoryChart());
+    }, 60);
+  }
+
+  private destroyEnvHistoryChart(): void {
+    try {
+      this.envHistoryChart?.destroy();
+      if (this.envHistoryCanvas) Chart.getChart(this.envHistoryCanvas)?.destroy();
+    } catch { /* ignore */ }
+    this.envHistoryChart = undefined;
+    this.hasEnvHistoryChart = false;
+  }
+
+  /** Succès = env en ligne / terminé proprement ; échec = FAILED. */
+  private envHistoryOutcome(dep: AppDeployment): 'success' | 'failed' | 'other' {
+    const s = (dep.status || '').toUpperCase();
+    if (s === 'FAILED') return 'failed';
+    if (s === 'RUNNING' || s === 'STOPPED') return 'success';
+    return 'other';
+  }
+
+  private buildEnvHistorySeries(): { labels: string[]; success: number[]; failed: number[] } {
+    const byDay = new Map<string, { success: number; failed: number }>();
+    for (const d of this.history) {
+      if (!d.createdAt) continue;
+      const dt = new Date(d.createdAt);
+      if (Number.isNaN(dt.getTime())) continue;
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      if (!byDay.has(key)) byDay.set(key, { success: 0, failed: 0 });
+      const bucket = byDay.get(key)!;
+      const outcome = this.envHistoryOutcome(d);
+      if (outcome === 'success') bucket.success++;
+      else if (outcome === 'failed') bucket.failed++;
+    }
+    const keys = [...byDay.keys()].sort();
+    // Limiter aux 30 derniers jours avec activité (ou remplir si peu)
+    const sliced = keys.length > 30 ? keys.slice(-30) : keys;
+    return {
+      labels: sliced.map(k => {
+        const [, m, day] = k.split('-');
+        return `${day}/${m}`;
+      }),
+      success: sliced.map(k => byDay.get(k)!.success),
+      failed: sliced.map(k => byDay.get(k)!.failed)
+    };
+  }
+
+  private renderEnvHistoryChart(): void {
+    const canvas = this.envHistoryCanvas;
+    if (!canvas || this.activeTab !== 'deployments') {
+      this.hasEnvHistoryChart = false;
+      return;
+    }
+    const series = this.buildEnvHistorySeries();
+    if (!series.labels.length) {
+      this.destroyEnvHistoryChart();
+      return;
+    }
+    this.hasEnvHistoryChart = true;
+    Chart.getChart(canvas)?.destroy();
+    this.envHistoryChart?.destroy();
+    this.envHistoryChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: series.labels,
+        datasets: [
+          {
+            label: 'Succès',
+            data: series.success,
+            borderColor: '#16a34a',
+            backgroundColor: 'rgba(22, 163, 74, 0.12)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2
+          },
+          {
+            label: 'Échecs',
+            data: series.failed,
+            borderColor: '#dc2626',
+            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 450 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            align: 'end',
+            labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, color: '#64748b' }
+          },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 10 }, color: '#94a3b8', maxRotation: 0 }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              font: { size: 10 },
+              color: '#94a3b8',
+              precision: 0,
+              stepSize: 1
+            },
+            grid: { color: 'rgba(148, 163, 184, 0.18)' }
+          }
+        }
+      }
+    });
   }
 
   // ---------- Pipelines app (agrégés) ----------
@@ -1724,14 +2239,22 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   openPipelineFullPage(item: PipelineListItem, event?: Event): void {
     event?.stopPropagation();
-    if (item.environmentId) {
-      this.router.navigate(['/pipeline', item.environmentId]);
+    const kind = (item.executionKind || '').toUpperCase() === 'DEPLOY' ? 'DEPLOY' : 'SCAN';
+    if (item.pipelineId) {
+      try {
+        localStorage.setItem('envirotest-last-pipeline-id', String(item.pipelineId));
+        localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(item.pipelineId));
+        localStorage.setItem('envirotest-last-pipeline-kind', kind);
+      } catch { /* ignore */ }
+      this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(item.pipelineId)], {
+        queryParams: { kind }
+      });
       return;
     }
-    if (item.pipelineId) {
-      const queryParams: Record<string, string> = {};
-      if (item.applicationId) queryParams['appId'] = item.applicationId;
-      this.router.navigate(['/pipeline/id', item.pipelineId], { queryParams });
+    if (item.environmentId) {
+      this.router.navigate(['/pipeline', item.environmentId], {
+        queryParams: { appId: this.appId, kind }
+      });
     }
   }
 

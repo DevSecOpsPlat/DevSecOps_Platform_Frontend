@@ -18,6 +18,8 @@ export interface NavLink {
   /** Segment de route relatif. */
   path: string;
   queryParams?: Record<string, string>;
+  /** Sous-catégorie indentée (ex. Détail pipeline). */
+  sub?: boolean;
 }
 
 export interface NavGroup {
@@ -32,6 +34,9 @@ export const SECTION_MAP: Record<string, { app: string; service: string }> = {
   defectdojo: { app: 'defectdojo', service: 'security-dashboard' },
   'quality-gate': { app: 'quality-gate', service: 'quality-gate' },
   pipelines: { app: 'pipelines', service: 'pipelines' },
+  'pipeline-detail': { app: 'pipeline-detail', service: 'pipeline-detail' },
+  'pipeline-detail-scan': { app: 'pipeline-detail', service: 'pipeline-detail' },
+  'pipeline-detail-deploy': { app: 'pipeline-detail', service: 'pipeline-detail' },
   history: { app: 'history', service: 'overview' },
   deployments: { app: 'deployments', service: 'deployments' },
   monitoring: { app: 'monitoring', service: 'monitoring' },
@@ -104,6 +109,13 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
             { key: 'defectdojo', label: 'DefectDojo', path: 'defectdojo' },
             { key: 'quality-gate', label: 'Quality Gate', path: 'quality-gate' },
             { key: 'pipelines', label: 'Pipelines', path: 'pipelines', queryParams: { kind: 'SCAN' } },
+            {
+              key: 'pipeline-detail-scan',
+              label: 'Détail pipeline',
+              path: 'pipeline-detail',
+              queryParams: { kind: 'SCAN' },
+              sub: true
+            },
             { key: 'history', label: 'Historique', path: 'history' }
           ]
         },
@@ -112,6 +124,13 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
           label: 'Déploiement',
           items: [
             { key: 'deployments', label: 'Runtime & environnements', path: 'deployments' },
+            {
+              key: 'pipeline-detail-deploy',
+              label: 'Détail pipeline',
+              path: 'pipeline-detail',
+              queryParams: { kind: 'DEPLOY' },
+              sub: true
+            },
             { key: 'monitoring', label: 'Monitoring', path: 'monitoring' },
             { key: 'alerts', label: 'Alertes', path: 'alerts' }
           ]
@@ -131,7 +150,14 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
           { key: 'defectdojo', label: 'DefectDojo', path: 'security-dashboard' },
           { key: 'quality-gate', label: 'Quality Gate', path: 'quality-gate' },
           { key: 'sonarqube', label: 'Sonar', path: 'sonarqube' },
-          { key: 'pipelines', label: 'Pipelines', path: 'pipelines' }
+          { key: 'pipelines', label: 'Pipelines', path: 'pipelines' },
+          {
+            key: 'pipeline-detail-scan',
+            label: 'Détail pipeline',
+            path: 'pipeline-detail',
+            queryParams: { kind: 'SCAN' },
+            sub: true
+          }
         ]
       },
       {
@@ -139,6 +165,13 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
         label: 'Déploiement',
         items: [
           { key: 'deployments', label: 'Déploiement', path: 'deployments' },
+          {
+            key: 'pipeline-detail-deploy',
+            label: 'Détail pipeline',
+            path: 'pipeline-detail',
+            queryParams: { kind: 'DEPLOY' },
+            sub: true
+          },
           { key: 'monitoring', label: 'Monitoring', path: 'monitoring' }
         ]
       }
@@ -202,7 +235,7 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
       return;
     }
     const map = SECTION_MAP[this.activeKey] || SECTION_MAP['overview'];
-    this.router.navigate(['/projects', id, map.app]);
+    this.router.navigate(['/projects', id, map.app], { queryParams: this.queryForActiveKey() });
   }
 
   toggleServiceMenu(ev: Event): void {
@@ -222,7 +255,16 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
         }
       }
     } catch { /* ignore */ }
-    this.router.navigate(['/project', svc.id, map.service]);
+    this.router.navigate(['/project', svc.id, map.service], { queryParams: this.queryForActiveKey() });
+  }
+
+  private queryForActiveKey(): Record<string, string> {
+    if (this.activeKey === 'pipeline-detail-deploy') return { kind: 'DEPLOY' };
+    if (this.activeKey === 'pipeline-detail-scan' || this.activeKey === 'pipeline-detail') {
+      return { kind: 'SCAN' };
+    }
+    if (this.activeKey === 'pipelines' && this.context === 'app') return { kind: 'SCAN' };
+    return {};
   }
 
   openServiceFromApp(svc: AppServiceModel): void {
@@ -236,8 +278,12 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
 
   private syncFromUrl(url: string): void {
     const path = url.split(/[?#]/)[0];
-    const appMatch = path.match(/^\/projects\/([^/]+)(?:\/([^/]+))?/);
-    const svcMatch = path.match(/^\/project\/([^/]+)(?:\/([^/]+))?/);
+    const query = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+    const qp = new URLSearchParams(query);
+    const kind = (qp.get('kind') || '').toUpperCase();
+
+    const appMatch = path.match(/^\/projects\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/);
+    const svcMatch = path.match(/^\/project\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/);
 
     if (appMatch && !path.startsWith('/projects/create')) {
       const nextId = appMatch[1];
@@ -246,7 +292,7 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
       this.context = 'app';
       this.appId = nextId;
       this.serviceId = '';
-      this.activeKey = this.keyFromAppSection(section);
+      this.activeKey = this.keyFromAppSection(section, kind);
       if (switched) this.loadAppContext(nextId);
       return;
     }
@@ -257,14 +303,17 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
       const switched = this.context !== 'service' || this.serviceId !== nextId;
       this.context = 'service';
       this.serviceId = nextId;
-      this.activeKey = this.keyFromServiceSection(section);
+      this.activeKey = this.keyFromServiceSection(section, kind);
       if (switched) this.loadServiceContext(nextId);
     }
   }
 
-  private keyFromAppSection(section: string): string {
+  private keyFromAppSection(section: string, kind = ''): string {
     if (section === 'security' || section === 'defectdojo') return 'defectdojo';
     if (section === 'dashboard' || section === 'services' || section === 'databases') return 'overview';
+    if (section === 'pipeline-detail') {
+      return kind === 'DEPLOY' ? 'pipeline-detail-deploy' : 'pipeline-detail-scan';
+    }
     const keys = Object.keys(SECTION_MAP);
     for (const k of keys) {
       if (SECTION_MAP[k].app === section) return k;
@@ -272,9 +321,12 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
     return 'overview';
   }
 
-  private keyFromServiceSection(section: string): string {
+  private keyFromServiceSection(section: string, kind = ''): string {
     if (section === 'security-dashboard' || section === 'security') return 'defectdojo';
     if (section === 'overview') return 'overview';
+    if (section === 'pipeline-detail') {
+      return kind === 'DEPLOY' ? 'pipeline-detail-deploy' : 'pipeline-detail-scan';
+    }
     const keys = Object.keys(SECTION_MAP);
     for (const k of keys) {
       if (SECTION_MAP[k].service === section) return k;

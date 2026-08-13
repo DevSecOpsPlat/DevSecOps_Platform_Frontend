@@ -1,0 +1,408 @@
+<div class="activity-page-container mah-page">
+  <header class="activity-page-header">
+    <div class="header-title">
+      <h1>
+        Historique
+        <span class="subtitle-inline" *ngIf="appName">• {{ appName }}</span>
+      </h1>
+      <p class="subtitle">Cycles de déploiement et lots de scan, triés du plus récent</p>
+    </div>
+    <button type="button" class="refresh-btn" (click)="reload()" [disabled]="loading">
+      Actualiser
+    </button>
+  </header>
+
+  <div class="activity-filters" *ngIf="!loading || rows.length > 0">
+    <button type="button" class="filter-btn"
+            [class.active]="kindFilter === 'ALL'"
+            (click)="setKind('ALL')">
+      Tous ({{ rows.length }})
+    </button>
+    <button type="button" class="filter-btn"
+            [class.active]="kindFilter === 'DEPLOY'"
+            (click)="setKind('DEPLOY')">
+      Déploiements ({{ getCountByType('deploy') }})
+    </button>
+    <button type="button" class="filter-btn"
+            [class.active]="kindFilter === 'SCAN'"
+            (click)="setKind('SCAN')">
+      Scans ({{ getCountByType('scan') }})
+    </button>
+  </div>
+
+  <div class="mah-extra-filters" *ngIf="!loading || rows.length > 0">
+    <div class="mah-search">
+      <input type="search" class="mah-search-input"
+             [(ngModel)]="searchQuery"
+             (ngModelChange)="onSearchChange()"
+             placeholder="Branche, namespace, SHA, service…" />
+      <button type="button" class="mah-search-clear" *ngIf="searchQuery"
+              (click)="searchQuery = ''; onSearchChange()">✕</button>
+    </div>
+
+    <label class="mah-field mah-field--period">
+      <span class="mah-field-label">Période</span>
+      <div class="mah-period-seg" role="group" aria-label="Période">
+        <button type="button" *ngFor="let p of periodOptions"
+                class="mah-period-btn"
+                [class.active]="periodFilter === p.id"
+                (click)="setPeriod(p.id)">{{ p.label }}</button>
+      </div>
+    </label>
+
+    <label class="mah-field mah-field--status">
+      <span class="mah-field-label">Statut</span>
+      <select class="mah-select" [ngModel]="statusFilter" (ngModelChange)="setStatus($event)">
+        <option *ngFor="let s of statusOptions" [ngValue]="s">
+          {{ s === 'ALL' ? 'Tous les statuts' : s }}
+        </option>
+      </select>
+    </label>
+
+    <label class="mah-field mah-field--service" *ngIf="serviceOptions.length">
+      <span class="mah-field-label">Service</span>
+      <select class="mah-select" [ngModel]="serviceFilter" (ngModelChange)="setService($event)">
+        <option [ngValue]="'ALL'">Tous les services</option>
+        <option *ngFor="let s of serviceOptions" [ngValue]="s.id">{{ s.name }}</option>
+      </select>
+    </label>
+
+    <button type="button" class="mah-clear" *ngIf="hasActiveFilters" (click)="clearFilters()">
+      Effacer
+    </button>
+  </div>
+
+  <!-- Détail environnement (même container Runtime / pipeline / pods) -->
+  <div id="mah-env-detail" class="mah-env-detail" *ngIf="selectedDeployment as detail">
+    <div class="mah-env-detail-head">
+      <div>
+        <span class="mah-env-eyebrow">Détail environnement</span>
+        <h2>{{ detail.namespace }}</h2>
+      </div>
+      <div class="mah-env-detail-actions">
+        <span class="status-badge" [ngClass]="getStatusClass(detail.status)">{{ detail.status }}</span>
+        <button type="button" class="refresh-btn" (click)="closeDeployDetail()">Fermer</button>
+      </div>
+    </div>
+    <app-managed-deployment-status
+      [appId]="appId"
+      [deployment]="detail"
+      [services]="services"
+      variant="full"
+      [showOpsTabs]="true"
+      (navigateSection)="onNavigateSection($event)">
+    </app-managed-deployment-status>
+  </div>
+
+  <!-- Détail scan : même design Runtime (Pipeline | Quality Gate) -->
+  <div id="mah-scan-detail" class="mah-env-detail mah-scan-detail" *ngIf="selectedBatch as batch">
+    <div class="mah-env-detail-head">
+      <div>
+        <span class="mah-env-eyebrow">Détail de pipeline</span>
+        <h2>
+          Lot {{ (batch.batchId || batch.id || '') | slice:0:8 }}
+          <ng-container *ngIf="batch.gitlabPipelineId != null"> · #{{ batch.gitlabPipelineId }}</ng-container>
+        </h2>
+      </div>
+      <div class="mah-env-detail-actions">
+        <span class="status-badge" [ngClass]="getStatusClass(batch.status)">{{ batch.status }}</span>
+        <button type="button" class="refresh-btn" (click)="closeScanDetail()">Fermer</button>
+      </div>
+    </div>
+
+    <div class="ds-ops-tabs" role="tablist" aria-label="Détail scan">
+      <button type="button" role="tab" class="ds-ops-tab"
+              [class.ds-ops-tab--active]="scanDetailTab === 'pipeline'"
+              [attr.aria-selected]="scanDetailTab === 'pipeline'"
+              (click)="setScanDetailTab('pipeline')">Pipeline</button>
+      <button type="button" role="tab" class="ds-ops-tab"
+              [class.ds-ops-tab--active]="scanDetailTab === 'quality-gate'"
+              [attr.aria-selected]="scanDetailTab === 'quality-gate'"
+              (click)="setScanDetailTab('quality-gate')">Quality Gate</button>
+    </div>
+
+    <!-- Onglet Pipeline : Stages & Jobs | Logs -->
+    <section class="ds-ops-block ds-ops-panel" *ngIf="scanDetailTab === 'pipeline'">
+      <div class="ds-pd-toolbar">
+        <div>
+          <strong *ngIf="batch.gitlabPipelineId != null">Pipeline #{{ batch.gitlabPipelineId }}</strong>
+          <strong *ngIf="batch.gitlabPipelineId == null">Pipeline</strong>
+          <span class="am-mono" style="color:#64748b;" *ngIf="scanPipeline?.status"> · {{ scanPipeline?.status }}</span>
+        </div>
+        <div style="display:flex; gap:.4rem; align-items:center;">
+          <a *ngIf="scanPipeline?.webUrl" class="am-btn am-btn-ghost am-btn-sm"
+             [href]="scanPipeline!.webUrl!" target="_blank" rel="noopener">GitLab</a>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                  (click)="refreshScanPipeline()" [disabled]="scanPipelineLoading">
+            {{ scanPipelineLoading ? '…' : 'Actualiser' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="am-alert am-alert-error" *ngIf="scanPipelineError">{{ scanPipelineError }}</div>
+      <div class="am-loading" *ngIf="scanPipelineLoading && !scanPipeline">Chargement des jobs CI…</div>
+      <div class="am-empty" *ngIf="!scanPipelineLoading && !scanPipelineError && (!scanPipeline?.jobs || !scanPipeline!.jobs.length)">
+        Aucun job CI pour l’instant.
+      </div>
+
+      <div class="ds-pd-layout" *ngIf="scanCiStages.length">
+        <div class="ds-pd-grid">
+          <div class="ds-pd-card">
+            <div class="ds-pd-card-head"><h4>Stages &amp; Jobs</h4></div>
+            <div class="ds-pd-card-body ds-pd-scroll">
+              <div class="ds-pd-stage" *ngFor="let stage of scanCiStages">
+                <button type="button" class="ds-pd-stage-title" (click)="selectScanStage(stage)">
+                  <span class="ds-pd-stage-name">
+                    <span class="ds-pd-dot" [ngClass]="'dot-' + (stage.status || 'pending')"></span>
+                    <span class="ds-pd-stage-label">{{ stage.name }}</span>
+                  </span>
+                  <span class="ds-pd-pill" [ngClass]="ciJobStatusClass(stage.status)">{{ stage.status | uppercase }}</span>
+                </button>
+                <ul class="ds-pd-jobs">
+                  <li *ngFor="let job of stage.jobs"
+                      [class.selected]="selectedScanJob?.id === job.id"
+                      [ngClass]="jobRowClass(job.status)"
+                      (click)="selectScanJob(job); $event.stopPropagation()">
+                    <div class="ds-pd-job-main">
+                      <span class="ds-pd-job-name">{{ job.name }}</span>
+                      <span class="ds-pd-pill" [ngClass]="ciJobStatusClass(job.status)">{{ job.status | uppercase }}</span>
+                    </div>
+                    <div class="ds-pd-job-meta">
+                      <span *ngIf="(job.durationSeconds ?? job.duration) != null">
+                        {{ formatJobDuration(job.durationSeconds ?? job.duration) }}
+                      </span>
+                      <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" rel="noopener"
+                         (click)="$event.stopPropagation()">Voir GitLab ↗</a>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="ds-pd-card">
+            <div class="ds-pd-card-head"><h4>Détails du job</h4></div>
+            <div class="ds-pd-card-body">
+              <div class="ds-pd-placeholder" *ngIf="!selectedScanJob">
+                Sélectionne un job pour voir ses logs.
+              </div>
+              <ng-container *ngIf="selectedScanJob as job">
+                <div class="ds-pd-detail-head">
+                  <div>
+                    <h3 class="ds-pd-detail-title">{{ job.name }}</h3>
+                    <p class="ds-pd-detail-tags">
+                      <span class="ds-pd-tag">{{ job.stage || '—' }}</span>
+                      <span class="ds-pd-pill" [ngClass]="ciJobStatusClass(job.status)">{{ job.status | uppercase }}</span>
+                    </p>
+                  </div>
+                  <div style="display:flex; gap:.4rem;">
+                    <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                            (click)="selectScanJob(job)" [disabled]="scanJobLogsLoading">
+                      {{ scanJobLogsLoading ? '…' : 'Rafraîchir' }}
+                    </button>
+                    <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="closeScanJobLogs()">Fermer</button>
+                  </div>
+                </div>
+
+                <div class="ds-pd-logs-label">Logs</div>
+                <div class="am-alert am-alert-error" *ngIf="scanJobLogsError">{{ scanJobLogsError }}</div>
+                <pre class="ds-pd-logs" *ngIf="scanJobLogsLoading || !scanJobLogsError">{{ scanJobLogsLoading ? 'Chargement…' : (scanJobLogs || '—') }}</pre>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Onglet Quality Gate -->
+    <section class="ds-ops-block ds-ops-panel" *ngIf="scanDetailTab === 'quality-gate'">
+      <div class="mah-scan-qg">
+        <div class="mah-scan-verdict" *ngIf="batch.verdict || batch.securityScore != null || batch.grade">
+          <span class="mah-verdict-pill" [ngClass]="verdictToneClass(batch.verdict)" *ngIf="batch.verdict">
+            {{ verdictLabel(batch.verdict) }}
+          </span>
+          <span class="mah-scan-score" *ngIf="batch.grade || batch.securityScore != null">
+            <ng-container *ngIf="batch.grade">{{ batch.grade }}</ng-container>
+            <ng-container *ngIf="batch.securityScore != null"> · {{ batch.securityScore }}</ng-container>
+          </span>
+          <div class="mah-sev" *ngIf="selectedScanRow?.bySeverity as sev">
+            <span class="mah-sev-pill mah-sev--c" *ngIf="sev.critical">C {{ sev.critical }}</span>
+            <span class="mah-sev-pill mah-sev--h" *ngIf="sev.high">H {{ sev.high }}</span>
+            <span class="mah-sev-pill mah-sev--m" *ngIf="sev.medium">M {{ sev.medium }}</span>
+            <span class="mah-sev-pill mah-sev--l" *ngIf="sev.low">L {{ sev.low }}</span>
+            <span class="mah-sev-pill mah-sev--i" *ngIf="sev.info">I {{ sev.info }}</span>
+          </div>
+        </div>
+
+        <p class="mah-scan-empty" *ngIf="!batch.verdict && (batch.status | uppercase) !== 'COMPLETE'">
+          Quality Gate disponible à la fin du lot.
+        </p>
+
+        <ul class="mah-qg-list" *ngIf="scanQualityGates.length; else noQg">
+          <li class="mah-qg-item" *ngFor="let g of scanQualityGates"
+              [attr.data-status]="(g.status || '').toLowerCase()">
+            <span class="mah-qg-status">{{ qualityGateStatusLabel(g.status) }}</span>
+            <div class="mah-qg-body">
+              <strong>{{ g.label }}</strong>
+              <p *ngIf="g.message">{{ g.message }}</p>
+              <span class="mah-qg-scope" *ngIf="g.scope">{{ g.scope }}</span>
+            </div>
+          </li>
+        </ul>
+        <ng-template #noQg>
+          <p class="mah-scan-empty">Aucune checklist encore pour ce lot.</p>
+        </ng-template>
+
+        <div class="mah-scan-svcs" *ngIf="scanServiceQgs.length">
+          <h4>Par service</h4>
+          <div class="mah-scan-svc" *ngFor="let s of scanServiceQgs"
+               [class.mah-scan-svc--blocked]="s.hardGateViolated">
+            <div class="mah-scan-svc-top">
+              <strong>{{ s.serviceName || s.serviceId || 'Service' }}</strong>
+              <span class="status-badge" [ngClass]="getStatusClass(s.status || '')">{{ s.status || '—' }}</span>
+            </div>
+            <div class="mah-scan-svc-meta">
+              <span *ngIf="s.sonarQg">Sonar {{ s.sonarQg }}</span>
+              <span *ngIf="s.secrets != null">Secrets {{ s.secrets }}</span>
+              <span *ngIf="s.critical != null">Critical {{ s.critical }}</span>
+              <span *ngIf="s.high != null">High {{ s.high }}</span>
+            </div>
+            <button type="button" class="mah-scan-svc-link" *ngIf="s.serviceId"
+                    (click)="openServiceQualityGate(s.serviceId, $event)">
+              Quality Gate service →
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div *ngIf="loading && !rows.length" class="activity-loading">
+    <div class="skeleton-timeline">
+      <div class="skeleton-item" *ngFor="let i of [1,2,3]">
+        <div class="skeleton-marker"></div>
+        <div class="skeleton-content">
+          <div class="skeleton-line w-60"></div>
+          <div class="skeleton-line w-80"></div>
+          <div class="skeleton-line w-40"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="error && !loading" class="activity-error">
+    <p>{{ error }}</p>
+    <button type="button" class="retry-btn" (click)="reload()">Réessayer</button>
+  </div>
+
+  <div *ngIf="!loading && !error" class="activity-timeline">
+    <div *ngIf="filteredRows.length === 0" class="empty-state">
+      <h3>Aucune activité</h3>
+      <p *ngIf="!hasActiveFilters">Lance un déploiement ou un scan pour alimenter l'historique.</p>
+      <p *ngIf="hasActiveFilters">
+        Aucune activité ne correspond aux filtres.
+        <button type="button" class="mah-clear" (click)="clearFilters()">Effacer</button>
+      </p>
+    </div>
+
+    <div *ngFor="let row of filteredRows; trackBy: trackRow; let last = last"
+         class="timeline-item"
+         [class.last]="last"
+         [class.timeline-item--selected]="
+           (row.kind === 'deploy' && selectedDeployId === row.id)
+           || (row.kind === 'scan' && selectedScanId === row.id)">
+      <div class="timeline-marker"
+           [class.marker-deployment]="row.kind === 'deploy'"
+           [class.marker-pipeline]="row.kind === 'scan'"></div>
+
+      <div class="timeline-content" (click)="openActivity(row)">
+        <div class="timeline-header">
+          <div class="timeline-title">
+            <span class="mah-kind-label"
+                  [class.mah-kind-label--deploy]="row.kind === 'deploy'"
+                  [class.mah-kind-label--scan]="row.kind === 'scan'">
+              {{ row.kind === 'scan' ? 'Scan' : 'Déploiement' }}
+            </span>
+            <div>
+              <h3>{{ row.title }}</h3>
+              <p class="timeline-description">{{ row.description }}</p>
+            </div>
+          </div>
+          <div class="timeline-time" [attr.data-tooltip]="formatAbsolute(row.at)">
+            {{ formatAgo(row.at) }}
+          </div>
+        </div>
+
+        <div class="timeline-meta">
+          <span class="meta-item" *ngIf="row.gitBranch">
+            <span class="meta-label">Branche</span>
+            {{ row.gitBranch }}
+          </span>
+          <span class="meta-item" *ngIf="row.shortSha">
+            <span class="meta-label">Commit</span>
+            {{ row.shortSha }}
+          </span>
+          <span class="meta-item" *ngIf="row.environment">
+            <span class="meta-label">{{ row.kind === 'deploy' ? 'Namespace' : 'Services' }}</span>
+            {{ row.environment }}
+          </span>
+          <span class="meta-item" *ngIf="row.kind === 'deploy' && row.ttlHours != null">
+            <span class="meta-label">TTL</span>
+            {{ row.ttlHours }}h
+          </span>
+          <span class="meta-item" *ngIf="row.kind === 'deploy' && row.serviceCount != null">
+            <span class="meta-label">Services</span>
+            {{ row.serviceCount }}
+          </span>
+          <span class="meta-item" *ngIf="row.kind === 'scan'">
+            <span class="meta-label">Progression</span>
+            {{ row.finishedCount ?? 0 }}/{{ row.expectedCount ?? 0 }}
+          </span>
+          <span class="meta-item" *ngIf="row.gitlabPipelineId != null">
+            <span class="meta-label">Pipeline</span>
+            #{{ row.gitlabPipelineId }}
+          </span>
+          <span class="meta-item" *ngIf="row.grade || row.securityScore != null">
+            <span class="meta-label">Score</span>
+            <ng-container *ngIf="row.grade">{{ row.grade }}</ng-container>
+            <ng-container *ngIf="row.securityScore != null"> · {{ row.securityScore }}</ng-container>
+          </span>
+          <span class="meta-item" *ngIf="row.triggeredByUserId">
+            <span class="meta-label">User</span>
+            {{ row.triggeredByUserId | slice:0:8 }}
+          </span>
+        </div>
+
+        <div class="mah-sev" *ngIf="row.bySeverity as sev">
+          <span class="mah-sev-pill mah-sev--c" *ngIf="sev.critical">C {{ sev.critical }}</span>
+          <span class="mah-sev-pill mah-sev--h" *ngIf="sev.high">H {{ sev.high }}</span>
+          <span class="mah-sev-pill mah-sev--m" *ngIf="sev.medium">M {{ sev.medium }}</span>
+          <span class="mah-sev-pill mah-sev--l" *ngIf="sev.low">L {{ sev.low }}</span>
+          <span class="mah-sev-pill mah-sev--i" *ngIf="sev.info">I {{ sev.info }}</span>
+        </div>
+
+        <div class="timeline-app-url" *ngIf="canVisit(row)">
+          <a class="app-preview-link"
+             [href]="row.previewUrl!"
+             target="_blank"
+             rel="noopener noreferrer"
+             [title]="row.previewUrl!"
+             (click)="$event.stopPropagation()">Ouvrir l'application</a>
+        </div>
+
+        <div class="timeline-footer">
+          <div class="mah-footer-left">
+            <span class="status-badge" [ngClass]="getStatusClass(row.status)">{{ row.status }}</span>
+            <span class="mah-verdict" *ngIf="row.kind === 'scan' && row.verdict && (row.status | uppercase) === 'COMPLETE'">
+              {{ verdictLabel(row.verdict) }}
+            </span>
+          </div>
+          <span class="view-link">
+            {{ row.kind === 'deploy' ? 'Voir l\'environnement' : 'Voir le détail' }}
+            <span class="view-arrow">→</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

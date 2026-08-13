@@ -73,14 +73,19 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   /** Filtre par nom de service (match workload). */
   serviceFilter = '';
   selectedPod: string | null = null;
+  selectedPodWorkload: string | null = null;
   logs = '';
   logsLoading = false;
   logsError: string | null = null;
+  logsActualPod: string | null = null;
+  /** Panneau événements récents (repliable). */
+  eventsOpen = false;
 
   private poll?: Subscription;
   private history: HistoryPoint[] = [];
   private renderTimer?: ReturnType<typeof setTimeout>;
   private rendering = false;
+  private visibilityBound = () => this.onVisibilityChange();
 
   private cpuTimeChart?: Chart;
   private memTimeChart?: Chart;
@@ -97,7 +102,11 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   constructor(
     private api: ApplicationManagementService,
     private zone: NgZone
-  ) {}
+  ) {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.visibilityBound);
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['deployment'] || changes['appId']) {
@@ -127,7 +136,21 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     }
   }
 
+  private onVisibilityChange(): void {
+    if (typeof document === 'undefined') return;
+    if (document.hidden) {
+      this.stopPoll();
+      return;
+    }
+    if (this.rangeMode !== 'live' || this.isInactive || !this.appId || !this.deployment?.id) return;
+    this.refresh();
+    this.startLivePoll();
+  }
+
   private startLivePoll(): void {
+    this.stopPoll();
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.rangeMode !== 'live' || this.isInactive) return;
     this.zone.runOutsideAngular(() => {
       this.poll = interval(POLL_MS)
         .pipe(switchMap(() => this.api.getDeploymentMonitoring(this.appId, this.deployment.id)))
@@ -146,14 +169,15 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     this.api.getMetricsHistory(this.appId, this.deployment.id, from).subscribe({
       next: (res) => {
         this.historyLoading = false;
-        this.history = (res.points || []).map((p) => ({
+        const raw = (res.points || []).map((p) => ({
           t: p.t,
           cpuMilli: p.cpuMilli ?? 0,
           memMi: p.memMi ?? (p.memBytes != null ? p.memBytes / (1024 * 1024) : 0),
-          netRx: 0,
-          netTx: 0,
+          netRx: Number(p.netRx ?? 0) || 0,
+          netTx: Number(p.netTx ?? 0) || 0,
           fsUsedMi: p.fsUsed != null ? p.fsUsed / (1024 * 1024) : 0
         }));
+        this.history = this.convertCumulativeNetToRates(raw);
         this.scheduleCharts();
         // Garde aussi un snapshot live pour KPIs / pods
         this.refresh();
@@ -165,7 +189,51 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /**
+   * Les samples DB stockent des compteurs cumulés (bytes) ; les charts live
+   * affichent un débit (bytes/s). Convertit les points serveur en rates.
+   */
+  private convertCumulativeNetToRates(points: HistoryPoint[]): HistoryPoint[] {
+    if (!points.length) return [];
+    const out: HistoryPoint[] = [{ ...points[0], netRx: 0, netTx: 0 }];
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const t0 = Date.parse(prev.t);
+      const t1 = Date.parse(cur.t);
+      const dt = Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0
+        ? (t1 - t0) / 1000
+        : 300; // fallback ~sampler 5 min
+      const rxRate = Math.max(0, (cur.netRx - prev.netRx) / dt);
+      const txRate = Math.max(0, (cur.netTx - prev.netTx) / dt);
+      out.push({
+        ...cur,
+        netRx: rxRate,
+        netTx: txRate,
+        t: this.formatHistoryLabel(cur.t)
+      });
+    }
+    if (out.length) {
+      out[0] = { ...out[0], t: this.formatHistoryLabel(points[0].t) };
+    }
+    return out;
+  }
+
+  private formatHistoryLabel(isoOrLabel: string): string {
+    const ms = Date.parse(isoOrLabel);
+    if (!Number.isFinite(ms)) return isoOrLabel;
+    return new Date(ms).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
   ngOnDestroy(): void {
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityBound);
+    }
     this.stopPoll();
     if (this.renderTimer) clearTimeout(this.renderTimer);
     this.destroyCharts();
@@ -173,6 +241,36 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   get isInactive(): boolean {
     return this.deployment?.status === 'STOPPED' || this.deployment?.status === 'FAILED';
+  }
+
+  get metricsAvailable(): boolean {
+    return this.data?.summary?.metricsAvailable === true;
+  }
+
+  get expiresAtLabel(): string | null {
+    const raw = this.data?.expiresAt || this.deployment?.expiresAt;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  get checkedAtLabel(): string | null {
+    const raw = this.data?.checkedAt;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  get showNetChart(): boolean {
+    if (this.rangeMode === 'live') return true;
+    return this.history.some(h => h.netRx > 0 || h.netTx > 0);
   }
 
   get pods(): DeploymentPodInfo[] {
@@ -377,14 +475,18 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   }
 
   openLogs(pod: DeploymentPodInfo): void {
+    if (!pod?.name) return;
     this.selectedPod = pod.name;
+    this.selectedPodWorkload = pod.workload || null;
+    this.logsActualPod = null;
     this.logs = '';
     this.logsError = null;
     this.logsLoading = true;
-    const wl = pod.workload || pod.name;
-    this.api.getDeploymentLogs(this.appId, this.deployment.id, wl, 200).subscribe({
+    // Toujours le nom de pod exact (backend résout d'abord withName).
+    this.api.getDeploymentLogs(this.appId, this.deployment.id, pod.name, 300).subscribe({
       next: (res) => {
         this.logs = res.logs || '';
+        this.logsActualPod = res.pod || pod.name;
         this.logsLoading = false;
       },
       error: (e) => {
@@ -396,8 +498,17 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   closeLogs(): void {
     this.selectedPod = null;
+    this.selectedPodWorkload = null;
+    this.logsActualPod = null;
     this.logs = '';
     this.logsError = null;
+  }
+
+  refreshLogs(): void {
+    if (!this.selectedPod || !this.data?.pods) return;
+    const pod = this.data.pods.find(p => p.name === this.selectedPod);
+    if (pod) this.openLogs(pod);
+    else this.openLogs({ name: this.selectedPod, workload: this.selectedPodWorkload || undefined } as DeploymentPodInfo);
   }
 
   healthClass(): string {
@@ -405,10 +516,6 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     if (this.health.ok === true) return 'md-pill ok';
     if (this.health.ok === false) return 'md-pill bad';
     return 'md-pill muted';
-  }
-
-  alertClass(sev: string): string {
-    return sev === 'error' ? 'am-alert-error' : 'am-alert-warn';
   }
 
   eventClass(type?: string | null): string {

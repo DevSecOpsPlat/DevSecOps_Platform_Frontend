@@ -2443,6 +2443,21 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         if (this.appId) {
           this.requestSecurityReload(this.appId, this.isGlobalView ? GLOBAL_BRANCH : this.selectedBranch);
         }
+        const pid = res.gitlabPipelineId;
+        if (pid && this.appId) {
+          try {
+            localStorage.setItem('envirotest-last-pipeline-id', String(pid));
+            localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pid));
+            localStorage.setItem('envirotest-last-pipeline-kind', 'SCAN');
+          } catch { /* ignore */ }
+          this.router.navigate(['/project', this.appId, 'pipeline-detail', String(pid)], {
+            queryParams: { kind: 'SCAN' }
+          });
+        } else if (this.appId) {
+          this.router.navigate(['/project', this.appId, 'pipeline-detail'], {
+            queryParams: { kind: 'SCAN' }
+          });
+        }
       }
     });
   }
@@ -3354,16 +3369,31 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   viewPipeline(envId: string, kind?: 'SCAN' | 'DEPLOY'): void {
-    const queryParams: Record<string, string> = { appId: this.appId || '' };
+    const queryParams: Record<string, string> = {};
     if (kind) queryParams['kind'] = kind;
+    if (this.appId) {
+      // Conserve l’env-id legacy pour les pipelines liés à un environnement
+      this.router.navigate(['/pipeline', envId], {
+        queryParams: { ...queryParams, appId: this.appId }
+      });
+      return;
+    }
     this.router.navigate(['/pipeline', envId], { queryParams });
   }
 
   viewPipelineById(pipelineId: number | string, branch?: string, kind?: 'SCAN' | 'DEPLOY'): void {
     const queryParams: Record<string, string> = {};
-    if (this.appId) queryParams['appId'] = this.appId;
-    if (branch) queryParams['branch'] = branch;
     if (kind) queryParams['kind'] = kind;
+    if (branch) queryParams['branch'] = branch;
+    try {
+      localStorage.setItem('envirotest-last-pipeline-id', String(pipelineId));
+      if (this.appId) localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pipelineId));
+      if (kind) localStorage.setItem('envirotest-last-pipeline-kind', kind);
+    } catch { /* ignore */ }
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'pipeline-detail', String(pipelineId)], { queryParams });
+      return;
+    }
     this.router.navigate(['/pipeline/id', String(pipelineId)], { queryParams });
   }
 

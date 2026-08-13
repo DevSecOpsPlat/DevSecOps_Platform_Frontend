@@ -1,119 +1,137 @@
 <div class="md-root" *ngIf="deployment">
-  <div class="md-hero">
-    <div class="md-hero-text">
-      <p class="md-kicker">Monitoring · namespace isolé · live charts</p>
-      <h2 class="md-title">{{ appName || data?.applicationName || 'Application' }}</h2>
-      <p class="md-sub am-mono">
-        {{ data?.namespace || deployment.namespace }}
-        <span *ngIf="lastRefresh"> · maj {{ lastRefresh | date:'HH:mm:ss' }}</span>
-      </p>
+  <!-- Head unique (fusion page + contexte) -->
+  <header class="md-head" *ngIf="!isInactive">
+    <div class="md-head-glow" aria-hidden="true"></div>
+    <div class="md-head-top">
+      <div class="md-head-main">
+        <p class="md-head-eyebrow">Application · {{ appName || data?.applicationName || 'Application' }}</p>
+        <h1 class="md-head-title">Monitoring</h1>
+        <p class="md-head-desc">
+          Métriques live du namespace isolé — pods, CPU, mémoire, réseau et health.
+        </p>
+        <p class="md-head-ns am-mono">{{ data?.namespace || deployment.namespace }}</p>
+        <div class="md-head-chips">
+          <span class="md-chip" [class.md-chip--ok]="deployment.status === 'RUNNING'"
+                [class.md-chip--bad]="isInactive">{{ deployment.status }}</span>
+          <span class="md-chip" *ngIf="data"
+                [class.md-chip--ok]="metricsAvailable"
+                [class.md-chip--warn]="!metricsAvailable">
+            {{ metricsAvailable ? 'Métriques OK' : 'Métriques partielles' }}
+          </span>
+          <span class="md-chip md-chip--muted" *ngIf="checkedAtLabel">Serveur {{ checkedAtLabel }}</span>
+          <span class="md-chip md-chip--muted" *ngIf="lastRefresh">UI {{ lastRefresh | date:'HH:mm:ss' }}</span>
+          <span class="md-chip md-chip--muted" *ngIf="expiresAtLabel">Expire {{ expiresAtLabel }}</span>
+        </div>
+      </div>
+      <div class="md-head-actions">
+        <button type="button" class="md-btn md-btn--ghost" (click)="refresh()" [disabled]="loading">
+          {{ loading ? '…' : 'Actualiser' }}
+        </button>
+        <a *ngIf="data?.appUrl" class="md-btn md-btn--primary"
+           [href]="data!.appUrl!" target="_blank" rel="noopener">Ouvrir l’app</a>
+      </div>
     </div>
-    <div class="md-hero-actions">
-      <button class="am-btn am-btn-secondary am-btn-sm" (click)="refresh()" [disabled]="loading">
-        {{ loading ? '…' : 'Actualiser' }}
-      </button>
-      <a *ngIf="data?.appUrl" class="am-btn am-btn-primary am-btn-sm"
-         [href]="data!.appUrl!" target="_blank" rel="noopener">Ouvrir l’app</a>
-    </div>
-  </div>
+  </header>
 
   <div class="am-alert am-alert-warn" *ngIf="isInactive">
     Environnement inactif — pas de métriques live. Redéploie pour activer le dashboard.
+  </div>
+  <div class="am-alert am-alert-warn" *ngIf="data && !isInactive && !metricsAvailable">
+    metrics-server / kubelet partiellement indisponible — CPU/MEM ou réseau peuvent être incomplets.
   </div>
   <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
   <div class="am-loading" *ngIf="loading && !data">Chargement du dashboard…</div>
 
   <ng-container *ngIf="data && !isInactive">
-    <div class="md-service-filter" *ngIf="appServices?.length">
-      <label class="am-label" for="md-svc-filter">Service</label>
-      <select id="md-svc-filter" class="am-input md-filter" [(ngModel)]="serviceFilter">
-        <option value="">Tous les services</option>
-        <option *ngFor="let s of appServices" [value]="s.name">{{ s.name }}</option>
-      </select>
+    <div class="md-toolbar">
+      <div class="md-service-filter" *ngIf="appServices?.length">
+        <label class="md-field-label" for="md-svc-filter">Service</label>
+        <select id="md-svc-filter" class="am-input md-filter" [(ngModel)]="serviceFilter">
+          <option value="">Tous les services</option>
+          <option *ngFor="let s of appServices" [value]="s.name">{{ s.name }}</option>
+        </select>
+      </div>
+      <div class="md-range" role="group" aria-label="Période métriques">
+        <button type="button" class="md-range-btn"
+                [class.md-range-btn--active]="rangeMode === 'live'"
+                (click)="setRange('live')">Live</button>
+        <button type="button" class="md-range-btn"
+                [class.md-range-btn--active]="rangeMode === '24h'"
+                (click)="setRange('24h')">24 h</button>
+        <button type="button" class="md-range-btn"
+                [class.md-range-btn--active]="rangeMode === '7d'"
+                (click)="setRange('7d')">7 j</button>
+      </div>
     </div>
 
-    <!-- KPI strip -->
+    <!-- KPI : 4 par ligne -->
     <div class="md-kpis">
-      <div class="md-kpi">
+      <article class="md-kpi md-kpi--pods">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Pods Ready</span>
         <span class="md-kpi-value">{{ summary?.readyPods || 0 }}/{{ summary?.totalPods || 0 }}</span>
         <div class="md-meter"><div class="md-meter-fill" [style.width.%]="readyPct"></div></div>
-      </div>
-      <div class="md-kpi">
+      </article>
+      <article class="md-kpi md-kpi--cpu">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">CPU (réel)</span>
         <span class="md-kpi-value">{{ cpuTotalLabel }}</span>
         <span class="md-kpi-hint">req {{ cpuRequestTotalLabel }} · lim {{ cpuLimitTotalLabel }}</span>
-      </div>
-      <div class="md-kpi">
+      </article>
+      <article class="md-kpi md-kpi--mem">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Mémoire</span>
         <span class="md-kpi-value">{{ memTotalLabel }}</span>
         <span class="md-kpi-hint">req {{ memRequestTotalLabel }} · lim {{ memLimitTotalLabel }}</span>
-      </div>
-      <div class="md-kpi">
+      </article>
+      <article class="md-kpi md-kpi--net">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Network RX / TX</span>
-        <span class="md-kpi-value" style="font-size:1.05rem;">{{ netRxLabel }}</span>
+        <span class="md-kpi-value md-kpi-value--sm">{{ netRxLabel }}</span>
         <span class="md-kpi-hint">TX {{ netTxLabel }}</span>
-      </div>
-      <div class="md-kpi">
+      </article>
+      <article class="md-kpi md-kpi--disk">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Disk (ephemeral)</span>
-        <span class="md-kpi-value" style="font-size:1.05rem;">{{ fsLabel }}</span>
-      </div>
-      <div class="md-kpi">
+        <span class="md-kpi-value md-kpi-value--sm">{{ fsLabel }}</span>
+      </article>
+      <article class="md-kpi md-kpi--health">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Health</span>
         <span [class]="healthClass()">
           {{ health?.checked ? (health?.ok ? 'OK' : 'KO') : 'N/A' }}
         </span>
         <span class="md-kpi-hint" *ngIf="health?.message">{{ health?.message }}</span>
-      </div>
-      <div class="md-kpi" *ngIf="quota?.enabled">
+      </article>
+      <article class="md-kpi md-kpi--quota" *ngIf="quota?.enabled">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Quota CPU (alloué)</span>
-        <span class="md-kpi-value" style="font-size:1.05rem;">
+        <span class="md-kpi-value md-kpi-value--sm">
           {{ formatQuotaCpu(quota!.usedCpu) }} / {{ formatQuotaCpu(quota!.hardCpu) }}
         </span>
         <div class="md-meter"><div class="md-meter-fill" [style.width.%]="quotaCpuAllocPct"></div></div>
         <span class="md-kpi-hint">réel {{ quotaCpuActualPct }}% du hard</span>
-      </div>
-      <div class="md-kpi" *ngIf="quota?.enabled">
+      </article>
+      <article class="md-kpi md-kpi--quota" *ngIf="quota?.enabled">
+        <span class="md-kpi-accent" aria-hidden="true"></span>
         <span class="md-kpi-label">Quota MEM (alloué)</span>
-        <span class="md-kpi-value" style="font-size:1.05rem;">
+        <span class="md-kpi-value md-kpi-value--sm">
           {{ formatQuotaMem(quota!.usedMemoryBytes) }} / {{ formatQuotaMem(quota!.hardMemoryBytes) }}
         </span>
         <div class="md-meter"><div class="md-meter-fill" [style.width.%]="quotaMemAllocPct"></div></div>
         <span class="md-kpi-hint">réel {{ quotaMemActualPct }}% du hard</span>
-      </div>
+      </article>
     </div>
-
-    <!-- Alerts -->
-    <section class="md-section" *ngIf="alerts.length">
-      <h3 class="md-section-title">Alertes</h3>
-      <div *ngFor="let a of alerts" class="am-alert" [ngClass]="alertClass(a.severity)" style="margin-bottom:.4rem;">
-        <span *ngIf="a.workload || a.pod" class="am-mono">{{ a.workload || a.pod }} — </span>{{ a.message }}
-      </div>
-    </section>
 
     <!-- Charts row: time series -->
     <section class="md-section">
-      <div class="am-section-head" style="margin-bottom:.5rem;">
+      <div class="md-section-head">
         <h3 class="md-section-title" style="margin:0;">Métriques namespace</h3>
-        <div style="display:flex; gap:.35rem; flex-wrap:wrap;">
-          <button type="button" class="am-btn am-btn-sm"
-                  [class.am-btn-primary]="rangeMode === 'live'"
-                  [class.am-btn-secondary]="rangeMode !== 'live'"
-                  (click)="setRange('live')">Live</button>
-          <button type="button" class="am-btn am-btn-sm"
-                  [class.am-btn-primary]="rangeMode === '24h'"
-                  [class.am-btn-secondary]="rangeMode !== '24h'"
-                  (click)="setRange('24h')">24 h</button>
-          <button type="button" class="am-btn am-btn-sm"
-                  [class.am-btn-primary]="rangeMode === '7d'"
-                  [class.am-btn-secondary]="rangeMode !== '7d'"
-                  (click)="setRange('7d')">7 j</button>
-        </div>
       </div>
       <p class="md-section-hint">
-        <ng-container *ngIf="rangeMode === 'live'">Refresh 15s · CPU/MEM (metrics-server) · Network/Disk (kubelet)</ng-container>
+        <ng-container *ngIf="rangeMode === 'live'">Refresh 15s · pause si onglet caché · CPU/MEM (metrics-server) · Network/Disk (kubelet)</ng-container>
         <ng-container *ngIf="rangeMode !== 'live'">
-          Historique DB (échantillon ~5 min)
+          Historique DB (échantillon ~5 min) · débit réseau dérivé des compteurs
           <span *ngIf="historyLoading"> · chargement…</span>
         </ng-container>
       </p>
@@ -128,9 +146,13 @@
         </div>
       </div>
       <div class="md-charts-2">
-        <div class="md-chart-card">
+        <div class="md-chart-card" *ngIf="showNetChart">
           <h4 class="md-chart-title">Network débit (KiB/s)</h4>
           <div class="md-chart-wrap"><canvas #netTimeCanvas></canvas></div>
+        </div>
+        <div class="md-chart-card" *ngIf="!showNetChart">
+          <h4 class="md-chart-title">Network débit</h4>
+          <p class="md-chart-empty">Pas encore de débit réseau calculable pour cette période.</p>
         </div>
         <div class="md-chart-card">
           <h4 class="md-chart-title">Disk ephemeral (Mi) par pod</h4>
@@ -226,7 +248,9 @@
       </div>
       <div class="am-empty" *ngIf="!pods.length">Aucun pod{{ filter ? ' pour ce filtre' : '' }}.</div>
       <div class="md-pods" *ngIf="pods.length">
-        <article class="md-pod" *ngFor="let p of pods" [class.md-pod-bad]="!p.ready || p.phase !== 'Running'">
+        <article class="md-pod" *ngFor="let p of pods"
+                 [class.md-pod-bad]="!p.ready || p.phase !== 'Running'"
+                 [class.md-pod--selected]="selectedPod === p.name">
           <header class="md-pod-head">
             <div>
               <div class="md-pod-name am-mono">{{ p.name }}</div>
@@ -237,7 +261,7 @@
                 <span *ngIf="p.reason"> · {{ p.reason }}</span>
               </div>
             </div>
-            <button class="am-btn am-btn-secondary am-btn-sm" (click)="openLogs(p)">Logs</button>
+            <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openLogs(p)">Logs</button>
           </header>
           <div class="md-res-grid am-mono">
             <div>
@@ -304,27 +328,53 @@
       </div>
     </section>
 
-    <section class="md-section">
-      <h3 class="md-section-title">Événements récents</h3>
-      <div class="am-empty" *ngIf="!events.length">Aucun événement.</div>
-      <ul class="md-events" *ngIf="events.length">
-        <li *ngFor="let e of events" [class]="eventClass(e.type)">
-          <span class="md-event-type">{{ e.type || 'Normal' }}</span>
-          <span class="am-mono">{{ e.object }}</span>
-          <span class="md-event-reason">{{ e.reason }}</span>
-          <span class="md-event-msg">{{ e.message }}</span>
-          <span class="md-event-time am-mono" *ngIf="e.lastTimestamp">{{ e.lastTimestamp | date:'short' }}</span>
-        </li>
-      </ul>
+    <section class="md-section md-events-section">
+      <button type="button" class="md-events-toggle" (click)="eventsOpen = !eventsOpen"
+              [attr.aria-expanded]="eventsOpen">
+        <div class="md-events-toggle-main">
+          <h3 class="md-section-title" style="margin:0;">Événements récents</h3>
+          <span class="md-events-count" *ngIf="events.length">{{ events.length }}</span>
+        </div>
+        <span class="md-events-chevron" [class.md-events-chevron--open]="eventsOpen" aria-hidden="true">▾</span>
+      </button>
+
+      <div class="md-events-panel" *ngIf="eventsOpen">
+        <div class="am-empty" *ngIf="!events.length">Aucun événement.</div>
+        <ul class="md-events" *ngIf="events.length">
+          <li *ngFor="let e of events" [class]="eventClass(e.type)">
+            <span class="md-event-type">{{ e.type || 'Normal' }}</span>
+            <div class="md-event-body">
+              <div class="md-event-top">
+                <span class="md-event-object am-mono">{{ e.object }}</span>
+                <span class="md-event-reason">{{ e.reason }}</span>
+                <span class="md-event-time am-mono" *ngIf="e.lastTimestamp">{{ e.lastTimestamp | date:'short' }}</span>
+              </div>
+              <p class="md-event-msg">{{ e.message }}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
     </section>
 
-    <div class="md-logs" *ngIf="selectedPod">
+    <div class="md-logs" *ngIf="selectedPod" role="dialog" aria-label="Logs du pod">
       <div class="md-logs-head">
-        <h3 class="md-section-title" style="margin:0;">Logs · {{ selectedPod }}</h3>
-        <button class="am-btn am-btn-ghost am-btn-sm" (click)="closeLogs()">Fermer</button>
+        <div>
+          <h3 class="md-section-title" style="margin:0;">Logs</h3>
+          <p class="md-logs-meta am-mono">
+            {{ logsActualPod || selectedPod }}
+            <span *ngIf="selectedPodWorkload"> · {{ selectedPodWorkload }}</span>
+          </p>
+        </div>
+        <div class="md-logs-actions">
+          <button type="button" class="am-btn am-btn-secondary am-btn-sm"
+                  (click)="refreshLogs()" [disabled]="logsLoading">
+            {{ logsLoading ? '…' : 'Rafraîchir' }}
+          </button>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="closeLogs()">Fermer</button>
+        </div>
       </div>
       <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
-      <pre class="md-logs-body" *ngIf="!logsLoading">{{ logs || '(vide)' }}</pre>
+      <pre class="md-logs-body" *ngIf="!logsLoading && !logsError">{{ logs || '(vide)' }}</pre>
       <div class="am-empty" *ngIf="logsLoading">Chargement des logs…</div>
     </div>
   </ng-container>

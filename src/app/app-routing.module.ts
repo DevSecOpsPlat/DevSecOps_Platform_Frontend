@@ -53,6 +53,8 @@ const routes: Routes = [
       // ProjectSecurityComponent legacy → DefectDojo service (dashboard2)
       { path: 'security', redirectTo: 'security-dashboard', pathMatch: 'full' },
       { path: 'pipelines', component: PipelinesListComponent },
+      { path: 'pipeline-detail', component: PipelineDetailsComponent },
+      { path: 'pipeline-detail/:pipelineId', component: PipelineDetailsComponent },
       // activity mélange pipelines + déploiements + environnements — route conservée hors sidebar
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
@@ -106,6 +108,8 @@ const routes: Routes = [
         .then(m => m.ManagedAppLayoutComponent),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+      { path: 'pipeline-detail', component: PipelineDetailsComponent },
+      { path: 'pipeline-detail/:pipelineId', component: PipelineDetailsComponent },
       {
         path: ':section',
         loadComponent: () =>

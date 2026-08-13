@@ -1,5 +1,6 @@
 import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
@@ -14,6 +15,9 @@ import {
   SECRET_MASK
 } from '../../models/application-management/application-management.models';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
+import { AiAnalysisService } from '../../services/ai/ai-analysis.service';
+import { ExplainPipelineLogsResponse } from '../../models/ai/explain-pipeline-logs.model';
+import { sortStageNames } from '../../shared/ci-stage-order';
 
 interface StateEntry {
   name: string;
@@ -31,7 +35,7 @@ const PREVIEW_VH = 800;
 @Component({
   selector: 'app-managed-deployment-status',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './deployment-status.component.html',
   styleUrls: ['../shared/app-management.shared.css']
 })
@@ -41,7 +45,94 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   @Input() services: AppServiceModel[] = [];
   /** full = historique (CI, pods, DBs) ; banner = dashboard app (annexe §3.3). */
   @Input() variant: 'full' | 'banner' = 'full';
+  /** true = détails techniques sous le banner (sans en-tête / TTL dupliqués). */
+  @Input() embed = false;
+  /** Affiche les onglets Pipeline / Services / BD / Pods / Connexions. */
+  @Input() showOpsTabs = false;
   @Output() navigateSection = new EventEmitter<'monitoring' | 'alerts' | 'history' | 'deployments'>();
+
+  opsTab: 'pipeline' | 'services' | 'databases' | 'pods' | 'connections' = 'pipeline';
+
+  setOpsTab(tab: 'pipeline' | 'services' | 'databases' | 'pods' | 'connections'): void {
+    this.opsTab = tab;
+    if (tab !== 'pipeline') {
+      this.closeCiLogs();
+    }
+    if (tab !== 'pods' && tab !== 'services' && tab !== 'databases') {
+      this.closeLogs();
+    }
+    if (tab === 'pipeline' && this.ciPipeline?.jobs?.length) {
+      this.ensureDefaultCiJobSelected(this.ciPipeline.jobs);
+    }
+    if (tab === 'pods') {
+      this.selectedWorkload = null;
+      this.ensureDefaultPodSelected(true);
+    }
+    if (tab === 'services') {
+      this.selectedWorkload = null;
+      this.ensureDefaultServiceSelected(true);
+    }
+    if (tab === 'databases') {
+      this.selectedWorkload = null;
+      this.ensureDefaultDatabaseSelected(true);
+    }
+  }
+
+  /** Jobs CI regroupés par stage (ordre .gitlab-ci.yml). */
+  get ciStages(): { name: string; status: string; jobs: PipelineJobInfo[] }[] {
+    const jobs = this.ciPipeline?.jobs || [];
+    const map = new Map<string, PipelineJobInfo[]>();
+    for (const j of jobs) {
+      const stage = (j.stage || 'default').trim() || 'default';
+      if (!map.has(stage)) map.set(stage, []);
+      map.get(stage)!.push(j);
+    }
+    map.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
+    const stageNames = sortStageNames(Array.from(map.keys()), (stage) =>
+      Math.min(...(map.get(stage) || []).map(j => j.id ?? 0))
+    );
+    return stageNames.map((name) => {
+      const stageJobs = map.get(name)!;
+      return {
+        name,
+        status: this.aggregateJobStatus(stageJobs),
+        jobs: stageJobs
+      };
+    });
+  }
+
+  private aggregateJobStatus(jobs: PipelineJobInfo[]): string {
+    const norms = jobs.map(j => this.normCiStatus(j.status));
+    if (norms.some(s => s === 'failed' || s === 'canceled')) return 'failed';
+    if (norms.some(s => s === 'running')) return 'running';
+    if (norms.some(s => s === 'pending' || s === 'created')) return 'pending';
+    if (norms.length && norms.every(s => s === 'success')) return 'success';
+    return 'pending';
+  }
+
+  formatJobDuration(seconds: number | null | undefined): string {
+    if (seconds == null || !Number.isFinite(seconds)) return '';
+    const s = Math.round(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return r ? `${m}m ${r}s` : `${m}m`;
+  }
+
+  jobRowClass(status: string): string {
+    const s = this.normCiStatus(status);
+    if (s === 'success' || s === 'ready') return 'job-success';
+    if (s === 'failed' || s === 'canceled' || s === 'stopped') return 'job-failed';
+    if (s === 'running' || s === 'pending' || s === 'created' || s === 'notready') return 'job-running';
+    return '';
+  }
+
+  podRowClass(phase: string | undefined, ready: boolean | undefined): string {
+    const p = (phase || '').toLowerCase();
+    if (ready || p === 'running') return 'job-success';
+    if (p === 'failed' || p === 'error' || p === 'crashloopbackoff') return 'job-failed';
+    return 'job-running';
+  }
 
   /** Stage aperçu — scale dynamique pour remplir le conteneur. */
   @ViewChild('previewStage') set previewStageEl(el: ElementRef<HTMLElement> | undefined) {
@@ -83,6 +174,12 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   ciJobLogsLoading = false;
   ciJobLogsError: string | null = null;
 
+  /** Agent IA — explication des logs CI. */
+  logAiResult: ExplainPipelineLogsResponse | null = null;
+  logAiLoading = false;
+  logAiError: string | null = null;
+  logAiQuestion = '';
+
   rebuildingServiceId: string | null = null;
   rebuildError: string | null = null;
   rebuildMessage: string | null = null;
@@ -110,7 +207,8 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   constructor(
     private api: ApplicationManagementService,
     private sanitizer: DomSanitizer,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private aiAnalysisService: AiAnalysisService
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -482,6 +580,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.podsLoading = false;
         this.podsError = null;
         this.syncPreviewUrl();
+        this.ensureDefaultPodSelected();
       },
       error: (e) => {
         this.podsLoading = false;
@@ -513,14 +612,68 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.api.getDeploymentLogs(this.appId, this.dep.id, workload, 400).subscribe({
       next: (res) => {
         this.logs = res.logs || '(vide)';
-        this.logsPod = res.pod;
+        this.logsPod = res.pod || '';
         this.logsLoading = false;
+        this.cdr.markForCheck();
       },
       error: (e) => {
         this.logsLoading = false;
-        this.logsError = e?.error?.message || 'Impossible de lire les logs.';
+        this.logsError = e?.error?.message || e?.message || 'Impossible de lire les logs.';
+        this.logs = '';
+        this.cdr.markForCheck();
       }
     });
+  }
+
+  /** Ouvre les logs d’un service / d’une base (résolution du label K8s `app`). */
+  openEntryLogs(entry: StateEntry, kind: 'service' | 'database' = 'service'): void {
+    const wl = this.resolveEntryWorkload(entry, kind);
+    if (wl) this.openLogs(wl);
+  }
+
+  entryWorkloadKey(entry: StateEntry, kind: 'service' | 'database' = 'service'): string {
+    return this.resolveEntryWorkload(entry, kind) || entry.name;
+  }
+
+  /** Premier pod sélectionné par défaut (onglet Pods). */
+  private ensureDefaultPodSelected(force = false): void {
+    if (!force && this.showOpsTabs && this.opsTab !== 'pods') return;
+    if (!this.pods.length) {
+      this.selectedWorkload = null;
+      return;
+    }
+    if (!force && this.selectedWorkload) {
+      const still = this.pods.some(p => (p.workload || p.name) === this.selectedWorkload);
+      if (still) return;
+    }
+    const first = this.pods[0];
+    this.openLogs(first.name || first.workload || '');
+  }
+
+  private ensureDefaultServiceSelected(force = false): void {
+    if (this.isStopped || !this.serviceEntries.length) {
+      this.closeLogs();
+      return;
+    }
+    if (!force && this.showOpsTabs && this.opsTab !== 'services') return;
+    if (!force && this.selectedWorkload) {
+      const still = this.serviceEntries.some(s => this.entryWorkloadKey(s, 'service') === this.selectedWorkload);
+      if (still) return;
+    }
+    this.openEntryLogs(this.serviceEntries[0], 'service');
+  }
+
+  private ensureDefaultDatabaseSelected(force = false): void {
+    if (this.isStopped || !this.databaseEntries.length) {
+      this.closeLogs();
+      return;
+    }
+    if (!force && this.showOpsTabs && this.opsTab !== 'databases') return;
+    if (!force && this.selectedWorkload) {
+      const still = this.databaseEntries.some(d => this.entryWorkloadKey(d, 'database') === this.selectedWorkload);
+      if (still) return;
+    }
+    this.openEntryLogs(this.databaseEntries[0], 'database');
   }
 
   closeLogs(): void {
@@ -574,12 +727,14 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.ciPipeline = res;
         this.ciLoading = false;
         this.ciError = null;
+        // Sélection par défaut : premier job (ou conserver le job courant)
+        this.ensureDefaultCiJobSelected(res.jobs || []);
         // Rafraîchir les logs du job sélectionné s'il est encore en cours
         if (this.selectedCiJob && this.isCiJobActive(this.selectedCiJob)) {
-          const updated = (res.jobs || []).find((j) => j.id === this.selectedCiJob!.id);
+          const updated = (res.jobs || []).find((j) => Number(j.id) === Number(this.selectedCiJob!.id));
           if (updated) {
             this.selectedCiJob = updated;
-            this.loadCiJobLogs(updated.id, true);
+            this.loadCiJobLogs(Number(updated.id), true);
           }
         }
         if (!this.shouldPollCi()) {
@@ -597,11 +752,63 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /** Choisit un job par défaut si aucun n'est sélectionné. */
+  private ensureDefaultCiJobSelected(jobs: PipelineJobInfo[]): void {
+    if (!jobs.length) {
+      this.selectedCiJob = null;
+      this.ciJobLogs = '';
+      return;
+    }
+    if (this.selectedCiJob) {
+      const stillThere = jobs.find(j => Number(j.id) === Number(this.selectedCiJob!.id));
+      if (stillThere) {
+        this.selectedCiJob = stillThere;
+        // Recharger les logs si le panneau est vide (ex. après changement d'onglet)
+        if (!this.ciJobLogs && !this.ciJobLogsLoading && !this.ciJobLogsError) {
+          this.loadCiJobLogs(Number(stillThere.id), false);
+        }
+        return;
+      }
+    }
+    // Préférer un job failed, sinon running, sinon le premier
+    const preferred =
+      jobs.find(j => {
+        const s = this.normCiStatus(j.status);
+        return s === 'failed' || s === 'canceled';
+      }) ||
+      jobs.find(j => this.isCiJobActive(j)) ||
+      jobs[0];
+    this.selectCiJob(preferred);
+  }
+
+  /** Clic sur un stage → sélectionne le premier job du stage. */
+  selectCiStage(stage: { name: string; jobs: PipelineJobInfo[] }): void {
+    const jobs = stage?.jobs || [];
+    if (!jobs.length) return;
+    const preferred =
+      jobs.find(j => {
+        const s = this.normCiStatus(j.status);
+        return s === 'failed' || s === 'canceled';
+      }) ||
+      jobs.find(j => this.isCiJobActive(j)) ||
+      jobs[0];
+    this.selectCiJob(preferred);
+  }
+
   selectCiJob(job: PipelineJobInfo): void {
-    if (!job?.id) return;
+    const id = Number(job?.id);
+    if (!job || !Number.isFinite(id) || id <= 0) {
+      this.ciJobLogsError = 'Job sans identifiant GitLab — logs indisponibles.';
+      this.selectedCiJob = job || null;
+      this.ciJobLogs = '';
+      return;
+    }
     this.closeLogs();
     this.selectedCiJob = job;
-    this.loadCiJobLogs(job.id, false);
+    this.logAiResult = null;
+    this.logAiError = null;
+    this.logAiQuestion = '';
+    this.loadCiJobLogs(id, false);
   }
 
   private loadCiJobLogs(jobId: number, silent: boolean): void {
@@ -634,6 +841,105 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.ciJobLogs = '';
     this.ciJobLogsError = null;
     this.ciJobLogsLoading = false;
+    // garde la conversation IA (questions projet / URL)
+  }
+
+  explainLogsWithAi(): void {
+    this.askPipelineAi(true);
+  }
+
+  /**
+   * @param explainLog true = bouton « Expliquer ce log » (question défaut sur l’échec)
+   */
+  askPipelineAi(explainLog = false): void {
+    if (this.logAiLoading) return;
+    const typed = this.logAiQuestion?.trim() || '';
+    if (!explainLog && !typed) return;
+    if (explainLog && !this.ciJobLogs?.trim()) {
+      this.logAiError = 'Charge d’abord les logs du job, ou pose une question libre (URL, statut…).';
+      return;
+    }
+    this.logAiLoading = true;
+    this.logAiError = null;
+    const question = typed || (explainLog
+      ? 'Explique-moi ce log : qu\'est-ce qui a échoué et quelles sont les causes probables ?'
+      : '');
+    const stagesOverview = this.ciStages
+      .map(s => `${s.name}=${(s.status || '').toLowerCase()}`)
+      .join('; ');
+    this.aiAnalysisService.explainPipelineLogs({
+      logs: this.ciJobLogs || undefined,
+      jobName: this.selectedCiJob?.name,
+      stageName: this.selectedCiJob?.stage,
+      jobStatus: this.selectedCiJob?.status,
+      pipelineKind: 'DEPLOY',
+      stagesOverview,
+      projectHint: 'EnviroTest — déploiement K8s géré',
+      projectContext: this.buildAiProjectContext(),
+      userQuestion: question
+    }).subscribe({
+      next: (res) => {
+        this.logAiResult = res;
+        this.logAiLoading = false;
+        this.cdr.detectChanges();
+        setTimeout(() => this.scrollLogAiIntoView(), 50);
+      },
+      error: (err) => {
+        this.logAiLoading = false;
+        this.logAiError = err?.error?.message || err?.message || 'Erreur lors de l\'explication IA.';
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  private buildAiProjectContext(): string {
+    const lines: string[] = [];
+    lines.push(`appId: ${this.appId || '—'}`);
+    if (this.dep) {
+      lines.push(`deploymentId: ${this.dep.id}`);
+      lines.push(`namespace: ${this.dep.namespace || '—'}`);
+      lines.push(`deploymentStatus: ${this.dep.status}`);
+      lines.push(`gitlabPipelineId: ${this.dep.gitlabPipelineId ?? '—'}`);
+      lines.push(`pipelineStatus: ${this.ciPipeline?.status || '—'}`);
+      if (this.ciPipeline?.webUrl) lines.push(`gitlabPipelineUrl: ${this.ciPipeline.webUrl}`);
+    }
+    const appUrl = this.frontendUrl;
+    if (appUrl) lines.push(`appUrl: ${appUrl}`);
+    if (this.monitorAppUrl) lines.push(`monitorAppUrl: ${this.monitorAppUrl}`);
+    const backendUrl = this.backendUrl;
+    if (backendUrl) lines.push(`backendUrl: ${backendUrl}`);
+    const services = this.serviceEntries || [];
+    if (services.length) {
+      lines.push('services:');
+      for (const s of services) {
+        lines.push(
+          `  - name=${s.name}; role=${s.role || '—'}; status=${s.status}; host=${s.internalHost || '—'}; externalUrl=${s.externalUrl || '—'}`
+        );
+      }
+    }
+    if (this.services?.length) {
+      lines.push('configuredServices:');
+      for (const s of this.services) {
+        lines.push(`  - id=${s.id}; name=${s.name}; role=${s.role || '—'}`);
+      }
+    }
+    const pods = this.pods || [];
+    if (pods.length) {
+      lines.push('pods:');
+      for (const p of pods.slice(0, 20)) {
+        lines.push(
+          `  - name=${p.name}; phase=${p.phase || '—'}; ready=${p.ready}; workload=${p.workload || '—'}`
+        );
+      }
+    }
+    return lines.join('\n');
+  }
+
+  private scrollLogAiIntoView(): void {
+    try {
+      const el = document.querySelector('.ds-log-ai-result') as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch { /* ignore */ }
   }
 
   isCiJobActive(job: PipelineJobInfo | null | undefined): boolean {
@@ -690,11 +996,57 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     });
   }
 
-  /** Extrait le nom K8s (label app) depuis internalHost. */
+  /** Extrait le nom K8s (label app) depuis internalHost / URL. */
   workloadFromHost(host: string): string | null {
     if (!host) return null;
-    const first = host.split('.')[0];
+    let h = host.trim();
+    // jdbc:postgresql://db-x.ns.svc… → db-x.ns.svc…
+    const schemeIdx = h.indexOf('://');
+    if (schemeIdx >= 0) h = h.slice(schemeIdx + 3);
+    h = h.split('/')[0].split(':')[0]; // drop path / port
+    const first = h.split('.')[0];
     return first || null;
+  }
+
+  /** Normalise comme AppNaming.k8sName côté backend. */
+  k8sWorkloadName(input: string): string {
+    if (!input?.trim()) return 'x';
+    let s = input.toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+    if (!s) s = 'x';
+    if (s.length > 50) s = s.slice(0, 50).replace(/-+$/, '');
+    return s || 'x';
+  }
+
+  /**
+   * Résout le label K8s `app` pour un service / une base :
+   * pods → DNS interne → nom normalisé (db-… pour les bases).
+   */
+  resolveEntryWorkload(entry: StateEntry, kind: 'service' | 'database' = 'service'): string | null {
+    if (!entry) return null;
+    const fromHost = this.workloadFromHost(entry.internalHost || '');
+    const slug = this.k8sWorkloadName(entry.name);
+    const candidates = kind === 'database'
+      ? [fromHost, slug.startsWith('db-') ? slug : `db-${slug}`, slug, entry.name]
+      : [fromHost, slug, entry.name];
+    const uniq = [...new Set(candidates.filter((c): c is string => !!c))];
+
+    for (const c of uniq) {
+      const pod = this.pods.find(p =>
+        p.workload === c || p.name === c || (p.name || '').startsWith(c + '-')
+      );
+      if (pod?.workload) return pod.workload;
+      if (pod?.name) return pod.workload || c;
+    }
+    return uniq[0] || null;
+  }
+
+  serviceEntryForWorkload(workload: string | null): StateEntry | null {
+    if (!workload) return null;
+    return this.serviceEntries.find(s => this.entryWorkloadKey(s, 'service') === workload) || null;
   }
 
   private entries(section: 'services' | 'databases'): StateEntry[] {
@@ -741,9 +1093,18 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   }
 
   podPhaseClass(phase: string, ready: boolean): string {
-    if (ready && phase === 'Running') return 'status-running';
-    if (phase === 'Failed' || phase === 'Unknown') return 'status-failed';
+    // Aligné sur les pastilles pipeline (success / failed / pending)
+    if (ready || (phase || '').toLowerCase() === 'running') return 'status-running';
+    const p = (phase || '').toLowerCase();
+    if (p === 'failed' || p === 'unknown' || p === 'error' || p === 'crashloopbackoff') return 'status-failed';
     return 'status-pending';
+  }
+
+  podStatusLabel(phase: string, ready: boolean): string {
+    if (ready || (phase || '').toLowerCase() === 'running') return 'success';
+    const p = (phase || '').toLowerCase();
+    if (p === 'failed' || p === 'unknown' || p === 'error' || p === 'crashloopbackoff') return 'failed';
+    return (phase || 'pending').toLowerCase();
   }
 
   displayUrl(db: AppDatabaseModel): string {

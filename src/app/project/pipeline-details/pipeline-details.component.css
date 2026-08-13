@@ -35,6 +35,22 @@
   background: #f8fafc;
 }
 
+/* Intégré au layout /projects ou /project (sidebar EnviroTest déjà présente) */
+.pd-embed {
+  display: block;
+  min-height: 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.pd-embed-main {
+  margin-left: 0;
+  background: transparent;
+}
+
+.pd-embed .pipeline-page {
+  padding-top: 0.25rem;
+}
+
 /* ── Variables ── */
 .pipeline-page {
   --bg:               #f8fafc;
@@ -361,7 +377,7 @@
 ═══════════════════════════════════════ */
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr);
+  grid-template-columns: minmax(300px, 1.25fr) minmax(0, 1.4fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -418,7 +434,8 @@
 .stage-title {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 0.55rem;
   margin: 0;
   padding: 0.75rem 1rem;
   background: var(--surface-elevated);
@@ -428,12 +445,29 @@
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--text);
+  flex-wrap: wrap;
+}
+
+.stage-name-badge {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.84rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.stage-label {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .stage-actions {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .stage-retry {
@@ -451,13 +485,6 @@
 .stage-retry:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.stage-name-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
 }
 
 .stage-dot {
@@ -804,6 +831,72 @@
   opacity: 0.7;
   cursor: not-allowed;
 }
+.log-ai-block {
+  margin: 1.25rem 0 0;
+  padding: 1.1rem 1.25rem;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 12px;
+}
+.log-ai-full {
+  width: 100%;
+  box-sizing: border-box;
+}
+.log-ai-title {
+  font-size: 0.95rem;
+  color: var(--text);
+  margin-right: auto;
+}
+.log-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.log-ai-ask {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+.log-ai-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.log-ai-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-color: var(--accent);
+}
+.log-ai-ask-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 0.85rem;
+}
+.log-ai-list {
+  margin-top: 0.85rem;
+}
+.log-ai-list h5 {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.log-ai-list ol,
+.log-ai-list ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.log-ai-list li + li {
+  margin-top: 0.35rem;
+}
 .ai-hint {
   margin: 0.5rem 0 0;
   font-size: 0.78rem;
@@ -825,6 +918,8 @@
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
+  max-height: min(48vh, 420px);
+  overflow: auto;
 }
 .ai-summary-title {
   margin: 0 0 0.4rem;
@@ -837,6 +932,8 @@
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .ai-vuln-list h5 {
   margin: 0 0 0.6rem;

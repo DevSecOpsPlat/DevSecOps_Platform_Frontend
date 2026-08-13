@@ -82,6 +82,8 @@ export interface AppDeployment {
   createdAt?: string;
   updatedAt?: string;
   databases?: AppDatabaseModel[];
+  /** Branche Git (env éphémère lié). */
+  gitBranch?: string | null;
   /** TTL heures (env éphémère). */
   ttlHours?: number | null;
   /** Expiration serveur (ISO). */
@@ -146,6 +148,12 @@ export interface DeploymentMonitorAlert {
   workload?: string | null;
   message: string;
   source?: 'live' | 'history' | string;
+  /** Origine : pod | k8s-event | … */
+  kind?: string | null;
+  reason?: string | null;
+  object?: string | null;
+  count?: number | null;
+  lastTimestamp?: string | null;
   type?: string;
   status?: string;
   createdAt?: string;
@@ -159,6 +167,8 @@ export interface DeploymentAlertsResponse {
   historyCount: number;
   health?: DeploymentMonitoringResponse['health'];
   summary?: DeploymentMonitoringResponse['summary'];
+  appUrl?: string | null;
+  events?: MonitoringEvent[];
   liveError?: string;
 }
 
@@ -438,6 +448,7 @@ export interface ScanBatchState {
   managedApplicationId?: string;
   status: string;
   gitlabPipelineId?: number | null;
+  triggeredByUserId?: string | null;
   verdict?: string;
   securityScore?: number | null;
   grade?: string | null;
