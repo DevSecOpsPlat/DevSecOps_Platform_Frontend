@@ -35,6 +35,13 @@ services:
       K8S_INSECURE_SKIP_TLS_VERIFY: ${K8S_INSECURE_SKIP_TLS_VERIFY:-true}
       DEPLOYMENT_INGRESS_DOMAIN: ${DEPLOYMENT_INGRESS_DOMAIN:-192.168.92.10.nip.io}
       DEPLOYMENT_PREVIEW_NIP_MASTER_IP: ${DEPLOYMENT_PREVIEW_NIP_MASTER_IP:-192.168.92.10}
+      # Traefik est installé via Helm dans son propre namespace "traefik" sur ce cluster
+      # (pas kube-system, contrairement au Traefik intégré par défaut de K3s) — la NetworkPolicy
+      # "default-isolation" générée par AppK8sManifestService doit autoriser explicitement ce
+      # namespace en entrée, sinon les pods planifiés sur un autre nœud que Traefik (ex. worker)
+      # rejettent tout le trafic de l'ingress (REJECT icmp-port-unreachable, masqué en local
+      # jusqu'ici uniquement parce que Traefik et les pods partageaient toujours le même nœud).
+      DEPLOYMENT_NETWORK_POLICY_INGRESS_NAMESPACE: ${DEPLOYMENT_NETWORK_POLICY_INGRESS_NAMESPACE:-traefik}
       DEPLOYMENT_PIPELINE_REF: ${DEPLOYMENT_PIPELINE_REF:-master}
       PIPELINE_SECRET: ${PIPELINE_SECRET:-}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-}
@@ -53,6 +60,19 @@ services:
       - backend
     ports:
       - "4200:80"
+
+  # Reverse proxy Nginx — WAF léger + rate limiting, point d'entrée unique (chapitre 6 du rapport)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: envirotest-nginx
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "8081:8081"
+    volumes:
+      - ../DevSecOps_Platform_Backend/deploy/nginx/envirotest.docker.conf:/etc/nginx/nginx.conf:ro
+      - ../DevSecOps_Platform_Backend/deploy/nginx/proxy-headers.conf:/etc/nginx/conf.d/proxy-headers.conf:ro
 
 volumes:
   postgres_data:

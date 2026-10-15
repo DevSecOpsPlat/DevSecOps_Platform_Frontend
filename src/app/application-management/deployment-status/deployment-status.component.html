@@ -24,6 +24,28 @@
     {{ ingressWarning }}
   </div>
 
+  <!--
+    TTL — variant "full" uniquement (Détails techniques + panneau historique).
+    Le variant "banner" a déjà son propre countdown live plus bas ; ici, l'objectif est de
+    montrer la même information même quand l'environnement est arrêté (session terminée),
+    au lieu de la faire disparaître avec le seul message générique ci-dessus.
+  -->
+  <div class="am-ttl" *ngIf="variant === 'full' && hasTtlData">
+    <div class="am-ttl-head">
+      <span class="am-label" style="margin:0;">{{ isStopped ? 'Session TTL' : 'Temps restant' }}</span>
+      <span class="am-ttl-clock" [class.am-ttl-expired]="isStopped" [class.am-ttl-urgent]="!isStopped && ttlUrgent">
+        {{ isStopped ? frozenTtlSummary : (ttlLabel || (dep.ttlHours + ' h')) }}
+      </span>
+    </div>
+    <div class="am-ttl-meta" *ngIf="dep.ttlHours || dep.readyAt">
+      <span *ngIf="dep.ttlHours">TTL {{ dep.ttlHours }} h</span>
+      <span *ngIf="dep.readyAt"> · prêt {{ dep.readyAt | date:'short' }}</span>
+    </div>
+    <div class="am-ttl-bar" *ngIf="!isStopped && expiresAtMs">
+      <div class="am-ttl-fill" [class.am-ttl-fill-urgent]="ttlUrgent" [style.width.%]="ttlProgress"></div>
+    </div>
+  </div>
+
   <div class="ds-banner-head" *ngIf="variant === 'banner' && !isRunning">
     <div class="ds-banner-status">
       <span class="am-badge" [ngClass]="'status-' + (dep.status || '').toLowerCase()">{{ dep.status }}</span>
@@ -109,12 +131,13 @@
               [style.width.px]="previewVw"
               [style.height.px]="previewVh"
               [style.transform]="'scale(' + previewScale + ')'"
-              title="Aperçu — si l’écran reste blanc, ouvre le lien (intégration bloquée)"
+              title="Aperçu du déploiement"
               loading="lazy"
               scrolling="no"
               tabindex="-1"
               referrerpolicy="no-referrer"></iframe>
           </div>
+          <p class="ds-preview-hint" *ngIf="previewHint">{{ previewHint }}</p>
         </div>
       </aside>
     </div>
@@ -150,7 +173,7 @@
   </div>
 
   <!-- Pipeline CI : design Stages & Jobs | Détails + logs -->
-  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'pipeline') && dep.gitlabPipelineId && !isStopped">
+  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'pipeline') && dep.gitlabPipelineId">
     <div class="ds-pd-toolbar">
       <div>
         <strong>Pipeline #{{ dep.gitlabPipelineId }}</strong>
@@ -279,15 +302,12 @@
     </div>
   </section>
 
-  <div class="am-empty" *ngIf="(!showOpsTabs || opsTab === 'pipeline') && isStopped && dep.gitlabPipelineId" style="padding:1rem 0;">
-    Dernier pipeline #{{ dep.gitlabPipelineId }} — environnement arrêté.
-  </div>
   <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'pipeline' && !dep.gitlabPipelineId" style="padding:1rem 0;">
     Aucun pipeline CI associé à ce déploiement.
   </div>
 
   <!-- Services : liste | logs -->
-  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'services') && !isStopped && serviceEntries.length">
+  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'services') && serviceEntries.length">
     <div class="ds-pd-grid">
       <div class="ds-pd-card">
         <div class="ds-pd-card-head"><h4>Services</h4></div>
@@ -305,6 +325,13 @@
                 <span class="am-mono">vague {{ s.wave }} · {{ s.internalHost }}</span>
                 <a *ngIf="s.externalUrl && !ingressBroken" [href]="s.externalUrl" target="_blank" rel="noopener"
                    (click)="$event.stopPropagation()">Ouvrir ↗</a>
+                <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                        *ngIf="s.externalUrl && !ingressBroken && canRebuild(s)"
+                        [disabled]="!!rebuildingServiceId"
+                        title="Relance le build + déploiement de ce service (relance aussi le scan ZAP sur l'URL live) — pas un scan ZAP isolé."
+                        (click)="$event.stopPropagation(); rebuildService(s)">
+                  Scan ZAP
+                </button>
               </div>
             </li>
           </ul>
@@ -345,12 +372,12 @@
     </div>
   </section>
 
-  <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'services' && (isStopped || !serviceEntries.length)" style="padding:1rem 0;">
+  <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'services' && !serviceEntries.length" style="padding:1rem 0;">
     Aucun service dans cet environnement.
   </div>
 
   <!-- Bases : liste | logs -->
-  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'databases') && !isStopped && databaseEntries.length">
+  <section class="ds-ops-block ds-ops-panel" *ngIf="(!showOpsTabs || opsTab === 'databases') && databaseEntries.length">
     <div class="ds-pd-grid">
       <div class="ds-pd-card">
         <div class="ds-pd-card-head"><h4>Bases de données</h4></div>
@@ -400,18 +427,28 @@
     </div>
   </section>
 
-  <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'databases' && (isStopped || !databaseEntries.length)" style="padding:1rem 0;">
+  <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'databases' && !databaseEntries.length" style="padding:1rem 0;">
     Aucune base de données dans cet environnement.
   </div>
 
   <!-- Santé résumé -->
-  <div class="ds-ops-block ds-health-line" *ngIf="(!showOpsTabs || opsTab === 'pods') && !isStopped && (monitorSummary || monitorHealth)">
+  <div class="ds-ops-block ds-health-line" *ngIf="(!showOpsTabs || opsTab === 'pods') && !isStopped && (monitorSummary || monitorHealth || quota?.enabled || clusterCapacity?.enabled)">
     <span *ngIf="monitorSummary">
       Pods prêts {{ monitorSummary.readyPods }}/{{ monitorSummary.totalPods }}
       · alertes {{ monitorSummary.alertCount }}
     </span>
     <span *ngIf="monitorHealth" class="am-badge" [ngClass]="healthBadgeClass()">
       Health {{ monitorHealth.checked ? (monitorHealth.ok ? 'OK' : 'KO') : 'N/A' }}
+    </span>
+    <span *ngIf="quota?.enabled" class="ds-quota-chip"
+          [class.ds-quota-chip--warn]="quotaCpuAllocPct >= 90 || quotaMemAllocPct >= 90"
+          [title]="'CPU ' + formatQuotaCpu(quota?.usedCpu) + ' / ' + formatQuotaCpu(quota?.hardCpu) + ' · MEM ' + formatQuotaMem(quota?.usedMemoryBytes) + ' / ' + formatQuotaMem(quota?.hardMemoryBytes)">
+      Quota namespace — CPU {{ quotaCpuAllocPct }}% · MEM {{ quotaMemAllocPct }}%
+    </span>
+    <span *ngIf="clusterCapacity?.enabled" class="ds-quota-chip"
+          [class.ds-quota-chip--warn]="nodeCapacityTight"
+          [title]="'Nœud (toutes namespaces) — CPU ' + formatQuotaCpu(clusterCapacity?.usedCpuCores) + ' / ' + formatQuotaCpu(clusterCapacity?.allocatableCpuCores) + ' · MEM ' + formatQuotaMem(clusterCapacity?.usedMemoryBytes) + ' / ' + formatQuotaMem(clusterCapacity?.allocatableMemoryBytes)">
+      Capacité nœud — CPU {{ nodeCpuUsedPct }}% · MEM {{ nodeMemUsedPct }}%
     </span>
     <button type="button" class="am-btn am-btn-ghost am-btn-sm"
             (click)="navigateSection.emit('monitoring')">Monitoring →</button>
@@ -483,6 +520,10 @@
       </div>
     </div>
   </section>
+
+  <div class="am-empty" *ngIf="showOpsTabs && opsTab === 'pods' && isStopped" style="padding:1rem 0;">
+    Pods indisponibles — l’environnement est arrêté (namespace supprimé).
+  </div>
 
   <!-- URL de connexion générée -->
   <div class="ds-ops-block" *ngIf="(!showOpsTabs || opsTab === 'connections') && !isStopped && dep.databases?.length">

@@ -1,0 +1,16 @@
+<header class="ph-hero">
+  <div class="ph-hero-glow" aria-hidden="true"></div>
+  <div class="ph-back"><ng-content select="[hero-back]"></ng-content></div>
+  <div class="ph-top">
+    <div class="ph-main">
+      <span class="ph-eyebrow" *ngIf="eyebrow">{{ eyebrow }}</span>
+      <h1 class="ph-title">{{ title }}</h1>
+      <div class="ph-meta"><ng-content select="[hero-meta]"></ng-content></div>
+      <p class="ph-desc" *ngIf="description">{{ description }}</p>
+    </div>
+    <div class="ph-actions">
+      <ng-content select="[hero-actions]"></ng-content>
+    </div>
+  </div>
+  <div class="ph-statusline"><ng-content select="[hero-stats]"></ng-content></div>
+</header>

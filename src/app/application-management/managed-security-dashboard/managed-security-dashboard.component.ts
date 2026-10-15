@@ -9,6 +9,7 @@ import {
   SecurityPostureResponse
 } from '../../models/application-management/application-management.models';
 import {
+  DefectDojoDashboardCharts,
   DefectDojoDashboardResponse,
   DefectDojoFindingItem,
   DefectDojoFindingStatusAction,
@@ -17,6 +18,33 @@ import {
   DefectDojoMetricCategory,
   DefectDojoService
 } from '../../services/defectdojo/defectdojo.service';
+import {
+  hasOpenSeverityChartData,
+  openSeverityChartSubtitle,
+  OpenSeverityGranularity
+} from '../../services/defectdojo/open-severity-evolution-chart.helper';
+import {
+  FluxGranularity,
+  fluxChartSubtitle,
+  hasFluxChartData
+} from '../../services/defectdojo/treatment-flux-chart.helper';
+import {
+  AxisTick,
+  buildCweRows,
+  buildFindingAgeRows,
+  buildFluxChart,
+  buildScanToolBarRows,
+  buildScanToolRows,
+  buildSeverityEvolution,
+  CweRow,
+  FindingAgeRow,
+  FluxBarDatum,
+  mergeDashboardCharts,
+  mergeScanToolRows,
+  ScanToolBarRow,
+  SeverityEvolutionSeries
+} from '../../services/defectdojo/dashboard-chart-builders';
+import { severityColor as sharedSeverityColor } from '../../services/defectdojo/severity-palette';
 import { QualityGateService, QualityGateEnvironmentOption } from '../../services/quality-gate/quality-gate.service';
 import { isHardBlocked } from '../shared/verdict.util';
 
@@ -97,6 +125,30 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
   metricCards: DefectDojoMetricCard[] = [];
   configuredCount = 0;
 
+  // ── Graphiques (Tendances + Répartition), agrégés sur les services actifs ──
+  // via services/defectdojo/dashboard-chart-builders.ts, partagé avec la vue
+  // par service (security-dashboard). `mergedCharts` fusionne les compteurs
+  // additifs (sévérité, outil, CWE, âge, séries jour/semaine/heure) de chaque
+  // service actif ; scanSnapshots n'y est volontairement pas fusionné (cf.
+  // mergeDashboardCharts), donc le flux « Run » et l'évolution « Heure »
+  // restent réservés au cas où un seul service est sélectionné.
+  mergedCharts: DefectDojoDashboardCharts | null = null;
+  multiServiceActive = false;
+  hasFluxChart = false;
+  hasOpenSeverityChart = false;
+  fluxGranularity: FluxGranularity = 'day';
+  openSeverityGranularity: OpenSeverityGranularity = 'day';
+  fluxBars: FluxBarDatum[] = [];
+  fluxYTicks: AxisTick[] = [];
+  scanToolBarRows: ScanToolBarRow[] = [];
+  cweRows: CweRow[] = [];
+  findingAgeRows: FindingAgeRow[] = [];
+  severityEvolutionSeries: SeverityEvolutionSeries[] = [];
+  severityEvolutionYTicks: AxisTick[] = [{ value: 1, y: 4 }, { value: 0, y: 96 }];
+  severityEvolutionLabels: string[] = [];
+  lastScanLabelCache = '—';
+  readonly plotX0 = 2;
+
   selectedCategory: DefectDojoMetricCategory = 'open';
   showFindingsTable = false;
   findings: ManagedFindingRow[] = [];
@@ -106,6 +158,12 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
   totalElements = 0;
 
   filterSeverity = '';
+  /** Filtre par nom d'outil — appliqué CÔTÉ CLIENT (contrairement au filtre "Outil (import)"
+   * de security-dashboard qui filtre côté serveur par testId) : un testId d'import n'a de sens
+   * que pour UN service, alors qu'un nom d'outil (ex. "Anchore Grype") est commun à tous. */
+  filterToolLabel: string | null = null;
+  filterDateFrom = '';
+  filterDateTo = '';
   searchQuery = '';
 
   readonly severities = [...SEVERITIES];
@@ -160,6 +218,12 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
 
   get severityTotal(): number {
     return SEVERITIES.reduce((n, s) => n + this.severityCount(s), 0);
+  }
+
+  /** Options du filtre "Outil (import)" — dérivées des lignes déjà agrégées par outil
+   * (cf. scanToolBarRows), donc toujours cohérentes avec le graphique "Par outil de scan". */
+  get scanToolFilterOptions(): string[] {
+    return this.scanToolBarRows.map(r => r.label);
   }
 
   get openFindingsSubtitle(): string {
@@ -463,6 +527,16 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
       this.configuredCount = 0;
       this.error = null;
       this.loading = false;
+      this.mergedCharts = null;
+      this.hasFluxChart = false;
+      this.hasOpenSeverityChart = false;
+      this.scanToolBarRows = [];
+      this.cweRows = [];
+      this.findingAgeRows = [];
+      this.fluxBars = [];
+      this.fluxYTicks = [];
+      this.severityEvolutionSeries = [];
+      this.severityEvolutionLabels = [];
       return;
     }
 
@@ -654,6 +728,110 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
         { key: 'total', label: 'Total', total: this.severityTotal, bySeverity: { ...sev } }
       ];
     }
+
+    this.recomputeChartData(active);
+  }
+
+  /** Construit les graphiques (Tendances + Répartition) à partir des services actifs —
+   * mêmes fonctions pures que security-dashboard.component.ts, voir dashboard-chart-builders.ts. */
+  private recomputeChartData(active: ServiceDashSlice[]): void {
+    const engaged = active.filter(s => s.dashboard?.engagementId);
+    this.multiServiceActive = engaged.length > 1;
+
+    if (engaged.length === 1) {
+      // Un seul service actif : pas d'ambiguïté d'agrégation, on utilise directement
+      // son `charts` (toutes les granularités, y compris Run/Heure, restent disponibles).
+      this.mergedCharts = engaged[0].dashboard!.charts ?? null;
+    } else {
+      this.mergedCharts = mergeDashboardCharts(engaged.map(s => s.dashboard?.charts));
+    }
+
+    this.hasFluxChart = hasFluxChartData(this.mergedCharts);
+    this.hasOpenSeverityChart = hasOpenSeverityChartData(this.mergedCharts);
+
+    const perServiceToolRows = engaged.map(s => buildScanToolRows(s.dashboard?.charts));
+    this.scanToolBarRows = buildScanToolBarRows(mergeScanToolRows(perServiceToolRows), this.severities);
+
+    this.cweRows = buildCweRows(this.mergedCharts);
+    this.findingAgeRows = buildFindingAgeRows(this.mergedCharts);
+
+    const flux = buildFluxChart(this.mergedCharts, this.fluxGranularity, this.plotX0);
+    this.fluxBars = flux.bars;
+    this.fluxYTicks = flux.yTicks;
+
+    const evolution = buildSeverityEvolution(this.mergedCharts, this.openSeverityGranularity, this.severities, this.plotX0);
+    this.severityEvolutionSeries = evolution.series;
+    this.severityEvolutionYTicks = evolution.yTicks;
+    this.severityEvolutionLabels = evolution.labels;
+
+    const lastScan = this.mergedCharts?.lastScanDate;
+    this.lastScanLabelCache = lastScan
+      ? (Number.isNaN(new Date(lastScan).getTime())
+          ? lastScan
+          : new Date(lastScan).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))
+      : '—';
+  }
+
+  get fluxSubtitle(): string {
+    const n = this.mergedCharts?.detailedMetrics?.openDayToDayBySeverity?.length ?? 0;
+    return fluxChartSubtitle(this.fluxGranularity, n);
+  }
+
+  get openSeverityChartSubtitle(): string {
+    return openSeverityChartSubtitle(this.openSeverityGranularity);
+  }
+
+  get openCweSubtitle(): string {
+    const total = Object.values(this.mergedCharts?.detailedMetrics?.openCwe ?? {}).reduce((a, b) => a + b, 0);
+    return `${total} occurrence(s) CWE sur findings ouverts`;
+  }
+
+  get findingAgeSubtitle(): string {
+    const n = this.mergedCharts?.detailedMetrics?.openFindingsForAge ?? 0;
+    return `${n} finding(s) ouvert(s) analysés`;
+  }
+
+  get scanToolStackSubtitle(): string {
+    const total = this.scanToolBarRows.reduce((sum, r) => sum + r.total, 0);
+    return `${this.scanToolBarRows.length} outil(s) · ${total} finding(s) ouvert(s) répartis`;
+  }
+
+  severityColor(sev: string): string {
+    return sharedSeverityColor(sev);
+  }
+
+  severityBarColor(sev: string): string {
+    return sharedSeverityColor(sev);
+  }
+
+  setFluxGranularity(g: FluxGranularity): void {
+    this.fluxGranularity = g;
+    const flux = buildFluxChart(this.mergedCharts, this.fluxGranularity, this.plotX0);
+    this.fluxBars = flux.bars;
+    this.fluxYTicks = flux.yTicks;
+  }
+
+  setOpenSeverityGranularity(g: OpenSeverityGranularity): void {
+    this.openSeverityGranularity = g;
+    const evolution = buildSeverityEvolution(this.mergedCharts, this.openSeverityGranularity, this.severities, this.plotX0);
+    this.severityEvolutionSeries = evolution.series;
+    this.severityEvolutionYTicks = evolution.yTicks;
+    this.severityEvolutionLabels = evolution.labels;
+  }
+
+  onCweRowClick(key: string): void {
+    this.selectedCategory = 'open';
+    this.searchQuery = key;
+    this.showFindingsTable = true;
+    this.page = 0;
+    this.loadFindings();
+    this.scrollToFindings();
+  }
+
+  /** Lignes agrégées sur plusieurs services : testId à 0 (pas d'import unique à filtrer),
+   * cf. mergeScanToolRows — la ligne reste alors purement informative, non cliquable. */
+  onScanToolRowClick(testId: number): void {
+    if (!testId) return;
   }
 
   filterBySeverity(sev: string): void {
@@ -698,7 +876,9 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
         multi ? 0 : this.page,
         multi ? 50 : this.size,
         this.filterSeverity || undefined,
-        tags
+        tags,
+        this.filterDateFrom || undefined,
+        this.filterDateTo || undefined
       ).pipe(
         timeout(60_000),
         catchError(() => of({
@@ -762,26 +942,42 @@ export class ManagedSecurityDashboardComponent implements OnChanges, OnDestroy {
     this.refreshFilteredFindings();
   }
 
+  onToolFilterChanged(): void {
+    this.refreshFilteredFindings();
+  }
+
   clearFilters(): void {
     this.filterSeverity = '';
+    this.filterToolLabel = null;
+    this.filterDateFrom = '';
+    this.filterDateTo = '';
     this.searchQuery = '';
     this.page = 0;
     this.loadFindings();
   }
 
   private refreshFilteredFindings(): void {
-    const q = this.searchQuery.trim().toLowerCase();
-    if (!q) {
-      this.filteredFindings = [...this.findings];
-      return;
+    let rows = this.findings;
+    if (this.filterToolLabel) {
+      // Comparaison insensible à la casse : le libellé vient de la ligne "Par outil de scan"
+      // (issue de scanSnapshots), le finding porte son propre toolName/scanType — mêmes noms
+      // d'outil DefectDojo en pratique, mais pas garanti caractère pour caractère.
+      const wanted = this.filterToolLabel.toLowerCase();
+      rows = rows.filter(f =>
+        this.toolLabel(f).toLowerCase() === wanted || (f.scanType || '').toLowerCase() === wanted
+      );
     }
-    this.filteredFindings = this.findings.filter(f =>
-      (f.title || '').toLowerCase().includes(q)
-      || (f.cve || '').toLowerCase().includes(q)
-      || (f.filePath || '').toLowerCase().includes(q)
-      || (f.serviceName || '').toLowerCase().includes(q)
-      || (f.toolName || '').toLowerCase().includes(q)
-    );
+    const q = this.searchQuery.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(f =>
+        (f.title || '').toLowerCase().includes(q)
+        || (f.cve || '').toLowerCase().includes(q)
+        || (f.filePath || '').toLowerCase().includes(q)
+        || (f.serviceName || '').toLowerCase().includes(q)
+        || (f.toolName || '').toLowerCase().includes(q)
+      );
+    }
+    this.filteredFindings = q || this.filterToolLabel ? rows : [...rows];
   }
 
   prevPage(): void {

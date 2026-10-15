@@ -873,152 +873,25 @@ export class ManagedAppHistoryComponent implements OnChanges, OnDestroy {
   }
 
   /** Checklist QG app à partir du lot (même logique que posture, version locale). */
+  /**
+   * Checklist app-level désormais calculée côté backend (ManagedAppScanService.extractQualityGates,
+   * réutilisée telle quelle par ScanBatchStateDto.qualityGates) -- ne plus la réimplémenter ici,
+   * ce qui garantit que le gate DAST (et toute future évolution) apparaît aussi dans l'historique.
+   */
   private buildScanQualityGates(batch: ScanBatchState | null): HistoryScanQgItem[] {
-    if (!batch) return [];
-    const sev = this.extractSeverity(batch) || { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-    const payload = batch.verdictPayload || {};
-    const failedIds = new Set<string>();
-    const unknownSources = new Set<string>();
-    const failedServices: string[] = [];
-
-    const payloadServices = (payload as { services?: unknown[] }).services;
-    if (Array.isArray(payloadServices)) {
-      for (const o of payloadServices) {
-        if (!o || typeof o !== 'object') continue;
-        const m = o as Record<string, unknown>;
-        const svcName = m['serviceName'] != null ? String(m['serviceName']) : null;
-        if (m['hardGateViolated'] === true) {
-          if (svcName && !failedServices.includes(svcName)) failedServices.push(svcName);
-          const ids = m['hardGateIds'];
-          if (Array.isArray(ids)) ids.forEach(id => { if (id != null) failedIds.add(String(id)); });
-        }
-        const src = m['indeterminateSources'];
-        if (Array.isArray(src)) src.forEach(s => { if (s != null) unknownSources.add(String(s)); });
-      }
-    }
-
-    let anySonarAvailable = false;
-    let secretsTotal = 0;
-    let secretsKnown = false;
-    for (const svc of batch.services || []) {
-      const gate = svc.qualityGateJson || {};
-      const qg = String(gate['sonarQualityGate'] ?? gate['sonar_quality_gate'] ?? '').toUpperCase();
-      if (qg && qg !== 'NONE' && qg !== 'UNKNOWN') anySonarAvailable = true;
-      if (gate['sonarAvailable'] === true || gate['sonar_available'] === true) anySonarAvailable = true;
-      if ('secrets' in gate) {
-        secretsKnown = true;
-        secretsTotal += Number(gate['secrets'] ?? 0) || 0;
-      }
-    }
-
-    const scope = failedServices.length ? failedServices.join(', ') : 'application';
-    const items: HistoryScanQgItem[] = [];
-
-    if (sev.critical > 0 || failedIds.has('dd_critical')) {
-      items.push({
-        id: 'dd_critical',
-        label: 'Vulnérabilités critiques (DefectDojo)',
-        status: 'FAIL',
-        message: `${sev.critical} Critical open — hard gate (tolérance zéro).`,
-        scope
-      });
-    } else {
-      items.push({
-        id: 'dd_critical',
-        label: 'Vulnérabilités critiques (DefectDojo)',
-        status: 'PASS',
-        message: 'Aucun Critical open sur le rollup app.',
-        scope: 'application'
-      });
-    }
-
-    const secretsUnknown =
-      !secretsKnown || [...unknownSources].some(s => s.toLowerCase().includes('secret'));
-    if (secretsUnknown) {
-      items.push({
-        id: 'secrets',
-        label: 'Secrets exposés (Gitleaks)',
-        status: failedIds.has('secrets') ? 'FAIL' : 'UNKNOWN',
-        message: failedIds.has('secrets')
-          ? `${secretsTotal} secret(s) — hard gate`
-          : 'Scan secrets non évalué / incomplet sur au moins un service',
-        scope: 'application'
-      });
-    } else if (secretsTotal > 0 || failedIds.has('secrets')) {
-      items.push({
-        id: 'secrets',
-        label: 'Secrets exposés (Gitleaks)',
-        status: 'FAIL',
-        message: `${secretsTotal} secret(s) exposé(s)`,
-        scope: 'application'
-      });
-    } else {
-      items.push({
-        id: 'secrets',
-        label: 'Secrets exposés (Gitleaks)',
-        status: 'PASS',
-        message: 'Aucun secret détecté',
-        scope: 'application'
-      });
-    }
-
-    const sonarUnknown =
-      !anySonarAvailable || [...unknownSources].some(s => s.toLowerCase().includes('sonar'));
-    if (failedIds.has('sonar_blocker') || failedIds.has('sonar_qg')) {
-      items.push({
-        id: 'sonar',
-        label: 'Quality Gate SonarQube',
-        status: 'FAIL',
-        message: 'Blocker ou Quality Gate ERROR sur au moins un service',
-        scope: 'application'
-      });
-    } else if (sonarUnknown) {
-      items.push({
-        id: 'sonar',
-        label: 'Quality Gate SonarQube',
-        status: 'UNKNOWN',
-        message: 'Sonar indisponible ou incomplet — pas un FAIL seul.',
-        scope: 'application'
-      });
-    } else {
-      items.push({
-        id: 'sonar',
-        label: 'Quality Gate SonarQube',
-        status: 'PASS',
-        message: 'Quality Gate Sonar OK sur les services scannés',
-        scope: 'application'
-      });
-    }
-
-    if (sev.high > 0) {
-      items.push({
-        id: 'dd_high',
-        label: 'Vulnérabilités High (DefectDojo)',
-        status: 'WARN',
-        message: `${sev.high} High open — à traiter, hors hard gate Critical.`,
-        scope: 'application'
-      });
-    }
-
-    return items;
+    return batch?.qualityGates || [];
   }
 
   private buildScanServiceQgs(batch: ScanBatchState | null): HistoryScanServiceQg[] {
     if (!batch?.services?.length) return [];
-    const payloadServices = Array.isArray((batch.verdictPayload as { services?: unknown[] } | undefined)?.services)
-      ? ((batch.verdictPayload as { services: Record<string, unknown>[] }).services)
-      : [];
 
     return batch.services.map((svc: ScanBatchServiceState) => {
       const gate = svc.qualityGateJson || {};
       const dd = (gate['ddBySeverity'] as Record<string, number> | undefined) || {};
-      const payloadMatch = payloadServices.find(p =>
-        (p['serviceId'] != null && String(p['serviceId']) === String(svc.serviceId))
-        || (p['serviceName'] != null && String(p['serviceName']) === String(svc.serviceName))
-      );
-      const hardIds = Array.isArray(payloadMatch?.['hardGateIds'])
-        ? (payloadMatch!['hardGateIds'] as unknown[]).map(String)
-        : [];
+      // hardGateViolated/hardGateIds dérivés de la checklist déjà calculée côté backend
+      // (svc.qualityGates, voir ScanBatchStateService) -- inclut désormais le gate DAST.
+      const items = svc.qualityGates || [];
+      const hardIds = items.filter(i => i.status === 'FAIL').map(i => i.id);
       return {
         serviceId: svc.serviceId,
         serviceName: svc.serviceName,
@@ -1028,7 +901,7 @@ export class ManagedAppHistoryComponent implements OnChanges, OnDestroy {
         secrets: 'secrets' in gate ? (Number(gate['secrets']) || 0) : null,
         critical: Number(dd['critical'] ?? gate['critical'] ?? 0) || 0,
         high: Number(dd['high'] ?? gate['high'] ?? 0) || 0,
-        hardGateViolated: payloadMatch?.['hardGateViolated'] === true || hardIds.length > 0,
+        hardGateViolated: hardIds.length > 0,
         hardGateIds: hardIds
       };
     });

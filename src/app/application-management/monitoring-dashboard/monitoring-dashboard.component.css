@@ -378,6 +378,7 @@
 .md-kpi--disk .md-kpi-accent { background: linear-gradient(180deg, #0f766e, #2dd4bf); }
 .md-kpi--health .md-kpi-accent { background: linear-gradient(180deg, #16a34a, #4ade80); }
 .md-kpi--quota .md-kpi-accent { background: linear-gradient(180deg, #1e293b, #64748b); }
+.md-kpi--cluster .md-kpi-accent { background: linear-gradient(180deg, #b45309, #fbbf24); }
 
 .md-kpi-label {
   font-size: 0.68rem;
@@ -453,6 +454,30 @@
 
 .md-section {
   margin-bottom: 1.5rem;
+}
+
+.md-missing-pods {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  color: #9a3412;
+}
+
+.md-missing-pods p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.md-missing-pods .am-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .md-section-head {

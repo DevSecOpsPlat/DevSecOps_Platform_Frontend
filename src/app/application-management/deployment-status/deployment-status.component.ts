@@ -12,6 +12,8 @@ import {
   DeploymentMonitorAlert,
   DeploymentMonitoringResponse,
   DeploymentPodInfo,
+  DeploymentQuotaInfo,
+  ClusterCapacityInfo,
   SECRET_MASK
 } from '../../models/application-management/application-management.models';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
@@ -158,6 +160,9 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   monitorSummary: DeploymentMonitoringResponse['summary'] | null = null;
   monitorAppUrl: string | null = null;
   metricsAvailable = false;
+  /** Quota namespace (CPU/mem) — même donnée que le Monitoring dashboard. */
+  quota: DeploymentQuotaInfo | null = null;
+  clusterCapacity: ClusterCapacityInfo | null = null;
 
   selectedWorkload: string | null = null;
   logs = '';
@@ -227,20 +232,18 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       this.setupTtlCountdown();
       this.syncPreviewUrl();
       if (this.isStopped) {
+        // Namespace supprimé : plus de pods à afficher (le template montre un message dédié).
         this.pods = [];
         this.podsError = null;
         this.podsLoading = false;
         this.rebuildMessage = null;
-        this.ciPipeline = null;
-        this.ciLoading = false;
-        this.ciError = null;
-        this.ciPoll?.unsubscribe();
-        this.closeCiLogs();
       } else {
         this.refreshPods();
-        if (this.variant === 'full') {
-          this.refreshCiPipeline();
-        }
+      }
+      // Pipeline CI (GitLab) et état des services : conservés même après arrêt de l'environnement,
+      // pour garder l'historique consultable (contrairement aux pods, réellement détruits).
+      if (this.variant === 'full') {
+        this.refreshCiPipeline();
       }
     }
   }
@@ -251,6 +254,28 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   get isRunning(): boolean {
     return (this.dep?.status || '').toUpperCase() === 'RUNNING';
+  }
+
+  /**
+   * Résumé TTL "gelé" pour un environnement arrêté (historique) : le countdown live
+   * n'a plus de sens, mais ttlHours/expiresAt restent en base — les montrer plutôt
+   * que le seul libellé générique "Environnement arrêté".
+   */
+  get frozenTtlSummary(): string {
+    if (!this.dep) return '';
+    const hrs = this.dep.ttlHours;
+    const expiresMs = this.parseInstantMs(this.dep.expiresAt);
+    if (expiresMs != null) {
+      const formatted = new Date(expiresMs).toLocaleString('fr-FR', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+      return hrs ? `Session ${hrs} h — expirée le ${formatted}` : `Expirée le ${formatted}`;
+    }
+    return hrs ? `Session ${hrs} h — terminée` : 'Session terminée';
+  }
+
+  get hasTtlData(): boolean {
+    return !!(this.dep && (this.dep.ttlHours || this.dep.expiresAt));
   }
 
   /** URL front : health/monitor, sinon service FRONTEND. */
@@ -279,6 +304,22 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   canEmbedPreview(url: string | null | undefined): boolean {
     const u = (url || '').trim().toLowerCase();
     return u.startsWith('http://') || u.startsWith('https://');
+  }
+
+  /**
+   * Message visible en permanence sous l'aperçu (pas juste un tooltip au survol) — un iframe
+   * bloqué (X-Frame-Options) ou pointant vers un pod pas encore Ready ne déclenche pas d'erreur
+   * fiable côté Angular (l'échec reste dans la console navigateur, invisible pour l'utilisateur),
+   * donc on explique la cause probable au lieu de laisser un cadre vide sans contexte (retour
+   * utilisateur du 18 août 2026 : « je regarde une erreur, l'enregistrement s'est-il fait ? »).
+   */
+  get previewHint(): string | null {
+    const s = this.monitorSummary;
+    if (s && (s.totalPods || 0) > 0 && (s.readyPods || 0) < (s.totalPods || 0)) {
+      return `Aperçu peut-être vide : ${s.readyPods}/${s.totalPods} pods prêts sur ce déploiement — `
+        + `le service n'a pas fini de démarrer (voir Alertes pour la cause). Le lien direct fonctionne dès que le pod est prêt.`;
+    }
+    return `Si l'aperçu reste vide, le site refuse d'être intégré dans un cadre — utilise le lien direct.`;
   }
 
   /**
@@ -555,6 +596,8 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       this.monitorSummary = null;
       this.monitorAppUrl = null;
       this.metricsAvailable = false;
+      this.quota = null;
+      this.clusterCapacity = null;
       this.podsLoading = false;
       this.podsError = null;
       this.podsPoll?.unsubscribe();
@@ -577,6 +620,8 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.monitorSummary = res.summary || null;
         this.monitorAppUrl = res.appUrl || null;
         this.metricsAvailable = !!res.summary?.metricsAvailable;
+        this.quota = res.quota || null;
+        this.clusterCapacity = res.clusterCapacity || null;
         this.podsLoading = false;
         this.podsError = null;
         this.syncPreviewUrl();
@@ -589,6 +634,49 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         }
       }
     });
+  }
+
+  /** Jauge de quota namespace (CPU/mem) — même calcul que le Monitoring dashboard. */
+  get quotaCpuAllocPct(): number {
+    const p = this.quota?.pctAllocated?.cpu;
+    return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  get quotaMemAllocPct(): number {
+    const p = this.quota?.pctAllocated?.memory;
+    return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  formatQuotaCpu(cores: number | null | undefined): string {
+    if (cores == null || !Number.isFinite(cores)) return '—';
+    if (cores < 1) return Math.round(cores * 1000) + 'm';
+    return cores.toFixed(2);
+  }
+
+  formatQuotaMem(bytes: number | null | undefined): string {
+    if (bytes == null || !Number.isFinite(bytes)) return '—';
+    const gi = bytes / (1024 * 1024 * 1024);
+    if (gi >= 1) return gi.toFixed(2) + ' Gi';
+    return (bytes / (1024 * 1024)).toFixed(0) + ' Mi';
+  }
+
+  /** Capacité réelle du nœud — diagnostic secondaire d'un pod bloqué en Pending (audit-deploiement.md). */
+  get nodeCpuUsedPct(): number {
+    const c = this.clusterCapacity;
+    if (!c?.enabled || !c.allocatableCpuCores) return 0;
+    return Math.min(100, Math.round(((c.usedCpuCores || 0) / c.allocatableCpuCores) * 100));
+  }
+
+  get nodeMemUsedPct(): number {
+    const c = this.clusterCapacity;
+    if (!c?.enabled || !c.allocatableMemoryBytes) return 0;
+    return Math.min(100, Math.round(((c.usedMemoryBytes || 0) / c.allocatableMemoryBytes) * 100));
+  }
+
+  get nodeCapacityTight(): boolean {
+    const c = this.clusterCapacity;
+    if (!c?.enabled) return false;
+    return this.nodeCpuUsedPct >= 90 || this.nodeMemUsedPct >= 90;
   }
 
   healthBadgeClass(): string {
@@ -705,13 +793,8 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   }
 
   refreshCiPipeline(silent = false): void {
-    if (this.isStopped) {
-      this.ciPipeline = null;
-      this.ciLoading = false;
-      this.ciError = null;
-      this.ciPoll?.unsubscribe();
-      return;
-    }
+    // Le pipeline GitLab reste consultable après arrêt de l'environnement (historique) ;
+    // seul le rafraîchissement automatique (setupCiPolling/shouldPollCi) s'arrête.
     if (!this.appId || !this.dep?.id || !this.dep.gitlabPipelineId) {
       this.ciPipeline = null;
       this.ciError = null;
@@ -973,7 +1056,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   rebuildService(s: StateEntry): void {
     const sid = this.serviceIdFor(s.name);
     if (!sid || !this.appId) return;
-    if (!confirm(`Rebuild « ${s.name} » uniquement (même namespace) ?\nLes autres services ne seront pas reconstruits.`)) {
+    if (!confirm(`Rebuild « ${s.name} » uniquement (même namespace) — relance aussi le scan ZAP sur l'environnement.\nLes autres services ne seront pas reconstruits.`)) {
       return;
     }
     this.rebuildingServiceId = sid;

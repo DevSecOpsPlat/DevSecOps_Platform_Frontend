@@ -41,7 +41,8 @@ export const SECTION_MAP: Record<string, { app: string; service: string }> = {
   deployments: { app: 'deployments', service: 'deployments' },
   monitoring: { app: 'monitoring', service: 'monitoring' },
   alerts: { app: 'alerts', service: 'deployments' },
-  sonarqube: { app: 'quality-gate', service: 'sonarqube' }
+  sonarqube: { app: 'quality-gate', service: 'sonarqube' },
+  'post-deploy': { app: 'post-deploy', service: 'post-deploy' }
 };
 
 @Component({
@@ -132,7 +133,8 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
               sub: true
             },
             { key: 'monitoring', label: 'Monitoring', path: 'monitoring' },
-            { key: 'alerts', label: 'Alertes', path: 'alerts' }
+            { key: 'alerts', label: 'Alertes', path: 'alerts' },
+            { key: 'post-deploy', label: 'Post-déploiement', path: 'post-deploy' }
           ]
         }
       ];
@@ -172,7 +174,8 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
             queryParams: { kind: 'DEPLOY' },
             sub: true
           },
-          { key: 'monitoring', label: 'Monitoring', path: 'monitoring' }
+          { key: 'monitoring', label: 'Monitoring', path: 'monitoring' },
+          { key: 'post-deploy', label: 'Post-déploiement', path: 'post-deploy' }
         ]
       }
     ];

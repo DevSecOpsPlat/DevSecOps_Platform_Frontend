@@ -14,10 +14,14 @@ import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { AdminCreateUserComponent } from './admin/admin-create-user/admin-create-user.component';
 import { AdminUserDetailComponent } from './admin/admin-user-detail/admin-user-detail.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
+import { PageHeroComponent } from './project/shared/page-hero/page-hero.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
-import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
 import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.component';
-import { AdminInventoryComponent } from './admin/admin-inventory/admin-inventory.component';
+import { AdminApplicationsComponent } from './admin/admin-applications/admin-applications.component';
+import { AdminApplicationDetailComponent } from './admin/admin-application-detail/admin-application-detail.component';
+import { AdminEnvironmentsComponent } from './admin/admin-environments/admin-environments.component';
+import { AdminEnvironmentDetailComponent } from './admin/admin-environment-detail/admin-environment-detail.component';
+import { AdminActivityTimelineComponent } from './admin/shared/admin-activity-timeline/admin-activity-timeline.component';
 import { AdminObservabilityComponent } from './admin/admin-observability/admin-observability.component';
 import { AdminLayoutComponent } from './admin/admin-layout/admin-layout.component';
 import { ProjectLayoutComponent } from './project/project-layout/project-layout.component';
@@ -35,7 +39,6 @@ import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { ToastContainerComponent } from './toast-container/toast-container.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
-import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
 import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
@@ -60,9 +63,12 @@ import { ServiceContextBarComponent } from './shared/service-context-bar/service
     PipelineDetailsComponent,
     PipelinesListComponent,
     AdminLayoutComponent,
-    AdminHomeComponent,
     AdminOverviewComponent,
-    AdminInventoryComponent,
+    AdminApplicationsComponent,
+    AdminApplicationDetailComponent,
+    AdminEnvironmentsComponent,
+    AdminEnvironmentDetailComponent,
+    AdminActivityTimelineComponent,
     AdminObservabilityComponent,
     AdminSidebarComponent,
     ToastContainerComponent,
@@ -76,7 +82,6 @@ import { ServiceContextBarComponent } from './shared/service-context-bar/service
     TimeAgoPipe,
     RecentActivityComponent,
     SonarqubeComponent,
-    MonitoringComponent,
     UserAccountLayoutComponent,
     UserReclamationsComponent,
     AdminReclamationsComponent,
@@ -96,7 +101,8 @@ import { ServiceContextBarComponent } from './shared/service-context-bar/service
     ProjectOverviewComponent,
     DefectDojoFindingDetailsComponent,
     EnvirotestNavSidebarComponent,
-    ServiceContextBarComponent
+    ServiceContextBarComponent,
+    PageHeroComponent
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },

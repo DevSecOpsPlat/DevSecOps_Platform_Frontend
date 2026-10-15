@@ -1,13 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, NgZone, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import Chart from 'chart.js/auto';
 import { Subject, combineLatest, from, of } from 'rxjs';
 import { catchError, concatMap, distinctUntilChanged, finalize, map, switchMap, takeUntil, timeout, toArray } from 'rxjs/operators';
 import {
   DefectDojoDashboardResponse,
-  DefectDojoDetailedMetrics,
   DefectDojoFindingItem,
   DefectDojoFindingStatusAction,
   DefectDojoMetricCard,
@@ -16,18 +14,29 @@ import {
 } from '../../services/defectdojo/defectdojo.service';
 import {
   hasOpenSeverityChartData,
-  OPEN_SEV_BAR_COLORS,
   openSeverityChartSubtitle,
-  OpenSeverityGranularity,
-  renderOpenSeverityEvolutionChart
+  OpenSeverityGranularity
 } from '../../services/defectdojo/open-severity-evolution-chart.helper';
 import {
   FluxGranularity,
   fluxChartSubtitle,
-  hasFluxChartData,
-  renderTreatmentFluxChart
+  hasFluxChartData
 } from '../../services/defectdojo/treatment-flux-chart.helper';
-import { cweDisplayLabel } from '../../services/defectdojo/cwe-labels';
+import {
+  AxisTick,
+  buildCweRows,
+  buildFindingAgeRows,
+  buildFluxChart,
+  buildScanToolBarRows,
+  buildScanToolRows,
+  buildSeverityEvolution,
+  CweRow,
+  FindingAgeRow,
+  FluxBarDatum,
+  ScanToolBarRow,
+  SeverityEvolutionSeries
+} from '../../services/defectdojo/dashboard-chart-builders';
+import { severityColor as sharedSeverityColor } from '../../services/defectdojo/severity-palette';
 import { QualityGateService, QualityGateEnvironmentOption } from '../../services/quality-gate/quality-gate.service';
 
 const METRIC_META: Record<DefectDojoMetricCategory, { icon: string; tone: string }> = {
@@ -39,27 +48,6 @@ const METRIC_META: Record<DefectDojoMetricCategory, { icon: string; tone: string
   out_of_scope: { icon: '↗', tone: 'oos' },
   total: { icon: '∑', tone: 'total' },
   inactive: { icon: '○', tone: 'inactive' }
-};
-
-const THEME = {
-  navy: '#0f172a',
-  navyMid: '#1e293b',
-  navyLight: '#334155',
-  slate: '#475569',
-  orange: '#f36c21',
-  orangeDark: '#ea580c',
-  orangeDeep: '#c2410c',
-  orangeSoft: '#fb923c',
-  green: '#22c55e',
-  greenDark: '#16a34a'
-};
-
-const SEV_COLORS: Record<string, string> = {
-  Critical: THEME.orangeDeep,
-  High: THEME.orangeDark,
-  Medium: THEME.orange,
-  Low: THEME.slate,
-  Info: THEME.navyLight
 };
 
 const SECURITY_REQUEST_TIMEOUT_MS = 180_000;
@@ -83,18 +71,6 @@ interface FindingRowAction {
 export class SecurityDashboardComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private readonly dashboardReload$ = new Subject<{ appId: string; branch: string; tags?: string }>();
-  private chartInstances: Chart[] = [];
-  private openSeverityChart?: Chart;
-  private fluxChart?: Chart;
-  private chartRenderTimer?: ReturnType<typeof setTimeout>;
-
-  @ViewChild('evolutionSeverityCanvas') evolutionSeverityCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('scanCanvas') scanCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('fluxCanvas') fluxCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('findingAgeCanvas') findingAgeCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('openCweCanvas') openCweCanvas?: ElementRef<HTMLCanvasElement>;
-
-  @ViewChildren('overviewChart') overviewCharts!: QueryList<ElementRef<HTMLCanvasElement>>;
 
   appId: string | null = null;
   selectedBranch = '';
@@ -107,6 +83,24 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   listLoading = false;
   error: string | null = null;
   dashboard: DefectDojoDashboardResponse | null = null;
+
+  // Données des graphiques — calculées une seule fois par chargement (voir
+  // recomputeChartData()), jamais réévaluées depuis le template. Construites
+  // via services/defectdojo/dashboard-chart-builders.ts (partagé avec la vue
+  // agrégée managed-security-dashboard).
+  scanToolBarRows: ScanToolBarRow[] = [];
+  cweRows: CweRow[] = [];
+  findingAgeRows: FindingAgeRow[] = [];
+  fluxBars: FluxBarDatum[] = [];
+  fluxYTicks: AxisTick[] = [];
+  severityEvolutionSeries: SeverityEvolutionSeries[] = [];
+  severityEvolutionMax = 1;
+  severityEvolutionYTicks: AxisTick[] = [{ value: 1, y: 4 }, { value: 0, y: 96 }];
+  severityEvolutionLabels: string[] = [];
+  /** Marge réservée à gauche (en unités du viewBox 0-100) pour les chiffres de l'axe Y,
+   * dessinés à l'intérieur du même SVG que les barres/lignes — jamais superposés dessus,
+   * et les lignes de grille traversent quand même toute la largeur (0 à 100) en dessous. */
+  readonly plotX0 = 2;
 
   selectedCategory: DefectDojoMetricCategory = 'open';
   findings: DefectDojoFindingItem[] = [];
@@ -153,8 +147,7 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private defectDojoService: DefectDojoService,
-    private qualityGateService: QualityGateService,
-    private ngZone: NgZone
+    private qualityGateService: QualityGateService
   ) {}
 
   ngOnInit(): void {
@@ -168,7 +161,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.loading = true;
         this.chartsLoading = false;
         this.error = null;
-        this.destroyCharts();
         return this.defectDojoService.getDashboard(appId, branch, tags ?? this.defectDojoService.scanKindTag()).pipe(
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
@@ -187,9 +179,9 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
         this.chartsLoading = false;
         this.hasOpenSeverityChart = hasOpenSeverityChartData(d.charts);
         this.refreshScanToolOptions();
+        this.recomputeChartData();
         if (d.engagementId) {
           if (this.showFindingsTable) this.loadFindings();
-          setTimeout(() => this.renderCharts(), 80);
         } else {
           this.hasOpenSeverityChart = false;
         }
@@ -203,6 +195,28 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     });
 
     appId$.pipe(takeUntil(this.destroy$)).subscribe(id => {
+      // Angular réutilise cette même instance de composant quand on navigue
+      // d'un service vers un autre (même route, juste :appId qui change) —
+      // ngOnInit ne se relance pas. Sans ce reset, selectedBranch/selectedPipelineId
+      // gardent la valeur du service précédent, et la garde `if (!this.selectedBranch)`
+      // plus bas empêche alors de jamais sélectionner la vraie branche du nouveau
+      // service (bug observé : "parfois il ne sélectionne pas la branche/pipeline").
+      if (this.appId !== id) {
+        this.selectedBranch = '';
+        this.selectedPipelineId = '';
+        this.branches = [];
+        this.pipelineOptions = [];
+        this.dashboard = null;
+        this.showFindingsTable = false;
+        this.scanToolBarRows = [];
+        this.cweRows = [];
+        this.findingAgeRows = [];
+        this.fluxBars = [];
+        this.fluxYTicks = [];
+        this.severityEvolutionSeries = [];
+        this.severityEvolutionLabels = [];
+        this.lastScanLabelCache = '—';
+      }
       this.appId = id;
       if (this.appId) {
         this.loadBranches();
@@ -246,7 +260,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.destroyCharts();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -404,12 +417,17 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     return ((card.bySeverity?.[sev] || 0) / total) * 100;
   }
 
+  /** Palette unique pour toute couleur de sévérité sans étiquette texte adjacente
+   * (segments de barres, mini-barres, lignes de graphique) — voir severity-palette.ts.
+   * severityColor() et severityBarColor() délèguent au même endroit à dessein : les
+   * deux noms restent utilisés côté template, mais un seul jeu de couleurs existe
+   * désormais (avant : deux palettes incompatibles selon le panneau). */
   severityColor(sev: string): string {
-    return SEV_COLORS[sev] ?? '#64748b';
+    return sharedSeverityColor(sev);
   }
 
   severityBarColor(sev: string): string {
-    return OPEN_SEV_BAR_COLORS[sev] ?? '#64748b';
+    return sharedSeverityColor(sev);
   }
 
   get openSeverityChartSubtitle(): string {
@@ -417,9 +435,12 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   setOpenSeverityGranularity(granularity: OpenSeverityGranularity): void {
-    if (this.openSeverityGranularity === granularity) return;
     this.openSeverityGranularity = granularity;
-    this.ngZone.runOutsideAngular(() => this.renderOpenSeverityChart());
+    const evolution = buildSeverityEvolution(this.charts, this.openSeverityGranularity, this.severities, this.plotX0);
+    this.severityEvolutionSeries = evolution.series;
+    this.severityEvolutionYTicks = evolution.yTicks;
+    this.severityEvolutionMax = evolution.max;
+    this.severityEvolutionLabels = evolution.labels;
   }
 
   get fluxSubtitle(): string {
@@ -437,12 +458,15 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   }
 
   setFluxGranularity(g: FluxGranularity): void {
-    if (this.fluxGranularity === g) return;
     this.fluxGranularity = g;
-    this.ngZone.runOutsideAngular(() => this.renderFluxChart());
+    const flux = buildFluxChart(this.charts, this.fluxGranularity, this.plotX0);
+    this.fluxBars = flux.bars;
+    this.fluxYTicks = flux.yTicks;
   }
 
-  get lastScanLabel(): string {
+  lastScanLabelCache = '—';
+
+  private computeLastScanLabel(): string {
     const raw = this.charts?.lastScanDate;
     if (!raw) return '—';
     const d = new Date(raw);
@@ -495,10 +519,21 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     const seen = new Set<number>();
     this.scanToolFilterOptions = (this.dashboard?.charts?.scanSnapshots ?? [])
       .filter(s => s.testId > 0 && !seen.has(s.testId) && seen.add(s.testId))
+      // ZAP (DAST) exclu de ce filtre à la demande : cette vue liste les findings sur le code
+      // source / les dépendances (SAST/SCA/secrets/IaC/container) -- le DAST est une nature de
+      // finding différente (vulnérabilités observées à l'exécution sur une URL live, pas dans le
+      // code), déjà consultable séparément dans post-deploy.component. Le garder ici mélangeait
+      // les deux dans le même filtre "Outil (import)".
+      .filter(s => !SecurityDashboardComponent.isZapScanType(s.scanType))
       .map(s => ({
         testId: s.testId,
         label: s.label || s.scanType || `Test #${s.testId}`
       }));
+  }
+
+  private static isZapScanType(scanType: string | undefined): boolean {
+    const s = (scanType || '').toLowerCase();
+    return s.includes('zap') || s.includes('dast');
   }
 
   private refreshFilteredFindings(): void {
@@ -875,14 +910,6 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     return branch?.trim() ? 1 : 0;
   }
 
-  mapEntries(m?: Record<string, number>): { key: string; value: number }[] {
-    if (!m) return [];
-    return Object.entries(m)
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .map(([key, value]) => ({ key, value }));
-  }
-
   private syncQueryParams(): void {
     this.router.navigate([], {
       relativeTo: this.route,
@@ -895,258 +922,44 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  private destroyCharts(): void {
-    if (this.chartRenderTimer) {
-      clearTimeout(this.chartRenderTimer);
-      this.chartRenderTimer = undefined;
-    }
-    this.openSeverityChart?.destroy();
-    this.openSeverityChart = undefined;
-    const evolutionCanvas = this.evolutionSeverityCanvas?.nativeElement;
-    if (evolutionCanvas) Chart.getChart(evolutionCanvas)?.destroy();
-    this.fluxChart?.destroy();
-    this.fluxChart = undefined;
-    this.chartInstances.forEach(c => c.destroy());
-    this.chartInstances = [];
+  // ─── Charts (SVG pur — pas de canvas, pas de librairie) ─────────────────────
+  // Chart.js gelait systématiquement ces pages, y compris avec toutes les
+  // protections possibles (largeur du canvas, zone Angular, resizeDelay...).
+  // Ces graphiques sont dessinés à la main en SVG : aucune dépendance externe,
+  // aucun risque de blocage.
+
+  onCweRowClick(key: string): void {
+    this.selectedCategory = 'open';
+    this.searchQuery = key;
+    this.showFindingsTable = true;
+    this.loadFindings();
+    this.scrollToFindings();
   }
 
-  private renderCharts(): void {
-    this.destroyCharts();
-    const c = this.dashboard?.charts;
-    if (!c) return;
-
-    this.renderOverviewCharts();
-    this.scheduleOpenSeverityChartRender();
-    this.renderDetailedCharts(c.detailedMetrics);
-    this.renderScanChart(c);
+  onScanToolRowClick(testId: number): void {
+    if (testId) this.filterByTool(testId);
   }
 
-  private renderOverviewCharts(): void {
-    const cards = this.dashboard?.metricCards ?? [];
-    const canvases = this.overviewCharts?.toArray() ?? [];
-    cards.forEach((card, index) => {
-      const canvas = canvases[index]?.nativeElement;
-      if (!canvas) return;
-      const chart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: this.severities,
-          datasets: [{
-            data: this.severities.map(s => card.bySeverity?.[s] || 0),
-            backgroundColor: this.severities.map(s => this.severityColor(s)),
-            borderRadius: 3
-          }]
-        },
-        options: {
-          responsive: false,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { font: { size: 8 }, color: THEME.slate }, grid: { display: false } },
-            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 8 } }, grid: { color: 'rgba(15,23,42,0.06)' } }
-          }
-        }
-      });
-      this.chartInstances.push(chart);
-    });
-  }
+  /** Recalcule toutes les données des graphiques — UNE SEULE FOIS par chargement,
+   * jamais depuis le template (sinon Angular détruit/recrée le DOM à chaque cycle
+   * de détection de changements : c'est ce qui gelait complètement la page).
+   * Toute la logique de construction vit dans dashboard-chart-builders.ts,
+   * partagée avec la vue agrégée managed-security-dashboard. */
+  private recomputeChartData(): void {
+    this.scanToolBarRows = buildScanToolBarRows(buildScanToolRows(this.charts), this.severities);
+    this.cweRows = buildCweRows(this.charts);
+    this.findingAgeRows = buildFindingAgeRows(this.charts);
 
-  private renderDetailedCharts(dm?: DefectDojoDetailedMetrics): void {
-    this.renderFluxChart();
-    if (!dm) return;
-    this.renderFindingAgeChart(dm);
-    this.renderCweChart(this.openCweCanvas?.nativeElement, dm.openCwe, 'CWE ouverts');
-  }
+    const flux = buildFluxChart(this.charts, this.fluxGranularity, this.plotX0);
+    this.fluxBars = flux.bars;
+    this.fluxYTicks = flux.yTicks;
 
-  private renderFluxChart(): void {
-    const canvas = this.fluxCanvas?.nativeElement;
-    if (!canvas || !this.hasFluxChart || this.loading) return;
-    this.fluxChart = renderTreatmentFluxChart(canvas, this.charts, this.fluxGranularity, this.fluxChart);
-  }
+    const evolution = buildSeverityEvolution(this.charts, this.openSeverityGranularity, this.severities, this.plotX0);
+    this.severityEvolutionSeries = evolution.series;
+    this.severityEvolutionYTicks = evolution.yTicks;
+    this.severityEvolutionMax = evolution.max;
+    this.severityEvolutionLabels = evolution.labels;
 
-  private scheduleOpenSeverityChartRender(): void {
-    if (this.chartRenderTimer) clearTimeout(this.chartRenderTimer);
-    this.chartRenderTimer = setTimeout(() => {
-      this.ngZone.runOutsideAngular(() => this.renderOpenSeverityChart());
-    }, 120);
-  }
-
-  private renderOpenSeverityChart(): void {
-    const canvas = this.evolutionSeverityCanvas?.nativeElement;
-    if (!canvas || !this.hasOpenSeverityChart || this.loading) return;
-    this.openSeverityChart = renderOpenSeverityEvolutionChart(
-      canvas,
-      this.dashboard?.charts,
-      this.openSeverityGranularity,
-      this.severities,
-      this.openSeverityChart
-    );
-  }
-
-  private renderFindingAgeChart(dm: DefectDojoDetailedMetrics): void {
-    if (!this.findingAgeCanvas?.nativeElement || !dm.findingAgeBuckets) return;
-    const entries = Object.entries(dm.findingAgeBuckets);
-    if (!entries.some(([, v]) => v > 0)) return;
-    const total = dm.openFindingsForAge || entries.reduce((s, [, v]) => s + v, 0);
-    const ageColors = ['#94a3b8', '#f59e0b', '#ea580c', '#b91c1c'];
-    const chart = new Chart(this.findingAgeCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels: entries.map(e => e[0]),
-        datasets: [{
-          data: entries.map(e => e[1]),
-          backgroundColor: entries.map((_, i) => ageColors[Math.min(i, ageColors.length - 1)]),
-          borderRadius: 4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const y = ctx.parsed.y ?? 0;
-                return ` ${y} finding(s) — ${Math.round((y / Math.max(total, 1)) * 100)} %`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            title: { display: true, text: "Ancienneté du finding (depuis sa détection)", font: { size: 11, weight: 'bold' } },
-            grid: { display: false }
-          },
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: 'Nombre de findings ouverts', font: { size: 11, weight: 'bold' } },
-            ticks: { stepSize: 1, precision: 0 }
-          }
-        }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderCweChart(canvas: HTMLCanvasElement | undefined, data: Record<string, number> | undefined, title: string): void {
-    if (!canvas || !data) return;
-    const entries = this.mapEntries(data);
-    if (!entries.length) return;
-    const chart = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: entries.map(e => cweDisplayLabel(e.key)),
-        datasets: [{
-          label: title,
-          data: entries.map(e => e.value),
-          backgroundColor: THEME.orangeSoft,
-          borderColor: THEME.orangeDark,
-          borderWidth: 1,
-          borderRadius: 3
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const totalOcc = entries.reduce((s, e) => s + e.value, 0);
-                const v = ctx.parsed.x ?? 0;
-                return ` ${v} finding(s) — ${Math.round((v / totalOcc) * 100)} % des occurrences`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            beginAtZero: true,
-            title: { display: true, text: 'Findings ouverts', font: { size: 11, weight: 'bold' } },
-            ticks: { stepSize: 1, precision: 0 }
-          },
-          y: {
-            title: { display: true, text: 'Famille de faiblesse (CWE)', font: { size: 11, weight: 'bold' } },
-            ticks: { font: { size: 10 } }
-          }
-        },
-        onClick: (_evt, elements) => {
-          if (!elements.length) return;
-          const cwe = entries[elements[0].index]?.key;
-          if (cwe) {
-            this.ngZone.run(() => {
-              this.selectedCategory = 'open';
-              this.searchQuery = cwe;
-              this.showFindingsTable = true;
-              this.loadFindings();
-              this.scrollToFindings();
-            });
-          }
-        }
-      }
-    });
-    this.chartInstances.push(chart);
-  }
-
-  private renderScanChart(c: NonNullable<DefectDojoDashboardResponse['charts']>): void {
-    if (!this.scanCanvas?.nativeElement || !c.scanSnapshots?.length) return;
-    const latestByTool = new Map<string, typeof c.scanSnapshots[number]>();
-    for (const s of c.scanSnapshots) {
-      const key = s.scanType || String(s.testId);
-      const prev = latestByTool.get(key);
-      if (!prev || (s.timestamp || s.date || '') > (prev.timestamp || prev.date || '')) {
-        latestByTool.set(key, s);
-      }
-    }
-    const snapshots = [...latestByTool.values()].sort((a, b) => (b.totalOpen || 0) - (a.totalOpen || 0));
-
-    const chart = new Chart(this.scanCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels: snapshots.map(s => s.scanType || s.label || `Test #${s.testId}`),
-        datasets: this.severities.map(sev => ({
-          label: sev,
-          data: snapshots.map(s => s.bySeverity?.[sev] || 0),
-          backgroundColor: this.severityColor(sev)
-        }))
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom' },
-          tooltip: {
-            callbacks: {
-              title: items => {
-                const s = snapshots[items[0].dataIndex];
-                return `${s.scanType || s.label} — import du ${s.timestamp || s.date || '?'}`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            stacked: true,
-            title: { display: true, text: 'Outil de scan (dernier import)', font: { size: 11, weight: 'bold' } },
-            ticks: { font: { size: 10 } }
-          },
-          y: {
-            stacked: true,
-            beginAtZero: true,
-            title: { display: true, text: 'Findings ouverts par sévérité', font: { size: 11, weight: 'bold' } },
-            ticks: { precision: 0 }
-          }
-        },
-        onClick: (_evt, elements) => {
-          if (!elements.length) return;
-          const snap = snapshots[elements[0].index];
-          if (snap?.testId) this.ngZone.run(() => this.filterByTool(snap.testId));
-        }
-      }
-    });
-    this.chartInstances.push(chart);
+    this.lastScanLabelCache = this.computeLastScanLabel();
   }
 }

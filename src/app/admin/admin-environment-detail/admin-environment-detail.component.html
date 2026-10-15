@@ -1,0 +1,95 @@
+<div class="ads-page" *ngIf="!loading && !error && env">
+  <header class="ads-hero">
+    <p class="ads-breadcrumb"><a (click)="openApplication()" style="cursor:pointer;">← {{ env.applicationName }}</a></p>
+    <div class="ads-hero-row">
+      <div>
+        <h1 class="ads-hero-title mono">{{ env.environmentName }}</h1>
+        <p class="ads-hero-lead">{{ ownerUsername }} ({{ ownerEmail }}) · branche <code class="mono">{{ env.gitBranch }}</code></p>
+      </div>
+      <span class="ads-status" [ngClass]="statusClass(env.status)" style="font-size:.72rem;padding:.3rem .7rem;">{{ env.status }}</span>
+    </div>
+    <div class="ads-hero-meta">
+      <div><strong>{{ age(env.createdAt) }}</strong>durée d'activité</div>
+      <div *ngIf="env.expiresAt"><strong>{{ age(env.expiresAt) }}</strong>avant expiration</div>
+      <div><strong>{{ env.ttlHours }}h</strong>durée de vie</div>
+    </div>
+  </header>
+
+  <div class="ads-detail-grid">
+    <div>
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">🧩 Services</h3>
+        <div *ngIf="monitoringLoading" class="ads-state-load"><span class="ads-spinner"></span> Chargement des ressources…</div>
+        <ng-container *ngIf="!monitoringLoading">
+          <div class="ads-svc-line" *ngFor="let s of services">
+            <span class="ads-svc-name">{{ s.name }}</span>
+            <span class="ads-svc-role" *ngIf="s.role">{{ s.role }}</span>
+            <span class="ads-status" [ngClass]="statusClass(serviceStatusLabel(s))">{{ serviceStatusLabel(s) }}</span>
+            <span class="ads-svc-res" *ngIf="s.pod?.memoryUsage">{{ s.pod?.memoryUsage }} · {{ s.pod?.cpuUsage }}</span>
+          </div>
+          <p class="ads-empty" *ngIf="!services.length">
+            <span class="ads-empty-sub">Aucune donnée de service disponible pour cet environnement.</span>
+          </p>
+        </ng-container>
+
+        <div class="ads-res-bar-wrap" *ngIf="monitoring?.summary as sum">
+          <div class="ads-res-bar-label"><span>Mémoire du namespace</span><span>{{ sum.totalMemoryMi }} Mi</span></div>
+          <div class="ads-res-bar"><div class="ads-res-bar-fill" [style.width.%]="sum.metricsAvailable ? 40 : 0"></div></div>
+        </div>
+      </section>
+
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">⚠️ Événements récents</h3>
+        <ul style="list-style:none;padding:0;margin:0;" *ngIf="monitoring?.alerts?.length">
+          <li *ngFor="let a of monitoring!.alerts" style="padding:.5rem 0;border-bottom:1px solid var(--admin-border-soft);font-size:.84rem;">
+            <strong>{{ a.reason || a.message }}</strong>
+            <span class="ads-t-chip" *ngIf="a.workload" style="margin-left:.4rem;">{{ a.workload }}</span>
+          </li>
+        </ul>
+        <p class="ads-empty" *ngIf="!monitoring?.alerts?.length">
+          <span class="ads-empty-sub">Aucun événement K8s récent sur ce namespace.</span>
+        </p>
+      </section>
+
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">🕒 Activité récente</h3>
+        <div *ngIf="activityLoading" class="ads-state-load"><span class="ads-spinner"></span></div>
+        <app-admin-activity-timeline
+          *ngIf="!activityLoading"
+          [events]="activity"
+          emptyText="Aucune activité récente pour cet environnement."
+        ></app-admin-activity-timeline>
+      </section>
+    </div>
+
+    <div>
+      <section class="ads-panel" *ngIf="env.url || monitoring?.appUrl">
+        <h3 class="ads-panel-title">🔗 Accès</h3>
+        <div class="ads-url-chip">
+          🌐 {{ monitoring?.appUrl || env.url }}
+          <button type="button" class="ads-btn-mini" (click)="copyUrl()" style="margin-left:auto;">Copier</button>
+        </div>
+        <div class="ads-preview-frame">
+          <iframe *ngIf="previewUrl" [src]="previewUrl" title="Aperçu de l'application"></iframe>
+          <ng-container *ngIf="!previewUrl">
+            <span style="font-size:1.5rem;">🖥️</span>
+            Aperçu indisponible
+          </ng-container>
+        </div>
+      </section>
+
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">ℹ️ Résumé</h3>
+        <div class="ads-kv-row"><span class="ads-kv-label">Application</span><span class="ads-kv-value">{{ env.applicationName }}</span></div>
+        <div class="ads-kv-row"><span class="ads-kv-label">Branche</span><span class="ads-kv-value mono">{{ env.gitBranch }}</span></div>
+        <div class="ads-kv-row"><span class="ads-kv-label">Créé le</span><span class="ads-kv-value">{{ formatDate(env.createdAt) }}</span></div>
+        <div class="ads-kv-row" *ngIf="env.expiresAt"><span class="ads-kv-label">Expire le</span><span class="ads-kv-value">{{ formatDate(env.expiresAt) }}</span></div>
+        <div class="ads-kv-row"><span class="ads-kv-label">Durée de vie</span><span class="ads-kv-value">{{ env.ttlHours }} heures</span></div>
+        <div class="ads-kv-row" *ngIf="env.gitlabPipelineId"><span class="ads-kv-label">Dernier pipeline</span><span class="ads-kv-value">#{{ env.gitlabPipelineId }} · {{ env.pipelineStatus || '—' }}</span></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="loading" class="ads-page"><div class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div></div>
+<div *ngIf="error" class="ads-page"><div class="ads-state-err">{{ error }}</div></div>

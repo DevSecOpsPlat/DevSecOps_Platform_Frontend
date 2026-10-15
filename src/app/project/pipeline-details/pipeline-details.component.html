@@ -15,42 +15,32 @@
     <div class="pipeline-page" *ngIf="data">
 
       <!-- ── HEADER ── -->
-      <header class="pipeline-header">
-        <div class="pipeline-main-title">
-          <div class="pipeline-eyebrow">
-            Pipeline
-            <span class="pipeline-kind-badge" *ngIf="pipelineKindLabel"
-              [class.pipeline-kind-badge--scan]="pipelineKind === 'SCAN'"
-              [class.pipeline-kind-badge--deploy]="pipelineKind === 'DEPLOY'">
-              {{ pipelineKindLabel }}
-            </span>
-          </div>
-          <h1>
-            <span *ngIf="data.pipelineId">#{{ data.pipelineId }}</span>
-            <span *ngIf="!data.pipelineId">ID GitLab invalide</span>
-          </h1>
-          <div class="pipeline-meta-row">
-            <span class="meta-chip">
-              <span class="meta-chip-icon">🌿</span>
-              <strong>{{ data.ref || 'main' }}</strong>
-            </span>
-            <span class="meta-chip">
-              <span class="meta-chip-icon">👤</span>
-              <strong>{{ data.triggeredBy || '—' }}</strong>
-            </span>
-            <span class="meta-chip" *ngIf="data.durationSeconds != null">
-              <span class="meta-chip-icon">⏱</span>
-              <strong>{{ formatDuration(data.durationSeconds) }}</strong>
-            </span>
-          </div>
-        </div>
-
-        <div class="pipeline-header-actions">
+      <app-page-hero eyebrow="Pipeline" [title]="data.pipelineId ? ('#' + data.pipelineId) : 'ID GitLab invalide'">
+        <ng-container hero-meta>
+          <span class="pipeline-kind-badge" *ngIf="pipelineKindLabel"
+            [class.pipeline-kind-badge--scan]="pipelineKind === 'SCAN'"
+            [class.pipeline-kind-badge--deploy]="pipelineKind === 'DEPLOY'">
+            {{ pipelineKindLabel }}
+          </span>
+          <span class="meta-chip"><strong>{{ data.ref || 'main' }}</strong></span>
+          <span class="meta-chip"><strong>{{ data.triggeredBy || '—' }}</strong></span>
+          <span class="meta-chip" *ngIf="data.durationSeconds != null">
+            <strong>{{ formatDuration(data.durationSeconds) }}</strong>
+          </span>
+        </ng-container>
+        <ng-container hero-actions>
           <span class="status-badge-lg" [ngClass]="statusClass(data.status)">
             <span class="badge-dot"></span>
             {{ data.status | uppercase }}
           </span>
           <div *ngIf="isRunning()" class="spinner"></div>
+          <button class="btn-stop"
+                  type="button"
+                  *ngIf="isRunning() && data.pipelineId"
+                  (click)="cancelPipeline()"
+                  title="Annuler tout le pipeline">
+            Stopper le pipeline
+          </button>
           <button class="btn-vuln"
                   type="button"
                   (click)="openSecurityDashboard()">
@@ -61,17 +51,73 @@
              target="_blank"
              rel="noopener noreferrer"
              class="btn-gitlab">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51 1.22 3.78a.84.84 0 0 1-.3.92z" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
             Ouvrir dans GitLab
           </a>
+        </ng-container>
+      </app-page-hero>
+
+      <!-- ── Barre de progression globale (jobs terminés/total + temps écoulé) ── -->
+      <div class="pipeline-progress" *ngIf="progressStats.total > 0">
+        <div class="pipeline-progress-bar">
+          <div class="pipeline-progress-fill"
+               [class.pipeline-progress-fill--done]="!isRunning()"
+               [style.width.%]="progressStats.pct"></div>
         </div>
-      </header>
+        <div class="pipeline-progress-meta">
+          <span>{{ progressStats.done }}/{{ progressStats.total }} jobs terminés</span>
+        </div>
+      </div>
+
+      <!-- ── Résultat du déploiement (pipeline DEPLOY, une fois l'environnement connu) ── -->
+      <div class="deploy-result-banner" *ngIf="pipelineKind === 'DEPLOY' && deployResult && deployResult.status !== 'DEPLOYING'">
+        <div class="deploy-result-body">
+          <strong>Résultat du déploiement</strong>
+          <p>
+            <span class="am-mono">{{ deployResult.namespace }}</span>
+            <span *ngIf="deployResultServiceSummary"> · {{ deployResultServiceSummary }}</span>
+            <span *ngIf="deployResult.status"> · {{ deployResult.status }}</span>
+          </p>
+          <p class="deploy-result-smoke" *ngIf="smokeTestSummary" [class.deploy-result-smoke--warn]="!smokeTest?.allOk">
+            {{ smokeTestSummary }}
+          </p>
+          <p class="deploy-result-smoke" *ngIf="containerScanSummary"
+             [class.deploy-result-smoke--warn]="(containerScan?.critical || 0) > 0 || (containerScan?.high || 0) > 0">
+            {{ containerScanSummary }}
+          </p>
+        </div>
+        <div class="deploy-result-actions">
+          <a *ngIf="deployResultUrl" [href]="deployResultUrl" target="_blank" rel="noopener noreferrer" class="btn-gitlab">
+            Ouvrir l'app
+          </a>
+          <button type="button" class="btn-vuln" (click)="openDeployResultRuntime()">Ouvrir Runtime</button>
+        </div>
+      </div>
+      <div class="deploy-result-banner deploy-result-banner--pending"
+           *ngIf="pipelineKind === 'DEPLOY' && !deployResult && deployResultLoading">
+        <span>Résolution de l'environnement déployé…</span>
+      </div>
+      <div class="deploy-result-banner deploy-result-banner--pending deploy-steps-banner"
+           *ngIf="pipelineKind === 'DEPLOY' && deployResult?.status === 'DEPLOYING'">
+        <div class="spinner"></div>
+        <div class="deploy-result-body">
+          <strong>Déploiement en cours</strong>
+          <p *ngIf="!deploySteps.length">{{ deployPhase || 'Apply Kubernetes en cours…' }}</p>
+
+          <!-- Checklist ordre de démarrage : namespace → BD → vague N → ingress, synchronisée en direct -->
+          <ol class="deploy-steps-list" *ngIf="deploySteps.length">
+            <li *ngFor="let step of deploySteps" [ngClass]="'deploy-step-' + step.status">
+              <span class="deploy-step-dot"></span>
+              <span class="deploy-step-label">{{ step.label }}</span>
+              <span class="deploy-step-services" *ngIf="step.services?.length">
+                {{ step.services?.join(', ') }}
+              </span>
+            </li>
+          </ol>
+        </div>
+      </div>
 
       <!-- ── WARNING BANNER (pas d'ID GitLab) ── -->
       <div *ngIf="!data.pipelineId || data.pipelineId <= 0" class="warning-banner">
-        <span class="warning-banner-icon">⚠️</span>
         <div class="warning-banner-body">
           <strong>Pipeline sans ID GitLab valide</strong>
           <p>Ce pipeline n'a pas d'ID GitLab valide. Les détails (stages, jobs, logs) ne peuvent pas être récupérés.</p>
@@ -87,10 +133,7 @@
         <!-- ── LEFT : Stages & Jobs ── -->
         <div class="jobs-card">
           <div class="card-header-bar">
-            <h2>
-              <span class="card-header-icon">⚙️</span>
-              Stages &amp; Jobs
-            </h2>
+            <h2>Stages &amp; Jobs</h2>
           </div>
           <div class="card-body">
 
@@ -107,21 +150,32 @@
 
             <!-- Stages -->
             <div class="stages-container" *ngIf="jobsList.length > 0">
-              <div *ngFor="let stage of getStages()" class="stage-group">
+              <div *ngFor="let stage of getStages()" class="stage-group" [class.stage-group--collapsed]="isStageCollapsed(stage)">
 
-                <h3 class="stage-title">
+                <h3 class="stage-title" (click)="toggleStage(stage)">
                   <span class="stage-name-badge">
+                    <span class="stage-chevron" [class.stage-chevron--open]="!isStageCollapsed(stage)"></span>
                     <span class="stage-dot" [ngClass]="'dot-' + (stage.status || '').toLowerCase()"></span>
                     <span class="stage-label">{{ stage.name }}</span>
+                    <span class="stage-job-count" *ngIf="isStageCollapsed(stage)">{{ stage.jobs.length }} job{{ stage.jobs.length > 1 ? 's' : '' }}</span>
                   </span>
                   <div class="stage-actions">
                     <button
                       type="button"
+                      class="stage-stop"
+                      *ngIf="(stage.status || '').toLowerCase() === 'running'"
+                      (click)="cancelStage(stage, $event)"
+                      title="Arrêter les jobs en cours de ce stage"
+                    >
+                      Stopper
+                    </button>
+                    <button
+                      type="button"
                       class="stage-retry"
-                      (click)="retryStage(stage)"
+                      (click)="$event.stopPropagation(); retryStage(stage)"
                       title="Relancer les jobs échoués de ce stage"
                     >
-                      ↻
+                      Relancer
                     </button>
                   <span class="stage-status-badge" [ngClass]="statusClass(stage.status)">
                     {{ (stage.status || '—') | uppercase }}
@@ -129,7 +183,7 @@
                   </div>
                 </h3>
 
-                <ul class="jobs-list">
+                <ul class="jobs-list" *ngIf="!isStageCollapsed(stage)">
                   <li *ngFor="let job of stage.jobs"
                       (click)="selectJob(job)"
                       [class.selected]="job.id === selectedJob?.id"
@@ -146,16 +200,21 @@
 
                     <div class="job-meta">
                       <span *ngIf="job.duration" class="job-duration">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
-                          <path d="M12 7V12L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                        </svg>
                         {{ formatDuration(job.duration) }}
                       </span>
                       <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" class="job-link"
                          (click)="$event.stopPropagation()">
-                        Voir GitLab ↗
+                        Voir GitLab
                       </a>
+                      <button
+                        type="button"
+                        class="job-ask-ai"
+                        *ngIf="job.status === 'failed'"
+                        (click)="selectJobAndExplain(job, $event)"
+                        title="Demander à l'IA pourquoi ce job a échoué"
+                      >
+                        Pourquoi ?
+                      </button>
                       <button
                         type="button"
                         class="job-retry"
@@ -177,10 +236,7 @@
         <!-- ── RIGHT : Job detail ── -->
         <div class="details-card">
           <div class="card-header-bar">
-            <h2>
-              <span class="card-header-icon">📋</span>
-              Détails du job
-            </h2>
+            <h2>Détails du job</h2>
           </div>
           <div class="card-body">
 
@@ -216,25 +272,32 @@
               <!-- Logs -->
               <div class="logs-section" *ngIf="selectedJobLogs">
                 <div class="logs-section-header">
-                  <span class="section-icon">📄</span>
                   <h4>Logs</h4>
+                  <span class="logs-live-badge" *ngIf="selectedJobRunning">
+                    <span class="logs-live-dot"></span> en direct
+                  </span>
                 </div>
-                <div class="logs-console" [innerHTML]="formatLogsForDisplay(selectedJobLogs)"></div>
+                <div class="logs-console-wrap">
+                  <div class="logs-console" #logsConsole (scroll)="onLogsScroll()"
+                       [innerHTML]="formatLogsForDisplay(selectedJobLogs)"></div>
+                  <button type="button" class="logs-resume-btn"
+                          *ngIf="!logsFollowing && selectedJobRunning"
+                          (click)="resumeLogsFollow()">
+                    ↓ Reprendre le suivi
+                  </button>
+                </div>
               </div>
               <div *ngIf="selectedJob && !loadingJob && !selectedJobLogs && jobLogsError" class="logs-unavailable">
-                <span class="logs-unavailable-icon">📄</span>
                 <p>{{ jobLogsError }}</p>
               </div>
 
               <!-- Scan results -->
               <div class="logs-section" *ngIf="selectedJobScanJson">
                 <div class="logs-section-header">
-                  <span class="section-icon">🔍</span>
                   <h4>Résultat du scan</h4>
                 </div>
                 <div class="scan-results">
                   <div *ngIf="hasVulnerabilities(selectedJobScanJson)" class="vulnerabilities-summary">
-                    <span class="vuln-icon">⚠️</span>
                     <div>
                       <h5>Vulnérabilités détectées</h5>
                       <p class="vuln-count">{{ countVulnerabilities(selectedJobScanJson) }} vulnérabilité(s) trouvée(s)</p>
@@ -250,7 +313,7 @@
                             class="ai-analyze-btn"
                             (click)="analyzeWithAi()"
                             [disabled]="aiAnalysisLoading">
-                      <span *ngIf="!aiAnalysisLoading">🤖 Analyser avec l'IA</span>
+                      <span *ngIf="!aiAnalysisLoading">Analyser avec l'IA</span>
                       <span *ngIf="aiAnalysisLoading">Analyse en cours...</span>
                     </button>
                     <p class="ai-hint">L'IA lit l'artifact et indique les vulnérabilités, où les trouver et comment les corriger. Après correction, relancez le pipeline pour obtenir de nouveaux artifacts.</p>
@@ -278,61 +341,56 @@
                 </div>
               </div>
               <div *ngIf="selectedJob && !selectedJobScanJson && scanError" class="logs-unavailable">
-                <span class="logs-unavailable-icon">🔍</span>
                 <p>{{ scanError }}</p>
               </div>
+            </div>
+
+            <!-- Assistant IA — vraie conversation, collée au job affiché -->
+            <div class="ai-analysis-block log-ai-block" *ngIf="data">
+              <div class="log-ai-actions">
+                <strong class="log-ai-title">Assistant pipeline</strong>
+                <span class="log-ai-context">
+                  {{ selectedJob ? (selectedJob.name + ' · ' + selectedJob.stage) : 'vue d’ensemble du pipeline' }}
+                </span>
+                <button type="button" class="log-ai-clear-btn" *ngIf="chatMessages.length"
+                        (click)="clearChat()" [disabled]="logAiLoading">
+                  Vider la conversation
+                </button>
+              </div>
+
+              <div class="ai-chat-thread" *ngIf="chatMessages.length">
+                <div *ngFor="let m of chatMessages" class="ai-chat-msg" [ngClass]="'ai-chat-msg--' + m.role">
+                  <span class="ai-chat-role">{{ m.role === 'user' ? 'Toi' : 'Assistant' }}</span>
+                  <p class="ai-chat-text" *ngIf="m.text">{{ m.text }}</p>
+                  <p class="ai-chat-text ai-chat-text--pending" *ngIf="!m.text && m.role === 'assistant'">
+                    Réflexion…
+                  </p>
+                </div>
+              </div>
+
+              <div class="log-ai-ask">
+                <input type="text"
+                       class="log-ai-input"
+                       [(ngModel)]="logAiQuestion"
+                       placeholder="Pose une question sur ce job ou le pipeline…"
+                       (keyup.enter)="submitTypedQuestion()"
+                       [disabled]="logAiLoading" />
+                <button type="button"
+                        class="ai-analyze-btn log-ai-ask-btn"
+                        (click)="submitTypedQuestion()"
+                        [disabled]="logAiLoading || !logAiQuestion.trim()">
+                  <span *ngIf="!logAiLoading">Demander</span>
+                  <span *ngIf="logAiLoading">…</span>
+                </button>
+              </div>
+              <p class="ai-hint" *ngIf="!chatMessages.length">Connaît tous les stages et leur statut, pas seulement le job sélectionné. Pas de kubectl.</p>
+              <div *ngIf="logAiError" class="ai-error">{{ logAiError }}</div>
             </div>
 
           </div>
         </div>
 
       </div><!-- /content-grid -->
-
-      <!-- Assistant IA pleine largeur sous Stages | Détails -->
-      <div class="ai-analysis-block log-ai-block log-ai-full" *ngIf="data">
-        <div class="log-ai-actions">
-          <strong class="log-ai-title">Assistant pipeline</strong>
-          <button type="button"
-                  class="ai-analyze-btn"
-                  (click)="askPipelineAi(true)"
-                  [disabled]="logAiLoading || !selectedJobLogs">
-            <span *ngIf="!logAiLoading">Expliquer ce log</span>
-            <span *ngIf="logAiLoading">Analyse en cours…</span>
-          </button>
-        </div>
-        <div class="log-ai-ask">
-          <input type="text"
-                 class="log-ai-input"
-                 [(ngModel)]="logAiQuestion"
-                 placeholder="N’importe quelle question… ex. c’est quoi l’URL / le statut ?"
-                 (keyup.enter)="askPipelineAi(false)"
-                 [disabled]="logAiLoading" />
-          <button type="button"
-                  class="ai-analyze-btn log-ai-ask-btn"
-                  (click)="askPipelineAi(false)"
-                  [disabled]="logAiLoading || !logAiQuestion.trim()">
-            Demander
-          </button>
-        </div>
-        <p class="ai-hint">Contexte : projet, pipeline, stages, logs. Pas de kubectl.</p>
-        <div *ngIf="logAiError" class="ai-error">{{ logAiError }}</div>
-        <div *ngIf="logAiResult" class="ai-result" #logAiResultEl>
-          <h5 class="ai-summary-title">Réponse</h5>
-          <p class="ai-summary">{{ logAiResult.answer || logAiResult.summary }}</p>
-          <div *ngIf="logAiResult.probableCauses?.length" class="log-ai-list">
-            <h5>Causes probables</h5>
-            <ol>
-              <li *ngFor="let c of logAiResult.probableCauses">{{ c }}</li>
-            </ol>
-          </div>
-          <div *ngIf="logAiResult.suggestedActions?.length" class="log-ai-list">
-            <h5>Que faire (sans accès cluster)</h5>
-            <ul>
-              <li *ngFor="let a of logAiResult.suggestedActions">{{ a }}</li>
-            </ul>
-          </div>
-        </div>
-      </div>
 
     </div><!-- /pipeline-page -->
   </div><!-- /main -->

@@ -472,7 +472,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const badges = CI_SCANNER_DEFS.map(def => ({
       name: def.name,
       iconUrl: def.icon,
-      active: !!this.findToolForScanner(def.matchers),
+      active: this.scannerHasExecuted(def.matchers),
       type: def.type,
       tooltip: def.tooltip
     }));
@@ -714,7 +714,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
   private buildMaturityScanAnalyses(): MaturityScanAnalysis[] {
     return CI_SCANNER_DEFS.map(def => {
-      const active = !!this.findToolForScanner(def.matchers);
+      const active = this.scannerHasExecuted(def.matchers);
       const findingCount = this.scannerFindingCount(def.matchers);
       return this.buildSingleScannerAnalysis(def, active, findingCount);
     });
@@ -2069,6 +2069,24 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private findToolForScanner(matchers: string[]): { key: string; value: number } | undefined {
     return this.toolList.find(t => {
       const hay = `${t.key} ${this.formatToolName(t.key)}`.toLowerCase();
+      return matchers.some(m => hay.includes(m));
+    });
+  }
+
+  /**
+   * "Cet outil a-t-il tourné ?" -- à utiliser pour active/inactive (jamais findToolForScanner /
+   * toolList, qui excluent les entrées à 0 finding et confondent donc "a tourné, rien trouvé"
+   * avec "n'a jamais tourné").
+   */
+  private scannerHasExecuted(matchers: string[]): boolean {
+    const executed = this.dashboard?.toolsExecuted;
+    if (!executed?.length) {
+      // Repli : pas de signal dédié disponible (dashboard non scopé pipeline, etc.) -- se rabat
+      // sur l'ancien comportement plutôt que de tout marquer "non exécuté" à tort.
+      return !!this.findToolForScanner(matchers);
+    }
+    return executed.some(key => {
+      const hay = `${key} ${this.formatToolName(key)}`.toLowerCase();
       return matchers.some(m => hay.includes(m));
     });
   }

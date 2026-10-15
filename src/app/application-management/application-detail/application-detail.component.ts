@@ -1,8 +1,8 @@
 import { Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin, interval, of, Subject, Subscription } from 'rxjs';
-import { catchError, debounceTime, switchMap, takeUntil, takeWhile } from 'rxjs/operators';
+import { EMPTY, forkJoin, interval, of, Subject, Subscription } from 'rxjs';
+import { catchError, debounceTime, switchMap, takeUntil, takeWhile, timeout } from 'rxjs/operators';
 import Chart from 'chart.js/auto';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
@@ -13,6 +13,8 @@ import {
   AppServiceModel,
   DeployPreview,
   DeploymentAlertsResponse,
+  AppAlertsHistoryResponse,
+  MachineTimeUsage,
   DeploymentMonitorAlert,
   ManagedApp,
   ServiceCardStats,
@@ -40,8 +42,10 @@ import { isHardBlocked, verdictLabelFr, verdictTone } from '../shared/verdict.ut
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
 import { AuthService } from '../../services/auth/auth.service';
+import { ToastService } from '../../services/ui/toast.service';
+import { QualityGateService } from '../../services/quality-gate/quality-gate.service';
 
-type AppSection = 'dashboard' | 'services' | 'databases' | 'monitoring' | 'history' | 'alerts' | 'deployments' | 'pipelines' | 'security' | 'defectdojo' | 'quality-gate';
+type AppSection = 'dashboard' | 'services' | 'databases' | 'monitoring' | 'history' | 'alerts' | 'deployments' | 'pipelines' | 'security' | 'defectdojo' | 'quality-gate' | 'post-deploy';
 type DeployStatusFilter = 'ALL' | 'RUNNING' | 'DEPLOYING' | 'FAILED' | 'STOPPED';
 type PipelineKindFilter = 'ALL' | 'SCAN' | 'DEPLOY';
 type PipelineStatusFilter = 'ALL' | 'SUCCESS' | 'FAILED' | 'RUNNING';
@@ -53,8 +57,9 @@ interface AlertNameAgg {
   history: number;
   errors: number;
   warnings: number;
-  category: 'k8s' | 'health' | 'pod';
-  severity: 'error' | 'warn';
+  infos: number;
+  category: 'k8s' | 'health' | 'pod' | 'sync';
+  severity: 'error' | 'warn' | 'info';
   samples: DeploymentMonitorAlert[];
 }
 
@@ -93,7 +98,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   formError: string | null = null;
   deploying = false;
   deployError: string | null = null;
-  syncMessage: string | null = null;
   syncingServiceId: string | null = null;
   customHostnameDraft = '';
   savingHostname = false;
@@ -175,6 +179,25 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   private alertsPollSub?: Subscription;
   private static readonly ALERTS_POLL_MS = 10000;
 
+  /** Historique persistant des alertes (tous environnements), filtrable env + date. */
+  alertsHistoryData: AppAlertsHistoryResponse | null = null;
+  alertsHistoryLoading = false;
+  alertsHistoryError: string | null = null;
+  /** 'ALL' ou un namespace précis. */
+  alertsEnvFilter = 'ALL';
+  /** Bornes de date (yyyy-MM-dd, liées aux <input type="date">). */
+  alertsFromDate = '';
+  alertsToDate = '';
+
+  /** Dernier événement (alerte) — carte résumé sur le Dashboard Overview. */
+  dashboardLatestAlert: DeploymentMonitorAlert | null = null;
+  dashboardLatestAlertLoading = false;
+  dashboardLatestAlertChecked = false;
+
+  /** Temps-machine cumulé (approximatif) — carte résumé sur le Dashboard Overview. */
+  machineTime: MachineTimeUsage | null = null;
+  machineTimeLoading = false;
+
   /** Posture sécurité app (Option A — rollup DefectDojo). */
   posture: SecurityPostureResponse | null = null;
   postureLoading = false;
@@ -191,6 +214,10 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   scanPipelineLoading = false;
   private batchPollSub?: Subscription;
   private pipelinePollSub?: Subscription;
+
+  /** Sélecteur de lot — page Quality Gate application. Défaut = lot le plus récent (scanBatches[0]). */
+  scanBatches: ScanBatchState[] = [];
+  selectedBatchId: string | null = null;
 
   private destroy$ = new Subject<void>();
 
@@ -216,7 +243,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     private auth: AuthService,
     private route: ActivatedRoute,
     private router: Router,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private toastService: ToastService,
+    private qualityGateService: QualityGateService
   ) {}
 
   get currentUsername(): string {
@@ -255,7 +284,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       }
       const allowed: AppSection[] = [
         'dashboard', 'defectdojo', 'quality-gate', 'monitoring', 'alerts',
-        'deployments', 'history', 'pipelines'
+        'deployments', 'history', 'pipelines', 'post-deploy'
       ];
       const section = (allowed.includes(raw as AppSection) ? raw : 'dashboard') as AppSection;
       this.applySection(section);
@@ -271,6 +300,13 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       }
       if (this.activeTab === 'pipelines') {
         this.loadAppPipelines();
+      }
+      // Pré-remplit la recherche Alertes quand on y arrive depuis un lien contextuel (ex. bouton
+      // "Voir les alertes" sur un workload Degraded dans Monitoring) — évite de devoir recopier
+      // soi-même le nom du workload (retour utilisateur du 18 août 2026).
+      const q = qp.get('q');
+      if (q != null) {
+        this.alertsSearch = q;
       }
     });
 
@@ -327,6 +363,11 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Depuis Monitoring : lien contextuel vers Alertes, pré-filtré sur un workload donné. */
+  onMonitoringNavigate(evt: { section: string; q?: string }): void {
+    this.goSection(evt.section as AppSection, evt.q ? { q: evt.q } : {});
+  }
+
   // ---------- Services ----------
 
   openDashboard(svc: AppServiceModel): void {
@@ -360,11 +401,17 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadSecurityPosture(): void {
+  /**
+   * @param batchId Lot précis à afficher (sélecteur Quality Gate application). Omis (ou undefined)
+   * pour tous les autres onglets consommateurs de `posture` (dashboard, defectdojo, historique...),
+   * qui affichent toujours le dernier lot -- la sélection du sélecteur reste scopée à l'onglet
+   * quality-gate, voir `loadQualityGateBatches()`.
+   */
+  loadSecurityPosture(batchId?: string): void {
     if (!this.appId) return;
     this.postureLoading = true;
     this.postureError = null;
-    this.api.getSecurityPosture(this.appId).pipe(takeUntil(this.destroy$)).subscribe({
+    this.api.getSecurityPosture(this.appId, batchId).pipe(takeUntil(this.destroy$)).subscribe({
       next: (p) => {
         this.posture = p;
         this.postureLoading = false;
@@ -375,6 +422,37 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.postureError = e?.error?.message || 'Impossible de charger la posture sécurité.';
       }
     });
+  }
+
+  /** Charge la liste des lots (du plus récent au plus ancien) pour le sélecteur Quality Gate application. */
+  loadQualityGateBatches(): void {
+    if (!this.appId) return;
+    this.api.listScanBatches(this.appId).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (batches) => {
+        this.scanBatches = batches || [];
+        if (!this.selectedBatchId && this.scanBatches.length) {
+          this.selectedBatchId = this.scanBatches[0].batchId;
+        }
+        this.loadSecurityPosture(this.selectedBatchId || undefined);
+      },
+      error: () => {
+        // Liste indisponible : on retombe sur le comportement "dernier lot" existant.
+        this.loadSecurityPosture();
+      }
+    });
+  }
+
+  onBatchChange(batchId: string): void {
+    this.selectedBatchId = batchId || null;
+    this.loadSecurityPosture(this.selectedBatchId || undefined);
+  }
+
+  /** Le lot actuellement AFFICHÉ (sélectionné dans le Quality Gate application) est-il en cours ? */
+  get isSelectedBatchRunning(): boolean {
+    if (!this.posture) return false;
+    if (this.posture.hasCompleteBatch) return false;
+    const s = (this.posture.batchStatus || '').toUpperCase();
+    return s === 'PENDING' || s === 'RUNNING';
   }
 
   bumpDojoRefresh(): void {
@@ -420,6 +498,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   /**
    * Recommandation de déploiement de l'application complète
    * (verdict agrégé D5 + rollup DefectDojo).
+   * Dashboard / DefectDojo : reflète le scan temps réel de l'app (`activeBatchRunning`).
+   * Quality Gate application : reflète le lot actuellement AFFICHÉ (`isSelectedBatchRunning`),
+   * pour rester cohérente avec le sélecteur de lot -- voir `appDeployRecommendationFor`.
    */
   get appDeployRecommendation(): {
     tone: ReturnType<typeof verdictTone>;
@@ -428,7 +509,17 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     canDeploy: boolean;
     hasData: boolean;
   } | null {
-    if (this.activeBatchRunning) {
+    return this.appDeployRecommendationFor(this.activeBatchRunning);
+  }
+
+  appDeployRecommendationFor(running: boolean): {
+    tone: ReturnType<typeof verdictTone>;
+    title: string;
+    detail: string;
+    canDeploy: boolean;
+    hasData: boolean;
+  } | null {
+    if (running) {
       return {
         tone: 'unknown',
         title: 'Scan en cours',
@@ -653,9 +744,45 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Tous les déploiements réellement actifs (RUNNING/DEPLOYING), pas seulement le dernier.
+   * Avant ce correctif, la section "Environnement actif" et son compteur ne pouvaient
+   * afficher qu'un seul environnement (app.lastDeployment), même quand plusieurs
+   * namespaces tournaient en parallèle (ex. deux branches déployées simultanément).
+   */
+  get activeDeployments(): AppDeployment[] {
+    return this.history.filter(d => {
+      const st = (d.status || '').toUpperCase();
+      return st === 'RUNNING' || st === 'DEPLOYING';
+    });
+  }
+
+  /** L'actif à montrer déplié par défaut — le dernier déploiement (comportement historique), sinon le premier actif trouvé. */
+  get primaryActiveDeployment(): AppDeployment | null {
+    const list = this.activeDeployments;
+    if (!list.length) return null;
+    const lastId = this.app?.lastDeployment?.id;
+    return (lastId && list.find(d => d.id === lastId)) || list[0];
+  }
+
+  /** Les autres environnements actifs — repliés par défaut pour ne pas noyer la page (voir expandedExtraEnvId). */
+  get otherActiveDeployments(): AppDeployment[] {
+    const primaryId = this.primaryActiveDeployment?.id;
+    return this.activeDeployments.filter(d => d.id !== primaryId);
+  }
+
+  expandedExtraEnvId: string | null = null;
+
+  toggleExtraEnv(id: string): void {
+    this.expandedExtraEnvId = this.expandedExtraEnvId === id ? null : id;
+  }
+
+  isExtraEnvExpanded(id: string): boolean {
+    return this.expandedExtraEnvId === id;
+  }
+
   get envActiveCount(): number {
-    const st = (this.app?.lastDeployment?.status || '').toUpperCase();
-    return st === 'RUNNING' || st === 'DEPLOYING' ? 1 : 0;
+    return this.activeDeployments.length;
   }
 
   get envPathLabel(): string {
@@ -761,7 +888,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.appScanRunning = false;
         this.showAppScanModal = false;
         this.activeBatch = batch;
-        this.syncMessage = `Scan lancé — ${params.serviceIds.length} service(s).`;
+        this.toastService.push('success', 'Scan lancé', `${params.serviceIds.length} service(s).`);
         this.startBatchPolling();
         this.refreshScanPipeline();
         const pid = batch?.gitlabPipelineId;
@@ -894,7 +1021,15 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         next: () => {
           this.refreshScanPipeline();
           if (!this.activeBatchRunning) {
-            this.loadSecurityPosture();
+            // Rafraîchit le lot actuellement affiché (même s'il vient de passer de RUNNING à
+            // COMPLETE) sans écraser un choix explicite du sélecteur sur un lot plus ancien ;
+            // sur la page Quality Gate, rafraîchit aussi la liste (le lot qui vient de finir doit
+            // apparaître dans le sélecteur).
+            if (this.activeTab === 'quality-gate') {
+              this.loadQualityGateBatches();
+            } else {
+              this.loadSecurityPosture(this.selectedBatchId || undefined);
+            }
             this.pipelinePollSub?.unsubscribe();
           }
         },
@@ -973,9 +1108,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         this.showScanModal = false;
         const name = this.scanningService?.name || 'service';
         this.scanningService = null;
-        this.syncMessage = res?.message
-          || `Scan lancé pour « ${name} »`
-            + (res?.gitlabPipelineId ? ` (pipeline #${res.gitlabPipelineId}).` : '.');
+        this.toastService.push('success', 'Scan lancé', res?.message
+          || `Service « ${name} »`
+            + (res?.gitlabPipelineId ? ` (pipeline #${res.gitlabPipelineId}).` : '.'));
         if (this.app) this.loadServiceStats(this.app.services || []);
         const pid = res?.gitlabPipelineId;
         if (pid) {
@@ -1013,38 +1148,76 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   }
 
   saveService(payload: AppServiceModel): void {
-    this.saving = true;
     this.formError = null;
-    this.syncMessage = null;
     const editingId = this.editingService?.id;
-    const req = editingId
-      ? this.api.updateService(this.appId, editingId, payload)
-      : this.api.addService(this.appId, payload);
-    req.subscribe({
-      next: (saved) => {
-        const serviceId = editingId || saved?.id;
-        if (!serviceId || !editingId) {
+    if (!editingId) {
+      this.saving = true;
+      this.api.addService(this.appId, payload).subscribe({
+        next: () => {
           this.saving = false;
           this.showServiceForm = false;
           this.load();
+        },
+        error: (e) => {
+          this.formError = e?.error?.message || 'Enregistrement impossible.';
+          this.saving = false;
+        }
+      });
+      return;
+    }
+
+    // Édition d'un service déjà déployé : réapplique directement au cluster (syncServiceRuntime
+    // ci-dessous), sans passer par la modale Déployer et son garde-fou capacité — on vérifie donc
+    // ici l'impact ressources avant d'enregistrer (audit-deploiement.md §8, retour utilisateur du
+    // 18 août 2026). Best-effort : si l'aperçu échoue (cluster indisponible…), on n'empêche pas
+    // l'édition, comme pour tout le reste du garde-fou.
+    this.saving = true;
+    this.api.previewServiceResourceChange(this.appId, editingId, payload).subscribe({
+      next: (preview) => {
+        if (this.resourceChangeOverCapacity(preview) && !this.confirmResourceOverCapacity(preview)) {
+          this.saving = false;
           return;
         }
-        this.api.syncServiceRuntime(this.appId, serviceId).subscribe({
-          next: (sync) => {
-            this.saving = false;
-            this.showServiceForm = false;
-            this.syncMessage = sync?.message || (sync?.synced
-              ? 'Variables appliquées sur le cluster.'
-              : 'Enregistré en base (pas d’env RUNNING à synchroniser).');
+        this.applyServiceEdit(editingId, payload);
+      },
+      error: () => this.applyServiceEdit(editingId, payload)
+    });
+  }
+
+  private applyServiceEdit(serviceId: string, payload: AppServiceModel): void {
+    this.api.updateService(this.appId, serviceId, payload).subscribe({
+      next: () => {
+        // L'enregistrement en base est acquis ici : on libère le formulaire tout de suite plutôt
+        // que d'attendre syncServiceRuntime, qui peut rester bloqué jusqu'à ~15 min si le nouveau
+        // pod n'obtient pas sa capacité (rolling update, cf. previewServiceResourceChange /
+        // audit-deploiement.md §8) — le bouton « Enregistrement… » restait figé sans retour,
+        // pour l'utilisateur ça ressemblait à un plantage (retour utilisateur du 18 août 2026).
+        this.saving = false;
+        this.showServiceForm = false;
+        this.load();
+
+        this.api.syncServiceRuntime(this.appId, serviceId).pipe(
+          timeout(20_000),
+          takeUntil(this.destroy$),
+          catchError((e) => {
+            const isTimeout = e?.name === 'TimeoutError';
+            this.toastService.push(
+              isTimeout ? 'info' : 'error',
+              isTimeout ? 'Synchronisation en cours' : 'Sync cluster échouée',
+              isTimeout
+                ? 'Enregistré. Le service est en cours d’application sur le cluster — ça peut prendre'
+                  + ' plusieurs minutes si la capacité est insuffisante. Suis la progression dans Alertes / Workloads.'
+                : (e?.error?.message || 'Enregistré en base, mais sync cluster échouée.'),
+              isTimeout ? 9000 : 4000
+            );
             this.load();
-          },
-          error: (e) => {
-            this.saving = false;
-            this.showServiceForm = false;
-            this.syncMessage = e?.error?.message
-              || 'Enregistré en base, mais sync cluster échouée.';
-            this.load();
-          }
+            return EMPTY;
+          })
+        ).subscribe((sync) => {
+          this.toastService.push('success', 'Service enregistré', sync?.message || (sync?.synced
+            ? 'Variables appliquées sur le cluster.'
+            : 'Enregistré en base (pas d’env RUNNING à synchroniser).'));
+          this.load();
         });
       },
       error: (e) => {
@@ -1054,32 +1227,50 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Même lecture que la modale Déployer (project-deploy-modal) : quota namespace OU capacité nœud dépassés. */
+  private resourceChangeOverCapacity(p: DeployPreview | null): boolean {
+    if (!p) return false;
+    const quotaOver = !!p.quotaEnabled
+      && ((!!p.quotaCpuMillicores && (p.requestedCpuMillicores || 0) > p.quotaCpuMillicores)
+        || (!!p.quotaMemoryBytes && (p.requestedMemoryBytes || 0) > p.quotaMemoryBytes));
+    const nodeOver = !!p.nodeCapacityEnabled
+      && ((p.requestedCpuMillicores || 0) > (p.nodeAvailableCpuMillicores || 0)
+        || (p.requestedMemoryBytes || 0) > (p.nodeAvailableMemoryBytes || 0));
+    return quotaOver || nodeOver;
+  }
+
+  private confirmResourceOverCapacity(p: DeployPreview): boolean {
+    const detail = (p.warnings || []).join('\n')
+      || 'Cette modification dépasse les ressources disponibles (quota namespace ou capacité du nœud).';
+    return confirm(
+      `Capacité insuffisante :\n\n${detail}\n\nEnregistrer quand même ? Le service risque de rester en Pending ou d'échouer (FailedCreate) sur le cluster.`
+    );
+  }
+
   syncServiceToCluster(svc: AppServiceModel): void {
     if (!svc.id) return;
     this.syncingServiceId = svc.id;
-    this.syncMessage = null;
     this.api.syncServiceRuntime(this.appId, svc.id).subscribe({
       next: (sync) => {
         this.syncingServiceId = null;
-        this.syncMessage = sync?.message || 'Sync terminée.';
+        this.toastService.push('success', 'Sync runtime', sync?.message || 'Sync terminée.');
       },
       error: (e) => {
         this.syncingServiceId = null;
-        this.syncMessage = e?.error?.message || 'Sync cluster impossible.';
+        this.toastService.push('error', 'Sync runtime échouée', e?.error?.message || 'Sync cluster impossible.');
       }
     });
   }
 
   deleteService(svc: AppServiceModel): void {
     if (!svc.id || !confirm(`Supprimer le service « ${svc.name} » ?\nSes pods/ressources seront aussi retirés du cluster RUNNING.`)) return;
-    this.syncMessage = null;
     this.api.deleteService(this.appId, svc.id).subscribe({
       next: (res) => {
-        this.syncMessage = res?.message || 'Service supprimé.';
+        this.toastService.push('success', 'Service supprimé', res?.message || 'Service supprimé.');
         this.load();
       },
       error: (e) => {
-        this.syncMessage = e?.error?.message || 'Suppression impossible.';
+        this.toastService.push('error', 'Suppression impossible', e?.error?.message || 'Suppression impossible.');
       }
     });
   }
@@ -1119,14 +1310,13 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   deleteDatabase(db: AppDatabaseModel): void {
     if (!db.id || !confirm(`Supprimer la base « ${db.name} » ?\nSes pods/PVC seront aussi retirés du cluster RUNNING.`)) return;
-    this.syncMessage = null;
     this.api.deleteDatabase(this.appId, db.id).subscribe({
       next: (res) => {
-        this.syncMessage = res?.message || 'Base supprimée.';
+        this.toastService.push('success', 'Base supprimée', res?.message || 'Base supprimée.');
         this.load();
       },
       error: (e) => {
-        this.syncMessage = e?.error?.message || 'Suppression impossible.';
+        this.toastService.push('error', 'Suppression impossible', e?.error?.message || 'Suppression impossible.');
       }
     });
   }
@@ -1201,9 +1391,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
           this.deploying = false;
           this.showDeployModal = false;
           this.deployPreview = null;
-          this.syncMessage = host
-            ? `Déploiement lancé — domaine « ${host} ».`
-            : 'Déploiement lancé.';
+          this.toastService.push('success', 'Déploiement lancé', host
+            ? `Domaine « ${host} ».`
+            : 'Déploiement en cours.');
           this.load();
           if (this.activeTab === 'deployments') this.loadHistory();
           const pid = dep?.gitlabPipelineId;
@@ -1251,18 +1441,21 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  teardown(): void {
-    const dep = this.app?.lastDeployment;
-    if (!dep || !confirm('Supprimer le déploiement (namespace K8s) ?\nLes pods et services cluster seront détruits.')) return;
-    this.syncMessage = null;
-    this.api.teardownDeployment(this.appId, dep.id).subscribe({
+  /**
+   * @param dep Déploiement ciblé — par défaut le dernier (compat), mais explicite
+   * dès qu'il y a plusieurs environnements actifs simultanément (voir activeDeployments).
+   */
+  teardown(dep?: AppDeployment): void {
+    const target = dep || this.app?.lastDeployment;
+    if (!target || !confirm('Supprimer le déploiement (namespace K8s) ?\nLes pods et services cluster seront détruits.')) return;
+    this.api.teardownDeployment(this.appId, target.id).subscribe({
       next: () => {
-        this.syncMessage = 'Déploiement arrêté — environnement STOPPED.';
+        this.toastService.push('success', 'Déploiement arrêté', 'Environnement STOPPED.');
         this.load();
         if (this.activeTab === 'deployments') this.loadHistory();
       },
       error: (e) => {
-        this.syncMessage = e?.error?.message || 'Teardown impossible.';
+        this.toastService.push('error', 'Teardown impossible', e?.error?.message || 'Teardown impossible.');
         this.load();
       }
     });
@@ -1372,11 +1565,27 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     if (section === 'pipelines') {
       this.loadAppPipelines();
     }
-    if (section === 'security' || section === 'defectdojo' || section === 'dashboard' || section === 'quality-gate') {
+    if (section === 'security' || section === 'defectdojo' || section === 'dashboard') {
       this.loadSecurityPosture();
+    }
+    if (section === 'quality-gate') {
+      this.loadQualityGateBatches();
+    }
+    if (section === 'post-deploy') {
+      this.loadPostDeploySummaries();
+    }
+    if (section === 'dashboard') {
+      this.loadDashboardLatestEvent();
+      this.loadHistory();
+      this.loadMachineTime();
     }
     if (section === 'alerts') {
       this.loadAlerts();
+      this.loadAlertsHistory();
+      // Alimente le filtre environnement même sans alerte encore enregistrée.
+      if (!this.history.length) {
+        this.loadHistory();
+      }
       this.startAlertsPoll();
     } else {
       this.stopAlertsPoll();
@@ -1457,6 +1666,70 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     this.router.navigate(['/project', serviceId, 'quality-gate']);
   }
 
+  openServicePostDeploy(serviceId: string | null | undefined): void {
+    if (!serviceId) return;
+    try {
+      localStorage.setItem('envirotest-last-managed-app-id', this.appId);
+      if (this.app?.name) {
+        localStorage.setItem('envirotest-last-managed-app-name', this.app.name);
+      }
+    } catch { /* ignore */ }
+    this.router.navigate(['/project', serviceId, 'post-deploy']);
+  }
+
+  /**
+   * Résumé DAST par service pour la page Post-déploiement "app totale" -- affiché inline sur
+   * chaque carte au lieu d'un simple lien (retour utilisateur : "pourquoi tu mets les résultats
+   * dans les services et pas dans l'app totale"). N+1 borné au nombre de services d'une app
+   * (typiquement 2-5) -- acceptable, pas de scheduler/cache nécessaire à ce stade.
+   */
+  postDeploySummaries: Record<string, {
+    loading: boolean;
+    dastApplicable?: boolean;
+    dastCritical?: number;
+    dastHigh?: number;
+    dastMedium?: number;
+    error?: boolean;
+  }> = {};
+
+  loadPostDeploySummaries(): void {
+    const services = this.app?.services || [];
+    for (const svc of services) {
+      if (!svc.id || this.postDeploySummaries[svc.id]) continue;
+      this.postDeploySummaries[svc.id] = { loading: true };
+      this.qualityGateService.listEnvironments(svc.id, undefined, false)
+        .pipe(
+          takeUntil(this.destroy$),
+          catchError(() => of([]))
+        )
+        .subscribe(envs => {
+          const envId = envs[0]?.environmentId;
+          if (!envId) {
+            this.postDeploySummaries[svc.id!] = { loading: false };
+            return;
+          }
+          this.qualityGateService.getQualityGate(svc.id!, undefined, envId, false, null)
+            .pipe(
+              takeUntil(this.destroy$),
+              catchError(() => of(null))
+            )
+            .subscribe(res => {
+              if (!res) {
+                this.postDeploySummaries[svc.id!] = { loading: false, error: true };
+                return;
+              }
+              this.postDeploySummaries[svc.id!] = {
+                loading: false,
+                dastApplicable: !!res.metrics?.dastApplicable,
+                dastCritical: res.metrics?.dastCritical,
+                dastHigh: res.metrics?.dastHigh,
+                dastMedium: res.metrics?.dastMedium
+              };
+            });
+        });
+    }
+  }
+
   loadHistory(): void {
     this.historyLoading = true;
     this.historyError = null;
@@ -1522,12 +1795,149 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     this.alertsPollSub = undefined;
   }
 
+  /** Temps-machine cumulé (approximatif) pour la carte résumé du Dashboard. */
+  loadMachineTime(): void {
+    this.machineTimeLoading = true;
+    this.api.getMachineTime(this.appId).subscribe({
+      next: (res) => {
+        this.machineTime = res;
+        this.machineTimeLoading = false;
+      },
+      error: () => {
+        this.machineTime = null;
+        this.machineTimeLoading = false;
+      }
+    });
+  }
+
+  /**
+   * Dernier événement encore pertinent pour la carte résumé du Dashboard : on ignore les
+   * alertes dont l'environnement associé est maintenant arrêté (STOPPED/FAILED) — un incident
+   * résolu ne doit plus s'afficher comme s'il était en cours, seulement dans l'Historique.
+   */
+  loadDashboardLatestEvent(): void {
+    this.dashboardLatestAlertLoading = true;
+    this.dashboardLatestAlertChecked = false;
+    forkJoin({
+      alerts: this.api.getAppAlertsHistory(this.appId, {}),
+      deployments: this.history.length ? of(this.history) : this.api.listDeployments(this.appId)
+    }).subscribe({
+      next: ({ alerts, deployments }) => {
+        if (!this.history.length) {
+          this.history = deployments;
+        }
+        const activeIds = new Set(deployments.filter(d => d.status === 'RUNNING').map(d => d.id));
+        const activeNs = new Set(
+          deployments.filter(d => d.status === 'RUNNING').map(d => d.namespace).filter(Boolean)
+        );
+        this.dashboardLatestAlert = (alerts.history || []).find(a =>
+          (a.deploymentId && activeIds.has(a.deploymentId))
+          || (a.namespace && activeNs.has(a.namespace))
+        ) || null;
+        this.dashboardLatestAlertLoading = false;
+        this.dashboardLatestAlertChecked = true;
+      },
+      error: () => {
+        this.dashboardLatestAlert = null;
+        this.dashboardLatestAlertLoading = false;
+        this.dashboardLatestAlertChecked = true;
+      }
+    });
+  }
+
+  /**
+   * Historique persistant des alertes, tous environnements de l'app — indépendant
+   * du déploiement actif (reste consultable même sans environnement en cours).
+   */
+  loadAlertsHistory(silent = false): void {
+    this.ensureAlertsDateRangeDefaults();
+    if (!silent) {
+      this.alertsHistoryLoading = true;
+      this.alertsHistoryError = null;
+    }
+    const from = this.alertsFromDate ? new Date(`${this.alertsFromDate}T00:00:00`).toISOString() : null;
+    const to = this.alertsToDate ? new Date(`${this.alertsToDate}T23:59:59.999`).toISOString() : null;
+    const namespace = this.alertsEnvFilter !== 'ALL' ? this.alertsEnvFilter : null;
+    this.api.getAppAlertsHistory(this.appId, { from, to, namespace }).subscribe({
+      next: (res) => {
+        this.alertsHistoryData = res;
+        this.alertsHistoryLoading = false;
+      },
+      error: (e) => {
+        if (!silent) {
+          this.alertsHistoryError = e?.error?.message || 'Impossible de charger l\'historique des alertes.';
+        }
+        this.alertsHistoryLoading = false;
+      }
+    });
+  }
+
+  /** Défaut : 30 derniers jours, initialisé une seule fois (respecte le choix de l'utilisateur ensuite). */
+  private ensureAlertsDateRangeDefaults(): void {
+    if (this.alertsFromDate && this.alertsToDate) return;
+    const to = new Date();
+    const from = new Date(to.getTime() - 30 * 24 * 3600_000);
+    this.alertsToDate = this.toDateInputValue(to);
+    this.alertsFromDate = this.toDateInputValue(from);
+  }
+
+  private toDateInputValue(d: Date): string {
+    return d.toISOString().slice(0, 10);
+  }
+
+  setAlertsEnvFilter(ns: string): void {
+    this.alertsEnvFilter = ns || 'ALL';
+    this.loadAlertsHistory();
+  }
+
+  onAlertsFromDateChange(value: string): void {
+    this.alertsFromDate = value;
+    this.loadAlertsHistory();
+  }
+
+  onAlertsToDateChange(value: string): void {
+    this.alertsToDate = value;
+    this.loadAlertsHistory();
+  }
+
+  /** Raccourcis période (24 h / 7 j / 30 j / 90 j). */
+  setAlertsQuickRange(days: number): void {
+    const to = new Date();
+    const from = new Date(to.getTime() - days * 24 * 3600_000);
+    this.alertsToDate = this.toDateInputValue(to);
+    this.alertsFromDate = this.toDateInputValue(from);
+    this.loadAlertsHistory();
+  }
+
+  isAlertsQuickRangeActive(days: number): boolean {
+    if (!this.alertsFromDate || !this.alertsToDate) return false;
+    return this.alertsFromDate === this.toDateInputValue(new Date(Date.now() - days * 24 * 3600_000))
+      && this.alertsToDate === this.toDateInputValue(new Date());
+  }
+
+  clearAlertsHistoryFilters(): void {
+    this.alertsEnvFilter = 'ALL';
+    this.setAlertsQuickRange(30);
+  }
+
+  /** Environnements disponibles pour le filtre : namespaces vus dans l'historique + déploiements connus. */
+  get alertsEnvOptions(): string[] {
+    const set = new Set<string>();
+    for (const ns of this.alertsHistoryData?.namespaces || []) {
+      if (ns) set.add(ns);
+    }
+    for (const d of this.history || []) {
+      if (d.namespace) set.add(d.namespace);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }
+
   get filteredLiveAlerts(): DeploymentMonitorAlert[] {
     return this.filterAlerts(this.alertsData?.live || []);
   }
 
   get filteredHistoryAlerts(): DeploymentMonitorAlert[] {
-    return this.filterAlerts(this.alertsData?.history || []);
+    return this.filterAlerts(this.alertsHistoryData?.history || []);
   }
 
   get showLiveSection(): boolean {
@@ -1570,7 +1980,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
    */
   get alertAggregations(): AlertNameAgg[] {
     const live = this.alertsInScope(this.alertsData?.live || [], 'live');
-    const history = this.alertsInScope(this.alertsData?.history || [], 'history');
+    const history = this.alertsInScope(this.alertsHistoryData?.history || [], 'history');
     const base = this.applyNonReasonFilters([...live, ...history]);
 
     const map = new Map<string, AlertNameAgg>();
@@ -1586,8 +1996,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
           history: 0,
           errors: 0,
           warnings: 0,
+          infos: 0,
           category: this.alertCategory(a),
-          severity: a.severity === 'error' ? 'error' : 'warn',
+          severity: a.severity === 'error' ? 'error' : (a.severity === 'info' ? 'info' : 'warn'),
           samples: []
         };
         map.set(name, row);
@@ -1598,8 +2009,12 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       if (a.severity === 'error') {
         row.errors++;
         row.severity = 'error';
+      } else if (a.severity === 'info') {
+        row.infos++;
+        if (row.severity !== 'error') row.severity = 'info';
       } else {
         row.warnings++;
+        if (row.severity === 'info') row.severity = 'warn';
       }
       if (row.samples.length < 3) {
         row.samples.push(a);
@@ -1687,13 +2102,15 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     this.alertsViewMode = 'grouped';
   }
 
-  alertCategory(a: DeploymentMonitorAlert): 'k8s' | 'health' | 'pod' {
+  alertCategory(a: DeploymentMonitorAlert): 'k8s' | 'health' | 'pod' | 'sync' {
     const kind = (a.kind || '').toLowerCase();
+    if (kind === 'sync') return 'sync';
     if (kind === 'k8s-event' || kind === 'k8s') return 'k8s';
     if (kind === 'health') return 'health';
     if (kind === 'pod') return 'pod';
 
     const type = (a.type || '').toUpperCase();
+    if (type === 'DEPLOYMENT_SYNC_RUNTIME') return 'sync';
     if (type.includes('HEALTH')) return 'health';
     if (type.includes('K8S_WARNING')) {
       const m = (a.message || '').toLowerCase();
@@ -1769,16 +2186,21 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   }
 
   alertCategoryLabel(a: DeploymentMonitorAlert): string {
-    const c = this.alertCategory(a);
-    if (c === 'k8s') return 'Kubernetes';
-    if (c === 'health') return 'Health check';
+    return this.categoryLabel(this.alertCategory(a));
+  }
+
+  categoryLabel(cat: 'k8s' | 'health' | 'pod' | 'sync'): string {
+    if (cat === 'k8s') return 'Kubernetes';
+    if (cat === 'health') return 'Health check';
+    if (cat === 'sync') return 'Sync runtime';
     return 'Pod';
   }
 
-  categoryLabel(cat: 'k8s' | 'health' | 'pod'): string {
-    if (cat === 'k8s') return 'Kubernetes';
-    if (cat === 'health') return 'Health check';
-    return 'Pod';
+  /** Libellé de sévérité — 3 niveaux (les sync-runtime sont des info, pas des warnings). */
+  alertSeverityLabel(a: DeploymentMonitorAlert): string {
+    if (a.severity === 'error') return 'ERROR';
+    if (a.severity === 'info') return 'INFO';
+    return 'WARNING';
   }
 
   alertTarget(a: DeploymentMonitorAlert): string {
@@ -1797,6 +2219,10 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   trackAgg(_index: number, g: AlertNameAgg): string {
     return g.name;
+  }
+
+  trackDeployment(_index: number, d: AppDeployment): string {
+    return d.id;
   }
 
   healthStatusTone(): 'ok' | 'ko' | 'unknown' {
@@ -1894,7 +2320,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   }
 
   isCurrentDeployment(dep: AppDeployment): boolean {
-    return !!this.app?.lastDeployment && this.app.lastDeployment.id === dep.id;
+    return this.activeDeployments.some(d => d.id === dep.id);
   }
 
   isDeployOnline(dep: AppDeployment): boolean {
@@ -2012,7 +2438,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   private renderEnvHistoryChart(): void {
     const canvas = this.envHistoryCanvas;
-    if (!canvas || this.activeTab !== 'deployments') {
+    if (!canvas || (this.activeTab !== 'deployments' && this.activeTab !== 'dashboard')) {
       this.hasEnvHistoryChart = false;
       return;
     }

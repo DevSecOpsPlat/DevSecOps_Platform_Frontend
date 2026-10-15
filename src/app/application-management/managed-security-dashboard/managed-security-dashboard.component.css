@@ -16,7 +16,7 @@
   padding: 1.15rem 1.25rem 1.25rem;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
@@ -72,7 +72,7 @@
   position: relative;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 1.05rem 1.1rem 1rem;
   display: flex;
   flex-direction: column;
@@ -240,7 +240,8 @@
   padding: 0.85rem 1.1rem;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .msd-toolbar-eyebrow {

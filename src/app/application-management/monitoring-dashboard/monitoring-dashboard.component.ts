@@ -1,10 +1,12 @@
 import {
   Component,
   ElementRef,
+  EventEmitter,
   Input,
   NgZone,
   OnChanges,
   OnDestroy,
+  Output,
   SimpleChanges,
   ViewChild
 } from '@angular/core';
@@ -17,13 +19,15 @@ import { ApplicationManagementService } from '../../services/application-managem
 import {
   AppDeployment,
   AppServiceModel,
+  ClusterCapacityInfo,
   DeploymentMonitorAlert,
   DeploymentMonitoringResponse,
   DeploymentPodInfo,
   DeploymentQuotaInfo,
   MonitoringEvent,
   MonitoringServiceInfo,
-  MonitoringWorkload
+  MonitoringWorkload,
+  NetworkPolicyInfo
 } from '../../models/application-management/application-management.models';
 
 interface HistoryPoint {
@@ -52,6 +56,14 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   /** Services de l'app — filtre workload (annexe §5). */
   @Input() appServices: AppServiceModel[] = [];
 
+  /**
+   * Navigation vers la section Alertes, filtrée sur un workload précis — évite de devoir
+   * recopier soi-même le nom du workload Degraded dans la recherche d'Alertes (retour
+   * utilisateur du 18 août 2026 : « y a un seul moyen pour voir ce qui se passe, dans les
+   * alertes » — pas de lien direct depuis Workloads).
+   */
+  @Output() navigateSection = new EventEmitter<{ section: string; q?: string }>();
+
   @ViewChild('cpuTimeCanvas') cpuTimeCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('memTimeCanvas') memTimeCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('netTimeCanvas') netTimeCanvas?: ElementRef<HTMLCanvasElement>;
@@ -72,6 +84,14 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   filter = '';
   /** Filtre par nom de service (match workload). */
   serviceFilter = '';
+  /**
+   * Filtre nœud pour les cartes « Capacité nœud » : 'app' (défaut, le/les nœud(s) qui hébergent
+   * les pods de CETTE appli), 'all' (agrégat cluster complet), ou un nom de nœud précis. Par
+   * défaut sur 'app' — un utilisateur qui regarde le monitoring de son appli veut voir la
+   * capacité du nœud qui la fait tourner, pas un chiffre cluster-entier sans contexte (retour
+   * utilisateur du 18 août 2026 : cluster passé de 1 à 2 nœuds, confusion sur "quel nœud ?").
+   */
+  nodeFilter = 'app';
   selectedPod: string | null = null;
   selectedPodWorkload: string | null = null;
   logs = '';
@@ -317,6 +337,28 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     return list.filter(w => (w.name || '').toLowerCase().includes(sf));
   }
 
+  /**
+   * Pods manquants (desired - ready) sur les workloads visibles — un pod rejeté par le quota
+   * namespace ou faute de capacité nœud n'existe jamais comme objet K8s, donc l'onglet Pods ne
+   * peut afficher QUE ce qui existe (tous "Ready") : l'écart n'est visible que dans Workloads
+   * (badge Degraded) et les Alertes. Indicateur ajouté directement ici pour ne pas obliger à
+   * recouper les deux onglets (audit-deploiement.md §8, retour utilisateur du 18 août 2026).
+   */
+  get missingPodsCount(): number {
+    return this.workloads.reduce((sum, w) => sum + Math.max(0, (w.desired || 0) - (w.ready || 0)), 0);
+  }
+
+  get degradedWorkloadNames(): string {
+    return this.workloads
+      .filter(w => (w.desired || 0) > (w.ready || 0))
+      .map(w => w.name)
+      .join(', ');
+  }
+
+  get firstDegradedWorkloadName(): string {
+    return this.workloads.find(w => (w.desired || 0) > (w.ready || 0))?.name || '';
+  }
+
   get services(): MonitoringServiceInfo[] {
     return this.data?.services || [];
   }
@@ -359,6 +401,96 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   get quotaMemActualPct(): number {
     const p = this.quota?.pctActualVsHard?.memory;
     return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  /** Isolation réseau du namespace — active par défaut au déploiement (AppK8sManifestService), relue ici pour la vérifier après coup. */
+  get networkPolicy(): NetworkPolicyInfo | null {
+    return this.data?.networkPolicy || null;
+  }
+
+  /**
+   * Capacité réelle du nœud K8s (allocatable - déjà utilisé par TOUS les namespaces) — jusqu'ici
+   * visible uniquement dans la modale Déployer, jamais en dehors. Ajouté ici pour consulter ces
+   * chiffres sans devoir ouvrir la modale (retour utilisateur du 18 août 2026).
+   */
+  get clusterCapacity(): ClusterCapacityInfo | null {
+    return this.data?.clusterCapacity || null;
+  }
+
+  /** Noms distincts des nœuds qui hébergent au moins un pod de cette appli (depuis la liste Pods). */
+  get appNodeNames(): string[] {
+    const names = new Set<string>();
+    for (const p of this.data?.pods || []) {
+      if (p.node) names.add(p.node);
+    }
+    return [...names];
+  }
+
+  /**
+   * Capacité affichée dans les cartes « Capacité nœud », selon le filtre sélectionné : l'agrégat
+   * cluster ('all') ou la somme des nœuds de cette appli ('app', défaut — le seul autre choix
+   * proposé à l'utilisateur, pas de sélection d'un nœud précis : trop de détail hors-sujet pour
+   * quelqu'un qui regarde le monitoring de SON appli, cf. retour utilisateur du 18 août 2026).
+   * Recalculé depuis le détail par nœud, jamais depuis l'agrégat cluster qui peut être trompeur
+   * dès qu'il y a plus d'un nœud.
+   */
+  get selectedNodeCapacity(): {
+    allocCpu: number; usedCpu: number; availCpu: number;
+    allocMem: number; usedMem: number; availMem: number;
+    allocDisk: number; usedDisk: number; availDisk: number;
+    label: string;
+  } | null {
+    const c = this.clusterCapacity;
+    if (!c?.enabled) return null;
+
+    if (this.nodeFilter === 'all') {
+      return {
+        allocCpu: c.allocatableCpuCores || 0, usedCpu: c.usedCpuCores || 0, availCpu: c.availableCpuCores || 0,
+        allocMem: c.allocatableMemoryBytes || 0, usedMem: c.usedMemoryBytes || 0, availMem: c.availableMemoryBytes || 0,
+        allocDisk: c.allocatableDiskBytes || 0, usedDisk: c.usedDiskBytes || 0, availDisk: c.availableDiskBytes || 0,
+        label: 'Cluster complet (' + (c.nodeCount || (c.nodes?.length ?? 0)) + ' nœuds)'
+      };
+    }
+
+    const nodes = c.nodes || [];
+    const targetNames = this.appNodeNames;
+
+    if (!targetNames.length) {
+      // App pas encore planifiée / nœud inconnu → pas de repli silencieux sur l'agrégat trompeur.
+      return null;
+    }
+    const selected = nodes.filter(n => targetNames.includes(n.name));
+    const sum = selected.reduce((acc, n) => ({
+      allocCpu: acc.allocCpu + n.allocatableCpuCores,
+      usedCpu: acc.usedCpu + n.usedCpuCores,
+      availCpu: acc.availCpu + n.availableCpuCores,
+      allocMem: acc.allocMem + n.allocatableMemoryBytes,
+      usedMem: acc.usedMem + n.usedMemoryBytes,
+      availMem: acc.availMem + n.availableMemoryBytes,
+      allocDisk: acc.allocDisk + (n.allocatableDiskBytes || 0),
+      usedDisk: acc.usedDisk + (n.usedDiskBytes || 0),
+      availDisk: acc.availDisk + (n.availableDiskBytes || 0)
+    }), { allocCpu: 0, usedCpu: 0, availCpu: 0, allocMem: 0, usedMem: 0, availMem: 0, allocDisk: 0, usedDisk: 0, availDisk: 0 });
+    const label = selected.length > 1 ? selected.map(n => n.name).join(' + ') : (selected[0]?.name || 'Nœud de l’app');
+    return { ...sum, label };
+  }
+
+  get clusterCpuUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocCpu) return 0;
+    return Math.min(100, Math.round((s.usedCpu / s.allocCpu) * 100));
+  }
+
+  get clusterMemUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocMem) return 0;
+    return Math.min(100, Math.round((s.usedMem / s.allocMem) * 100));
+  }
+
+  get clusterDiskUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocDisk) return 0;
+    return Math.min(100, Math.round((s.usedDisk / s.allocDisk) * 100));
   }
 
   formatQuotaCpu(cores: number | null | undefined): string {

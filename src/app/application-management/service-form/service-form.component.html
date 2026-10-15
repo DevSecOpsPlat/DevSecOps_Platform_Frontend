@@ -110,6 +110,18 @@
     </div>
   </div>
 
+  <div class="am-field">
+    <label class="am-checkbox-row">
+      <input type="checkbox" formControlName="hardenedSecurityContext" />
+      <span>Durcissement conteneur (runAsNonRoot + lecture seule du système de fichiers)</span>
+    </label>
+    <span class="am-hint">
+      Désactivé par défaut. À activer seulement si l'image de ce service supporte de tourner en
+      utilisateur non-root et d'écrire uniquement dans <code>/tmp</code> — sinon le conteneur
+      risque de ne plus démarrer.
+    </span>
+  </div>
+
   <!-- Variables d'environnement -->
   <div class="am-field">
     <div class="am-section-head" style="margin-bottom:.5rem;">

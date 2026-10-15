@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
@@ -13,6 +13,8 @@ import {
   DeploymentMonitoringResponse,
   DeploymentMonitorAlert,
   DeploymentAlertsResponse,
+  AppAlertsHistoryResponse,
+  MachineTimeUsage,
   DeploymentPodsResponse,
   MetricsHistoryResponse,
   EnvVar,
@@ -106,6 +108,19 @@ export class ApplicationManagementService {
     return this.http.put<AppServiceModel>(`${API}/${appId}/services/${serviceId}`, body, { headers: this.headers() });
   }
 
+  /**
+   * Aperçu ressources (quota namespace + capacité nœud, état réel du cluster) avant d'enregistrer
+   * l'édition d'un service déjà déployé — même garde-fou que la modale Déployer, pour ce chemin
+   * qui l'a jusqu'ici contourné (audit-deploiement.md §8).
+   */
+  previewServiceResourceChange(appId: string, serviceId: string, body: AppServiceModel): Observable<DeployPreview> {
+    return this.http.post<DeployPreview>(
+      `${API}/${appId}/services/${serviceId}/resource-preview`,
+      body,
+      { headers: this.headers() }
+    );
+  }
+
   deleteService(appId: string, serviceId: string): Observable<ClusterPruneResult> {
     return this.http.delete<ClusterPruneResult>(`${API}/${appId}/services/${serviceId}`, { headers: this.headers() });
   }
@@ -181,6 +196,11 @@ export class ApplicationManagementService {
     return this.http.get<AppDeployment>(`${API}/${appId}/deployments/${deploymentId}`, { headers: this.headers() });
   }
 
+  /** Temps-machine cumulé (approximatif) — audit-deploiement.md, chantier #10. */
+  getMachineTime(appId: string): Observable<MachineTimeUsage> {
+    return this.http.get<MachineTimeUsage>(`${API}/${appId}/machine-time`, { headers: this.headers() });
+  }
+
   teardownDeployment(appId: string, deploymentId: string): Observable<AppDeployment> {
     return this.http.delete<AppDeployment>(`${API}/${appId}/deployments/${deploymentId}`, { headers: this.headers() });
   }
@@ -217,6 +237,21 @@ export class ApplicationManagementService {
     return this.http.get<DeploymentAlertsResponse>(
       `${API}/${appId}/deployments/${deploymentId}/alerts`,
       { headers: this.headers() }
+    );
+  }
+
+  /** Historique des alertes de l'app, tous environnements, filtrable par date (ISO) et namespace. */
+  getAppAlertsHistory(
+    appId: string,
+    opts?: { from?: string | null; to?: string | null; namespace?: string | null }
+  ): Observable<AppAlertsHistoryResponse> {
+    let params = new HttpParams();
+    if (opts?.from) params = params.set('from', opts.from);
+    if (opts?.to) params = params.set('to', opts.to);
+    if (opts?.namespace) params = params.set('namespace', opts.namespace);
+    return this.http.get<AppAlertsHistoryResponse>(
+      `${API}/${appId}/alerts/history`,
+      { headers: this.headers(), params }
     );
   }
 
@@ -281,11 +316,24 @@ export class ApplicationManagementService {
     );
   }
 
-  /** Posture sécurité app = dernier lot COMPLETE (verdict D5 + rollup DefectDojo). */
-  getSecurityPosture(appId: string): Observable<SecurityPostureResponse> {
+  /** Post-déploiement, Objectif 3 : relance manuelle du smoke test, sans restriction. */
+  rerunSmokeTest(appId: string, serviceId: string): Observable<{ allOk: boolean; checkedAt: string; results: Record<string, { ok: boolean; statusCode?: number | null; message?: string; probedUrl?: string }> }> {
+    return this.http.post<any>(
+      `${API}/${appId}/services/${serviceId}/smoke-test/rerun`,
+      {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Posture sécurité app = dernier lot COMPLETE (verdict D5 + rollup DefectDojo), ou un lot précis via batchId. */
+  getSecurityPosture(appId: string, batchId?: string): Observable<SecurityPostureResponse> {
+    let params = new HttpParams();
+    if (batchId) {
+      params = params.set('batchId', batchId);
+    }
     return this.http.get<SecurityPostureResponse>(
       `${API}/${appId}/security-posture`,
-      { headers: this.headers() }
+      { headers: this.headers(), params }
     );
   }
 

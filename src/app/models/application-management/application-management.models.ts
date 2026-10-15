@@ -50,6 +50,8 @@ export interface AppServiceModel {
   cpuLimit?: string;
   memoryRequest?: string;
   memoryLimit?: string;
+  /** Durcissement conteneur optionnel (runAsNonRoot + readOnlyRootFilesystem) — désactivé par défaut. */
+  hardenedSecurityContext?: boolean;
   envVars?: EnvVar[];
   createdAt?: string;
   updatedAt?: string;
@@ -158,6 +160,9 @@ export interface DeploymentMonitorAlert {
   status?: string;
   createdAt?: string;
   id?: string;
+  /** Namespace d'origine — présent sur l'historique cross-environnements. */
+  namespace?: string | null;
+  deploymentId?: string | null;
 }
 
 export interface DeploymentAlertsResponse {
@@ -170,6 +175,30 @@ export interface DeploymentAlertsResponse {
   appUrl?: string | null;
   events?: MonitoringEvent[];
   liveError?: string;
+}
+
+/** Temps-machine cumulé (approximatif) — proxy de coût, pas une facturation exacte. */
+export interface MachineTimeUsage {
+  totalHours: number;
+  deploymentCount: number;
+  byDeployment: Array<{
+    deploymentId: string;
+    namespace: string;
+    status: string;
+    readyAt: string;
+    stillRunning: boolean;
+    hours: number;
+  }>;
+}
+
+/** Historique des alertes appli, tous environnements, filtré par date/namespace. */
+export interface AppAlertsHistoryResponse {
+  history: DeploymentMonitorAlert[];
+  historyCount: number;
+  /** Namespaces distincts trouvés dans la plage — alimente le filtre environnement. */
+  namespaces: string[];
+  from?: string | null;
+  to?: string | null;
 }
 
 export interface MonitoringWorkload {
@@ -213,6 +242,8 @@ export interface DeploymentMonitoringResponse {
   events?: MonitoringEvent[];
   alerts: DeploymentMonitorAlert[];
   quota?: DeploymentQuotaInfo;
+  networkPolicy?: NetworkPolicyInfo;
+  clusterCapacity?: ClusterCapacityInfo;
   summary?: {
     totalPods: number;
     readyPods: number;
@@ -255,6 +286,67 @@ export interface DeploymentQuotaInfo {
   usedMemoryBytes?: number | null;
   usage?: { cpuCores?: number | null; memoryBytes?: number | null };
   message?: string;
+}
+
+/** Isolation réseau du namespace (NetworkPolicy "default-isolation") — active par défaut au déploiement, relue ici pour la vérifier après coup plutôt que de la supposer. */
+export interface NetworkPolicyInfo {
+  active: boolean;
+  name?: string;
+  policyTypes?: string[];
+  ingressRuleCount?: number;
+  message?: string;
+}
+
+/** Capacité réelle du/des nœud(s) K8s — allocatable moins l'utilisation de tous les namespaces. */
+export interface ClusterCapacityInfo {
+  enabled: boolean;
+  allocatableCpuCores?: number;
+  allocatableMemoryBytes?: number;
+  usedCpuCores?: number;
+  usedMemoryBytes?: number;
+  /** Agrégat (somme de tous les nœuds) — informatif, pas fiable pour "est-ce que ça va tenir ?". */
+  availableCpuCores?: number;
+  availableMemoryBytes?: number;
+  /** Le nœud le plus disponible — c'est ce chiffre qui répond à "un pod peut-il être planifié ?". */
+  maxAvailableCpuCores?: number;
+  maxAvailableMemoryBytes?: number;
+  /** Disque réel du nœud (équivalent df), lu via le nœud kubelet — pas une valeur de quota. */
+  allocatableDiskBytes?: number;
+  usedDiskBytes?: number;
+  availableDiskBytes?: number;
+  maxAvailableDiskBytes?: number;
+  nodeCount?: number;
+  nodes?: NodeCapacityInfo[];
+  message?: string;
+}
+
+export interface NodeCapacityInfo {
+  name: string;
+  ready: boolean;
+  /** Conditions K8s au-delà de Ready — cause fréquente de scheduling bloqué (ex. §8 du 18 août 2026). */
+  diskPressure?: boolean;
+  memoryPressure?: boolean;
+  pidPressure?: boolean;
+  allocatableCpuCores: number;
+  allocatableMemoryBytes: number;
+  /** Somme des requests planifiées (réservé) — pas l'usage réel, voir real*UsageCores/Bytes. */
+  usedCpuCores: number;
+  usedMemoryBytes: number;
+  availableCpuCores: number;
+  availableMemoryBytes: number;
+  /** Usage RÉEL (kubelet /stats/summary) — ce qui tourne vraiment, distinct des requests ci-dessus. */
+  realCpuUsageCores?: number;
+  realMemoryUsageBytes?: number;
+  allocatableDiskBytes?: number;
+  usedDiskBytes?: number;
+  availableDiskBytes?: number;
+  podCount?: number;
+  podCapacity?: number;
+  role?: 'control-plane' | 'worker';
+  createdAt?: string;
+  kubeletVersion?: string;
+  osImage?: string;
+  architecture?: string;
 }
 
 export interface MetricsHistoryPoint {
@@ -327,6 +419,19 @@ export interface DeployPreview {
   selectedServiceCount: number;
   selectedDatabaseCount: number;
   resolvedServiceIds: string[];
+  /** Empreinte ressources demandée vs quota namespace. */
+  quotaEnabled?: boolean;
+  requestedCpuMillicores?: number;
+  requestedMemoryBytes?: number;
+  quotaCpuMillicores?: number;
+  quotaMemoryBytes?: number;
+
+  /** Capacité réelle du nœud K8s (allocatable - déjà utilisé par tous les namespaces). */
+  nodeCapacityEnabled?: boolean;
+  nodeAvailableCpuMillicores?: number;
+  nodeAllocatableCpuMillicores?: number;
+  nodeAvailableMemoryBytes?: number;
+  nodeAllocatableMemoryBytes?: number;
 }
 
 /** Stats légères affichées sur une carte service. */
@@ -440,6 +545,8 @@ export interface ScanBatchServiceState {
   status?: string;
   finished?: boolean;
   qualityGateJson?: Record<string, unknown>;
+  /** Checklist déjà calculée côté backend -- ne plus la réimplémenter côté frontend. */
+  qualityGates?: QualityGateItem[];
 }
 
 export interface ScanBatchState {
@@ -458,4 +565,6 @@ export interface ScanBatchState {
   finishedAt?: string;
   services?: ScanBatchServiceState[];
   verdictPayload?: Record<string, unknown>;
+  /** Checklist app-level déjà calculée côté backend (voir ManagedAppScanService.extractQualityGates). */
+  qualityGates?: QualityGateItem[];
 }

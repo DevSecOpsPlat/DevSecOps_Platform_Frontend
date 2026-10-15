@@ -1,0 +1,238 @@
+<div class="admin-route-page admin-monitoring-root">
+  <header class="page-head">
+    <div>
+      <p class="page-kicker">Infra (lecture)</p>
+      <h1 class="page-title">Monitoring cluster</h1>
+      <p class="page-lead">
+        Capacité réelle de tous les nœuds, et un résumé de tous les environnements <strong>RUNNING</strong>
+        de tous les utilisateurs — la flèche ouvre le dashboard complet de l'environnement, juste en dessous.
+      </p>
+    </div>
+    <button type="button" class="btn-refresh" (click)="load()" [disabled]="loading">Actualiser</button>
+  </header>
+
+  <div *ngIf="loading" class="state state-load">
+    <span class="spinner" aria-hidden="true"></span>
+    Chargement…
+  </div>
+  <div *ngIf="error" class="state state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <!-- Nœuds -->
+    <section class="panel" aria-label="Nœuds du cluster">
+      <div class="panel-head">
+        <h2>Nœuds ({{ nodes?.nodeCount || 0 }})</h2>
+        <select class="user-filter" [(ngModel)]="selectedNode" (ngModelChange)="onNodeFilterChange()" *ngIf="nodes?.enabled" aria-label="Filtrer par nœud">
+          <option value="all">Cluster complet</option>
+          <option *ngFor="let n of nodes!.nodes" [value]="n.name">{{ n.name }}</option>
+        </select>
+      </div>
+
+      <!-- Bandeau KPI — cluster complet, ou juste le nœud sélectionné -->
+      <div class="kpi-strip" *ngIf="nodes?.enabled">
+        <div class="kpi-card">
+          <span class="kpi-label">Nœuds Ready</span>
+          <span class="kpi-value">{{ readyNodesLabel }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">CPU réel</span>
+          <span class="kpi-value">{{ formatCores(clusterRealCpuCores) }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Mémoire réelle</span>
+          <span class="kpi-value">{{ formatBytes(clusterRealMemBytes) }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Pods</span>
+          <span class="kpi-value">{{ clusterPodsLabel }}</span>
+        </div>
+      </div>
+
+      <!-- 4 jauges : agrégées en "Cluster complet", ou sur le nœud sélectionné -->
+      <div class="gauge-grid" *ngIf="nodes?.enabled">
+        <div class="gauge-card" *ngFor="let g of gaugeItems; trackBy: trackByGaugeKey">
+          <div class="gauge-canvas-wrap"><canvas #gaugeCanvas></canvas></div>
+          <span class="gauge-node">{{ g.nodeName }}</span>
+          <span class="gauge-label">{{ g.label }}</span>
+        </div>
+      </div>
+
+      <div class="admin-table-wrap node-table-wrap" *ngIf="nodes?.enabled; else nodesUnavailable">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Nœud</th>
+              <th>État</th>
+              <th>Pods</th>
+              <th>CPU</th>
+              <th>Mémoire</th>
+              <th>Disque</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let n of displayNodes">
+              <td>
+                <span class="admin-cell-title">{{ n.name }}</span>
+                <span class="admin-cell-sub">
+                  {{ n.role === 'control-plane' ? 'Control-plane' : 'Worker' }} · {{ formatAge(n.createdAt) }}
+                  <span *ngIf="n.kubeletVersion"> · {{ n.kubeletVersion }}</span>
+                </span>
+                <span class="admin-cell-sub" *ngIf="n.osImage">{{ n.osImage }}<span *ngIf="n.architecture"> ({{ n.architecture }})</span></span>
+              </td>
+              <td>
+                <span class="admin-badge-status" [class.am-bad]="!n.ready">{{ n.ready ? 'Ready' : 'NotReady' }}</span>
+                <div class="pressure-badges" *ngIf="hasPressure(n)">
+                  <span class="admin-badge-status am-bad" *ngFor="let p of pressureLabels(n)">{{ p }}</span>
+                </div>
+              </td>
+              <td class="cell-metric">
+                <span class="admin-cell-mono">{{ n.podCount || 0 }} / {{ n.podCapacity || '—' }}</span>
+                <div class="mini-meter"><div class="mini-meter-fill" [class]="'sev-' + severityClass(nodePodsPct(n))" [style.width.%]="nodePodsPct(n)"></div></div>
+              </td>
+              <td class="cell-metric">
+                <span class="admin-cell-mono">{{ formatCores(n.usedCpuCores) }} / {{ formatCores(n.allocatableCpuCores) }} <span class="metric-tag">résa</span></span>
+                <div class="mini-meter"><div class="mini-meter-fill" [class]="'sev-' + severityClass(nodeCpuPct(n))" [style.width.%]="nodeCpuPct(n)"></div></div>
+                <span class="admin-cell-sub metric-real">réel {{ formatCores(n.realCpuUsageCores) }} ({{ nodeRealCpuPct(n) }}%)</span>
+              </td>
+              <td class="cell-metric">
+                <span class="admin-cell-mono">{{ formatBytes(n.usedMemoryBytes) }} / {{ formatBytes(n.allocatableMemoryBytes) }} <span class="metric-tag">résa</span></span>
+                <div class="mini-meter"><div class="mini-meter-fill" [class]="'sev-' + severityClass(nodeMemPct(n))" [style.width.%]="nodeMemPct(n)"></div></div>
+                <span class="admin-cell-sub metric-real">réel {{ formatBytes(n.realMemoryUsageBytes) }} ({{ nodeRealMemPct(n) }}%)</span>
+              </td>
+              <td class="cell-metric">
+                <ng-container *ngIf="(n.allocatableDiskBytes || 0) > 0; else diskUnknown">
+                  <span class="admin-cell-mono">{{ formatBytes(n.usedDiskBytes) }} / {{ formatBytes(n.allocatableDiskBytes) }}</span>
+                  <div class="mini-meter"><div class="mini-meter-fill" [class]="'sev-' + severityClass(nodeDiskPct(n))" [style.width.%]="nodeDiskPct(n)"></div></div>
+                </ng-container>
+                <ng-template #diskUnknown><span class="admin-cell-sub">— (redémarrage kubelet requis après un redimensionnement)</span></ng-template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #nodesUnavailable>
+        <p class="empty">Capacité cluster indisponible{{ nodes?.message ? ' — ' + nodes?.message : '' }}.</p>
+      </ng-template>
+
+      <!-- Capacité disque par nœud : utilisé vs libre -->
+      <div class="md-section" *ngIf="nodes?.enabled">
+        <div class="md-section-head">
+          <h3 class="md-section-title" style="margin:0;">Capacité disque par nœud</h3>
+        </div>
+        <div class="md-chart-card capacity-bar-card">
+          <div class="md-chart-wrap"><canvas #capacityBarCanvas></canvas></div>
+        </div>
+      </div>
+
+      <!-- Métriques nœuds : mêmes charts que le dashboard appli, une ligne par nœud -->
+      <div class="md-section" *ngIf="nodes?.enabled">
+        <div class="md-section-head">
+          <h3 class="md-section-title" style="margin:0;">Métriques nœuds</h3>
+        </div>
+        <p class="md-section-hint">
+          Usage réel (kubelet), pas les requests planifiées · rafraîchi toutes les 30s · fenêtre ~10 min
+          <span *ngIf="!hasHistory"> · collecte en cours…</span>
+        </p>
+        <div class="md-charts-2">
+          <div class="md-chart-card">
+            <h4 class="md-chart-title">CPU réel (%)</h4>
+            <div class="md-chart-wrap"><canvas #nodeCpuCanvas></canvas></div>
+          </div>
+          <div class="md-chart-card">
+            <h4 class="md-chart-title">Mémoire réelle (%)</h4>
+            <div class="md-chart-wrap"><canvas #nodeMemCanvas></canvas></div>
+          </div>
+        </div>
+        <div class="md-charts-2">
+          <div class="md-chart-card">
+            <h4 class="md-chart-title">Disque (%)</h4>
+            <div class="md-chart-wrap"><canvas #nodeDiskCanvas></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Environnements -->
+    <section class="panel" aria-label="Environnements">
+      <div class="panel-head">
+        <h2>
+          Environnements ({{ filteredNamespaces.length }}{{ selectedNode !== 'all' ? ' / ' + namespaces.length : '' }})
+          <span class="admin-cell-sub node-filter-hint" *ngIf="selectedNode !== 'all'">— filtré sur {{ selectedNode }}</span>
+        </h2>
+        <span class="admin-badge-status am-bad" *ngIf="orphanedCount > 0">{{ orphanedCount }} orphelin(s)</span>
+      </div>
+      <div class="ns-filters">
+        <select class="user-filter" [(ngModel)]="userFilter" aria-label="Filtrer par utilisateur">
+          <option value="">Tous les utilisateurs</option>
+          <option *ngFor="let u of owners" [value]="u">{{ u }}</option>
+        </select>
+        <input
+          type="search"
+          class="search"
+          [(ngModel)]="search"
+          placeholder="Filtrer (namespace, application…)"
+          aria-label="Filtrer les environnements"
+        />
+      </div>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Namespace</th>
+              <th>Pods</th>
+              <th>Alertes</th>
+              <th>Nœud(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let n of filteredNamespaces">
+              <tr (click)="toggleExpand(n)" class="row-clickable" [class.row-expanded]="expandedNamespace === n.namespace">
+                <td>
+                  <span class="row-chevron" [class.row-chevron--open]="expandedNamespace === n.namespace" aria-hidden="true">›</span>
+                </td>
+                <td>
+                  <span class="admin-cell-title">{{ n.appName || '—' }}</span>
+                  <span class="admin-cell-sub" *ngIf="n.orphaned">Orphelin — ne fait plus partie du dernier déploiement de cette appli</span>
+                </td>
+                <td><span class="admin-cell-title">{{ n.ownerUsername || '—' }}</span></td>
+                <td><span class="admin-cell-mono">{{ n.namespace }}</span></td>
+                <td class="cell-metric">
+                  <span class="admin-cell-mono">{{ n.podsReady }}/{{ n.podsTotal }}</span>
+                  <div class="mini-meter"><div class="mini-meter-fill" [style.width.%]="podsPct(n)"></div></div>
+                </td>
+                <td>
+                  <span class="admin-badge-status" [class.am-bad]="n.warningEventCount > 0">{{ n.warningEventCount }}</span>
+                </td>
+                <td><span class="admin-cell-sub">{{ (n.nodes || []).join(', ') || '—' }}</span></td>
+              </tr>
+              <tr *ngIf="expandedNamespace === n.namespace" class="row-expand-panel">
+                <td colspan="7">
+                  <div class="expand-wrap">
+                    <div *ngIf="expandLoading" class="state state-load">
+                      <span class="spinner" aria-hidden="true"></span>
+                      Chargement du dashboard…
+                    </div>
+                    <div *ngIf="expandError" class="state state-err">{{ expandError }}</div>
+                    <app-monitoring-dashboard
+                      *ngIf="!expandLoading && !expandError && expandedDeployment"
+                      [appId]="n.appId!"
+                      [deployment]="expandedDeployment!"
+                      [appName]="n.appName || ''"
+                      [appServices]="expandedAppServices">
+                    </app-monitoring-dashboard>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!filteredNamespaces.length">
+              <td colspan="7" class="empty">Aucun environnement RUNNING{{ search || userFilter ? ' pour ce filtre' : '' }}.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+</div>

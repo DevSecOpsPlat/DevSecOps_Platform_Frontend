@@ -1,0 +1,27 @@
+<div class="ads-timeline" *ngIf="events.length">
+  <div
+    class="ads-t-item"
+    *ngFor="let e of events"
+    [ngClass]="severityClass(e)"
+  >
+    <div class="ads-t-dot"></div>
+    <div class="ads-t-row" [class.is-link]="isClickable(e)" (click)="isClickable(e) && open(e)">
+      <div class="ads-t-main">
+        <span aria-hidden="true">{{ icon(e) }}</span>
+        <b>{{ label(e) }}</b>
+        <ng-container *ngIf="e.message"> — {{ e.message }}</ng-container>
+        <div class="ads-t-ctx">
+          <span class="ads-t-chip" *ngIf="e.applicationName">{{ e.applicationName }}</span>
+          <span class="ads-t-chip mono" *ngIf="e.environmentName">{{ e.environmentName }}</span>
+          <span class="ads-t-chip" *ngIf="e.actorUsername">{{ e.actorUsername }}</span>
+        </div>
+      </div>
+      <div class="ads-t-time">{{ toDate(e.occurredAt) | timeAgo }}</div>
+    </div>
+  </div>
+</div>
+
+<p class="ads-empty" *ngIf="!events.length">
+  <span class="ads-empty-icon" aria-hidden="true">🕊️</span>
+  <span class="ads-empty-sub">{{ emptyText }}</span>
+</p>

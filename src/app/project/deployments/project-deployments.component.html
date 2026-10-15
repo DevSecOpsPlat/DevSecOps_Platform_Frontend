@@ -1,38 +1,20 @@
 <div class="deployments-container">
   <!-- Header avec titre et stats -->
-  <header class="deployments-header">
-    <div class="header-title">
-      <h1>
-        <span class="back-link" (click)="goBackToProject()">←</span>
-        Environnements de test
-        <span *ngIf="appName" class="app-name">• {{ appName }}</span>
-      </h1>
-      <p class="subtitle">Environnements éphémères créés pour les tests</p>
-    </div>
-    
-    <div class="header-stats">
-      <div class="stat-item">
-        <span class="stat-value">{{ totalCount }}</span>
-        <span class="stat-label">Total</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-value active">{{ activeCount }}</span>
-        <span class="stat-label">En ligne</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-value in-progress">{{ inProgressCount }}</span>
-        <span class="stat-label">En cours</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-value failed">{{ failedCount }}</span>
-        <span class="stat-label">Échec</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-value ended">{{ endedCount }}</span>
-        <span class="stat-label">Terminés</span>
-      </div>
-    </div>
-  </header>
+  <app-page-hero
+      eyebrow="Déploiement · service"
+      [title]="appName ? ('Environnements de test · ' + appName) : 'Environnements de test'"
+      description="Environnements éphémères créés pour les tests">
+    <ng-container hero-back>
+      <button type="button" (click)="goBackToProject()">← Retour</button>
+    </ng-container>
+    <ng-container hero-stats>
+      <span class="ph-stat"><strong>{{ totalCount }}</strong> total</span>
+      <span class="ph-stat ph-stat-ok"><strong>{{ activeCount }}</strong> en ligne</span>
+      <span class="ph-stat"><strong>{{ inProgressCount }}</strong> en cours</span>
+      <span class="ph-stat ph-stat-fail"><strong>{{ failedCount }}</strong> échec</span>
+      <span class="ph-stat"><strong>{{ endedCount }}</strong> terminés</span>
+    </ng-container>
+  </app-page-hero>
 
   <!-- Barre de filtres -->
   <div class="filters-bar">

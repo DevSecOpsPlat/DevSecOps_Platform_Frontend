@@ -1,4 +1,3 @@
-import Chart from 'chart.js/auto';
 import {
   DefectDojoDashboardCharts,
   DefectDojoScanSnapshot,
@@ -51,99 +50,7 @@ export function openSeverityChartSubtitle(
   }
 }
 
-export function renderOpenSeverityEvolutionChart(
-  canvas: HTMLCanvasElement,
-  charts: DefectDojoDashboardCharts | null | undefined,
-  granularity: OpenSeverityGranularity,
-  severities: string[] = DEFAULT_SEVERITIES,
-  existingChart?: Chart
-): Chart | undefined {
-  const snapshots = charts?.scanSnapshots ?? [];
-  const dayToDay = charts?.detailedMetrics?.openDayToDayBySeverity;
-  const hasData = snapshots.length > 0 || (dayToDay?.length ?? 0) > 0;
-  if (!hasData) return undefined;
-
-  const wrap = canvas.parentElement;
-  if (!wrap || wrap.clientWidth === 0) return undefined;
-
-  existingChart?.destroy();
-  Chart.getChart(canvas)?.destroy();
-
-  canvas.width = wrap.clientWidth;
-  canvas.height = 280;
-
-  const sorted = resolveSeverityChartSnapshots(snapshots, charts, granularity, severities);
-  const labels = sorted.map(s => formatSeverityChartLabel(s, granularity));
-  const maxTicks = granularity === 'hour' ? 24 : granularity === 'day' ? 18 : 10;
-  const yMax = Math.max(
-    ...sorted.flatMap(s => severities.map(sev => s.bySeverity?.[sev] || 0)),
-    1
-  );
-  const yStep = niceChartStepSize(yMax);
-
-  return new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: severities.map(sev => ({
-        label: sev,
-        data: sorted.map(s => s.bySeverity?.[sev] || 0),
-        borderColor: OPEN_SEV_LINE_COLORS[sev] ?? '#64748b',
-        backgroundColor: OPEN_SEV_LINE_COLORS[sev] ?? '#64748b',
-        tension: 0.1,
-        pointRadius: granularity === 'day' ? 4 : 5,
-        pointHoverRadius: 7,
-        borderWidth: 2,
-        fill: false
-      }))
-    },
-    options: {
-      responsive: false,
-      maintainAspectRatio: false,
-      animation: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          position: 'top',
-          align: 'start',
-          labels: { boxWidth: 12, padding: 12, font: { size: 11 } }
-        },
-        tooltip: {
-          callbacks: {
-            title: items => {
-              const idx = items[0]?.dataIndex ?? 0;
-              const snap = sorted[idx];
-              if (!snap) return '';
-              if (granularity === 'day') {
-                const day = snapshotDayKey(snap);
-                return day ? formatDayLabel(day) : (snap.label || '');
-              }
-              return formatSeverityChartLabel(snap, granularity);
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            maxRotation: granularity === 'day' ? 0 : 45,
-            autoSkip: true,
-            maxTicksLimit: maxTicks,
-            font: { size: 10 }
-          }
-        },
-        y: {
-          beginAtZero: true,
-          ticks: { stepSize: yStep, font: { size: 10 } },
-          grid: { color: 'rgba(15,23,42,0.08)' }
-        }
-      }
-    }
-  });
-}
-
-function resolveSeverityChartSnapshots(
+export function resolveSeverityChartSnapshots(
   snapshots: DefectDojoScanSnapshot[],
   charts: DefectDojoDashboardCharts | null | undefined,
   granularity: OpenSeverityGranularity,

@@ -2,22 +2,11 @@
 <div class="pipelines-container">
 
   <!-- HEADER -->
-  <header class="pipelines-header">
-    <div class="header-left">
-      <div class="page-eyebrow">CI/CD</div>
-      <h1 class="page-title">
-        <span class="title-icon">🚀</span>
-        {{ getPageTitle() }}
-      </h1>
-      <p class="page-subtitle">{{ getSubtitle() }}</p>
-    </div>
-    <div class="header-right">
-      <div class="stats-badge">
-        <span class="stat-value">{{ filtered.length }}</span>
-        <span class="stat-label">pipelines</span>
-      </div>
-    </div>
-  </header>
+  <app-page-hero eyebrow="CI/CD" [title]="'🚀 ' + getPageTitle()" [description]="getSubtitle()">
+    <ng-container hero-stats>
+      <span class="ph-stat"><strong>{{ filtered.length }}</strong> pipelines</span>
+    </ng-container>
+  </app-page-hero>
 
   <div class="pipelines-filters" *ngIf="!loading || filtered.length > 0">
     <label class="filter-group">

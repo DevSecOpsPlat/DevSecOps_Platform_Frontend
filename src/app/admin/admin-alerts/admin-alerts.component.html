@@ -123,6 +123,33 @@
     </section>
   </ng-container>
 
+  <!-- Protection des données -->
+  <section class="table-section" *ngIf="dataProtection">
+    <button type="button" class="table-head" style="width:100%;background:none;border:0;cursor:pointer;text-align:left;" (click)="toggleDataProtection()">
+      <h2><i class="fas fa-lock"></i> Protection des données</h2>
+      <span class="table-count">{{ dataProtectionOpen ? 'Masquer' : 'Afficher' }} <i class="fas" [class.fa-chevron-down]="!dataProtectionOpen" [class.fa-chevron-up]="dataProtectionOpen"></i></span>
+    </button>
+    <div *ngIf="dataProtectionOpen" style="padding:1rem 1.25rem;">
+      <h3>En transit</h3>
+      <p>{{ dataProtection.inTransit.protocol }} — {{ dataProtection.inTransit.description }}</p>
+      <p class="muted">HSTS : {{ dataProtection.inTransit.hstsEnabled ? 'actif' : 'inactif' }} · HTTPS imposé : {{ dataProtection.inTransit.requireHttpsEnforced ? 'oui' : 'non' }}</p>
+      <ul>
+        <li *ngFor="let h of dataProtection.inTransit.headers">{{ h }}</li>
+      </ul>
+      <h3>Au repos</h3>
+      <p>{{ dataProtection.atRest.algorithm }} — clé : {{ dataProtection.atRest.keySource }}</p>
+      <p class="muted" *ngIf="!dataProtection.atRest.productionKeyConfigured">⚠ Clé de production non configurée (valeur par défaut, développement uniquement)</p>
+      <ul>
+        <li *ngFor="let f of dataProtection.atRest.encryptedFields">{{ f.label }} ({{ f.table }}.{{ f.column }})</li>
+      </ul>
+      <p class="muted">{{ dataProtection.atRest.databaseNote }}</p>
+      <h3>Jamais persisté</h3>
+      <p class="muted">Codes OTP e-mail : {{ dataProtection.ephemeralSecrets.otpEmailCodes }}</p>
+      <p class="muted">Jeton JWT : {{ dataProtection.ephemeralSecrets.jwtAccessToken }}</p>
+      <p><strong>{{ dataProtection.complianceNote }}</strong></p>
+    </div>
+  </section>
+
   <!-- Panneau détail KPI (clic sur une carte) -->
   <section class="kpi-detail-panel" *ngIf="activeKpiPanel">
     <header class="kpi-detail-head">
@@ -242,12 +269,22 @@
               <button
                 type="button"
                 class="btn-block-ip"
-                *ngIf="alert.ipAddress"
-                [disabled]="isIpBlocked(alert.ipAddress) || blockingIp === alert.ipAddress"
+                *ngIf="alert.ipAddress && !isIpBlocked(alert.ipAddress)"
+                [disabled]="blockingIp === alert.ipAddress"
                 (click)="blockIpFromRow(alert, $event)"
-                title="Bloquer cette IP"
+                title="Bloquer cette IP (60 min)"
               >
                 <i class="fas fa-lock"></i>
+              </button>
+              <button
+                type="button"
+                class="btn-block-ip btn-block-ip--unblock"
+                *ngIf="alert.ipAddress && isIpBlocked(alert.ipAddress)"
+                [disabled]="blockingIp === alert.ipAddress"
+                (click)="unblockIpFromRow(alert, $event)"
+                title="Débloquer cette IP"
+              >
+                <i class="fas fa-unlock"></i>
               </button>
             </td>
             <td>

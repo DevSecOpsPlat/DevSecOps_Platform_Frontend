@@ -1,0 +1,71 @@
+<div class="ads-page" *ngIf="!loading && !error && app">
+  <header class="ads-hero">
+    <p class="ads-breadcrumb"><a [routerLink]="['/admin/applications']">← Applications</a></p>
+    <div class="ads-hero-row">
+      <div>
+        <h1 class="ads-hero-title">
+          {{ app.name }}
+          <span class="ads-app-tag" *ngIf="app.standalone" style="vertical-align:middle;">projet autonome</span>
+        </h1>
+        <p class="ads-hero-lead">{{ ownerUsername }} ({{ ownerEmail }})<ng-container *ngIf="accountStatus !== 'ACTIVE'"> · compte {{ accountStatus | lowercase }}</ng-container></p>
+      </div>
+    </div>
+    <div class="ads-hero-meta">
+      <div><strong>{{ app.services.length }}</strong>service{{ app.services.length > 1 ? 's' : '' }}</div>
+      <div><strong>{{ app.databasesCount }}</strong>base{{ app.databasesCount > 1 ? 's' : '' }} de données</div>
+      <div><strong>{{ activeEnvironmentsCount() }}</strong>environnement{{ activeEnvironmentsCount() > 1 ? 's' : '' }} actif{{ activeEnvironmentsCount() > 1 ? 's' : '' }}</div>
+      <div><strong>{{ app.pipelineCounts?.success || 0 }}/{{ pipelineTotal() }}</strong>pipelines réussis</div>
+    </div>
+  </header>
+
+  <div class="ads-detail-grid">
+    <div>
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">🧩 Services</h3>
+        <div class="ads-svc-line" *ngFor="let s of app.services">
+          <span class="ads-svc-name">{{ s.name }}</span>
+          <span class="ads-svc-role" *ngIf="s.role">{{ s.role }}</span>
+          <span class="ads-status" [ngClass]="statusClass(liveStatus(s.id)?.status)" *ngIf="liveStatus(s.id) as st">{{ st.status }}</span>
+          <span class="ads-svc-res" *ngIf="liveStatus(s.id)?.cpuUsage">{{ liveStatus(s.id)?.cpuUsage }} · {{ liveStatus(s.id)?.memoryUsage }}</span>
+          <span class="ads-svc-res mono" *ngIf="s.gitBranch">{{ s.gitBranch }}</span>
+        </div>
+      </section>
+
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">🌍 Environnements ({{ environments.length }})</h3>
+        <div class="ads-svc-line" *ngFor="let e of environments" style="cursor:pointer;" (click)="openEnvironment(e)">
+          <span class="ads-svc-name">{{ e.environmentName }}</span>
+          <span class="ads-status" [ngClass]="statusClass(e.status)">{{ e.status }}</span>
+          <span class="ads-svc-res mono">{{ e.gitBranch }}</span>
+          <span class="ads-app-row-chev" aria-hidden="true">›</span>
+        </div>
+        <p class="ads-empty" *ngIf="!environments.length">
+          <span class="ads-empty-sub">Aucun environnement pour cette application.</span>
+        </p>
+      </section>
+    </div>
+
+    <div>
+      <section class="ads-panel" *ngIf="previewUrl">
+        <h3 class="ads-panel-title">🔗 Aperçu en direct</h3>
+        <div class="ads-url-chip">🌐 {{ previewRawUrl }}</div>
+        <div class="ads-preview-frame">
+          <iframe [src]="previewUrl" title="Aperçu de l'application"></iframe>
+        </div>
+      </section>
+
+      <section class="ads-panel">
+        <h3 class="ads-panel-title">🕒 Activité récente</h3>
+        <div *ngIf="activityLoading" class="ads-state-load"><span class="ads-spinner"></span></div>
+        <app-admin-activity-timeline
+          *ngIf="!activityLoading"
+          [events]="activity"
+          emptyText="Aucune activité récente pour cette application."
+        ></app-admin-activity-timeline>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="loading" class="ads-page"><div class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div></div>
+<div *ngIf="error" class="ads-page"><div class="ads-state-err">{{ error }}</div></div>

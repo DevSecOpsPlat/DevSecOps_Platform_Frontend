@@ -1,0 +1,253 @@
+/* Reprend à l'identique .ad-hero--identity.ad-hero--runtime (application-detail.component.css)
+   — même dégradé, mêmes rayons, même typo — pour que "Runtime & environnements" et ces pages
+   service partagent un seul langage visuel d'en-tête. */
+:host {
+  --ph-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  display: block;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ph-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  margin: 0 0 1.25rem;
+  padding: 1.5rem 1.6rem 1.4rem;
+  border-radius: 22px;
+  overflow: hidden;
+  color: #f8fbff;
+  background:
+    radial-gradient(1000px 320px at 12% -30%, rgba(243, 108, 33, 0.28), transparent 55%),
+    radial-gradient(800px 280px at 95% 10%, rgba(56, 189, 248, 0.18), transparent 50%),
+    linear-gradient(145deg, #0a1224 0%, #121a33 42%, #1a2744 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 48px -28px rgba(10, 18, 36, 0.75);
+  animation: ph-hero-in 700ms var(--ph-ease) both;
+}
+
+.ph-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 80%);
+  pointer-events: none;
+}
+
+.ph-hero-glow {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  right: -60px;
+  top: -80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(243, 108, 33, 0.22), transparent 68%);
+  pointer-events: none;
+  animation: ph-glow-drift 8s ease-in-out infinite alternate;
+}
+
+.ph-back { position: relative; z-index: 1; }
+.ph-back:empty { display: none; }
+::ng-deep .ph-back > * {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: rgba(186, 230, 253, 0.75);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 0 1.1rem 0;
+  font-family: inherit;
+  transition: color 160ms var(--ph-ease), transform 160ms var(--ph-ease);
+}
+::ng-deep .ph-back > *:hover { color: #fff; transform: translateX(-2px); }
+
+.ph-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.ph-main { min-width: 0; flex: 1; }
+
+.ph-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(253, 186, 116, 0.9);
+}
+
+.ph-title {
+  margin: 0.2rem 0 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: clamp(1.4rem, 2.2vw, 1.85rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.ph-desc {
+  margin: 0.7rem 0 0;
+  max-width: 52ch;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.ph-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Puces d'identité (badge de type, statut, branche…) juste sous le titre — vide par défaut,
+   masqué plutôt que de laisser un espace mort quand une page ne projette rien. */
+.ph-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.ph-meta:empty { display: none; }
+
+/* Ligne de stats en pied de bandeau (ex. compteurs de déploiements) — même idée que .ph-meta :
+   invisible tant que rien n'est projeté dedans. */
+.ph-statusline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  margin: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(203, 213, 225, 0.88);
+}
+.ph-statusline:empty { display: none; padding-top: 0; border-top: none; }
+
+/* Boutons/select projetés dans [hero-actions] — mêmes classes que le reste de la plateforme
+   (.ph-btn/.ph-icon-btn) pour qu'un bouton "Actualiser" ait la même forme partout. */
+::ng-deep .ph-actions .ph-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  border: 1px solid rgba(186, 230, 253, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0f2fe;
+  cursor: pointer;
+  font-size: 1.05rem;
+  transition: background 150ms, border-color 150ms, transform 100ms;
+}
+::ng-deep .ph-actions .ph-icon-btn:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(186, 230, 253, 0.45); }
+::ng-deep .ph-actions .ph-icon-btn:active { transform: scale(0.96); }
+::ng-deep .ph-actions .ph-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+::ng-deep .ph-actions .ph-btn {
+  height: 40px;
+  padding: 0 1.05rem;
+  border-radius: 11px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 150ms, transform 100ms, background 150ms, border-color 150ms;
+}
+::ng-deep .ph-actions .ph-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+::ng-deep .ph-actions .ph-btn:active:not(:disabled) { transform: scale(0.98); }
+
+::ng-deep .ph-actions .ph-btn--ghost {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(186, 230, 253, 0.35);
+  color: #f0f9ff;
+}
+::ng-deep .ph-actions .ph-btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(186, 230, 253, 0.55);
+}
+
+::ng-deep .ph-actions .ph-btn--primary {
+  background: linear-gradient(135deg, #f36c21, #ea580c);
+  border: 1px solid transparent;
+  color: #fff;
+  box-shadow: 0 8px 20px -10px rgba(243, 108, 33, 0.7);
+}
+::ng-deep .ph-actions .ph-btn--primary:hover:not(:disabled) { filter: brightness(1.06); }
+
+::ng-deep .ph-actions select.ph-select {
+  height: 40px;
+  padding: 0 0.7rem;
+  border-radius: 11px;
+  border: 1px solid rgba(186, 230, 253, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #f0f9ff;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+::ng-deep .ph-actions select.ph-select option { color: #0f172a; }
+
+/* Puces projetées dans [hero-meta] (badge type/statut) et [hero-stats] (compteurs). */
+::ng-deep .ph-meta .ph-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(186, 230, 253, 0.28);
+  color: #e0f2fe;
+}
+::ng-deep .ph-meta .ph-badge--scan { background: rgba(56, 189, 248, 0.18); border-color: rgba(56, 189, 248, 0.4); }
+::ng-deep .ph-meta .ph-badge--deploy { background: rgba(243, 108, 33, 0.2); border-color: rgba(243, 108, 33, 0.45); }
+::ng-deep .ph-meta .ph-badge--ok { background: rgba(34, 197, 94, 0.18); border-color: rgba(134, 239, 172, 0.4); color: #86efac; }
+::ng-deep .ph-meta .ph-badge--fail { background: rgba(239, 68, 68, 0.18); border-color: rgba(252, 165, 165, 0.4); color: #fca5a5; }
+
+::ng-deep .ph-statusline .ph-stat strong { color: #fff; font-weight: 750; }
+::ng-deep .ph-statusline .ph-stat-ok { color: #86efac; }
+::ng-deep .ph-statusline .ph-stat-fail { color: #fca5a5; }
+
+@keyframes ph-hero-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ph-glow-drift {
+  from { transform: translate(0, 0); opacity: 0.85; }
+  to { transform: translate(-18px, 12px); opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  .ph-hero { padding: 1.2rem 1.15rem 1.15rem; }
+  .ph-actions { width: 100%; }
+  ::ng-deep .ph-actions .ph-btn { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph-hero { animation: none; }
+  .ph-hero-glow { animation: none; }
+}

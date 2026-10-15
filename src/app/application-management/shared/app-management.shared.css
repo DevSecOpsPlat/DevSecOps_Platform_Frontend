@@ -1,13 +1,17 @@
 /* ============================================================
    Styles partagés — module de gestion des applications managées
-   Charte : orange #F97316 (primary) · navy #1C1C2E
+   Charte : orange de marque Attijari #F36C21 (primary) · navy #1C1C2E
+   (aligné sur --color-primary de styles.css — avant ce correctif, ce fichier
+   utilisait #F97316 (Tailwind orange-500), une teinte proche mais différente
+   de la couleur de marque réelle, créant une dérive visible entre boutons/badges
+   "am-*" et les éléments "ad-*"/"et-*" qui utilisaient déjà la bonne valeur.)
    ============================================================ */
 
 :host {
-  --am-primary: #F97316;
-  --am-primary-dark: #EA580C;
-  --am-primary-light: #FDBA74;
-  --am-primary-soft: #FFF1E6;
+  --am-primary: #F36C21;
+  --am-primary-dark: #D85B16;
+  --am-primary-light: #FF8C42;
+  --am-primary-soft: #FFE5D3;
 
   --am-navy: #1C1C2E;
   --am-navy-soft: #2A2A45;
@@ -21,9 +25,11 @@
   --am-shadow-sm: 0 1px 2px rgba(28, 28, 46, 0.06);
   --am-shadow-md: 0 8px 24px rgba(28, 28, 46, 0.08);
   --am-shadow-lg: 0 20px 60px rgba(28, 28, 46, 0.28);
-  --am-shadow-glow: 0 8px 24px rgba(249, 115, 22, 0.28);
+  --am-shadow-glow: 0 8px 24px rgba(243, 108, 33, 0.28);
 
-  --am-ease: cubic-bezier(.4, 0, .2, 1);
+  /* Easing canonique — aligné sur --ad-ease / --et-ease, remplace l'ancien (.4,0,.2,1)
+     pour que toutes les transitions (boutons, cartes, modales) partagent la même sensation. */
+  --am-ease: cubic-bezier(.22, 1, .36, 1);
   --am-ease-spring: cubic-bezier(.34, 1.56, .64, 1);
 
   display: block;
@@ -62,9 +68,9 @@
   to { transform: rotate(360deg); }
 }
 @keyframes am-pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(249, 115, 22, .35); }
-  70%  { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(243, 108, 33, .35); }
+  70%  { box-shadow: 0 0 0 8px rgba(243, 108, 33, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(243, 108, 33, 0); }
 }
 @keyframes am-shimmer {
   0%   { background-position: -400px 0; }
@@ -410,6 +416,13 @@
 
 .am-hint { font-size: .75rem; color: var(--am-muted); }
 
+.am-checkbox-row {
+  display: flex; align-items: center; gap: .55rem;
+  font-size: .88rem; font-weight: 600; color: var(--am-navy);
+  cursor: pointer;
+}
+.am-checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--am-primary); cursor: pointer; }
+
 .am-input, .am-select, .am-textarea {
   border: 1.5px solid var(--am-border); border-radius: 10px; padding: .62rem .8rem;
   font-size: .9rem; font-family: inherit; color: var(--am-navy); background: var(--am-surface);
@@ -421,7 +434,7 @@
   outline: none;
   border-color: var(--am-navy-soft);
   background: #FBFBFF;
-  box-shadow: 0 0 0 4px rgba(28, 28, 46, .07), 0 0 0 1px rgba(249, 115, 22, .35) inset;
+  box-shadow: 0 0 0 4px rgba(28, 28, 46, .07), 0 0 0 1px rgba(243, 108, 33, .35) inset;
 }
 .am-textarea { resize: vertical; min-height: 72px; }
 .am-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -598,6 +611,23 @@
   border-radius: 10px;
 }
 
+.ds-quota-chip {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  cursor: default;
+}
+
+.ds-quota-chip--warn {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
 /* Pipeline / Pods detail (inspiré pipeline-details) */
 .ds-pd-toolbar {
   display: flex;
@@ -713,7 +743,7 @@
 .ds-pd-dot.dot-canceled { background: #ef4444; }
 .ds-pd-dot.dot-running,
 .ds-pd-dot.dot-pending,
-.ds-pd-dot.dot-created { background: #f97316; }
+.ds-pd-dot.dot-created { background: #f36c21; }
 .ds-pd-jobs {
   list-style: none;
   margin: 0;
@@ -733,14 +763,14 @@
 .ds-pd-jobs > li:hover { background: #f8fafc; }
 .ds-pd-jobs > li.selected {
   background: #fff7ed;
-  border-left-color: #f97316;
+  border-left-color: #f36c21;
 }
 .ds-pd-jobs > li.job-success { border-left-color: #22c55e; }
 .ds-pd-jobs > li.job-failed { border-left-color: #ef4444; }
-.ds-pd-jobs > li.job-running { border-left-color: #f97316; }
+.ds-pd-jobs > li.job-running { border-left-color: #f36c21; }
 .ds-pd-jobs > li.selected.job-success,
 .ds-pd-jobs > li.selected.job-failed,
-.ds-pd-jobs > li.selected.job-running { border-left-color: #f97316; }
+.ds-pd-jobs > li.selected.job-running { border-left-color: #f36c21; }
 .ds-pd-job-main {
   display: flex;
   justify-content: space-between;
@@ -795,7 +825,7 @@
 .ds-pd-pill.status-pending {
   background: #fff7ed;
   color: #ea580c;
-  border-color: rgba(249, 115, 22, 0.25);
+  border-color: rgba(243, 108, 33, 0.25);
 }
 .ds-pd-tag {
   display: inline-flex;
@@ -976,7 +1006,7 @@
   content: '';
   width: 8px; height: 8px; border-radius: 2px;
   background: var(--am-primary);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, .25);
+  box-shadow: 0 0 0 3px rgba(243, 108, 33, .25);
   flex-shrink: 0;
 }
 
@@ -1096,7 +1126,7 @@
   background: #0ea5e9;
   transition: width .8s linear;
 }
-.am-ttl-fill-urgent { background: #f97316; }
+.am-ttl-fill-urgent { background: #f36c21; }
 .am-ttl-extend {
   display: flex;
   align-items: center;
@@ -1307,7 +1337,14 @@
   overflow: hidden;
 }
 .ds-preview-hint {
-  display: none;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  border-top: 1px solid #334155;
+  flex-shrink: 0;
 }
 
 /* Ancien bas TTL|preview (plus utilisé) */
@@ -1332,7 +1369,7 @@
   text-align: left;
   transition: border-color .15s ease;
 }
-.ds-tile:hover { border-color: rgba(249, 115, 22, .45); }
+.ds-tile:hover { border-color: rgba(243, 108, 33, .45); }
 .ds-tile-n {
   font-size: 1.2rem;
   font-weight: 800;

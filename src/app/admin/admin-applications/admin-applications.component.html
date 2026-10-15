@@ -1,0 +1,61 @@
+<div class="ads-page">
+  <header class="ads-hero">
+    <p class="ads-hero-eyebrow">Ressources</p>
+    <div class="ads-hero-row">
+      <div>
+        <h1 class="ads-hero-title">Applications</h1>
+        <p class="ads-hero-lead">
+          Une ligne = une vraie application. Cliquez pour voir sa composition, ses environnements et son activité récente.
+        </p>
+      </div>
+      <button type="button" class="ads-btn-ghost-dark" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div>
+  <div *ngIf="error" class="ads-state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <div class="ads-toolbar">
+      <input type="search" [(ngModel)]="search" placeholder="Rechercher une application, un service, un propriétaire…" />
+      <select [(ngModel)]="ownerFilter">
+        <option value="">Tous les propriétaires</option>
+        <option *ngFor="let o of owners" [value]="o">{{ o }}</option>
+      </select>
+      <select [(ngModel)]="onlyWithActiveEnv" [ngModelOptions]="{standalone: true}">
+        <option [ngValue]="false">Toutes les applications</option>
+        <option [ngValue]="true">Avec un environnement actif</option>
+      </select>
+    </div>
+
+    <div *ngFor="let r of filteredRows" class="ads-app-row" (click)="open(r)">
+      <div class="ads-app-icon">{{ initials(r.name) }}</div>
+      <div class="ads-app-row-main">
+        <div class="ads-app-row-name">
+          {{ r.name }}
+          <span class="ads-app-tag" *ngIf="r.standalone">projet autonome</span>
+        </div>
+        <div class="ads-app-row-sub">
+          {{ r.ownerUsername }} · {{ compositionLabel(r) }}
+          <ng-container *ngIf="r.standalone"> · {{ r.gitRepositoryUrl }}</ng-container>
+        </div>
+      </div>
+      <div class="ads-app-row-stats">
+        <div class="ads-app-stat">
+          <div class="ads-app-stat-n">{{ r.activeEnvironmentsCount }}</div>
+          <div class="ads-app-stat-l">env. actif{{ r.activeEnvironmentsCount > 1 ? 's' : '' }}</div>
+        </div>
+        <div class="ads-app-stat">
+          <div class="ads-app-stat-n">{{ (r.pipelineCounts?.success || 0) }}/{{ pipelineTotal(r) }}</div>
+          <div class="ads-app-stat-l">pipelines ok</div>
+        </div>
+      </div>
+      <div class="ads-app-row-chev" aria-hidden="true">›</div>
+    </div>
+
+    <p class="ads-empty" *ngIf="!filteredRows.length">
+      <span class="ads-empty-icon" aria-hidden="true">📭</span>
+      <span class="ads-empty-sub">Aucune application ne correspond à ces filtres.</span>
+    </p>
+  </ng-container>
+</div>

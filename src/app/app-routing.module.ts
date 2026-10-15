@@ -8,9 +8,11 @@ import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { AdminUserDetailComponent } from './admin/admin-user-detail/admin-user-detail.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
-import { AdminHomeComponent } from './admin/admin-home/admin-home.component';
 import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.component';
-import { AdminInventoryComponent } from './admin/admin-inventory/admin-inventory.component';
+import { AdminApplicationsComponent } from './admin/admin-applications/admin-applications.component';
+import { AdminApplicationDetailComponent } from './admin/admin-application-detail/admin-application-detail.component';
+import { AdminEnvironmentsComponent } from './admin/admin-environments/admin-environments.component';
+import { AdminEnvironmentDetailComponent } from './admin/admin-environment-detail/admin-environment-detail.component';
 import { AdminObservabilityComponent } from './admin/admin-observability/admin-observability.component';
 import { AdminLayoutComponent } from './admin/admin-layout/admin-layout.component';
 import { AuthGuard } from './guards/auth.guard';
@@ -22,7 +24,6 @@ import { EnvironmentDetailsComponent } from './project/environments/environment-
 import { RecentActivityComponent } from './project/recent-activity/recent-activity.component';
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
-import { MonitoringComponent } from './project/monitoring/monitoring.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
 import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
@@ -59,7 +60,8 @@ const routes: Routes = [
       { path: 'activity', component: RecentActivityComponent },
       { path: 'sonarqube', component: SonarqubeComponent },
       { path: 'quality-gate', loadComponent: () => import('./project/quality-gate/quality-gate.component').then(m => m.QualityGateComponent) },
-      { path: 'monitoring', component: MonitoringComponent },
+      { path: 'post-deploy', loadComponent: () => import('./project/post-deploy/post-deploy.component').then(m => m.PostDeployComponent) },
+      { path: 'monitoring', loadComponent: () => import('./project/monitoring/monitoring.component').then(m => m.MonitoringComponent) },
       { path: 'security-dashboard', component: SecurityDashboardComponent },
       { path: 'security-dashboard/finding/:findingId', component: DefectDojoFindingDetailsComponent },
       { path: 'vulnerabilities/:findingId', redirectTo: 'security-dashboard', pathMatch: 'full' },
@@ -132,23 +134,30 @@ const routes: Routes = [
     component: AdminLayoutComponent,
     canActivate: [AdminGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'home' },
-      { path: 'home', component: AdminHomeComponent },
+      // Vue d'ensemble = page d'atterrissage : l'ancien Accueil ne portait aucune donnée propre,
+      // seulement des liens déjà présents dans la sidebar (cf. docs/audit-dashboard-admin.md §3).
+      { path: '', pathMatch: 'full', redirectTo: 'overview' },
       { path: 'overview', component: AdminOverviewComponent },
       { path: 'users', component: AdminUsersComponent },
       { path: 'users/:id', component: AdminUserDetailComponent },
       { path: 'alerts', component: AdminAlertsComponent },
       { path: 'audit', component: AdminAuditComponent },
-      { path: 'inventory', component: AdminInventoryComponent },
+      { path: 'applications', component: AdminApplicationsComponent },
+      { path: 'applications/:id', component: AdminApplicationDetailComponent },
+      { path: 'environments', component: AdminEnvironmentsComponent },
+      { path: 'environments/:id', component: AdminEnvironmentDetailComponent },
       { path: 'observability', component: AdminObservabilityComponent },
+      { path: 'monitoring', loadComponent: () => import('./admin/admin-monitoring/admin-monitoring.component').then(m => m.AdminMonitoringComponent) },
       { path: 'reclamations', component: AdminReclamationsComponent }
     ]
   },
-  { path: 'admin-home', redirectTo: 'admin/home', pathMatch: 'full' },
+  { path: 'admin-home', redirectTo: 'admin/overview', pathMatch: 'full' },
+  { path: 'admin/home', redirectTo: 'admin/overview', pathMatch: 'full' },
   { path: 'admin-dashboard', redirectTo: 'admin/users', pathMatch: 'full' },
   { path: 'admin-users', redirectTo: 'admin/users', pathMatch: 'full' },
   { path: 'admin-overview', redirectTo: 'admin/overview', pathMatch: 'full' },
-  { path: 'admin-inventory', redirectTo: 'admin/inventory', pathMatch: 'full' },
+  { path: 'admin-inventory', redirectTo: 'admin/applications', pathMatch: 'full' },
+  { path: 'admin/inventory', redirectTo: 'admin/applications', pathMatch: 'full' },
   { path: 'admin-observability', redirectTo: 'admin/observability', pathMatch: 'full' },
   { path: 'admin-reclamations', redirectTo: 'admin/reclamations', pathMatch: 'full' },
   { path: 'admin/validations', redirectTo: 'admin/users', pathMatch: 'full' },

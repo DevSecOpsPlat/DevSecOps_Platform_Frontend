@@ -1,9 +1,16 @@
 <section class="monitoring">
-  <iframe
-    class="monitoring-frame"
-    [src]="grafanaUrl"
-    title="Grafana - Node Exporter Full"
-    loading="lazy"
-    allow="same-origin"
-  ></iframe>
+  <div class="am-loading" *ngIf="loading">Chargement du monitoring…</div>
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+  <app-monitoring-dashboard
+    *ngIf="!loading && !error && managedApp?.lastDeployment"
+    [appId]="managedApp!.id"
+    [deployment]="managedApp!.lastDeployment!"
+    [appName]="managedApp!.name"
+    [appServices]="appServicesForDashboard">
+  </app-monitoring-dashboard>
+
+  <div class="am-empty" *ngIf="!loading && !error && managedApp && !managedApp.lastDeployment">
+    Aucun déploiement actif pour cette application — lance un déploiement pour voir le monitoring de ce service.
+  </div>
 </section>

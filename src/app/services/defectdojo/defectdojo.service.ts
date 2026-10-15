@@ -169,6 +169,8 @@ export interface DefectDojoDashboard2Response {
   engagementName?: string;
   bySeverity?: Record<string, number>;
   byTool?: Record<string, number>;
+  /** Outils ayant réellement tourné, y compris ceux à 0 finding -- pour "a-t-il tourné ?" (byTool ne le permet pas, il exclut les entrées à 0). */
+  toolsExecuted?: string[];
   byStatus?: Record<string, number>;
   totalOpen?: number;
   totalClosed?: number;
@@ -364,6 +366,26 @@ export class DefectDojoService {
   /** Tag DefectDojo pour filtrer par pipeline GitLab (exécution CI). */
   pipelineTag(pipelineId: number | string): string {
     return `pipeline-${pipelineId}`;
+  }
+
+  /**
+   * Résout les Tests DefectDojo (id + scan_type) d'un pipeline -- pour isoler les findings d'UN
+   * outil via testId plutôt qu'une page combinée plafonnée à 100 résultats (où un outil plus
+   * verbeux, ex. Grype, peut noyer entièrement un autre outil du même pipeline, ex. ZAP).
+   */
+  getTestsForPipeline(
+    applicationId: string,
+    branch: string | undefined,
+    pipelineId: number | string
+  ): Observable<Array<{ testId: number; scanType: string }>> {
+    let params = new HttpParams()
+      .set('applicationId', applicationId)
+      .set('pipelineId', String(pipelineId));
+    if (branch?.trim()) params = params.set('branch', branch.trim());
+    return this.http.get<Array<{ testId: number; scanType: string }>>(
+      BASE + 'api/defectdojo/tests',
+      { headers: this.authHeaders(), params }
+    );
   }
 
   /** Tag DefectDojo des imports scan (exclut les pipelines deploy). */

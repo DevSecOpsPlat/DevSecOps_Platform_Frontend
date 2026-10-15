@@ -103,6 +103,12 @@ getLatestPipeline(): Observable<any> {
     });
   }
 
+  cancelJob(jobId: number): Observable<void> {
+    return this.http.post<void>(BASE + `api/pipelines/jobs/${jobId}/cancel`, null, {
+      headers: this.authHeaders()
+    });
+  }
+
   getScanResults(jobId: number): Observable<any> {
     return this.http.get(BASE + `api/pipelines/jobs/${jobId}/scan`, {
       headers: this.authHeaders(),

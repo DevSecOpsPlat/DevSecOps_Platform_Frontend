@@ -72,33 +72,40 @@
     </button>
   </div>
 
-  <!-- Détail environnement (même container Runtime / pipeline / pods) -->
-  <div id="mah-env-detail" class="mah-env-detail" *ngIf="selectedDeployment as detail">
-    <div class="mah-env-detail-head">
-      <div>
-        <span class="mah-env-eyebrow">Détail environnement</span>
-        <h2>{{ detail.namespace }}</h2>
+  <!--
+    Détail environnement et détail scan — définis comme templates réutilisables (pas rendus ici).
+    Instanciés via *ngTemplateOutlet juste sous la ligne de la timeline cliquée (voir plus bas),
+    pour que "voir le détail" ouvre le panneau au bon endroit au lieu de faire remonter la page
+    vers un panneau ancré tout en haut, hors du flux naturel de lecture.
+  -->
+  <ng-template #envDetailTpl let-detail>
+    <div id="mah-env-detail" class="mah-env-detail">
+      <div class="mah-env-detail-head">
+        <div>
+          <span class="mah-env-eyebrow">Détail environnement</span>
+          <h2>{{ detail.namespace }}</h2>
+        </div>
+        <div class="mah-env-detail-actions">
+          <span class="status-badge" [ngClass]="getStatusClass(detail.status)">{{ detail.status }}</span>
+          <button type="button" class="refresh-btn" (click)="closeDeployDetail()">Fermer</button>
+        </div>
       </div>
-      <div class="mah-env-detail-actions">
-        <span class="status-badge" [ngClass]="getStatusClass(detail.status)">{{ detail.status }}</span>
-        <button type="button" class="refresh-btn" (click)="closeDeployDetail()">Fermer</button>
-      </div>
+      <app-managed-deployment-status
+        [appId]="appId"
+        [deployment]="detail"
+        [services]="services"
+        variant="full"
+        [showOpsTabs]="true"
+        (navigateSection)="onNavigateSection($event)">
+      </app-managed-deployment-status>
     </div>
-    <app-managed-deployment-status
-      [appId]="appId"
-      [deployment]="detail"
-      [services]="services"
-      variant="full"
-      [showOpsTabs]="true"
-      (navigateSection)="onNavigateSection($event)">
-    </app-managed-deployment-status>
-  </div>
+  </ng-template>
 
-  <!-- Détail scan : même design Runtime (Pipeline | Quality Gate) -->
-  <div id="mah-scan-detail" class="mah-env-detail mah-scan-detail" *ngIf="selectedBatch as batch">
-    <div class="mah-env-detail-head">
-      <div>
-        <span class="mah-env-eyebrow">Détail de pipeline</span>
+  <ng-template #scanDetailTpl let-batch>
+    <div id="mah-scan-detail" class="mah-env-detail mah-scan-detail">
+      <div class="mah-env-detail-head">
+        <div>
+          <span class="mah-env-eyebrow">Détail de pipeline</span>
         <h2>
           Lot {{ (batch.batchId || batch.id || '') | slice:0:8 }}
           <ng-container *ngIf="batch.gitlabPipelineId != null"> · #{{ batch.gitlabPipelineId }}</ng-container>
@@ -275,7 +282,8 @@
         </div>
       </div>
     </section>
-  </div>
+    </div>
+  </ng-template>
 
   <div *ngIf="loading && !rows.length" class="activity-loading">
     <div class="skeleton-timeline">
@@ -403,6 +411,14 @@
           </span>
         </div>
       </div>
+
+      <!-- Panneau détail instancié ici, juste sous la ligne — plus de saut vers le haut de page. -->
+      <ng-container *ngIf="row.kind === 'deploy' && selectedDeployId === row.id && selectedDeployment as detail">
+        <ng-container *ngTemplateOutlet="envDetailTpl; context: { $implicit: detail }"></ng-container>
+      </ng-container>
+      <ng-container *ngIf="row.kind === 'scan' && selectedScanId === row.id && selectedBatch as batch">
+        <ng-container *ngTemplateOutlet="scanDetailTpl; context: { $implicit: batch }"></ng-container>
+      </ng-container>
     </div>
   </div>
 </div>

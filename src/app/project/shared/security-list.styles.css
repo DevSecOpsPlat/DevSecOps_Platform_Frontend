@@ -2223,45 +2223,10 @@
   }
 }
 
-/* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-  .vuln-container {
-    background: #1a202c;
-  }
-  
-  .vuln-stat-card,
-  .vuln-table-wrapper,
-  .vuln-modal-content {
-    background: #2d3748;
-  }
-  
-  .vuln-stat-card {
-    border-color: #4a5568;
-  }
-  
-  .vuln-stat-info h3,
-  .vuln-table-title h2 {
-    color: #e2e8f0;
-  }
-  
-  .vuln-tool-item,
-  .vuln-location-detail,
-  .vuln-description,
-  .vuln-ai-card-header {
-    background: #374151;
-  }
-  
-  .vuln-code-snippet,
-  .vuln-code-patch {
-    background: #1a202c;
-  }
-  
-  .vuln-chat-messages {
-    background: #374151;
-  }
-  
-  .vuln-chat-bubble {
-    background: #4a5568;
-    color: #e2e8f0;
-  }
-}
+/* Dark Mode Support desactive : ce dashboard ne disposait jamais de theme
+   sombre complet (seuls quelques anciens blocs vuln- etaient couverts,
+   aucun des panneaux dd- ou msd- actuels). Consequence en
+   prefers-color-scheme: dark, le fond de page devenait sombre pendant que
+   presque tous les blocs restaient blancs, soit un rendu casse plutot
+   qu un theme sombre reel. Le dashboard reste volontairement clair quel
+   que soit le theme du systeme. */

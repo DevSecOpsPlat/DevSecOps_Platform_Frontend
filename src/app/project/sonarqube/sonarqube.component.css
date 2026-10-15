@@ -672,6 +672,22 @@
   height: 160px;
 }
 
+.donut-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donut-svg circle {
+  transition: stroke-width 0.15s ease, opacity 0.15s ease;
+  stroke-linecap: butt;
+}
+
+.donut-svg circle:not(:first-child):hover {
+  stroke-width: 5.5;
+  cursor: pointer;
+}
+
 .donut-center {
   position: absolute;
   top: 50%;
@@ -2830,6 +2846,64 @@
   height: 280px;
   margin-bottom: 1.5rem;
   position: relative;
+}
+
+.activity-svg {
+  width: 100%;
+  height: calc(100% - 22px);
+  overflow: visible;
+}
+
+.activity-svg-axis {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+
+.activity-svg-line {
+  stroke-width: 2;
+  filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, 0.12));
+}
+
+.activity-svg-point {
+  stroke: #fff;
+  stroke-width: 0.6;
+  transition: r 0.15s ease;
+}
+
+.activity-svg-point:hover {
+  r: 2.6;
+  cursor: pointer;
+}
+
+.activity-svg-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--c-muted);
+  margin-top: 6px;
+}
+
+.activity-svg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--c-muted);
+}
+
+.activity-svg-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.activity-svg-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .activity-loading,

@@ -3,6 +3,31 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
+import { ClusterCapacityInfo, DeploymentMonitoringResponse } from '../../models/application-management/application-management.models';
+
+/** Miroir de DataProtectionService.getProtectionSummary() (backend). */
+export interface DataProtectionSummary {
+  inTransit: {
+    protocol: string;
+    description: string;
+    termination: string;
+    hstsEnabled: boolean;
+    requireHttpsEnforced: boolean;
+    headers: string[];
+  };
+  atRest: {
+    algorithm: string;
+    keySource: string;
+    productionKeyConfigured: boolean;
+    encryptedFields: { table: string; column: string; label: string }[];
+    databaseNote: string;
+  };
+  ephemeralSecrets: {
+    otpEmailCodes: string;
+    jwtAccessToken: string;
+  };
+  complianceNote: string;
+}
 
 export interface AdminCreateUserPayload {
   username: string;
@@ -41,6 +66,19 @@ export interface AdminEnvironmentStatusBreakdown {
   total?: number;
 }
 
+export interface AdminAppServiceSummary {
+  id: string;
+  name: string;
+  role?: string | null;
+  gitRepositoryUrl: string;
+  gitBranch?: string | null;
+}
+
+/**
+ * Une ligne "Application" : soit une vraie application multi-services (`standalone: false`,
+ * `services.length` peut être > 1), soit un service autonome sans application parente
+ * (`standalone: true`, `services.length === 1`) — cf. docs/audit-dashboard-admin.md §0.
+ */
 export interface AdminUserApplicationDetail {
   id: string;
   name: string;
@@ -49,6 +87,9 @@ export interface AdminUserApplicationDetail {
   createdAt: string | number[];
   linkedEnvironmentsCount: number;
   pipelineCounts: AdminPipelineCounts;
+  standalone: boolean;
+  services: AdminAppServiceSummary[];
+  databasesCount: number;
 }
 
 export interface AdminUserEnvironmentDetail {
@@ -56,6 +97,8 @@ export interface AdminUserEnvironmentDetail {
   applicationId: string;
   applicationName: string;
   environmentName: string;
+  /** Namespace K8s réel — permet d'appeler getMonitoringNamespaceDetail(namespace) directement. */
+  namespace?: string | null;
   gitBranch: string;
   status: string;
   url?: string | null;
@@ -86,6 +129,25 @@ export interface AdminUserMetrics {
   environmentStatusBreakdown: AdminEnvironmentStatusBreakdown;
   applications: AdminUserApplicationDetail[];
   environments: AdminUserEnvironmentDetail[];
+}
+
+/**
+ * Un événement du fil d'activité admin fusionné (pipelines + alertes + activité de compte) —
+ * miroir de AdminActivityEvent (backend). `kind`/`eventType` sont bruts : les libellés affichés
+ * sont construits côté frontend (cf. admin-activity-timeline).
+ */
+export interface AdminActivityEvent {
+  id: string;
+  kind: 'PIPELINE' | 'ALERT' | 'ACCOUNT';
+  eventType: string;
+  message?: string | null;
+  actorUsername?: string | null;
+  applicationId?: string | null;
+  applicationName?: string | null;
+  environmentId?: string | null;
+  environmentName?: string | null;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  occurredAt: string | number[];
 }
 
 export interface AdminUserActivityEntry {
@@ -289,6 +351,11 @@ export class AdminService {
     );
   }
 
+  /** Résumé chiffrement transit/repos + secrets jamais persistés (DataProtectionService). */
+  getDataProtection(): Observable<DataProtectionSummary> {
+    return this.http.get<DataProtectionSummary>(BASE + 'security/data-protection', { headers: this.authHeaders() });
+  }
+
   getAuditLog(
     page = 0,
     size = 50,
@@ -344,6 +411,59 @@ export class AdminService {
   getAuditAnalytics(): Observable<AdminAuditAnalytics> {
     return this.http.get<AdminAuditAnalytics>(BASE + 'audit-log/analytics', { headers: this.authHeaders() });
   }
+
+  // ---------- Monitoring cluster-wide (console admin, 18 août 2026) ----------
+
+  /** Capacité de tous les nœuds du cluster (CPU/MEM/disque) — même donnée que le garde-fou de déploiement. */
+  getMonitoringNodes(): Observable<ClusterCapacityInfo> {
+    return this.http.get<ClusterCapacityInfo>(BASE + 'monitoring/nodes', { headers: this.authHeaders() });
+  }
+
+  /** Résumé (une ligne par environnement RUNNING, tous utilisateurs) — pods, alertes, propriétaire. */
+  getMonitoringNamespaces(): Observable<AdminNamespaceSummary[]> {
+    return this.http.get<AdminNamespaceSummary[]>(BASE + 'monitoring/namespaces', { headers: this.authHeaders() });
+  }
+
+  /** Détail complet d'un namespace (au clic depuis le résumé) — même forme que le monitoring utilisateur. */
+  getMonitoringNamespaceDetail(namespace: string): Observable<DeploymentMonitoringResponse & { appName?: string; ownerUsername?: string }> {
+    return this.http.get<DeploymentMonitoringResponse & { appName?: string; ownerUsername?: string }>(
+      BASE + `monitoring/namespaces/${encodeURIComponent(namespace)}`,
+      { headers: this.authHeaders() }
+    );
+  }
+
+  // ---------- Fil d'activité admin (refonte dashboard, Phase 1) ----------
+
+  /** Événements récents fusionnés (pipelines + alertes + activité de compte), globaux ou filtrés
+   * par application/environnement/utilisateur — alimente admin-activity-timeline. */
+  getActivity(opts?: { limit?: number; applicationId?: string; environmentId?: string; userId?: string }): Observable<AdminActivityEvent[]> {
+    let params = '';
+    if (opts) {
+      const parts: string[] = [];
+      if (opts.limit != null) parts.push(`limit=${opts.limit}`);
+      if (opts.applicationId) parts.push(`applicationId=${encodeURIComponent(opts.applicationId)}`);
+      if (opts.environmentId) parts.push(`environmentId=${encodeURIComponent(opts.environmentId)}`);
+      if (opts.userId) parts.push(`userId=${encodeURIComponent(opts.userId)}`);
+      if (parts.length) params = '?' + parts.join('&');
+    }
+    return this.http.get<AdminActivityEvent[]>(BASE + 'activity' + params, { headers: this.authHeaders() });
+  }
+}
+
+export interface AdminNamespaceSummary {
+  namespace: string;
+  deploymentId: string;
+  createdAt?: string;
+  appId?: string;
+  appName?: string;
+  ownerUsername?: string | null;
+  /** RUNNING mais plus le dernier déploiement de son appli — invisible dans le portail utilisateur. */
+  orphaned: boolean;
+  podsReady: number;
+  podsTotal: number;
+  warningEventCount: number;
+  nodes: string[];
+  message?: string;
 }
 
 export interface AdminAlert {

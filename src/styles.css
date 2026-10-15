@@ -47,6 +47,44 @@
   --et-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .06);
   --et-shadow-hover: 0 2px 4px rgba(15, 23, 42, .06), 0 16px 40px rgba(15, 23, 42, .10);
   --et-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* Refonte dashboard admin (Phase 1) — tokens --admin-* utilisés par
+     src/app/admin/admin-design-system.css. Déclarés ICI (styles globaux) et non dans ce fichier de
+     composant : un :root{} écrit dans une feuille de style scopée par composant est réécrit par
+     l'encapsulation Angular en :root[_ngcontent-xxx], qui ne correspond jamais à la vraie balise
+     <html> — les variables restent alors indéfinies et toute règle qui les utilise (border,
+     box-shadow, background, border-radius…) est silencieusement invalide. Alias des tokens --et-*
+     déjà en place ci-dessus, plus quelques ajouts propres à l'admin (pages, cartes, sévérités). */
+  --admin-ink: var(--et-text);
+  --admin-slate: #334155;
+  --admin-muted: var(--et-muted);
+  --admin-faint: #94a3b8;
+  --admin-border: var(--et-border);
+  --admin-border-soft: #eef1f5;
+  --admin-surface: var(--et-surface);
+  --admin-page: #f7f8fa;
+  --admin-page-2: #f1f3f6;
+
+  --admin-accent: var(--et-accent);
+  --admin-accent-dark: var(--color-primary-dark);
+  --admin-accent-light: var(--color-primary-light);
+  --admin-accent-soft: var(--color-primary-soft);
+  --admin-accent-tint: #fff7ed;
+
+  --admin-success: var(--color-success);
+  --admin-success-soft: var(--color-success-light);
+  --admin-warning: var(--color-warning);
+  --admin-warning-soft: var(--color-warning-light);
+  --admin-danger: var(--color-danger);
+  --admin-danger-soft: var(--color-danger-light);
+  --admin-info: var(--color-info);
+  --admin-info-soft: var(--color-info-light);
+
+  --admin-radius: var(--et-radius);
+  --admin-radius-lg: var(--radius-xl);
+  --admin-shadow: var(--et-shadow);
+  --admin-shadow-hover: var(--et-shadow-hover);
+  --admin-ease: var(--et-ease);
 }
 
 /* Light theme (default) */

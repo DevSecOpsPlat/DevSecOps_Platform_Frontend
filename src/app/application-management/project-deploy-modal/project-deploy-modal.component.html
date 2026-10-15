@@ -2,8 +2,9 @@
   <div class="am-modal pdm-modal" (click)="$event.stopPropagation()">
     <h3 class="am-modal-title">Déployer l'application</h3>
     <p class="am-subtitle">
-      Choisissez la branche, la durée de vie (TTL), un domaine optionnel et les services à inclure.
+      Choisissez la branche, la durée de vie (TTL) et les services à inclure.
       Les bases liées aux services sélectionnés sont déployées automatiquement.
+      L'URL publique est générée automatiquement (modifiable dans Réglages).
     </p>
 
     <div class="am-form-grid">
@@ -31,19 +32,6 @@
           [disabled]="running" />
       </label>
     </div>
-
-    <label class="am-field" style="display:block;margin-top:.85rem;">
-      <span class="am-field-label">Domaine personnalisé (optionnel)</span>
-      <input
-        class="am-input"
-        type="text"
-        [(ngModel)]="customHostname"
-        placeholder="demo.example.com — vide = nip.io"
-        [disabled]="running" />
-      <span class="am-subtitle" style="display:block;margin:.35rem 0 0;font-size:.8rem;">
-        Si renseigné, pointez le DNS A/CNAME vers l’IP Traefik du cluster. Sinon : <code class="am-slug">app-&lt;ns&gt;.nip.io</code>.
-      </span>
-    </label>
 
     <div class="pdm-services">
       <div class="pdm-services-head">
@@ -88,6 +76,41 @@
     </div>
 
     <div class="pdm-preview" *ngIf="!previewLoading && preview">
+      <div class="pdm-quota" *ngIf="preview.quotaEnabled" [class.pdm-quota--over]="quotaOverCapacity || nodeOverCapacity">
+        <span class="am-field-label">Ressources demandées</span>
+        <div class="pdm-quota-row">
+          <span class="pdm-quota-label">CPU</span>
+          <div class="pdm-quota-meter">
+            <div class="pdm-quota-fill" [style.width.%]="quotaCpuPct"></div>
+            <div class="pdm-quota-node-marker" *ngIf="nodeCpuMarkerPct != null" [style.left.%]="nodeCpuMarkerPct"
+                 title="Au-delà de ce trait, plus assez de ressources libres sur le nœud"></div>
+          </div>
+          <span class="pdm-quota-val am-mono">
+            {{ formatMillicores(preview.requestedCpuMillicores) }} / {{ formatMillicores(preview.quotaCpuMillicores) }} quota
+            <span *ngIf="preview.nodeCapacityEnabled" [class.pdm-quota-warn-text]="nodeOverCapacity">
+              · nœud {{ formatMillicores(preview.nodeAvailableCpuMillicores) }} libre
+            </span>
+          </span>
+        </div>
+        <div class="pdm-quota-row">
+          <span class="pdm-quota-label">MEM</span>
+          <div class="pdm-quota-meter">
+            <div class="pdm-quota-fill" [style.width.%]="quotaMemPct"></div>
+            <div class="pdm-quota-node-marker" *ngIf="nodeMemMarkerPct != null" [style.left.%]="nodeMemMarkerPct"
+                 title="Au-delà de ce trait, plus assez de ressources libres sur le nœud"></div>
+          </div>
+          <span class="pdm-quota-val am-mono">
+            {{ formatBytes(preview.requestedMemoryBytes) }} / {{ formatBytes(preview.quotaMemoryBytes) }} quota
+            <span *ngIf="preview.nodeCapacityEnabled" [class.pdm-quota-warn-text]="nodeOverCapacity">
+              · nœud {{ formatBytes(preview.nodeAvailableMemoryBytes) }} libre
+            </span>
+          </span>
+        </div>
+        <p class="pdm-quota-hint pdm-quota-hint--danger" *ngIf="nodeOverCapacity">
+          Le nœud n'a pas assez de ressources libres, tous namespaces confondus — le déploiement risque de rester en attente (Pending).
+        </p>
+      </div>
+
       <div class="am-alert am-alert-info" *ngFor="let info of preview.infos">{{ info }}</div>
       <div class="am-alert am-alert-warn" *ngFor="let w of preview.warnings">{{ w }}</div>
       <div class="am-alert am-alert-error" *ngFor="let e of preview.blockingErrors">{{ e }}</div>
@@ -96,10 +119,30 @@
         <input type="checkbox" [(ngModel)]="persistenceConfirmed" [disabled]="running" />
         <span>Je confirme déployer un backend sans persistance des données (aucune BD associée).</span>
       </label>
+      <label class="pdm-confirm pdm-confirm--danger" *ngIf="nodeOverCapacity">
+        <input type="checkbox" [(ngModel)]="nodeCapacityConfirmed" [disabled]="running" />
+        <span>Je confirme déployer malgré la capacité insuffisante du nœud (risque de rester en Pending).</span>
+      </label>
     </div>
 
     <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
 
+    <div class="am-alert ad-verdict-indicative-notice"
+         [class.am-alert-error]="verdictIsBlockedLooking"
+         [class.am-alert-warn]="!verdictIsBlockedLooking && verdictNoticeTone === 'warn'"
+         [class.am-alert-info]="!verdictIsBlockedLooking && verdictNoticeTone !== 'warn'">
+      <ng-container *ngIf="verdict; else verdictUnknownNotice">
+        <strong>Verdict de sécurité actuel : {{ verdictNoticeLabel }}.</strong>
+        Ce verdict est indicatif : il n'empêche pas techniquement ce déploiement de continuer.
+        <span *ngIf="verdictIsBlockedLooking">Consultez le rapport de sécurité (Quality Gate) avant de confirmer.</span>
+      </ng-container>
+      <ng-template #verdictUnknownNotice>
+        Le verdict de sécurité de cette application est indicatif : il n'empêche pas techniquement le déploiement,
+        quel que soit son résultat. Consultez le rapport de sécurité (Quality Gate) avant de confirmer.
+      </ng-template>
+    </div>
+
+    <p class="am-subtitle pdm-disabled-reason" *ngIf="disabledReason">⚠ {{ disabledReason }}</p>
     <div class="am-form-actions">
       <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()" [disabled]="running">
         Annuler

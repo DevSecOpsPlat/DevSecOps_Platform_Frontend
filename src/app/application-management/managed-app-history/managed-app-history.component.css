@@ -6,7 +6,9 @@
   --overview-border: #e2e8f0;
   --overview-text: #0f172a;
   --overview-text-muted: #64748b;
-  --accent-orange: #f97316;
+  /* Orange de marque Attijari, unifié avec --am-primary (shared) et --ad-orange (application-detail) —
+     avant ce correctif c'était #f97316 (Tailwind orange-500), une teinte proche mais différente. */
+  --accent-orange: #f36c21;
   --success: #22c55e;
   --danger: #ef4444;
   display: block;
@@ -164,7 +166,7 @@
 }
 
 .mah-select:focus {
-  outline: 2px solid rgba(249, 115, 22, 0.35);
+  outline: 2px solid rgba(243, 108, 33, 0.35);
   border-color: #fdba74;
 }
 
@@ -213,7 +215,7 @@
 }
 
 .mah-search-input:focus {
-  outline: 2px solid rgba(249, 115, 22, 0.35);
+  outline: 2px solid rgba(243, 108, 33, 0.35);
   border-color: #fdba74;
 }
 
@@ -283,7 +285,7 @@
 
 .marker-pipeline {
   background: var(--accent-orange);
-  border: 2px solid rgba(249, 115, 22, 0.3);
+  border: 2px solid rgba(243, 108, 33, 0.3);
 }
 
 .timeline-content {
@@ -336,7 +338,7 @@
 }
 
 .mah-kind-label--scan {
-  background: rgba(249, 115, 22, 0.1);
+  background: rgba(243, 108, 33, 0.1);
   color: #c2410c;
 }
 
@@ -486,7 +488,7 @@
 }
 
 .status-pending {
-  background: rgba(249, 115, 22, 0.1);
+  background: rgba(243, 108, 33, 0.1);
   color: var(--accent-orange);
 }
 
@@ -658,7 +660,7 @@
 
 .timeline-item--selected .timeline-content {
   border-color: var(--accent-orange);
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.2);
+  box-shadow: 0 0 0 1px rgba(243, 108, 33, 0.2);
 }
 
 .mah-scan-detail .ds-ops-tabs {
@@ -827,9 +829,35 @@
   text-decoration: underline;
 }
 
+/* Tablette : la barre de filtres (recherche + période + statut + service) était le seul
+   point de rupture manquant entre le desktop pleine largeur et le passage mobile à 768px
+   — elle se retassait sans jamais aérer avant ce seuil. */
+@media (max-width: 1024px) {
+  .mah-extra-filters {
+    gap: 0.65rem 0.85rem;
+  }
+  .mah-select {
+    min-width: 9rem;
+  }
+}
+
 @media (max-width: 768px) {
   .mah-page.activity-page-container {
     padding: 1rem;
+  }
+
+  .mah-extra-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .mah-field,
+  .mah-search {
+    width: 100%;
+    min-width: 0;
+  }
+  .mah-select {
+    min-width: 0;
+    width: 100%;
   }
 
   .activity-page-header {
