@@ -1,27 +1,33 @@
 import {
   Component,
   ElementRef,
+  EventEmitter,
   Input,
   NgZone,
   OnChanges,
   OnDestroy,
+  Output,
   SimpleChanges,
   ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import Chart from 'chart.js/auto';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import {
   AppDeployment,
+  AppServiceModel,
+  ClusterCapacityInfo,
   DeploymentMonitorAlert,
   DeploymentMonitoringResponse,
   DeploymentPodInfo,
   DeploymentQuotaInfo,
   MonitoringEvent,
   MonitoringServiceInfo,
-  MonitoringWorkload
+  MonitoringWorkload,
+  NetworkPolicyInfo
 } from '../../models/application-management/application-management.models';
 
 interface HistoryPoint {
@@ -39,7 +45,7 @@ const POLL_MS = 15000;
 @Component({
   selector: 'app-monitoring-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './monitoring-dashboard.component.html',
   styleUrls: ['./monitoring-dashboard.component.css', '../shared/app-management.shared.css']
 })
@@ -47,6 +53,16 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   @Input() appId!: string;
   @Input() deployment!: AppDeployment;
   @Input() appName = '';
+  /** Services de l'app — filtre workload (annexe §5). */
+  @Input() appServices: AppServiceModel[] = [];
+
+  /**
+   * Navigation vers la section Alertes, filtrée sur un workload précis — évite de devoir
+   * recopier soi-même le nom du workload Degraded dans la recherche d'Alertes (retour
+   * utilisateur du 18 août 2026 : « y a un seul moyen pour voir ce qui se passe, dans les
+   * alertes » — pas de lien direct depuis Workloads).
+   */
+  @Output() navigateSection = new EventEmitter<{ section: string; q?: string }>();
 
   @ViewChild('cpuTimeCanvas') cpuTimeCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('memTimeCanvas') memTimeCanvas?: ElementRef<HTMLCanvasElement>;
@@ -66,15 +82,30 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   historyLoading = false;
 
   filter = '';
+  /** Filtre par nom de service (match workload). */
+  serviceFilter = '';
+  /**
+   * Filtre nœud pour les cartes « Capacité nœud » : 'app' (défaut, le/les nœud(s) qui hébergent
+   * les pods de CETTE appli), 'all' (agrégat cluster complet), ou un nom de nœud précis. Par
+   * défaut sur 'app' — un utilisateur qui regarde le monitoring de son appli veut voir la
+   * capacité du nœud qui la fait tourner, pas un chiffre cluster-entier sans contexte (retour
+   * utilisateur du 18 août 2026 : cluster passé de 1 à 2 nœuds, confusion sur "quel nœud ?").
+   */
+  nodeFilter = 'app';
   selectedPod: string | null = null;
+  selectedPodWorkload: string | null = null;
   logs = '';
   logsLoading = false;
   logsError: string | null = null;
+  logsActualPod: string | null = null;
+  /** Panneau événements récents (repliable). */
+  eventsOpen = false;
 
   private poll?: Subscription;
   private history: HistoryPoint[] = [];
   private renderTimer?: ReturnType<typeof setTimeout>;
   private rendering = false;
+  private visibilityBound = () => this.onVisibilityChange();
 
   private cpuTimeChart?: Chart;
   private memTimeChart?: Chart;
@@ -91,7 +122,11 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   constructor(
     private api: ApplicationManagementService,
     private zone: NgZone
-  ) {}
+  ) {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.visibilityBound);
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['deployment'] || changes['appId']) {
@@ -121,7 +156,21 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     }
   }
 
+  private onVisibilityChange(): void {
+    if (typeof document === 'undefined') return;
+    if (document.hidden) {
+      this.stopPoll();
+      return;
+    }
+    if (this.rangeMode !== 'live' || this.isInactive || !this.appId || !this.deployment?.id) return;
+    this.refresh();
+    this.startLivePoll();
+  }
+
   private startLivePoll(): void {
+    this.stopPoll();
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.rangeMode !== 'live' || this.isInactive) return;
     this.zone.runOutsideAngular(() => {
       this.poll = interval(POLL_MS)
         .pipe(switchMap(() => this.api.getDeploymentMonitoring(this.appId, this.deployment.id)))
@@ -140,14 +189,15 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     this.api.getMetricsHistory(this.appId, this.deployment.id, from).subscribe({
       next: (res) => {
         this.historyLoading = false;
-        this.history = (res.points || []).map((p) => ({
+        const raw = (res.points || []).map((p) => ({
           t: p.t,
           cpuMilli: p.cpuMilli ?? 0,
           memMi: p.memMi ?? (p.memBytes != null ? p.memBytes / (1024 * 1024) : 0),
-          netRx: 0,
-          netTx: 0,
+          netRx: Number(p.netRx ?? 0) || 0,
+          netTx: Number(p.netTx ?? 0) || 0,
           fsUsedMi: p.fsUsed != null ? p.fsUsed / (1024 * 1024) : 0
         }));
+        this.history = this.convertCumulativeNetToRates(raw);
         this.scheduleCharts();
         // Garde aussi un snapshot live pour KPIs / pods
         this.refresh();
@@ -159,7 +209,51 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /**
+   * Les samples DB stockent des compteurs cumulés (bytes) ; les charts live
+   * affichent un débit (bytes/s). Convertit les points serveur en rates.
+   */
+  private convertCumulativeNetToRates(points: HistoryPoint[]): HistoryPoint[] {
+    if (!points.length) return [];
+    const out: HistoryPoint[] = [{ ...points[0], netRx: 0, netTx: 0 }];
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const t0 = Date.parse(prev.t);
+      const t1 = Date.parse(cur.t);
+      const dt = Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0
+        ? (t1 - t0) / 1000
+        : 300; // fallback ~sampler 5 min
+      const rxRate = Math.max(0, (cur.netRx - prev.netRx) / dt);
+      const txRate = Math.max(0, (cur.netTx - prev.netTx) / dt);
+      out.push({
+        ...cur,
+        netRx: rxRate,
+        netTx: txRate,
+        t: this.formatHistoryLabel(cur.t)
+      });
+    }
+    if (out.length) {
+      out[0] = { ...out[0], t: this.formatHistoryLabel(points[0].t) };
+    }
+    return out;
+  }
+
+  private formatHistoryLabel(isoOrLabel: string): string {
+    const ms = Date.parse(isoOrLabel);
+    if (!Number.isFinite(ms)) return isoOrLabel;
+    return new Date(ms).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
   ngOnDestroy(): void {
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityBound);
+    }
     this.stopPoll();
     if (this.renderTimer) clearTimeout(this.renderTimer);
     this.destroyCharts();
@@ -169,8 +263,45 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     return this.deployment?.status === 'STOPPED' || this.deployment?.status === 'FAILED';
   }
 
+  get metricsAvailable(): boolean {
+    return this.data?.summary?.metricsAvailable === true;
+  }
+
+  get expiresAtLabel(): string | null {
+    const raw = this.data?.expiresAt || this.deployment?.expiresAt;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  get checkedAtLabel(): string | null {
+    const raw = this.data?.checkedAt;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  get showNetChart(): boolean {
+    if (this.rangeMode === 'live') return true;
+    return this.history.some(h => h.netRx > 0 || h.netTx > 0);
+  }
+
   get pods(): DeploymentPodInfo[] {
-    const all = this.data?.pods || [];
+    let all = this.data?.pods || [];
+    const sf = this.serviceFilter.trim().toLowerCase();
+    if (sf) {
+      all = all.filter(p => {
+        const wl = (p.workload || p.name || '').toLowerCase();
+        return wl.includes(sf);
+      });
+    }
     const q = this.filter.trim().toLowerCase();
     if (!q) return all;
     return all.filter(p =>
@@ -183,20 +314,49 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   get workloads(): MonitoringWorkload[] {
     const fromApi = this.data?.workloads || [];
-    if (fromApi.length) return fromApi;
-    const map = new Map<string, MonitoringWorkload>();
-    for (const p of this.data?.pods || []) {
-      const name = p.workload || p.name;
-      const cur = map.get(name) || {
-        kind: 'Workload', name, desired: 0, ready: 0, available: 0, updated: 0, healthy: false
-      };
-      cur.desired++;
-      if (p.ready && p.phase === 'Running') cur.ready++;
-      cur.available = cur.ready;
-      cur.healthy = cur.desired > 0 && cur.ready >= cur.desired;
-      map.set(name, cur);
+    let list: MonitoringWorkload[];
+    if (fromApi.length) {
+      list = fromApi;
+    } else {
+      const map = new Map<string, MonitoringWorkload>();
+      for (const p of this.data?.pods || []) {
+        const name = p.workload || p.name;
+        const cur = map.get(name) || {
+          kind: 'Workload', name, desired: 0, ready: 0, available: 0, updated: 0, healthy: false
+        };
+        cur.desired++;
+        if (p.ready && p.phase === 'Running') cur.ready++;
+        cur.available = cur.ready;
+        cur.healthy = cur.desired > 0 && cur.ready >= cur.desired;
+        map.set(name, cur);
+      }
+      list = [...map.values()];
     }
-    return [...map.values()];
+    const sf = this.serviceFilter.trim().toLowerCase();
+    if (!sf) return list;
+    return list.filter(w => (w.name || '').toLowerCase().includes(sf));
+  }
+
+  /**
+   * Pods manquants (desired - ready) sur les workloads visibles — un pod rejeté par le quota
+   * namespace ou faute de capacité nœud n'existe jamais comme objet K8s, donc l'onglet Pods ne
+   * peut afficher QUE ce qui existe (tous "Ready") : l'écart n'est visible que dans Workloads
+   * (badge Degraded) et les Alertes. Indicateur ajouté directement ici pour ne pas obliger à
+   * recouper les deux onglets (audit-deploiement.md §8, retour utilisateur du 18 août 2026).
+   */
+  get missingPodsCount(): number {
+    return this.workloads.reduce((sum, w) => sum + Math.max(0, (w.desired || 0) - (w.ready || 0)), 0);
+  }
+
+  get degradedWorkloadNames(): string {
+    return this.workloads
+      .filter(w => (w.desired || 0) > (w.ready || 0))
+      .map(w => w.name)
+      .join(', ');
+  }
+
+  get firstDegradedWorkloadName(): string {
+    return this.workloads.find(w => (w.desired || 0) > (w.ready || 0))?.name || '';
   }
 
   get services(): MonitoringServiceInfo[] {
@@ -241,6 +401,96 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   get quotaMemActualPct(): number {
     const p = this.quota?.pctActualVsHard?.memory;
     return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  /** Isolation réseau du namespace — active par défaut au déploiement (AppK8sManifestService), relue ici pour la vérifier après coup. */
+  get networkPolicy(): NetworkPolicyInfo | null {
+    return this.data?.networkPolicy || null;
+  }
+
+  /**
+   * Capacité réelle du nœud K8s (allocatable - déjà utilisé par TOUS les namespaces) — jusqu'ici
+   * visible uniquement dans la modale Déployer, jamais en dehors. Ajouté ici pour consulter ces
+   * chiffres sans devoir ouvrir la modale (retour utilisateur du 18 août 2026).
+   */
+  get clusterCapacity(): ClusterCapacityInfo | null {
+    return this.data?.clusterCapacity || null;
+  }
+
+  /** Noms distincts des nœuds qui hébergent au moins un pod de cette appli (depuis la liste Pods). */
+  get appNodeNames(): string[] {
+    const names = new Set<string>();
+    for (const p of this.data?.pods || []) {
+      if (p.node) names.add(p.node);
+    }
+    return [...names];
+  }
+
+  /**
+   * Capacité affichée dans les cartes « Capacité nœud », selon le filtre sélectionné : l'agrégat
+   * cluster ('all') ou la somme des nœuds de cette appli ('app', défaut — le seul autre choix
+   * proposé à l'utilisateur, pas de sélection d'un nœud précis : trop de détail hors-sujet pour
+   * quelqu'un qui regarde le monitoring de SON appli, cf. retour utilisateur du 18 août 2026).
+   * Recalculé depuis le détail par nœud, jamais depuis l'agrégat cluster qui peut être trompeur
+   * dès qu'il y a plus d'un nœud.
+   */
+  get selectedNodeCapacity(): {
+    allocCpu: number; usedCpu: number; availCpu: number;
+    allocMem: number; usedMem: number; availMem: number;
+    allocDisk: number; usedDisk: number; availDisk: number;
+    label: string;
+  } | null {
+    const c = this.clusterCapacity;
+    if (!c?.enabled) return null;
+
+    if (this.nodeFilter === 'all') {
+      return {
+        allocCpu: c.allocatableCpuCores || 0, usedCpu: c.usedCpuCores || 0, availCpu: c.availableCpuCores || 0,
+        allocMem: c.allocatableMemoryBytes || 0, usedMem: c.usedMemoryBytes || 0, availMem: c.availableMemoryBytes || 0,
+        allocDisk: c.allocatableDiskBytes || 0, usedDisk: c.usedDiskBytes || 0, availDisk: c.availableDiskBytes || 0,
+        label: 'Cluster complet (' + (c.nodeCount || (c.nodes?.length ?? 0)) + ' nœuds)'
+      };
+    }
+
+    const nodes = c.nodes || [];
+    const targetNames = this.appNodeNames;
+
+    if (!targetNames.length) {
+      // App pas encore planifiée / nœud inconnu → pas de repli silencieux sur l'agrégat trompeur.
+      return null;
+    }
+    const selected = nodes.filter(n => targetNames.includes(n.name));
+    const sum = selected.reduce((acc, n) => ({
+      allocCpu: acc.allocCpu + n.allocatableCpuCores,
+      usedCpu: acc.usedCpu + n.usedCpuCores,
+      availCpu: acc.availCpu + n.availableCpuCores,
+      allocMem: acc.allocMem + n.allocatableMemoryBytes,
+      usedMem: acc.usedMem + n.usedMemoryBytes,
+      availMem: acc.availMem + n.availableMemoryBytes,
+      allocDisk: acc.allocDisk + (n.allocatableDiskBytes || 0),
+      usedDisk: acc.usedDisk + (n.usedDiskBytes || 0),
+      availDisk: acc.availDisk + (n.availableDiskBytes || 0)
+    }), { allocCpu: 0, usedCpu: 0, availCpu: 0, allocMem: 0, usedMem: 0, availMem: 0, allocDisk: 0, usedDisk: 0, availDisk: 0 });
+    const label = selected.length > 1 ? selected.map(n => n.name).join(' + ') : (selected[0]?.name || 'Nœud de l’app');
+    return { ...sum, label };
+  }
+
+  get clusterCpuUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocCpu) return 0;
+    return Math.min(100, Math.round((s.usedCpu / s.allocCpu) * 100));
+  }
+
+  get clusterMemUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocMem) return 0;
+    return Math.min(100, Math.round((s.usedMem / s.allocMem) * 100));
+  }
+
+  get clusterDiskUsedPct(): number {
+    const s = this.selectedNodeCapacity;
+    if (!s?.allocDisk) return 0;
+    return Math.min(100, Math.round((s.usedDisk / s.allocDisk) * 100));
   }
 
   formatQuotaCpu(cores: number | null | undefined): string {
@@ -357,14 +607,18 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   }
 
   openLogs(pod: DeploymentPodInfo): void {
+    if (!pod?.name) return;
     this.selectedPod = pod.name;
+    this.selectedPodWorkload = pod.workload || null;
+    this.logsActualPod = null;
     this.logs = '';
     this.logsError = null;
     this.logsLoading = true;
-    const wl = pod.workload || pod.name;
-    this.api.getDeploymentLogs(this.appId, this.deployment.id, wl, 200).subscribe({
+    // Toujours le nom de pod exact (backend résout d'abord withName).
+    this.api.getDeploymentLogs(this.appId, this.deployment.id, pod.name, 300).subscribe({
       next: (res) => {
         this.logs = res.logs || '';
+        this.logsActualPod = res.pod || pod.name;
         this.logsLoading = false;
       },
       error: (e) => {
@@ -376,8 +630,17 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   closeLogs(): void {
     this.selectedPod = null;
+    this.selectedPodWorkload = null;
+    this.logsActualPod = null;
     this.logs = '';
     this.logsError = null;
+  }
+
+  refreshLogs(): void {
+    if (!this.selectedPod || !this.data?.pods) return;
+    const pod = this.data.pods.find(p => p.name === this.selectedPod);
+    if (pod) this.openLogs(pod);
+    else this.openLogs({ name: this.selectedPod, workload: this.selectedPodWorkload || undefined } as DeploymentPodInfo);
   }
 
   healthClass(): string {
@@ -385,10 +648,6 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
     if (this.health.ok === true) return 'md-pill ok';
     if (this.health.ok === false) return 'md-pill bad';
     return 'md-pill muted';
-  }
-
-  alertClass(sev: string): string {
-    return sev === 'error' ? 'am-alert-error' : 'am-alert-warn';
   }
 
   eventClass(type?: string | null): string {

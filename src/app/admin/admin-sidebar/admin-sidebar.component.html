@@ -18,15 +18,11 @@
       <h3 class="section-label"><span>Tableau de bord</span></h3>
       <div class="nav-items">
         <a
-          routerLink="/admin/home"
+          routerLink="/admin/overview"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: true }"
           class="nav-item"
         >
-          <span class="nav-dot"></span>
-          <span class="nav-text">Accueil</span>
-        </a>
-        <a routerLink="/admin/overview" routerLinkActive="active" class="nav-item">
           <span class="nav-dot"></span>
           <span class="nav-text">Vue d’ensemble</span>
         </a>
@@ -69,11 +65,15 @@
     </section>
 
     <section class="sidebar-section">
-      <h3 class="section-label"><span>Inventaire</span></h3>
+      <h3 class="section-label"><span>Ressources</span></h3>
       <div class="nav-items">
-        <a routerLink="/admin/inventory" routerLinkActive="active" class="nav-item">
+        <a routerLink="/admin/applications" routerLinkActive="active" class="nav-item">
           <span class="nav-dot"></span>
-          <span class="nav-text">Apps &amp; environnements</span>
+          <span class="nav-text">Applications</span>
+        </a>
+        <a routerLink="/admin/environments" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Environnements</span>
         </a>
       </div>
     </section>
@@ -81,6 +81,10 @@
     <section class="sidebar-section">
       <h3 class="section-label"><span>Infra (lecture)</span></h3>
       <div class="nav-items">
+        <a routerLink="/admin/monitoring" routerLinkActive="active" class="nav-item">
+          <span class="nav-dot"></span>
+          <span class="nav-text">Monitoring</span>
+        </a>
         <a routerLink="/admin/observability" routerLinkActive="active" class="nav-item">
           <span class="nav-dot"></span>
           <span class="nav-text">Observabilité</span>

@@ -1,13 +1,25 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { of, Subject, combineLatest } from 'rxjs';
+import { catchError, distinctUntilChanged, map, takeUntil } from 'rxjs/operators';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
 import { PipelineScanResponse, PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
 import { ToastService } from '../../services/ui/toast.service';
 import { AiAnalysisService } from '../../services/ai/ai-analysis.service';
 import { AnalyzeArtifactResponse } from '../../models/ai/analyze-artifact.model';
+import { ChatTurn } from '../../models/ai/explain-pipeline-logs.model';
+import { ApplicationManagementService } from '../../services/application-management/application-management.service';
+import { AppDeployment } from '../../models/application-management/application-management.models';
+import { sortStageNames } from '../../shared/ci-stage-order';
+
+/** Un message du fil de discussion avec l'assistant pipeline. */
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  /** true = analyse approfondie (modèle plus lent, plus fiable) — connu après le 1er événement du flux. */
+  deep?: boolean;
+}
 
 @Component({
   selector: 'app-pipeline-details',
@@ -18,11 +30,23 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
   envId = '';
   pipelineIdOnly: number | null = null;
+  /** Service (/project/:appId) ou app managée (/projects/:id). */
+  contextAppId: string | null = null;
+  /** true si URL sous /projects/:id/... */
+  managedAppContext = false;
+  /** Affiché dans le layout EnviroTest (sidebar app/service) — pas de double shell. */
+  inAppShell = false;
   data?: PipelineScanResponse;
   loading = false;
   error: string | null = null;
   /** SCAN | DEPLOY — depuis query param ou déduit des jobs. */
   pipelineKind: 'SCAN' | 'DEPLOY' | null = null;
+
+  /** Déploiement correspondant (namespace/URL/services) — bannière « Résultat du déploiement ». */
+  deployResult: AppDeployment | null = null;
+  deployResultLoading = false;
+  private deployResultPipelineId: number | null = null;
+  private deployPhasePoll?: ReturnType<typeof setInterval>;
 
   selectedJob?: PipelineJobInfo;
   selectedJobLogs?: string;
@@ -38,10 +62,48 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   aiAnalysisLoading = false;
   aiAnalysisError: string | null = null;
 
+  /**
+   * Agent IA — vraie conversation, une par job. Conservée tant qu'on reste sur cette page (change
+   * de job et revient = retrouve la discussion), remise à zéro seulement si on la vide explicitement
+   * ou qu'on charge un autre pipeline (retour utilisateur du 17 août 2026).
+   */
+  private chatHistoryByJob = new Map<string, ChatMessage[]>();
+  logAiLoading = false;
+  logAiError: string | null = null;
+  logAiQuestion = '';
+
+  private get currentChatKey(): string {
+    return this.selectedJob?.id != null ? String(this.selectedJob.id) : '__overview__';
+  }
+
+  /** Fil de discussion du job actuellement affiché (ou vue d'ensemble si aucun job sélectionné). */
+  get chatMessages(): ChatMessage[] {
+    const key = this.currentChatKey;
+    if (!this.chatHistoryByJob.has(key)) {
+      this.chatHistoryByJob.set(key, []);
+    }
+    return this.chatHistoryByJob.get(key)!;
+  }
+
+  /** Vide la conversation du job actuellement affiché pour repartir de zéro. */
+  clearChat(): void {
+    this.chatHistoryByJob.set(this.currentChatKey, []);
+    this.logAiError = null;
+    this.cdr.detectChanges();
+  }
+
   private pollId?: any;
   private lastAutoScrollJobId?: number;
   /** true = l'utilisateur a cliqué manuellement sur un job (pas de suivi auto). */
   private jobSelectionPinned = false;
+  private readonly destroy$ = new Subject<void>();
+
+  /** Stages explicitement dépliés/repliés par l'utilisateur (override du repli auto des stages verts). */
+  private stageOverrides = new Map<string, boolean>();
+
+  /** Suivi auto du bas des logs — coupé si l'utilisateur remonte manuellement. */
+  logsFollowing = true;
+  @ViewChild('logsConsole') private logsConsoleEl?: ElementRef<HTMLDivElement>;
 
   constructor(
     private route: ActivatedRoute,
@@ -49,48 +111,403 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     private pipelineService: PipelineService,
     private toastService: ToastService,
     private aiAnalysisService: AiAnalysisService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private appMgmt: ApplicationManagementService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
+    combineLatest([
+      this.route.paramMap,
+      this.route.queryParamMap
+    ]).pipe(
+      map(([pm, qm]) => ({
+        pipelineId: pm.get('pipelineId') || '',
+        envId: pm.get('envId') || '',
+        kind: (qm.get('kind') || '').toUpperCase()
+      })),
+      distinctUntilChanged((a, b) =>
+        a.pipelineId === b.pipelineId && a.envId === b.envId && a.kind === b.kind
+      ),
+      takeUntil(this.destroy$)
+    ).subscribe(() => this.resolveAndLoad());
+  }
+
+  private resolveAndLoad(): void {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+      this.pollId = undefined;
+    }
+    this.data = undefined;
+    this.error = null;
+    this.selectedJob = undefined;
+    this.jobSelectionPinned = false;
+    this.stageOverrides.clear();
+    this.logsFollowing = true;
+    this.chatHistoryByJob.clear(); // nouveau pipeline chargé = nouveau contexte, on repart de zéro
+
     const kindParam = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
     if (kindParam === 'SCAN' || kindParam === 'DEPLOY') {
       this.pipelineKind = kindParam;
     }
+
+    this.contextAppId = this.resolveContextAppId();
+    this.managedAppContext = this.isManagedAppRoute();
+    this.inAppShell = this.isInAppShell();
+
     const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
+    this.pipelineIdOnly = null;
+
     if (pipelineIdParam) {
       const pid = Number(pipelineIdParam);
       if (!Number.isNaN(pid) && pid > 0) {
         this.pipelineIdOnly = pid;
+        this.rememberPipeline(pid);
         this.loadPipelineById();
         return;
       }
     }
     if (this.envId) {
       this.loadPipeline();
-    } else {
-      this.error = 'Pipeline invalide';
+      return;
     }
+    // Sidebar « Détail pipeline » sans id → dernier pipeline (filtre kind)
+    this.loadLatestForContext();
+  }
+
+  private resolveContextAppId(): string | null {
+    let r: ActivatedRoute | null = this.route;
+    while (r) {
+      const appId = r.snapshot.paramMap.get('appId');
+      if (appId) return appId;
+      const id = r.snapshot.paramMap.get('id');
+      if (id && this.router.url.includes('/projects/')) return id;
+      r = r.parent;
+    }
+    return this.route.snapshot.queryParamMap.get('appId');
+  }
+
+  private isManagedAppRoute(): boolean {
+    return this.router.url.split(/[?#]/)[0].startsWith('/projects/');
+  }
+
+  private isInAppShell(): boolean {
+    const path = this.router.url.split(/[?#]/)[0];
+    return path.startsWith('/projects/') || path.startsWith('/project/');
+  }
+
+  private rememberPipeline(pipelineId: number): void {
+    try {
+      localStorage.setItem('envirotest-last-pipeline-id', String(pipelineId));
+      if (this.contextAppId) {
+        localStorage.setItem(`envirotest-last-pipeline-id:${this.contextAppId}`, String(pipelineId));
+      }
+      if (this.pipelineKind) {
+        localStorage.setItem('envirotest-last-pipeline-kind', this.pipelineKind);
+      }
+    } catch { /* ignore */ }
+  }
+
+  /** Oublie le pipeline mémorisé (ex. après échec de chargement) — évite une redirection en boucle. */
+  private forgetRememberedPipeline(): void {
+    try {
+      localStorage.removeItem('envirotest-last-pipeline-id');
+      if (this.contextAppId) {
+        localStorage.removeItem(`envirotest-last-pipeline-id:${this.contextAppId}`);
+      }
+    } catch { /* ignore */ }
+  }
+
+  private loadLatestForContext(): void {
+    this.loading = true;
+    this.error = null;
+
+    const remembered = this.readRememberedPipelineId();
+    if (remembered) {
+      this.pipelineIdOnly = remembered;
+      this.loadPipelineById();
+      return;
+    }
+
+    if (this.managedAppContext && this.contextAppId) {
+      this.loadLatestManagedAppPipeline();
+      return;
+    }
+
+    if (this.contextAppId) {
+      this.pipelineService.listPipelines(0, 30, this.contextAppId, this.pipelineKind || null).subscribe({
+        next: list => {
+          const item = (list || [])[0];
+          if (item?.pipelineId) {
+            this.pipelineIdOnly = item.pipelineId;
+            this.rememberPipeline(item.pipelineId);
+            this.loadPipelineById();
+          } else if (item?.environmentId) {
+            this.envId = item.environmentId;
+            this.loadPipeline();
+          } else {
+            this.loading = false;
+            this.error = this.emptyPipelineMessage();
+          }
+        },
+        error: () => {
+          this.loading = false;
+          this.error = this.emptyPipelineMessage();
+        }
+      });
+      return;
+    }
+
+    this.pipelineService.getLatestPipeline().subscribe({
+      next: latest => {
+        if (latest?.pipelineId || latest?.id) {
+          const pid = Number(latest.pipelineId ?? latest.id);
+          if (!Number.isNaN(pid) && pid > 0) {
+            this.pipelineIdOnly = pid;
+            this.loadPipelineById();
+            return;
+          }
+        }
+        if (latest?.environmentId) {
+          this.envId = latest.environmentId;
+          this.loadPipeline();
+          return;
+        }
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      },
+      error: () => {
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      }
+    });
+  }
+
+  private loadLatestManagedAppPipeline(): void {
+    if (!this.contextAppId) return;
+    if (this.pipelineKind === 'DEPLOY') {
+      this.appMgmt.listDeployments(this.contextAppId).pipe(
+        catchError(() => of([])),
+        takeUntil(this.destroy$)
+      ).subscribe(deps => {
+        const withPipe = (deps || []).find(d => !!d.gitlabPipelineId);
+        if (withPipe?.gitlabPipelineId) {
+          this.pipelineIdOnly = withPipe.gitlabPipelineId;
+          this.rememberPipeline(withPipe.gitlabPipelineId);
+          this.loadPipelineById();
+        } else {
+          this.loading = false;
+          this.error = this.emptyPipelineMessage();
+        }
+      });
+      return;
+    }
+    this.appMgmt.listScanBatches(this.contextAppId).pipe(
+      catchError(() => of([])),
+      takeUntil(this.destroy$)
+    ).subscribe(batches => {
+      const withPipe = (batches || []).find(b => !!b.gitlabPipelineId);
+      if (withPipe?.gitlabPipelineId) {
+        this.pipelineIdOnly = withPipe.gitlabPipelineId!;
+        this.rememberPipeline(withPipe.gitlabPipelineId!);
+        this.loadPipelineById();
+      } else {
+        this.loading = false;
+        this.error = this.emptyPipelineMessage();
+      }
+    });
+  }
+
+  private readRememberedPipelineId(): number | null {
+    try {
+      const storedKind = localStorage.getItem('envirotest-last-pipeline-kind');
+      if (this.pipelineKind && storedKind && storedKind !== this.pipelineKind) {
+        return null;
+      }
+      const keyed = this.contextAppId
+        ? localStorage.getItem(`envirotest-last-pipeline-id:${this.contextAppId}`)
+        : null;
+      const raw = keyed || localStorage.getItem('envirotest-last-pipeline-id');
+      const n = raw ? Number(raw) : NaN;
+      return !Number.isNaN(n) && n > 0 ? n : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Reflète pipelineKind (résolu via inferPipelineKind, quand la route n'avait pas de ?kind=
+   * explicite -- ex. "dernier pipeline pour ce contexte") dans l'URL affichée. Sans ça, la sidebar
+   * (envirotest-nav-sidebar.syncFromUrl) lit ?kind= directement depuis l'URL courante pour savoir
+   * quelle section est active -- une page DEPLOY chargée sans ce paramètre se lit alors comme
+   * "kind inconnu", et keyFromAppSection()/keyFromServiceSection() y défaut sur 'pipeline-detail-scan'.
+   * Symptôme réel constaté le 29/08/2026 : app → détail pipeline DEPLOY affiché correctement, mais
+   * "entrer dans le service" depuis là bascule vers le détail du pipeline SCAN (queryForActiveKey()
+   * suit l'activeKey déjà faussé) -- pas le pipeline DEPLOY en cours qu'on regardait. replaceUrl:true
+   * pour ne pas polluer l'historique navigateur d'une entrée par résolution.
+   */
+  private syncKindToUrl(): void {
+    if (!this.pipelineKind) return;
+    const current = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
+    if (current === this.pipelineKind) return;
+    // router.navigate (pas Location.replaceState) : envirotest-nav-sidebar ne se resynchronise
+    // QUE sur les événements NavigationEnd du routeur (jamais sur un simple changement d'URL) --
+    // un replaceState "silencieux" laisserait la sidebar bloquée sur l'ancien kind déduit (donc le
+    // bug d'origine) jusqu'à la prochaine vraie navigation. Coût accepté : un rechargement
+    // redondant (queryParamMap change -> resolveAndLoad() se relance), mais pipelineKind est déjà
+    // fixé à ce moment-là donc pas de 2e appel à syncKindToUrl -- pas de boucle.
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { kind: this.pipelineKind },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
+  }
+
+  private emptyPipelineMessage(): string {
+    if (this.pipelineKind === 'DEPLOY') {
+      return 'Aucun pipeline de déploiement — lance un déploiement pour suivre les jobs ici.';
+    }
+    if (this.pipelineKind === 'SCAN') {
+      return 'Aucun pipeline de scan — lance un scan pour suivre les jobs ici.';
+    }
+    return 'Aucun pipeline disponible. Lance un scan ou un déploiement.';
   }
 
   loadPipelineById(): void {
     if (this.pipelineIdOnly == null) return;
     this.loading = true;
     this.error = null;
-    const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+    const appId = this.contextAppId
+      || this.route.snapshot.queryParamMap.get('appId')
+      || undefined;
+    // Le backend accepte maintenant un UUID d'appli managée en plus d'un service isolé
+    // (voir PipelineController#getByPipelineId) — plus besoin de l'omettre ici.
     this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
       next: res => {
         this.applyPipelineUpdate(res);
         this.loading = false;
         this.autoFollowRunningJob();
         this.ensurePolling();
+        if (this.pipelineIdOnly) this.rememberPipeline(this.pipelineIdOnly);
       },
       error: err => {
         this.loading = false;
         this.error = err.error?.message || 'Erreur lors du chargement du pipeline';
+        // Évite de rester bloqué indéfiniment sur un ID mémorisé (localStorage) devenu invalide.
+        this.forgetRememberedPipeline();
       }
     });
+  }
+
+  /**
+   * Bannière « Résultat du déploiement » : ne concerne que les pipelines de déploiement,
+   * dans le contexte d'une app managée. Un seul appel par pipeline (pas à chaque poll).
+   */
+  private maybeLoadDeployResult(pipelineId: number | null): void {
+    if (this.pipelineKind !== 'DEPLOY' || !this.contextAppId || !this.managedAppContext) return;
+    if (!pipelineId || pipelineId === this.deployResultPipelineId) return;
+    this.deployResultPipelineId = pipelineId;
+    this.deployResultLoading = true;
+    this.appMgmt.listDeployments(this.contextAppId).subscribe({
+      next: (list) => {
+        this.deployResult = (list || []).find(d => d.gitlabPipelineId === pipelineId) || null;
+        this.deployResultLoading = false;
+        this.trackDeployPhase();
+      },
+      error: () => {
+        this.deployResultLoading = false;
+      }
+    });
+  }
+
+  /** Progression fine (namespace → BD → vague N → ingress) tant que status = DEPLOYING. */
+  private trackDeployPhase(): void {
+    this.stopDeployPhasePoll();
+    if (this.deployResult?.status !== 'DEPLOYING' || !this.contextAppId || !this.deployResult.id) return;
+    const appId = this.contextAppId;
+    const deploymentId = this.deployResult.id;
+    this.deployPhasePoll = setInterval(() => {
+      this.appMgmt.getDeployment(appId, deploymentId).subscribe({
+        next: (dep) => {
+          this.deployResult = dep;
+          if (dep.status !== 'DEPLOYING') this.stopDeployPhasePoll();
+        },
+        error: () => this.stopDeployPhasePoll()
+      });
+    }, 4000);
+  }
+
+  private stopDeployPhasePoll(): void {
+    if (this.deployPhasePoll) {
+      clearInterval(this.deployPhasePoll);
+      this.deployPhasePoll = undefined;
+    }
+  }
+
+  /** Phase courante de l'apply K8s (servicesState.deployPhase, posée côté backend). */
+  get deployPhase(): string | null {
+    return this.deployResult?.servicesState?.['deployPhase'] || null;
+  }
+
+  /** Checklist ordonnée « namespace → BD → vague N → ingress » (servicesState.deploySteps). */
+  get deploySteps(): Array<{ key: string; label: string; status: string; services?: string[] }> {
+    const raw = this.deployResult?.servicesState?.['deploySteps'];
+    return Array.isArray(raw) ? raw : [];
+  }
+
+  openDeployResultRuntime(): void {
+    if (!this.contextAppId) return;
+    this.router.navigate(['/projects', this.contextAppId, 'deployments']);
+  }
+
+  /** Smoke test post-déploiement (servicesState.smokeTest, posé côté backend une fois Ready). */
+  get smokeTest(): { allOk: boolean; results: Record<string, { ok: boolean; message?: string }> } | null {
+    return this.deployResult?.servicesState?.['smokeTest'] || null;
+  }
+
+  /** Résumé Grype (scan de l'image construite) — servicesState.containerScan. */
+  get containerScan(): { critical: number; high: number; medium: number; low: number; imageName?: string } | null {
+    return this.deployResult?.servicesState?.['containerScan'] || null;
+  }
+
+  get containerScanSummary(): string | null {
+    const cs = this.containerScan;
+    if (!cs) return null;
+    return `Image scannée (Grype) : ${cs.critical || 0} critique, ${cs.high || 0} élevée`;
+  }
+
+  get smokeTestSummary(): string | null {
+    const st = this.smokeTest;
+    if (!st?.results) return null;
+    const names = Object.keys(st.results);
+    if (!names.length) return null;
+    const okCount = names.filter(n => st.results[n]?.ok).length;
+    return `Smoke test : ${okCount}/${names.length} service${names.length > 1 ? 's' : ''} OK`;
+  }
+
+  /** Services prêts / attendus, calculé depuis servicesState (même structure que Runtime). */
+  get deployResultServiceSummary(): string | null {
+    const state = this.deployResult?.servicesState as { services?: Record<string, { status?: string }> } | undefined;
+    const services = state?.services;
+    if (!services) return null;
+    const names = Object.keys(services);
+    if (!names.length) return null;
+    const ready = names.filter(n => (services[n]?.status || '').toLowerCase() === 'ready').length;
+    return `${ready}/${names.length} services prêts`;
+  }
+
+  /** Première URL externe trouvée dans servicesState — même logique que Runtime/Historique. */
+  get deployResultUrl(): string | null {
+    const state = this.deployResult?.servicesState as { services?: Record<string, { externalUrl?: string }> } | undefined;
+    const services = state?.services;
+    if (!services) return null;
+    for (const svc of Object.values(services)) {
+      const url = (svc?.externalUrl || '').trim();
+      if (url) return url;
+    }
+    return null;
   }
 
   ngOnDestroy(): void {
@@ -98,6 +515,21 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       clearInterval(this.pollId);
       this.pollId = undefined;
     }
+    this.stopDeployPhasePoll();
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /** Progression globale (jobs terminés/total) — pour la barre sous le header. */
+  get progressStats(): { done: number; total: number; pct: number } {
+    const jobs = this.jobsList;
+    const total = jobs.length;
+    if (!total) return { done: 0, total: 0, pct: 0 };
+    const done = jobs.filter(j => {
+      const s = this.normStatus(j.status);
+      return s === 'SUCCESS' || s === 'FAILED' || s === 'CANCELED' || s === 'SKIPPED';
+    }).length;
+    return { done, total, pct: Math.round((done / total) * 100) };
   }
 
   /** Liste jobs normalisée pour le template. */
@@ -140,7 +572,9 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
     if (!this.pipelineKind) {
       this.pipelineKind = this.inferPipelineKind(nextJobs.length ? nextJobs : this.normalizeJobs(this.data?.jobs));
+      this.syncKindToUrl();
     }
+    this.maybeLoadDeployResult(normalized.pipelineId ?? this.pipelineIdOnly ?? null);
 
     if (!this.data) {
       this.data = normalized;
@@ -240,7 +674,11 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       onDone?.();
     };
     if (this.pipelineIdOnly != null) {
-      const appId = this.route.snapshot.queryParamMap.get('appId') || undefined;
+      // contextAppId d'abord : pour une appli managée (/projects/:id/...), l'id est un
+      // paramètre de route, pas un query param — queryParamMap seul renvoyait toujours vide.
+      const appId = this.contextAppId
+        || this.route.snapshot.queryParamMap.get('appId')
+        || undefined;
       this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
         next: res => {
           this.applyPipelineUpdate(res);
@@ -326,6 +764,14 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         3000
       );
     }
+    if (this.managedAppContext && this.contextAppId) {
+      this.router.navigate(['/projects', this.contextAppId, 'pipelines']);
+      return;
+    }
+    if (this.contextAppId) {
+      this.router.navigate(['/project', this.contextAppId, 'pipelines']);
+      return;
+    }
     this.router.navigate(['/pipelines']);
   }
 
@@ -333,6 +779,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     if (fromUserClick) {
       this.jobSelectionPinned = true;
     }
+    if (job.stage) {
+      this.stageOverrides.set(job.stage, true); // le stage du job sélectionné reste toujours déplié
+    }
+    this.logsFollowing = true; // nouveau job = on suit son log depuis le début
 
     const latest = this.normalizeJobs(this.data?.jobs).find(j => j.id === job.id) ?? job;
 
@@ -352,6 +802,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.scanError = null;
     this.aiAnalysisResult = null;
     this.aiAnalysisError = null;
+    // Pas de reset ici : la conversation de ce job est conservée (chatHistoryByJob), on la
+    // retrouve telle quelle si on revient dessus plus tard (retour utilisateur du 17 août 2026).
+    this.logAiError = null;
+    this.logAiQuestion = '';
     this.loadingJob = true;
 
     this.pipelineService.getJobLogs(latest.id).subscribe({
@@ -359,6 +813,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         this.selectedJobLogs = this.cleanJobLogs(logs);
         this.jobLogsError = null;
         this.loadingJob = false;
+        this.scrollLogsToBottom();
       },
       error: () => {
         this.loadingJob = false;
@@ -425,19 +880,24 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   }
 
   openSecurityDashboard(): void {
-    const appId =
-      this.route.snapshot.queryParamMap.get('appId') ||
-      localStorage.getItem('envirotest-last-project-app-id');
-    if (!appId) {
-      this.router.navigate(['/my-applications']);
-      return;
-    }
     const queryParams: Record<string, string> = {};
     if (this.data?.ref) queryParams['branch'] = this.data.ref;
     if (this.data?.pipelineId) {
       queryParams['pipelineId'] = String(this.data.pipelineId);
-    } else if (this.envId) {
-      queryParams['pipelineId'] = '';
+    }
+
+    if (this.managedAppContext && this.contextAppId) {
+      this.router.navigate(['/projects', this.contextAppId, 'defectdojo'], { queryParams });
+      return;
+    }
+
+    const appId =
+      this.contextAppId ||
+      this.route.snapshot.queryParamMap.get('appId') ||
+      localStorage.getItem('envirotest-last-project-app-id');
+    if (!appId) {
+      this.router.navigate(['/projects']);
+      return;
     }
     this.router.navigate(['/project', appId, 'security-dashboard'], { queryParams });
   }
@@ -522,27 +982,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  /**
-   * Ordre des stages tel que défini dans le .gitlab-ci.yml (pipeline.md).
-   * On ne trie PAS par id de job : un retry GitLab crée un nouveau job id plus élevé
-   * et faisait remonter deploy-k8s en fin de liste après zap/reporting.
-   */
-  private static readonly CI_STAGE_ORDER: string[] = [
-    'setup',
-    'code-analysis',
-    'sca',
-    'sast',
-    'secrets-iac',
-    'build',
-    'container-scan',
-    'push-image',
-    'deploy-k8s',
-    'zap-scan',
-    'reporting',
-    'security-validation',
-    'report'
-  ];
-
   getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
     const jobs = this.normalizeJobs(this.data?.jobs);
     if (!jobs.length) return [];
@@ -559,18 +998,10 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     // Jobs d'un même stage : id croissant (ordre d'apparition GitLab)
     stageMap.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
 
-    const known = PipelineDetailsComponent.CI_STAGE_ORDER;
-    const stageNames = Array.from(stageMap.keys()).sort((a, b) => {
-      const ia = known.indexOf(a.toLowerCase());
-      const ib = known.indexOf(b.toLowerCase());
-      if (ia >= 0 && ib >= 0) return ia - ib;
-      if (ia >= 0) return -1;
-      if (ib >= 0) return 1;
-      // Stages inconnus : premier job id le plus bas
-      const minA = Math.min(...(stageMap.get(a) || []).map(j => j.id ?? 0));
-      const minB = Math.min(...(stageMap.get(b) || []).map(j => j.id ?? 0));
-      return minA - minB;
-    });
+    // Ordre CI (.gitlab-ci.yml) — pas l'ordre d'insertion GitLab / retry
+    const stageNames = sortStageNames(Array.from(stageMap.keys()), (stage) =>
+      Math.min(...(stageMap.get(stage) || []).map(j => j.id ?? 0))
+    );
 
     return stageNames.map((name) => {
       const stageJobs = stageMap.get(name) || [];
@@ -587,6 +1018,69 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       }
       return { name, jobs: stageJobs, status: overallStatus };
     });
+  }
+
+  /** Sélectionne un job en échec et pose directement la question « pourquoi » — raccourci 1 clic. */
+  selectJobAndExplain(job: PipelineJobInfo, event: Event): void {
+    event.stopPropagation();
+    this.selectJob(job, true);
+    const waitForLogsThenAsk = () => {
+      if (!this.loadingJob) {
+        this.sendChatMessage('Pourquoi ce job a échoué ?');
+        return;
+      }
+      setTimeout(waitForLogsThenAsk, 250);
+    };
+    setTimeout(waitForLogsThenAsk, 250);
+  }
+
+  /** Annule tout le pipeline (GitLab) — bouton header, visible tant qu'il tourne. */
+  cancelPipeline(): void {
+    const pipelineId = this.data?.pipelineId;
+    if (!pipelineId || !confirm('Arrêter ce pipeline ? Les jobs en cours seront annulés.')) return;
+    this.pipelineService.cancelPipeline(pipelineId).subscribe({
+      next: () => {
+        this.toastService?.push('success', 'Pipeline arrêté', `Pipeline #${pipelineId} annulé.`, 3000);
+        this.refreshPipelineLive();
+      },
+      error: () => {
+        this.toastService?.push('error', 'Arrêt impossible', `Impossible d'annuler le pipeline #${pipelineId}.`, 3500);
+      }
+    });
+  }
+
+  /** Annule uniquement les jobs en cours/en attente d'un stage — sans toucher au reste du pipeline. */
+  cancelStage(stage: { name: string; jobs: PipelineJobInfo[] }, event: Event): void {
+    event.stopPropagation();
+    const jobs = (stage?.jobs || []).filter(j => {
+      const s = this.normStatus(j.status);
+      return s === 'RUNNING' || s === 'PENDING';
+    });
+    if (!jobs.length) {
+      this.toastService?.push('info', 'Rien à arrêter', 'Ce stage n’a aucun job en cours.', 2500);
+      return;
+    }
+    if (!confirm(`Arrêter le stage « ${stage.name} » (${jobs.length} job${jobs.length > 1 ? 's' : ''} en cours) ?`)) return;
+    jobs.forEach(j => {
+      this.pipelineService.cancelJob(j.id).subscribe({
+        next: () => this.refreshPipelineLive(),
+        error: () => {
+          this.toastService?.push('error', 'Arrêt impossible', `Impossible d'annuler le job #${j.id}.`, 3000);
+        }
+      });
+    });
+  }
+
+  /** Stages verts repliés par défaut (rien à surveiller) — évite de scroller une longue page pour rien. */
+  isStageCollapsed(stage: { name: string; status: string }): boolean {
+    const override = this.stageOverrides.get(stage.name);
+    if (override != null) return !override;
+    const s = this.normStatus(stage.status);
+    return s === 'SUCCESS' || s === 'SKIPPED';
+  }
+
+  toggleStage(stage: { name: string; status: string }): void {
+    this.stageOverrides.set(stage.name, this.isStageCollapsed(stage));
   }
 
   /** Relance tous les jobs échoués/annulés d’un stage. */
@@ -694,11 +1188,40 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         this.selectedJobLogs = this.cleanJobLogs(logs);
         this.jobLogsError = null;
         this.loadingJob = false;
+        this.scrollLogsToBottom();
       },
       error: () => {
         // silencieux pendant l'exécution
       }
     });
+  }
+
+  /** Suit le bas des logs tant que l'utilisateur n'a pas remonté manuellement (logsFollowing). */
+  private scrollLogsToBottom(): void {
+    if (!this.logsFollowing) return;
+    const el = this.logsConsoleEl?.nativeElement;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  /** Coupe le suivi auto si l'utilisateur remonte manuellement ; le réactive s'il revient en bas. */
+  onLogsScroll(): void {
+    const el = this.logsConsoleEl?.nativeElement;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    this.logsFollowing = distanceFromBottom < 40;
+  }
+
+  resumeLogsFollow(): void {
+    this.logsFollowing = true;
+    this.scrollLogsToBottom();
+  }
+
+  get selectedJobRunning(): boolean {
+    const st = this.normStatus(this.selectedJob?.status);
+    return st === 'RUNNING' || st === 'PENDING';
   }
 
   private autoScrollToSelectedJob(): void {
@@ -907,6 +1430,165 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     if (s.includes('MEDIUM')) return 'ai-sev-medium';
     if (s.includes('LOW')) return 'ai-sev-low';
     return 'ai-sev-info';
+  }
+
+  /** Bouton « Demander » — envoie le texte tapé dans le champ libre et vide le champ. */
+  submitTypedQuestion(): void {
+    const text = (this.logAiQuestion || '').trim();
+    if (!text) return;
+    this.logAiQuestion = '';
+    this.sendChatMessage(text);
+  }
+
+  /**
+   * Vraie conversation (historique conservé, pas une question isolée à chaque fois — retour
+   * utilisateur du 17 août 2026) et streamée (SSE) : le texte s'affiche au fil de l'eau au lieu
+   * d'attendre la réponse complète — bien plus supportable quand le secours Ollama local (CPU)
+   * prend 1-2 min à répondre.
+   */
+  sendChatMessage(question: string): void {
+    const text = (question || '').trim();
+    if (!text || this.logAiLoading) return;
+
+    this.logAiLoading = true;
+    this.logAiError = null;
+    // Tours précédents AVANT d'ajouter ce nouvel échange (l'historique envoyé au backend).
+    const history: ChatTurn[] = this.chatMessages
+      .filter(m => m.text.trim().length > 0)
+      .map(m => ({ role: m.role, content: m.text }));
+
+    this.chatMessages.push({ role: 'user', text });
+    const assistantMsg: ChatMessage = { role: 'assistant', text: '' };
+    this.chatMessages.push(assistantMsg);
+    const reveal = this.createSmoothReveal(assistantMsg);
+
+    const stagesOverview = this.getStages()
+      .map(s => `${s.name}=${(s.status || '').toLowerCase()}`)
+      .join('; ');
+
+    let firstChunk = true;
+    this.aiAnalysisService.streamExplainPipelineLogs({
+      logs: this.selectedJobLogs || undefined,
+      jobName: this.selectedJob?.name,
+      stageName: this.selectedJob?.stage,
+      jobStatus: this.selectedJob?.status,
+      pipelineKind: this.pipelineKind || undefined,
+      stagesOverview,
+      projectHint: 'EnviroTest — pipeline GitLab multi-services',
+      projectContext: this.buildAiProjectContext(),
+      userQuestion: text,
+      history
+    },
+    (deep) => {
+      assistantMsg.deep = deep;
+    },
+    (chunk) => {
+      if (firstChunk) {
+        firstChunk = false;
+        setTimeout(() => {
+          try {
+            const thread = document.querySelector('.ai-chat-thread');
+            thread?.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
+          } catch { /* ignore */ }
+        }, 50);
+      }
+      reveal.push(chunk);
+    },
+    () => {
+      this.logAiLoading = false;
+      // Le lissage continue de dérouler ce qui reste en file à son propre rythme — inutile de
+      // forcer l'affichage instantané ici, ça casserait l'effet « texte qui coule ».
+      this.cdr.detectChanges();
+    },
+    (message) => {
+      reveal.cancel();
+      this.logAiLoading = false;
+      this.logAiError = message;
+      const idx = this.chatMessages.indexOf(assistantMsg);
+      if (idx >= 0) this.chatMessages.splice(idx, 1);
+      this.toastService?.push('error', 'Assistant pipeline', message, 5000);
+      this.cdr.detectChanges();
+    });
+  }
+
+  /**
+   * Affiche le texte au rythme régulier d'une machine à écrire, indépendamment de la façon dont
+   * il arrive du réseau (un gros paquet d'un coup si le cache Ollama répond vite, ou plein de
+   * petits — dans les deux cas ça « coule » à l'écran au lieu d'apparaître en bloc — retour
+   * utilisateur du 17 août 2026 : « y a pas de streaming, des blocs d'écriture s'affichent »).
+   * Volontairement rapide (~600 car/s) pour ne jamais ralentir perceptiblement une réponse déjà là.
+   */
+  private createSmoothReveal(msg: ChatMessage): { push: (text: string) => void; cancel: () => void } {
+    let queue = '';
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const CHARS_PER_TICK = 6;
+    const TICK_MS = 10;
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const tick = () => {
+      if (!queue.length) {
+        stop();
+        return;
+      }
+      msg.text += queue.slice(0, CHARS_PER_TICK);
+      queue = queue.slice(CHARS_PER_TICK);
+      this.cdr.detectChanges();
+    };
+    return {
+      push: (text: string) => {
+        queue += text;
+        if (!timer) {
+          timer = setInterval(tick, TICK_MS);
+        }
+      },
+      cancel: () => {
+        stop();
+        queue = '';
+      }
+    };
+  }
+
+  private buildAiProjectContext(): string {
+    const lines: string[] = [];
+    lines.push(`contextAppId: ${this.contextAppId || '—'}`);
+    lines.push(`managedApp: ${this.managedAppContext}`);
+    lines.push(`envId: ${this.envId || '—'}`);
+    lines.push(`pipelineId: ${this.data?.pipelineId ?? this.pipelineIdOnly ?? '—'}`);
+    lines.push(`pipelineStatus: ${this.data?.status || '—'}`);
+    lines.push(`pipelineKind: ${this.pipelineKind || '—'}`);
+    if (this.data?.webUrl) lines.push(`gitlabPipelineUrl: ${this.data.webUrl}`);
+    const jobs = this.normalizeJobs(this.data?.jobs);
+    if (jobs.length) {
+      lines.push('jobs:');
+      for (const j of jobs.slice(0, 20)) {
+        lines.push(`  - ${j.stage || '?'}/${j.name}=${j.status}`);
+      }
+    }
+    // État réel de l'orchestration du déploiement (namespace → BD → vagues → ingress) — donnée
+    // déjà en base, pas une supposition. Donne à l'IA le même niveau d'info que celui utilisé
+    // manuellement pour diagnostiquer un échec (retour utilisateur du 17 août 2026 : « il a accès
+    // à des ressources comme vous ? »). Pas d'exécution de commandes, juste plus de contexte.
+    if (this.pipelineKind === 'DEPLOY' && this.deployResult) {
+      lines.push(`deploiementStatut: ${this.deployResult.status || '—'}`);
+      const steps = this.deploySteps;
+      if (steps.length) {
+        lines.push('deploiementEtapes (ordre réel, avec statut) :');
+        for (const s of steps) {
+          const services = s.services?.length ? ` [${s.services.join(', ')}]` : '';
+          lines.push(`  - ${s.label}${services} = ${s.status}`);
+        }
+      }
+      const state = this.deployResult.servicesState as { ingressApplied?: boolean; ingressError?: string } | undefined;
+      if (state?.ingressApplied != null) {
+        lines.push(`ingressApplique: ${state.ingressApplied}${state.ingressError ? ' (erreur: ' + state.ingressError + ')' : ''}`);
+      }
+    }
+    return lines.join('\n');
   }
 }
 

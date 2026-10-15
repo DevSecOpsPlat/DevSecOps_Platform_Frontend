@@ -4,6 +4,7 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ApplicationService } from '../../services/application/application.service';
 import { ApplicationResponse } from '../../models/application/application-response';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
+import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 
 @Component({
   selector: 'app-user-sidebar',
@@ -13,11 +14,17 @@ import { PipelineService } from '../../services/pipeline/pipeline.service';
 export class UserSidebarComponent implements OnInit {
   /** Dernier projet ouvert (URL /project/:id/...) — pour garder le contexte hors des routes projet. */
   private static readonly LAST_PROJECT_APP_ID_KEY = 'envirotest-last-project-app-id';
+  private static readonly LAST_MANAGED_APP_ID_KEY = 'envirotest-last-managed-app-id';
+  private static readonly LAST_MANAGED_APP_NAME_KEY = 'envirotest-last-managed-app-name';
 
   currentAppId: string | null = null;
   lastEnvId: string | null = null;
   currentApp: ApplicationResponse | null = null;
   project: ApplicationResponse | null = null;
+
+  /** Projet managé parent (dash global) — pour revenir sans rupture. */
+  parentManagedAppId: string | null = null;
+  parentManagedAppName: string | null = null;
   
   pipelineCounts = {
     total: 0,
@@ -40,7 +47,8 @@ export class UserSidebarComponent implements OnInit {
     public authService: AuthService,
     private router: Router,
     private applicationService: ApplicationService,
-    private pipelineService: PipelineService
+    private pipelineService: PipelineService,
+    private appMgmt: ApplicationManagementService
   ) {}
 
   ngOnInit(): void {
@@ -188,6 +196,61 @@ export class UserSidebarComponent implements OnInit {
         this.project = null;
       }
     });
+
+    this.resolveParentManagedApp(this.currentAppId);
+  }
+
+  private resolveParentManagedApp(serviceId: string): void {
+    try {
+      this.parentManagedAppId = localStorage.getItem(UserSidebarComponent.LAST_MANAGED_APP_ID_KEY);
+      this.parentManagedAppName = localStorage.getItem(UserSidebarComponent.LAST_MANAGED_APP_NAME_KEY);
+    } catch {
+      this.parentManagedAppId = null;
+      this.parentManagedAppName = null;
+    }
+
+    this.appMgmt.getDeployContext(serviceId).subscribe({
+      next: (ctx) => {
+        if (ctx?.managedApplicationId) {
+          this.parentManagedAppId = ctx.managedApplicationId;
+          try {
+            localStorage.setItem(UserSidebarComponent.LAST_MANAGED_APP_ID_KEY, ctx.managedApplicationId);
+          } catch { /* ignore */ }
+          if (!this.parentManagedAppName) {
+            this.appMgmt.get(ctx.managedApplicationId).subscribe({
+              next: (app) => {
+                this.parentManagedAppName = app?.name || null;
+                try {
+                  if (app?.name) {
+                    localStorage.setItem(UserSidebarComponent.LAST_MANAGED_APP_NAME_KEY, app.name);
+                  }
+                } catch { /* ignore */ }
+              },
+              error: () => { /* keep cached name if any */ }
+            });
+          }
+        }
+      },
+      error: () => { /* keep localStorage fallback */ }
+    });
+  }
+
+  get backLinkLabel(): string {
+    if (this.parentManagedAppName) return `← ${this.parentManagedAppName}`;
+    if (this.parentManagedAppId) return '← Projet';
+    return '← Applications';
+  }
+
+  backToParent(): void {
+    if (this.parentManagedAppId) {
+      this.router.navigate(['/projects', this.parentManagedAppId, 'dashboard']);
+      return;
+    }
+    this.backToApplications();
+  }
+
+  backToApplications(): void {
+    this.router.navigate(['/projects']);
   }
 
   navigate(path: string): void {
@@ -276,10 +339,6 @@ export class UserSidebarComponent implements OnInit {
   isSonarqubeRoute(): boolean {
     const path = this.router.url.split(/[?#]/)[0];
     return /\/project\/[^/]+\/sonarqube$/.test(path);
-  }
-
-  backToApplications(): void {
-    this.router.navigate(['/my-applications']);
   }
 
   private detectCurrentFilter(url: string): void {

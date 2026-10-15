@@ -2,7 +2,7 @@
   <header class="vuln-header">
     <div class="vuln-header-content">
       <div class="vuln-header-left">
-        <button type="button" class="vuln-btn vuln-btn-secondary dd-back-btn" (click)="backToProject()">← Retour au projet</button>
+        <button type="button" class="vuln-btn vuln-btn-secondary dd-back-btn" (click)="backToProject()">← Vue d'ensemble</button>
         <div class="vuln-badge"><span class="vuln-badge-dot"></span>Analyse détaillée · DefectDojo</div>
         <h1 class="vuln-title">Branche {{ selectedBranch || '—' }}</h1>
         <p class="vuln-subtitle" *ngIf="dashboard?.engagementName">
@@ -118,8 +118,16 @@
             <span class="dd-overview-label">{{ card.label }}</span>
           </div>
         </div>
-        <div class="dd-overview-chart-wrap">
-          <canvas #overviewChart></canvas>
+        <div class="dd-overview-chart-wrap dd-mini-bars">
+          <div class="dd-mini-bar" *ngFor="let sev of severities" [title]="sev">
+            <span class="dd-mini-bar-label" [style.color]="severityColor(sev)">{{ sev.charAt(0) }}</span>
+            <span class="dd-mini-bar-track">
+              <span class="dd-mini-bar-fill"
+                    [style.background]="severityColor(sev)"
+                    [style.width.%]="severityBarWidth(card, sev)"></span>
+            </span>
+            <span class="dd-mini-bar-value">{{ card.bySeverity && card.bySeverity[sev] || 0 }}</span>
+          </div>
         </div>
         <div class="dd-overview-foot">Consulter la liste →</div>
       </button>
@@ -147,7 +155,45 @@
           <button type="button" class="dd-granularity-btn" [class.active]="fluxGranularity === 'month'" (click)="setFluxGranularity('month')">Mois</button>
         </div>
       </div>
-      <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #fluxCanvas></canvas></div>
+      <div class="dd-chart-canvas dd-chart-canvas--medium" *ngIf="fluxBars.length; else fluxEmpty">
+        <div class="dd-flux-values">
+          <span *ngFor="let b of fluxBars" class="dd-flux-value">
+            {{ b.stock }}
+            <small class="dd-flux-delta"
+                   *ngIf="b.delta !== 0"
+                   [class.dd-flux-delta--up]="b.trend === 'up'"
+                   [class.dd-flux-delta--down]="b.trend === 'down'">
+              {{ b.trend === 'up' ? '▲' : '▼' }}{{ b.delta > 0 ? b.delta : -b.delta }}
+            </small>
+          </span>
+        </div>
+        <div class="dd-svg-row">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="dd-svg-chart">
+            <line *ngFor="let t of fluxYTicks; last as isAxis" x1="0" [attr.y1]="t.y" x2="100" [attr.y2]="t.y"
+                  [class.dd-svg-axis]="isAxis" [class.dd-svg-gridline]="!isAxis"
+                  vector-effect="non-scaling-stroke"></line>
+            <rect *ngFor="let b of fluxBars"
+                  [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.width" [attr.height]="b.height"
+                  [attr.fill]="b.color" rx="0.6">
+              <title>{{ b.label }} — Stock : {{ b.stock }} · Nouvelles : +{{ b.nouvelles }} · Résolues : −{{ b.resolues }}</title>
+            </rect>
+          </svg>
+          <div class="dd-svg-yaxis">
+            <span *ngFor="let t of fluxYTicks" [style.top.%]="t.y">{{ t.value }}</span>
+          </div>
+        </div>
+        <div class="dd-svg-labels">
+          <span *ngFor="let b of fluxBars">{{ b.label }}</span>
+        </div>
+        <div class="dd-flux-legend">
+          <span class="dd-flux-legend-item"><span class="dd-flux-legend-dot" style="background:#16a34a"></span>Stock en baisse</span>
+          <span class="dd-flux-legend-item"><span class="dd-flux-legend-dot" style="background:#c2410c"></span>Stock en hausse</span>
+          <span class="dd-flux-legend-item"><span class="dd-flux-legend-dot" style="background:#475569"></span>Stable</span>
+        </div>
+      </div>
+      <ng-template #fluxEmpty>
+        <p class="empty-text">Pas assez de périodes pour calculer un flux.</p>
+      </ng-template>
     </section>
 
     <!-- Évolution par sévérité -->
@@ -194,7 +240,22 @@
         </div>
         <div class="dd-chart-canvas dd-chart-canvas--evolution"
              [class.dd-chart-canvas--hidden]="!hasOpenSeverityChart || loading">
-          <canvas #evolutionSeverityCanvas></canvas>
+          <div class="dd-svg-row">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="dd-svg-chart">
+              <line *ngFor="let t of severityEvolutionYTicks" x1="0" [attr.y1]="t.y" x2="100" [attr.y2]="t.y"
+                    [class.dd-svg-axis]="t.value === 0" [class.dd-svg-gridline]="t.value !== 0"
+                    vector-effect="non-scaling-stroke"></line>
+              <path *ngFor="let s of severityEvolutionSeries"
+                    [attr.d]="s.path" fill="none" [attr.stroke]="s.color"
+                    vector-effect="non-scaling-stroke" class="dd-svg-line"></path>
+            </svg>
+            <div class="dd-svg-yaxis">
+              <span *ngFor="let t of severityEvolutionYTicks" [style.top.%]="t.y">{{ t.value }}</span>
+            </div>
+          </div>
+          <div class="dd-svg-labels">
+            <span *ngFor="let l of severityEvolutionLabels">{{ l }}</span>
+          </div>
         </div>
       </div>
     </article>
@@ -202,24 +263,65 @@
     <!-- ④ RÉPARTITION -->
     <div class="dd-section-head dd-section-head--detailed" *ngIf="!chartsLoading && charts?.detailedMetrics">
       <h2>Répartition</h2>
-      <p>État instantané au dernier import — {{ lastScanLabel }}. Cliquez un élément pour filtrer la liste.</p>
+      <p>État instantané au dernier import — {{ lastScanLabelCache }}. Cliquez un élément pour filtrer la liste.</p>
     </div>
 
     <div class="dd-charts-grid" *ngIf="!chartsLoading && charts?.detailedMetrics">
       <section class="dd-chart-panel dd-chart-panel--wide">
         <h3 class="dd-chart-title">Par outil de scan</h3>
-        <p class="dd-chart-sub">{{ scanToolStackSubtitle }} — état au {{ lastScanLabel }}</p>
-        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #scanCanvas></canvas></div>
+        <p class="dd-chart-sub">{{ scanToolStackSubtitle }} — état au {{ lastScanLabelCache }}</p>
+        <!-- Liste de lignes horizontales (comme Top CWE / Âge) plutôt qu'un graphique en
+             barres verticales à échelle partagée : un outil dominant (ex. Anchore Grype)
+             n'y écrase plus les autres au point de les rendre invisibles, et les noms
+             longs d'outils ne sont jamais coupés. -->
+        <div class="dd-bar-list dd-bar-list--tools" *ngIf="scanToolBarRows.length">
+          <button type="button" class="dd-bar-row dd-bar-row--tool" *ngFor="let row of scanToolBarRows"
+                  (click)="onScanToolRowClick(row.testId)">
+            <span class="dd-bar-row-label" [title]="row.label">{{ row.label }}</span>
+            <span class="dd-bar-row-track">
+              <span class="dd-bar-row-fill-wrap" [style.width.%]="row.pct">
+                <span class="dd-bar-row-seg" *ngFor="let seg of row.segments"
+                      [style.width.%]="seg.pct" [style.background]="seg.color"
+                      [title]="seg.sev + ' : ' + seg.value"></span>
+              </span>
+            </span>
+            <span class="dd-bar-row-value">{{ row.total }}</span>
+          </button>
+        </div>
+        <p class="empty-text" *ngIf="!scanToolBarRows.length">Aucune donnée par outil de scan.</p>
+        <div class="dd-bar-list-legend">
+          <span class="dd-evolution-legend-item" *ngFor="let sev of severities">
+            <span class="dd-evolution-legend-dot" [style.background]="severityColor(sev)"></span>{{ sev }}
+          </span>
+        </div>
       </section>
       <section class="dd-chart-panel">
         <h3 class="dd-chart-title">Top CWE ouverts</h3>
-        <p class="dd-chart-sub">{{ openCweSubtitle }} — état au {{ lastScanLabel }}</p>
-        <div class="dd-chart-canvas dd-chart-canvas--medium"><canvas #openCweCanvas></canvas></div>
+        <p class="dd-chart-sub">{{ openCweSubtitle }} — état au {{ lastScanLabelCache }}</p>
+        <div class="dd-bar-list">
+          <button type="button" class="dd-bar-row" *ngFor="let c of cweRows" (click)="onCweRowClick(c.key)" [title]="c.label">
+            <span class="dd-bar-row-label dd-bar-row-label--wrap">{{ c.label }}</span>
+            <span class="dd-bar-row-track">
+              <span class="dd-bar-row-fill" [style.width.%]="c.pct"></span>
+            </span>
+            <span class="dd-bar-row-value">{{ c.value }}</span>
+          </button>
+          <p class="empty-text" *ngIf="!cweRows.length">Aucun CWE sur les findings ouverts.</p>
+        </div>
       </section>
       <section class="dd-chart-panel">
         <h3 class="dd-chart-title">Âge des findings ouverts</h3>
-        <p class="dd-chart-sub">{{ findingAgeSubtitle }} — état au {{ lastScanLabel }}</p>
-        <div class="dd-chart-canvas"><canvas #findingAgeCanvas></canvas></div>
+        <p class="dd-chart-sub">{{ findingAgeSubtitle }} — état au {{ lastScanLabelCache }}</p>
+        <div class="dd-bar-list">
+          <div class="dd-bar-row dd-bar-row--static" *ngFor="let a of findingAgeRows">
+            <span class="dd-bar-row-label">{{ a.key }}</span>
+            <span class="dd-bar-row-track">
+              <span class="dd-bar-row-fill" [style.width.%]="a.pct"></span>
+            </span>
+            <span class="dd-bar-row-value">{{ a.value }}</span>
+          </div>
+          <p class="empty-text" *ngIf="!findingAgeRows.length">Pas de données d'ancienneté.</p>
+        </div>
       </section>
     </div>
 

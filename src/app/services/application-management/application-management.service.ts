@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { UserService } from '../user/user.service';
@@ -8,15 +8,20 @@ import {
   AppDeployment,
   AppServiceModel,
   ClusterPruneResult,
+  DeployPreview,
   DeploymentLogsResponse,
   DeploymentMonitoringResponse,
   DeploymentMonitorAlert,
   DeploymentAlertsResponse,
+  AppAlertsHistoryResponse,
+  MachineTimeUsage,
   DeploymentPodsResponse,
   MetricsHistoryResponse,
   EnvVar,
   ManagedApp,
-  RuntimeSyncResult
+  RuntimeSyncResult,
+  SecurityPostureResponse,
+  ScanBatchState
 } from '../../models/application-management/application-management.models';
 import { PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 
@@ -66,6 +71,21 @@ export class ApplicationManagementService {
     return this.http.get<ManagedApp>(`${API}/${id}`, { headers: this.headers() });
   }
 
+  /** Projet parent + capacité deploy-single pour un service (hub / bouton Déployer). */
+  getDeployContext(serviceId: string): Observable<{
+    applicationId: string;
+    managedApplicationId: string | null;
+    canDeploySingle: boolean;
+    serviceName: string;
+  }> {
+    return this.http.get<{
+      applicationId: string;
+      managedApplicationId: string | null;
+      canDeploySingle: boolean;
+      serviceName: string;
+    }>(`${SCAN_API}/${serviceId}/deploy-context`, { headers: this.headers() });
+  }
+
   create(body: { name: string; description?: string }): Observable<ManagedApp> {
     return this.http.post<ManagedApp>(API, body, { headers: this.headers() });
   }
@@ -86,6 +106,19 @@ export class ApplicationManagementService {
 
   updateService(appId: string, serviceId: string, body: AppServiceModel): Observable<AppServiceModel> {
     return this.http.put<AppServiceModel>(`${API}/${appId}/services/${serviceId}`, body, { headers: this.headers() });
+  }
+
+  /**
+   * Aperçu ressources (quota namespace + capacité nœud, état réel du cluster) avant d'enregistrer
+   * l'édition d'un service déjà déployé — même garde-fou que la modale Déployer, pour ce chemin
+   * qui l'a jusqu'ici contourné (audit-deploiement.md §8).
+   */
+  previewServiceResourceChange(appId: string, serviceId: string, body: AppServiceModel): Observable<DeployPreview> {
+    return this.http.post<DeployPreview>(
+      `${API}/${appId}/services/${serviceId}/resource-preview`,
+      body,
+      { headers: this.headers() }
+    );
   }
 
   deleteService(appId: string, serviceId: string): Observable<ClusterPruneResult> {
@@ -128,9 +161,31 @@ export class ApplicationManagementService {
 
   deploy(
     appId: string,
-    body?: { sessionDurationHours?: number; branch?: string }
+    body?: { sessionDurationHours?: number; branch?: string; serviceIds?: string[] }
   ): Observable<AppDeployment> {
     return this.http.post<AppDeployment>(`${API}/${appId}/deploy`, body ?? {}, { headers: this.headers() });
+  }
+
+  /** Aperçu infos / warnings avant déploiement (sélection services + TTL). */
+  previewDeploy(
+    appId: string,
+    body?: { sessionDurationHours?: number; branch?: string; serviceIds?: string[] }
+  ): Observable<DeployPreview> {
+    return this.http.post<DeployPreview>(
+      `${API}/${appId}/deploy/preview`,
+      body ?? {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Déclenche un scan sécurité sur un service (AppService UUID). */
+  scanService(serviceId: string, branch?: string): Observable<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }> {
+    const body = branch ? { branch } : {};
+    return this.http.post<{ gitlabPipelineId?: number; pipelineStatus?: string; message?: string }>(
+      `${SCAN_API}/${serviceId}/scan`,
+      body,
+      { headers: this.headers() }
+    );
   }
 
   listDeployments(appId: string): Observable<AppDeployment[]> {
@@ -139,6 +194,11 @@ export class ApplicationManagementService {
 
   getDeployment(appId: string, deploymentId: string): Observable<AppDeployment> {
     return this.http.get<AppDeployment>(`${API}/${appId}/deployments/${deploymentId}`, { headers: this.headers() });
+  }
+
+  /** Temps-machine cumulé (approximatif) — audit-deploiement.md, chantier #10. */
+  getMachineTime(appId: string): Observable<MachineTimeUsage> {
+    return this.http.get<MachineTimeUsage>(`${API}/${appId}/machine-time`, { headers: this.headers() });
   }
 
   teardownDeployment(appId: string, deploymentId: string): Observable<AppDeployment> {
@@ -177,6 +237,21 @@ export class ApplicationManagementService {
     return this.http.get<DeploymentAlertsResponse>(
       `${API}/${appId}/deployments/${deploymentId}/alerts`,
       { headers: this.headers() }
+    );
+  }
+
+  /** Historique des alertes de l'app, tous environnements, filtrable par date (ISO) et namespace. */
+  getAppAlertsHistory(
+    appId: string,
+    opts?: { from?: string | null; to?: string | null; namespace?: string | null }
+  ): Observable<AppAlertsHistoryResponse> {
+    let params = new HttpParams();
+    if (opts?.from) params = params.set('from', opts.from);
+    if (opts?.to) params = params.set('to', opts.to);
+    if (opts?.namespace) params = params.set('namespace', opts.namespace);
+    return this.http.get<AppAlertsHistoryResponse>(
+      `${API}/${appId}/alerts/history`,
+      { headers: this.headers(), params }
     );
   }
 
@@ -237,6 +312,50 @@ export class ApplicationManagementService {
     return this.http.post<AppDeployment>(
       `${API}/${appId}/services/${serviceId}/rebuild`,
       {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Post-déploiement, Objectif 3 : relance manuelle du smoke test, sans restriction. */
+  rerunSmokeTest(appId: string, serviceId: string): Observable<{ allOk: boolean; checkedAt: string; results: Record<string, { ok: boolean; statusCode?: number | null; message?: string; probedUrl?: string }> }> {
+    return this.http.post<any>(
+      `${API}/${appId}/services/${serviceId}/smoke-test/rerun`,
+      {},
+      { headers: this.headers() }
+    );
+  }
+
+  /** Posture sécurité app = dernier lot COMPLETE (verdict D5 + rollup DefectDojo), ou un lot précis via batchId. */
+  getSecurityPosture(appId: string, batchId?: string): Observable<SecurityPostureResponse> {
+    let params = new HttpParams();
+    if (batchId) {
+      params = params.set('batchId', batchId);
+    }
+    return this.http.get<SecurityPostureResponse>(
+      `${API}/${appId}/security-posture`,
+      { headers: this.headers(), params }
+    );
+  }
+
+  /** Lance un scan multi-services (lot). */
+  scanApplication(appId: string, body?: { branch?: string; serviceIds?: string[] }): Observable<ScanBatchState> {
+    return this.http.post<ScanBatchState>(
+      `${API}/${appId}/scan`,
+      body || {},
+      { headers: this.headers() }
+    );
+  }
+
+  listScanBatches(appId: string): Observable<ScanBatchState[]> {
+    return this.http.get<ScanBatchState[]>(
+      `${API}/${appId}/scan-batches`,
+      { headers: this.headers() }
+    );
+  }
+
+  getScanBatch(appId: string, batchId: string): Observable<ScanBatchState> {
+    return this.http.get<ScanBatchState>(
+      `${API}/${appId}/scan-batches/${batchId}`,
       { headers: this.headers() }
     );
   }

@@ -556,6 +556,11 @@ tbody tr.clickable:hover {
   cursor: not-allowed;
 }
 
+.btn-block-ip--unblock {
+  border-color: #86efac;
+  color: #16a34a;
+}
+
 .status--unread {
   color: #b45309;
   font-weight: 600;

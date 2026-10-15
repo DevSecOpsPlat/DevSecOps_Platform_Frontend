@@ -49,6 +49,7 @@ export class ServiceFormComponent implements OnInit {
       cpuLimit: new FormControl(s?.cpuLimit || '500m'),
       memoryRequest: new FormControl(s?.memoryRequest || '128Mi'),
       memoryLimit: new FormControl(s?.memoryLimit || '512Mi'),
+      hardenedSecurityContext: new FormControl(s?.hardenedSecurityContext || false),
       envVars: new FormArray<FormGroup>([])
     });
 
@@ -124,6 +125,7 @@ export class ServiceFormComponent implements OnInit {
       cpuLimit: v.cpuLimit || undefined,
       memoryRequest: v.memoryRequest || undefined,
       memoryLimit: v.memoryLimit || undefined,
+      hardenedSecurityContext: !!v.hardenedSecurityContext,
       envVars
     };
     if (v.gitToken && v.gitToken !== SECRET_MASK) {

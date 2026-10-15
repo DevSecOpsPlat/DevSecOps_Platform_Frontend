@@ -50,6 +50,8 @@ export interface AppServiceModel {
   cpuLimit?: string;
   memoryRequest?: string;
   memoryLimit?: string;
+  /** Durcissement conteneur optionnel (runAsNonRoot + readOnlyRootFilesystem) — désactivé par défaut. */
+  hardenedSecurityContext?: boolean;
   envVars?: EnvVar[];
   createdAt?: string;
   updatedAt?: string;
@@ -82,6 +84,8 @@ export interface AppDeployment {
   createdAt?: string;
   updatedAt?: string;
   databases?: AppDatabaseModel[];
+  /** Branche Git (env éphémère lié). */
+  gitBranch?: string | null;
   /** TTL heures (env éphémère). */
   ttlHours?: number | null;
   /** Expiration serveur (ISO). */
@@ -146,10 +150,19 @@ export interface DeploymentMonitorAlert {
   workload?: string | null;
   message: string;
   source?: 'live' | 'history' | string;
+  /** Origine : pod | k8s-event | … */
+  kind?: string | null;
+  reason?: string | null;
+  object?: string | null;
+  count?: number | null;
+  lastTimestamp?: string | null;
   type?: string;
   status?: string;
   createdAt?: string;
   id?: string;
+  /** Namespace d'origine — présent sur l'historique cross-environnements. */
+  namespace?: string | null;
+  deploymentId?: string | null;
 }
 
 export interface DeploymentAlertsResponse {
@@ -159,7 +172,33 @@ export interface DeploymentAlertsResponse {
   historyCount: number;
   health?: DeploymentMonitoringResponse['health'];
   summary?: DeploymentMonitoringResponse['summary'];
+  appUrl?: string | null;
+  events?: MonitoringEvent[];
   liveError?: string;
+}
+
+/** Temps-machine cumulé (approximatif) — proxy de coût, pas une facturation exacte. */
+export interface MachineTimeUsage {
+  totalHours: number;
+  deploymentCount: number;
+  byDeployment: Array<{
+    deploymentId: string;
+    namespace: string;
+    status: string;
+    readyAt: string;
+    stillRunning: boolean;
+    hours: number;
+  }>;
+}
+
+/** Historique des alertes appli, tous environnements, filtré par date/namespace. */
+export interface AppAlertsHistoryResponse {
+  history: DeploymentMonitorAlert[];
+  historyCount: number;
+  /** Namespaces distincts trouvés dans la plage — alimente le filtre environnement. */
+  namespaces: string[];
+  from?: string | null;
+  to?: string | null;
 }
 
 export interface MonitoringWorkload {
@@ -203,6 +242,8 @@ export interface DeploymentMonitoringResponse {
   events?: MonitoringEvent[];
   alerts: DeploymentMonitorAlert[];
   quota?: DeploymentQuotaInfo;
+  networkPolicy?: NetworkPolicyInfo;
+  clusterCapacity?: ClusterCapacityInfo;
   summary?: {
     totalPods: number;
     readyPods: number;
@@ -245,6 +286,67 @@ export interface DeploymentQuotaInfo {
   usedMemoryBytes?: number | null;
   usage?: { cpuCores?: number | null; memoryBytes?: number | null };
   message?: string;
+}
+
+/** Isolation réseau du namespace (NetworkPolicy "default-isolation") — active par défaut au déploiement, relue ici pour la vérifier après coup plutôt que de la supposer. */
+export interface NetworkPolicyInfo {
+  active: boolean;
+  name?: string;
+  policyTypes?: string[];
+  ingressRuleCount?: number;
+  message?: string;
+}
+
+/** Capacité réelle du/des nœud(s) K8s — allocatable moins l'utilisation de tous les namespaces. */
+export interface ClusterCapacityInfo {
+  enabled: boolean;
+  allocatableCpuCores?: number;
+  allocatableMemoryBytes?: number;
+  usedCpuCores?: number;
+  usedMemoryBytes?: number;
+  /** Agrégat (somme de tous les nœuds) — informatif, pas fiable pour "est-ce que ça va tenir ?". */
+  availableCpuCores?: number;
+  availableMemoryBytes?: number;
+  /** Le nœud le plus disponible — c'est ce chiffre qui répond à "un pod peut-il être planifié ?". */
+  maxAvailableCpuCores?: number;
+  maxAvailableMemoryBytes?: number;
+  /** Disque réel du nœud (équivalent df), lu via le nœud kubelet — pas une valeur de quota. */
+  allocatableDiskBytes?: number;
+  usedDiskBytes?: number;
+  availableDiskBytes?: number;
+  maxAvailableDiskBytes?: number;
+  nodeCount?: number;
+  nodes?: NodeCapacityInfo[];
+  message?: string;
+}
+
+export interface NodeCapacityInfo {
+  name: string;
+  ready: boolean;
+  /** Conditions K8s au-delà de Ready — cause fréquente de scheduling bloqué (ex. §8 du 18 août 2026). */
+  diskPressure?: boolean;
+  memoryPressure?: boolean;
+  pidPressure?: boolean;
+  allocatableCpuCores: number;
+  allocatableMemoryBytes: number;
+  /** Somme des requests planifiées (réservé) — pas l'usage réel, voir real*UsageCores/Bytes. */
+  usedCpuCores: number;
+  usedMemoryBytes: number;
+  availableCpuCores: number;
+  availableMemoryBytes: number;
+  /** Usage RÉEL (kubelet /stats/summary) — ce qui tourne vraiment, distinct des requests ci-dessus. */
+  realCpuUsageCores?: number;
+  realMemoryUsageBytes?: number;
+  allocatableDiskBytes?: number;
+  usedDiskBytes?: number;
+  availableDiskBytes?: number;
+  podCount?: number;
+  podCapacity?: number;
+  role?: 'control-plane' | 'worker';
+  createdAt?: string;
+  kubeletVersion?: string;
+  osImage?: string;
+  architecture?: string;
 }
 
 export interface MetricsHistoryPoint {
@@ -300,6 +402,46 @@ export interface ManagedApp {
   warnings?: string[];
 }
 
+/** Corps de requête déploiement managé. */
+export interface ManagedDeployRequest {
+  branch?: string;
+  sessionDurationHours?: number;
+  serviceIds?: string[];
+}
+
+/** Aperçu infos / warnings avant déploiement. */
+export interface DeployPreview {
+  infos: string[];
+  warnings: string[];
+  blockingErrors: string[];
+  requiresConfirmation: boolean;
+  ttlHours: number;
+  selectedServiceCount: number;
+  selectedDatabaseCount: number;
+  resolvedServiceIds: string[];
+  /** Empreinte ressources demandée vs quota namespace. */
+  quotaEnabled?: boolean;
+  requestedCpuMillicores?: number;
+  requestedMemoryBytes?: number;
+  quotaCpuMillicores?: number;
+  quotaMemoryBytes?: number;
+
+  /** Capacité réelle du nœud K8s (allocatable - déjà utilisé par tous les namespaces). */
+  nodeCapacityEnabled?: boolean;
+  nodeAvailableCpuMillicores?: number;
+  nodeAllocatableCpuMillicores?: number;
+  nodeAvailableMemoryBytes?: number;
+  nodeAllocatableMemoryBytes?: number;
+}
+
+/** Stats légères affichées sur une carte service. */
+export interface ServiceCardStats {
+  scanCount: number;
+  deployCount: number;
+  lastScanAt: string | null;
+  loading: boolean;
+}
+
 /** Ports par défaut par moteur (pré-remplissage du formulaire). */
 export const DEFAULT_DB_PORTS: Record<DbEngine, number> = {
   MARIADB: 3306,
@@ -315,3 +457,114 @@ export const ENGINES_BY_FAMILY: Record<DbFamily, DbEngine[]> = {
   SQL: ['MARIADB', 'POSTGRES', 'MYSQL'],
   NOSQL: ['MONGODB', 'REDIS', 'CASSANDRA']
 };
+
+/** Posture sécurité application (dernier lot COMPLETE + rollup DefectDojo). */
+export interface SecurityPostureResponse {
+  managedApplicationId: string;
+  hasCompleteBatch: boolean;
+  /** PENDING | RUNNING | PARTIAL | COMPLETE | FAILED */
+  batchStatus?: string;
+  batchId?: string;
+  batchFinishedAt?: string;
+  batchCreatedAt?: string;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  gitlabPipelineId?: number;
+  expectedServiceCount?: number;
+  finishedServiceCount?: number;
+  obsolete: boolean;
+  obsoleteServices?: ObsoleteServicePosture[];
+  message?: string;
+  bySeverity?: Record<string, number>;
+  topBlockingFindings?: TopBlockingFinding[];
+  dimensioningService?: DimensioningServicePosture | null;
+  services?: ServicePostureSummary[];
+  qualityGates?: QualityGateItem[];
+}
+
+export interface QualityGateItem {
+  id: string;
+  label: string;
+  /** PASS | FAIL | UNKNOWN | WARN */
+  status: string;
+  message?: string;
+  scope?: string;
+}
+
+export interface ObsoleteServicePosture {
+  serviceId: string;
+  serviceName?: string;
+  gitBranch?: string;
+  scannedCommitSha?: string;
+  headCommitSha?: string;
+}
+
+export interface TopBlockingFinding {
+  findingId: number;
+  title?: string;
+  severity?: string;
+  serviceId?: string;
+  serviceName?: string;
+  scanType?: string;
+  filePath?: string;
+  cve?: string;
+}
+
+export interface DimensioningServicePosture {
+  serviceId?: string;
+  serviceName?: string;
+  serviceRole?: string;
+  publiclyExposed?: boolean;
+  securityScore?: number;
+  grade?: string;
+  adjustedScoreForSelection?: number;
+}
+
+export interface ServicePostureSummary {
+  serviceId: string;
+  serviceName?: string;
+  serviceRole?: string;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  bySeverity?: Record<string, number>;
+  hardGateViolated?: boolean;
+  indeterminate?: boolean;
+  hardGateIds?: string[];
+  indeterminateSources?: string[];
+}
+
+export interface ScanBatchServiceState {
+  pipelineExecutionId?: string;
+  serviceId?: string;
+  serviceName?: string;
+  serviceRole?: string;
+  gitBranch?: string;
+  commitSha?: string;
+  status?: string;
+  finished?: boolean;
+  qualityGateJson?: Record<string, unknown>;
+  /** Checklist déjà calculée côté backend -- ne plus la réimplémenter côté frontend. */
+  qualityGates?: QualityGateItem[];
+}
+
+export interface ScanBatchState {
+  batchId: string;
+  id?: string;
+  managedApplicationId?: string;
+  status: string;
+  gitlabPipelineId?: number | null;
+  triggeredByUserId?: string | null;
+  verdict?: string;
+  securityScore?: number | null;
+  grade?: string | null;
+  expectedServiceCount?: number;
+  finishedServiceCount?: number;
+  createdAt?: string;
+  finishedAt?: string;
+  services?: ScanBatchServiceState[];
+  verdictPayload?: Record<string, unknown>;
+  /** Checklist app-level déjà calculée côté backend (voir ManagedAppScanService.extractQualityGates). */
+  qualityGates?: QualityGateItem[];
+}

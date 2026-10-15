@@ -10,7 +10,6 @@ import { UserService } from '../../services/user/user.service';
   styleUrls: ['./project-layout.component.css']
 })
 export class ProjectLayoutComponent implements OnInit {
-
   appId: string | null = null;
   project: ApplicationResponse | null = null;
   loading = true;
@@ -46,26 +45,14 @@ export class ProjectLayoutComponent implements OnInit {
       next: (app: ApplicationResponse) => {
         this.project = app;
         this.loading = false;
+        try {
+          localStorage.setItem('envirotest-last-project-app-id', this.appId!);
+        } catch { /* ignore */ }
       },
       error: (err: any) => {
         this.loading = false;
-        this.error = err.error?.message || 'Projet non trouvé';
+        this.error = err.error?.message || 'Service introuvable';
       }
     });
-  }
-
-  navigate(path: string): void {
-    if (this.appId) {
-      this.router.navigate(['/project', this.appId, path]);
-    }
-  }
-
-  isActive(path: string): boolean {
-    const url = this.router.url;
-    return url.includes(`/project/${this.appId}/${path}`);
-  }
-
-  backToApplications(): void {
-    this.router.navigate(['/my-applications']);
   }
 }

@@ -1,0 +1,60 @@
+<div class="ads-page">
+  <header class="ads-hero">
+    <p class="ads-hero-eyebrow">Ressources</p>
+    <div class="ads-hero-row">
+      <div>
+        <h1 class="ads-hero-title">Environnements</h1>
+        <p class="ads-hero-lead">
+          Les environnements actifs en tête. Chaque ligne montre son application, sa composition et sa durée de vie — pas juste un badge.
+        </p>
+      </div>
+      <button type="button" class="ads-btn-ghost-dark" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+    </div>
+  </header>
+
+  <div *ngIf="loading" class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div>
+  <div *ngIf="error" class="ads-state-err">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <div class="ads-toolbar">
+      <input type="search" [(ngModel)]="search" placeholder="Rechercher un environnement, une application, un propriétaire…" />
+      <select [(ngModel)]="statusFilter">
+        <option value="">Tous les statuts</option>
+        <option *ngFor="let s of statuses" [value]="s">{{ s }}</option>
+      </select>
+      <select [(ngModel)]="ownerFilter">
+        <option value="">Tous les propriétaires</option>
+        <option *ngFor="let o of owners" [value]="o">{{ o }}</option>
+      </select>
+    </div>
+
+    <div class="ads-cards">
+      <div class="ads-ecard" *ngFor="let r of filteredRows" (click)="open(r)">
+        <div class="ads-ecard-top">
+          <div>
+            <div class="ads-ecard-name mono">{{ r.environmentName }}</div>
+            <div class="ads-ecard-owner">
+              <button type="button" class="ads-section-link" style="font-size:.76rem;" (click)="openApplication(r, $event)">{{ r.applicationName }}</button>
+              · {{ r.ownerUsername }}
+            </div>
+          </div>
+          <span class="ads-status" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
+        </div>
+        <div class="ads-ecard-meta">
+          <span class="ads-meta-chip mono">{{ r.gitBranch }}</span>
+          <span class="ads-meta-chip">{{ r.servicesCount }} service{{ r.servicesCount > 1 ? 's' : '' }}</span>
+          <span class="ads-meta-chip" *ngIf="statusClass(r.status) === 'running'">actif depuis {{ age(r.createdAt) }}</span>
+        </div>
+        <div class="ads-ecard-foot">
+          <span>créé {{ age(r.createdAt) }}</span>
+          <span class="ads-ecard-cta">Détail →</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="ads-empty" *ngIf="!filteredRows.length">
+      <span class="ads-empty-icon" aria-hidden="true">📭</span>
+      <span class="ads-empty-sub">Aucun environnement ne correspond à ces filtres.</span>
+    </p>
+  </ng-container>
+</div>

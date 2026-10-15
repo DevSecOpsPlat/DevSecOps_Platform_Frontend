@@ -1,7 +1,4 @@
-<div class="user-shell">
-  <app-user-sidebar></app-user-sidebar>
-  <div class="user-main">
-    <div class="sonar-page">
+<div class="sonar-page">
 
       <!-- ─── Header ─── -->
       <header class="sonar-header">
@@ -166,7 +163,16 @@
               <div class="panel-sub">{{ totalIssues }} problèmes au total</div>
               <div class="donut-wrap">
                 <div class="donut-canvas-wrap">
-                  <canvas #donutCanvas></canvas>
+                  <svg viewBox="0 0 36 36" class="donut-svg">
+                    <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#e2e8f0" stroke-width="4"></circle>
+                    <circle *ngFor="let seg of donutSegments"
+                            cx="18" cy="18" r="15.9155" fill="transparent"
+                            [attr.stroke]="seg.color" stroke-width="4"
+                            [attr.stroke-dasharray]="seg.dasharray"
+                            [attr.stroke-dashoffset]="seg.dashoffset">
+                      <title>{{ seg.label }} : {{ seg.value }}</title>
+                    </circle>
+                  </svg>
                   <div class="donut-center">
                     <span class="donut-num">{{ totalIssues }}</span>
                     <span class="donut-label">problèmes</span>
@@ -187,7 +193,7 @@
               <h3 class="overview-section-title">Activité</h3>
               <p class="panel-sub">Historique des analyses sur la branche {{ currentBranch }}</p>
             </div>
-            <div class="activity-toolbar">
+            <div class="activity-toolbar" *ngIf="activityAnalyses.length">
               <div class="activity-graph-select">
                 <label for="activityGraphType">Type de graphique</label>
                 <select id="activityGraphType"
@@ -215,8 +221,42 @@
               Aucun historique d'analyse disponible pour cette branche.
             </div>
 
-            <div class="activity-chart-wrap" *ngIf="!activityLoading && activityAnalyses.length">
-              <canvas #activityCanvas></canvas>
+            <div class="activity-chart-wrap" *ngIf="!activityLoading && activityAnalyses.length && activityChartSeries.length">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="activity-svg">
+                <defs>
+                  <linearGradient *ngFor="let s of activityChartSeries; let i = index" [attr.id]="'actGrad' + i" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" [attr.stop-color]="s.color" stop-opacity="0.32"></stop>
+                    <stop offset="100%" [attr.stop-color]="s.color" stop-opacity="0"></stop>
+                  </linearGradient>
+                </defs>
+                <line x1="0" y1="96" x2="100" y2="96" class="activity-svg-axis" vector-effect="non-scaling-stroke"></line>
+                <path *ngFor="let s of activityChartSeries; let i = index"
+                      [attr.d]="s.areaPath"
+                      [attr.fill]="s.areaPath ? ('url(#actGrad' + i + ')') : 'none'"
+                      stroke="none"></path>
+                <path *ngFor="let s of activityChartSeries"
+                      [attr.d]="s.path"
+                      fill="none"
+                      [attr.stroke]="s.color"
+                      [attr.stroke-dasharray]="s.dashed ? '3,2' : null"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      vector-effect="non-scaling-stroke"
+                      class="activity-svg-line"></path>
+                <ng-container *ngFor="let s of activityChartSeries">
+                  <circle *ngFor="let p of s.points" [attr.cx]="p.x" [attr.cy]="p.y" r="1.6" [attr.fill]="s.color" class="activity-svg-point">
+                    <title>{{ s.label }} · {{ formatActivityDate(p.date) }} : {{ p.value }}</title>
+                  </circle>
+                </ng-container>
+              </svg>
+              <div class="activity-svg-labels">
+                <span *ngFor="let l of activityChartLabels">{{ l }}</span>
+              </div>
+              <div class="activity-svg-legend" *ngIf="activityChartSeries.length > 1">
+                <span class="activity-svg-legend-item" *ngFor="let s of activityChartSeries">
+                  <span class="activity-svg-legend-dot" [style.background]="s.color"></span>{{ s.label }}
+                </span>
+              </div>
             </div>
 
             <div class="activity-analyses" *ngIf="activityAnalyses.length">
@@ -1064,8 +1104,6 @@
 
       </div><!-- /sonar-content -->
     </div><!-- /sonar-page -->
-  </div><!-- /user-main -->
-</div><!-- /user-shell -->
 
 
 

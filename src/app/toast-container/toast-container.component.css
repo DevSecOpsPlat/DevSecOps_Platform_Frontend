@@ -9,14 +9,30 @@
 }
 
 .toast {
+  position: relative;
   min-width: 260px;
   max-width: 360px;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 2.25rem 0.75rem 1rem;
   border-radius: 6px;
   color: #fff;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
   font-size: 0.9rem;
 }
+
+.toast-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: #fff;
+  opacity: 0.75;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem;
+}
+.toast-close:hover { opacity: 1; }
 
 .toast .toast-title {
   font-weight: 600;

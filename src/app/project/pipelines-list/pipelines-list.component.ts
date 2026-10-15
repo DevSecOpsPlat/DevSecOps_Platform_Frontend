@@ -211,15 +211,29 @@ export class PipelinesListComponent implements OnInit {
   }
 
   viewDetails(item: PipelineListItem): void {
+    const kind = (item.executionKind || '').toUpperCase() === 'DEPLOY' ? 'DEPLOY' : 'SCAN';
+    const appId = this.appId || item.applicationId || undefined;
+    if (item.pipelineId && appId) {
+      try {
+        localStorage.setItem('envirotest-last-pipeline-id', String(item.pipelineId));
+        localStorage.setItem(`envirotest-last-pipeline-id:${appId}`, String(item.pipelineId));
+        localStorage.setItem('envirotest-last-pipeline-kind', kind);
+      } catch { /* ignore */ }
+      this.router.navigate(['/project', appId, 'pipeline-detail', String(item.pipelineId)], {
+        queryParams: { kind }
+      });
+      return;
+    }
     if (item.environmentId) {
-      this.router.navigate(['/pipeline', item.environmentId]);
+      this.router.navigate(['/pipeline', item.environmentId], {
+        queryParams: appId ? { appId, kind } : { kind }
+      });
       return;
     }
     if (item.pipelineId) {
-      const queryParams = this.appId || item.applicationId
-        ? { appId: this.appId || item.applicationId || undefined }
-        : undefined;
-      this.router.navigate(['/pipeline/id', item.pipelineId], { queryParams });
+      this.router.navigate(['/pipeline/id', item.pipelineId], {
+        queryParams: appId ? { appId, kind } : { kind }
+      });
     }
   }
 

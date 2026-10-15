@@ -1,24 +1,21 @@
 <div class="qg-page">
-  <header class="qg-head">
-    <div>
-      <h1 class="qg-title">Quality Gate — Recommandation de déploiement</h1>
-      <p class="qg-sub">Hard gates déterministes · score de posture · centralisation des vulnérabilités</p>
-    </div>
-    <div class="qg-toolbar">
-      <label class="qg-branch-label">Branche</label>
-      <select class="qg-branch-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()">
+  <app-page-hero
+      eyebrow="Analyse · service"
+      title="Quality Gate — Recommandation de déploiement"
+      description="Hard gates déterministes · score de posture · centralisation des vulnérabilités">
+    <ng-container hero-actions>
+      <select class="ph-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()" title="Branche">
         <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
       </select>
-      <label class="qg-branch-label">Pipeline</label>
-      <select class="qg-branch-select qg-env-select" [(ngModel)]="selectedPipelineId" (change)="onPipelineChange()">
+      <select class="ph-select" [(ngModel)]="selectedPipelineId" (change)="onPipelineChange()" title="Pipeline">
         <option *ngFor="let env of environments" [ngValue]="env.pipelineId">
           #{{ env.pipelineId }}
         </option>
       </select>
-      <button type="button" class="qg-refresh" (click)="refreshData()" [disabled]="loading" [title]="refreshButtonTitle">Actualiser</button>
+      <button type="button" class="ph-btn ph-btn--ghost" (click)="refreshData()" [disabled]="loading" [title]="refreshButtonTitle">Actualiser</button>
       <span class="qg-polling" *ngIf="pipelinePolling" title="Pipeline en cours">● Live</span>
-    </div>
-  </header>
+    </ng-container>
+  </app-page-hero>
 
   <p class="qg-env-hint" *ngIf="selectedBranch">
     Pipelines scan de la branche <strong>{{ selectedBranch }}</strong> — du plus récent au plus ancien.

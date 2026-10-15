@@ -1,0 +1,190 @@
+<div class="pd-page">
+  <app-page-hero
+      eyebrow="Post-déploiement · service"
+      title="DAST &amp; smoke test"
+      description="Signaux qui n'existent qu'après un déploiement réel — pas de score ici, ZAP ne peut pas être un gate pré-déploiement. Le scan de conteneur (Grype) reste dans la Quality Gate du service.">
+    <ng-container hero-actions>
+      <select class="ph-select" [(ngModel)]="selectedBranch" (change)="onBranchChange()" title="Branche">
+        <option *ngFor="let b of branches" [value]="b">{{ b }}</option>
+      </select>
+      <select class="ph-select" [(ngModel)]="selectedEnvironmentId" (change)="onEnvironmentChange()" title="Environnement">
+        <option *ngFor="let env of environments" [ngValue]="env.environmentId">
+          {{ env.environmentName || ('#' + env.pipelineId) }}
+          <ng-container *ngIf="env.evaluatedAt"> · {{ env.evaluatedAt | date:'dd/MM HH:mm' }}</ng-container>
+        </option>
+      </select>
+      <button type="button" class="ph-btn ph-btn--ghost" (click)="refresh()" [disabled]="loading">
+        {{ loading ? '…' : 'Actualiser' }}
+      </button>
+    </ng-container>
+  </app-page-hero>
+
+  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+  <div class="am-loading" *ngIf="loading && !result">Chargement…</div>
+
+  <div class="pd-empty" *ngIf="!environments.length && !loading">
+    <p>Aucun environnement de déploiement pour ce service sur cette branche — déploie d'abord ce service.</p>
+  </div>
+
+  <ng-container *ngIf="!loading && environments.length">
+    <div class="pd-empty" *ngIf="isEmpty">
+      <p>Cet environnement n'a encore aucun résultat post-déploiement (DAST, smoke test).</p>
+      <button type="button" class="am-btn am-btn-primary am-btn-sm" [disabled]="!canRebuild()" (click)="triggerScan()">
+        {{ rebuilding ? 'Lancement…' : 'Lancer un scan' }}
+      </button>
+    </div>
+
+    <div class="am-alert am-alert-error" *ngIf="rebuildError">{{ rebuildError }}</div>
+    <div class="am-alert am-alert-success" *ngIf="rebuildMessage">{{ rebuildMessage }}</div>
+
+    <div class="pd-cards" *ngIf="!isEmpty">
+      <!-- DAST / ZAP -->
+      <article class="pd-card">
+        <div class="pd-card-head">
+          <h3>DAST — OWASP ZAP</h3>
+          <span class="pd-status pd-status--{{ zapCardState.status }}">
+            <span class="pd-status-icon" aria-hidden="true"></span>
+            <span [ngSwitch]="zapCardState.status">
+              <ng-container *ngSwitchCase="'never'">Pas encore scanné</ng-container>
+              <ng-container *ngSwitchCase="'running'">Scan en cours…</ng-container>
+              <ng-container *ngSwitchCase="'ok'">Aucune vulnérabilité</ng-container>
+              <ng-container *ngSwitchCase="'findings'">
+                {{ (zapTool?.critical || 0) + (zapTool?.high || 0) + (zapTool?.medium || 0) + (zapTool?.low || 0) }} finding(s)
+              </ng-container>
+              <ng-container *ngSwitchCase="'failed'">Échec</ng-container>
+            </span>
+          </span>
+        </div>
+
+        <p class="pd-stale-flag" *ngIf="zapCardState.stale">
+          <span class="pd-stale-icon" aria-hidden="true"></span>
+          Obsolète — résultat du {{ zapCardState.staleSince | date:'dd/MM HH:mm' }}, redéploiement plus récent
+        </p>
+        <p class="pd-stale-flag pd-stale-flag--refreshing" *ngIf="zapCardState.status === 'running' && zapCardState.stale">
+          Actualisation en cours — le résultat ci-dessous date d'avant ce déploiement
+        </p>
+
+        <div class="pd-card-body" [class.pd-card-body--refreshing]="zapCardState.status === 'running' && zapCardState.stale"
+             *ngIf="!dastApplicable">
+          <p class="pd-muted">DAST ne s'applique pas à cet environnement (pas un pipeline de déploiement).</p>
+        </div>
+        <div class="pd-card-body" *ngIf="dastApplicable && zapCardState.status === 'running' && !zapCardState.stale">
+          <p class="pd-muted">Scan ZAP en cours sur l'URL live — actualise dans 1 à 3 min.</p>
+        </div>
+        <div class="pd-card-body" *ngIf="dastApplicable && zapCardState.status === 'failed'">
+          <p class="pd-error-text">
+            Scan terminé mais aucun détail outil disponible — l'import DefectDojo a probablement échoué
+            pour ce pipeline. Vérifie le job <code>deploy:defectdojo-import</code> côté GitLab.
+          </p>
+        </div>
+        <div class="pd-card-body" *ngIf="dastApplicable && zapCardState.status === 'ok'">
+          <p class="pd-ok-text">Aucune vulnérabilité détectée sur l'URL live.</p>
+        </div>
+        <div class="pd-card-body" *ngIf="dastApplicable && zapCardState.status === 'findings' && zapTool as tool">
+          <div class="pd-sev-row">
+            <span class="severity-critical pd-sev-pill" *ngIf="tool.critical">{{ tool.critical }} critique(s)</span>
+            <span class="severity-high pd-sev-pill" *ngIf="tool.high">{{ tool.high }} high</span>
+            <span class="severity-medium pd-sev-pill" *ngIf="tool.medium">{{ tool.medium }} moyen(s)</span>
+            <span class="severity-low pd-sev-pill" *ngIf="tool.low">{{ tool.low }} faible(s)</span>
+          </div>
+        </div>
+
+        <p class="pd-foot-hint" *ngIf="dastApplicable">
+          Un nouveau scan ZAP se relance automatiquement à chaque redéploiement de ce service.
+        </p>
+      </article>
+
+      <!-- Smoke test -->
+      <article class="pd-card">
+        <div class="pd-card-head">
+          <h3>Smoke test</h3>
+          <span class="pd-status pd-status--{{ smokeCardState.status }}">
+            <span class="pd-status-icon" aria-hidden="true"></span>
+            <span [ngSwitch]="smokeCardState.status">
+              <ng-container *ngSwitchCase="'never'">Pas encore testé</ng-container>
+              <ng-container *ngSwitchCase="'running'">Test en cours…</ng-container>
+              <ng-container *ngSwitchCase="'ok'">OK</ng-container>
+              <ng-container *ngSwitchCase="'failed'">Échec</ng-container>
+            </span>
+          </span>
+        </div>
+
+        <p class="pd-stale-flag" *ngIf="smokeCardState.stale">
+          <span class="pd-stale-icon" aria-hidden="true"></span>
+          Obsolète — résultat du {{ smokeCardState.staleSince | date:'dd/MM HH:mm:ss' }}, redéploiement plus récent
+        </p>
+
+        <div class="pd-card-body" *ngIf="smokeCardState.status === 'never'">
+          <p class="pd-muted">Pas encore de smoke test pour cet environnement.</p>
+        </div>
+        <ng-container *ngIf="smokeCardState.status !== 'never'">
+          <p class="pd-muted" *ngIf="smokeTest?.checkedAt">Sondé le {{ smokeTest?.checkedAt | date:'dd/MM/yy HH:mm:ss' }}</p>
+          <ul class="pd-smoke-list">
+            <li *ngFor="let e of smokeTestEntries" [class.pd-smoke--bad]="!e.ok">
+              <div class="pd-smoke-row-top">
+                <strong>{{ e.name }}</strong>
+                <span class="pd-badge" [class.pd-badge--ok]="e.ok" [class.pd-badge--bad]="!e.ok">
+                  {{ e.ok ? 'OK' : ('Échec' + (e.statusCode ? ' · HTTP ' + e.statusCode : '')) }}
+                </span>
+              </div>
+              <p class="pd-smoke-url am-mono" *ngIf="e.probedUrl">{{ e.probedUrl }}</p>
+              <p class="pd-smoke-msg" *ngIf="!e.ok && e.message">{{ e.message }}</p>
+            </li>
+          </ul>
+        </ng-container>
+
+        <div class="pd-card-foot">
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm"
+                  [disabled]="smokeTestRerunning"
+                  (click)="rerunSmokeTest()">
+            {{ smokeTestRerunning ? 'Test en cours…' : 'Relancer' }}
+          </button>
+          <span class="am-alert am-alert-error pd-inline-error" *ngIf="smokeTestRerunError">{{ smokeTestRerunError }}</span>
+        </div>
+      </article>
+    </div>
+
+    <!-- Findings détaillés ZAP -->
+    <section class="pd-findings" *ngIf="!isEmpty && dastApplicable">
+      <div class="pd-findings-head">
+        <span class="pd-findings-title">Findings ZAP ({{ zapFindingsTotal }})</span>
+        <select class="pd-select" [(ngModel)]="findingsSeverity" (change)="onFindingsSeverityChange()">
+          <option value="">Toutes sévérités</option>
+          <option *ngFor="let s of severities" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+
+      <div class="am-loading" *ngIf="findingsLoading">Chargement des findings…</div>
+      <div class="am-alert am-alert-error" *ngIf="findingsError">{{ findingsError }}</div>
+
+      <p class="pd-muted" *ngIf="!findingsLoading && !findingsError && !zapFindings.length">
+        Aucun finding ZAP{{ findingsSeverity ? (' de sévérité ' + findingsSeverity) : '' }} pour cet environnement.
+      </p>
+
+      <p class="pd-muted" *ngIf="!findingsLoading && zapFindings.length && zapFindingsTotal > zapFindings.length">
+        {{ zapFindings.length }} affiché(s) sur {{ zapFindingsTotal }} — affine par sévérité pour voir le reste.
+      </p>
+      <div class="pd-table-wrap" *ngIf="!findingsLoading && zapFindings.length">
+        <table class="pd-findings-table">
+          <thead>
+            <tr><th>Sévérité</th><th>Titre</th><th>Composant</th><th>CWE</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let f of zapFindings">
+              <td><span class="pd-sev-badge" [ngClass]="severityBadgeClass(f.severity)">{{ f.severity }}</span></td>
+              <td>{{ f.title }}</td>
+              <td class="am-mono">{{ f.componentName || '—' }}</td>
+              <td>{{ f.cwe || '—' }}</td>
+              <td>
+                <!-- Objectif 4 : flux IA existant (security-dashboard.component), pas recréé --
+                     même classe partagée (security-list.styles.css), même navigation
+                     (openFinding -> DefectDojoFindingDetailsComponent, où vit AiAnalysisService). -->
+                <button type="button" class="vuln-detail-btn" (click)="openFinding(f.id)">Détails &amp; IA</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+</div>

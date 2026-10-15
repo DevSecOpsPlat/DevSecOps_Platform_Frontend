@@ -14,7 +14,8 @@ import {
   AdminKpiPanel,
   AdminSecurityDashboard,
   AdminService,
-  BlockedIpEntry
+  BlockedIpEntry,
+  DataProtectionSummary
 } from '../../services/admin/admin.service';
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
@@ -73,6 +74,8 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   alerts: AdminAlert[] = [];
   blockedIps: BlockedIpEntry[] = [];
   loadingBlocked = false;
+  dataProtection: DataProtectionSummary | null = null;
+  dataProtectionOpen = false;
 
   filterType = '';
   filterIp = '';
@@ -103,6 +106,14 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     this.loadAll();
     this.refreshTimer = setInterval(() => this.loadAll(false), 60000);
+    this.adminService.getDataProtection().subscribe({
+      next: (d) => (this.dataProtection = d),
+      error: () => (this.dataProtection = null)
+    });
+  }
+
+  toggleDataProtection(): void {
+    this.dataProtectionOpen = !this.dataProtectionOpen;
   }
 
   ngAfterViewInit(): void {
@@ -231,6 +242,25 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     event.stopPropagation();
     this.adminService.unblockIp(entry.ip).subscribe({
       next: () => this.loadAll(false)
+    });
+  }
+
+  /** Même action que unblockFromPanel, depuis une ligne du journal des alertes (retour utilisateur du 6 septembre 2026 : débloquer directement depuis cette liste plutôt que par le panneau KPI séparé). */
+  unblockIpFromRow(alert: AdminAlert, event: Event): void {
+    event.stopPropagation();
+    const ip = alert.ipAddress?.trim();
+    if (!ip) {
+      return;
+    }
+    this.blockingIp = ip;
+    this.adminService.unblockIp(ip).subscribe({
+      next: () => {
+        this.blockingIp = null;
+        this.loadBlockedIps();
+      },
+      error: () => {
+        this.blockingIp = null;
+      }
     });
   }
 

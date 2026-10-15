@@ -136,10 +136,16 @@
 .qg-scale-title { margin: 0; font-size: .9rem; font-weight: 800; color: #1c1c2e; }
 .qg-scale-current { font-size: .85rem; font-weight: 900; }
 .qg-scale-bar { position: relative; display: grid; grid-template-columns: 40% 20% 15% 15% 10%; height: 26px; border-radius: 8px; overflow: hidden; }
-.qg-scale-seg { display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; color: #fff; }
-.qg-scale-seg--e { background: #ef4444; } .qg-scale-seg--d { background: #f97316; }
-.qg-scale-seg--c { background: #eab308; } .qg-scale-seg--b { background: #84cc16; }
-.qg-scale-seg--a { background: #22c55e; }
+.qg-scale-seg { display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; }
+/* Vrai fond pastel + texte foncé, comme les badges de sévérité (security-list.styles.css
+   .severity-critical/high/medium/low) — le premier essai gardait un texte blanc sur un fond
+   encore plein/saturé, pas réellement pastel (retour utilisateur du 3 septembre 2026, 2e passe).
+   B/A distingués par les deux mêmes tons de vert clair/foncé que severity-low y utilise déjà. */
+.qg-scale-seg--e { background: #fed7d7; color: #c53030; }
+.qg-scale-seg--d { background: #feebc8; color: #c05621; }
+.qg-scale-seg--c { background: #fefcbf; color: #b7791f; }
+.qg-scale-seg--b { background: #e3f9e5; color: #2f855a; }
+.qg-scale-seg--a { background: #c6f6d5; color: #276749; }
 .qg-scale-marker { position: absolute; top: -6px; bottom: -6px; transform: translateX(-50%); transition: left .6s cubic-bezier(.34,1.56,.64,1); }
 .qg-scale-marker-dot { display: block; width: 4px; height: 38px; background: #1c1c2e; border-radius: 3px; box-shadow: 0 0 0 3px #fff; }
 .qg-scale-legend { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .6rem; font-size: .72rem; color: #94a3b8; }
@@ -253,8 +259,8 @@
 .qg-sq-card { border: 1px solid #e2e8f0; border-radius: 11px; padding: .75rem; text-align: center; background: #fafbfc; }
 .qg-sq-card h4 { margin: 0 0 .3rem; font-size: .72rem; color: #64748b; text-transform: uppercase; }
 .qg-sq-rating { font-size: 1.6rem; font-weight: 900; } .qg-sq-issues { margin: .3rem 0 0; font-size: .8rem; font-weight: 600; }
-.qg-rating--a { color: #22c55e; } .qg-rating--b { color: #84cc16; } .qg-rating--c { color: #eab308; }
-.qg-rating--d { color: #f97316; } .qg-rating--e { color: #ef4444; }
+.qg-rating--a { color: #276749; } .qg-rating--b { color: #2f855a; } .qg-rating--c { color: #b7791f; }
+.qg-rating--d { color: #c05621; } .qg-rating--e { color: #c53030; }
 .qg-branch-chip { font-size: .7rem; font-weight: 700; padding: .2rem .55rem; border-radius: 999px; background: #f1f5f9; color: #475569; }
 .qg-sonar-link { font-size: .78rem; font-weight: 700; color: #f97316; text-decoration: none; }
 .qg-sonar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px,1fr)); gap: 10px; }

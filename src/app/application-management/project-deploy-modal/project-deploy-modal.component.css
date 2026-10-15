@@ -1,0 +1,213 @@
+.pdm-modal {
+  max-width: 560px;
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
+}
+
+.pdm-services {
+  margin: 1rem 0 0.75rem;
+}
+
+.pdm-services-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pdm-services-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pdm-svc {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--am-border, #e5e7eb);
+  border-radius: 10px;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pdm-svc:hover {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.pdm-svc-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.pdm-svc .ad-role {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 5px;
+  text-transform: uppercase;
+}
+
+.pdm-svc .role-frontend { background: #eff6ff; color: #1d4ed8; }
+.pdm-svc .role-backend { background: #fef3c7; color: #b45309; }
+.pdm-svc .role-worker { background: #f3e8ff; color: #7e22ce; }
+
+.pdm-hint {
+  margin: 0.35rem 0 0;
+  color: #b45309;
+}
+
+.pdm-dbs {
+  margin: 0.85rem 0 0.5rem;
+}
+
+.pdm-db {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--am-border, #e5e7eb);
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+  background: #fafafa;
+  font-size: 0.88rem;
+}
+
+.pdm-db-name {
+  font-weight: 600;
+}
+
+.pdm-db-meta {
+  color: var(--am-muted, #6b7280);
+  font-size: 0.8rem;
+}
+
+.pdm-preview {
+  margin: 0.85rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pdm-preview .am-alert {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.pdm-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: #9a3412;
+  cursor: pointer;
+}
+
+.pdm-confirm input {
+  margin-top: 0.15rem;
+}
+
+.pdm-disabled-reason {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  color: #9a3412;
+  font-size: 0.85rem;
+}
+
+.pdm-confirm--danger {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.pdm-quota {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--am-border, #e5e7eb);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.pdm-quota--over {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.pdm-quota-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.pdm-quota-label {
+  width: 32px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--am-muted, #6b7280);
+}
+
+.pdm-quota-meter {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: visible;
+}
+
+.pdm-quota-fill {
+  height: 100%;
+  background: #f97316;
+  border-radius: 999px;
+}
+
+.pdm-quota--over .pdm-quota-fill {
+  background: #dc2626;
+}
+
+/* Repère de la vraie limite (capacité nœud), quand plus restrictive que le quota namespace. */
+.pdm-quota-node-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #1f2937;
+  border-radius: 1px;
+}
+
+.pdm-quota-val {
+  font-size: 0.76rem;
+  color: var(--am-muted, #6b7280);
+  white-space: normal;
+  text-align: right;
+}
+
+.pdm-quota-warn-text {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.pdm-quota-hint {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--am-muted, #6b7280);
+}
+.pdm-quota-hint--danger {
+  color: #b45309;
+  font-weight: 600;
+}

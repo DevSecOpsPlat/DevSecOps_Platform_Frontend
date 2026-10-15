@@ -77,8 +77,9 @@ export interface SecurityScore {
 export interface SoftwareQualityDimension {
   dimension: string;
   issues: number;
-  rating: string;
-  ratingValue: number;
+  /** null quand la note Sonar est inconnue -- jamais 0 (pas une note valide). */
+  rating: string | null;
+  ratingValue?: number | null;
   bySeverity?: Record<string, number>;
 }
 
@@ -146,6 +147,12 @@ export interface QualityGateResult {
     ddCritical?: number;
     sonarCritical?: number;
     combinedCritical?: number;
+    /** DAST (ZAP) -- n'existe/n'est évaluable que sur un pipeline DEPLOY (jamais scan-only). */
+    dastApplicable?: boolean;
+    dastEvaluable?: boolean;
+    dastCritical?: number;
+    dastHigh?: number;
+    dastMedium?: number;
   };
   thresholds?: Record<string, unknown>;
   verdict: 'RECOMMENDED' | 'WITH_WARNINGS' | 'NOT_RECOMMENDED' | 'INDETERMINE' | 'UNKNOWN' | string;

@@ -6,6 +6,12 @@
       Décrivez un problème ou une demande : l’administration peut répondre et vous pouvez poursuivre la discussion tant que la
       réclamation reste ouverte. Une fois clôturée, le fil reste visible en lecture seule.
     </p>
+    <div class="recl-app-ctx" *ngIf="appName || managedAppId">
+      <span>Liée à l'application <strong>{{ appName || managedAppId }}</strong></span>
+      <button type="button" class="recl-btn recl-btn-ghost" *ngIf="managedAppId" (click)="backToApp()">
+        ← Retour à l'app
+      </button>
+    </div>
   </header>
 
   <div *ngIf="error" class="recl-alert">{{ error }}</div>

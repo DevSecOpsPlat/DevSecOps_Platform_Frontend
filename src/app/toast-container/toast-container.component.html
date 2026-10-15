@@ -1,5 +1,6 @@
 <div class="toast-container">
   <div *ngFor="let t of toastService.messages" class="toast" [ngClass]="t.type">
+    <button type="button" class="toast-close" (click)="toastService.dismiss(t.id)" aria-label="Fermer">×</button>
     <div class="toast-title">{{ t.title }}</div>
     <div class="toast-message">{{ t.message }}</div>
   </div>

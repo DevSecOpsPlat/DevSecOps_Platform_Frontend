@@ -1,0 +1,69 @@
+.asm-modal {
+  max-width: 520px;
+}
+
+.asm-services {
+  margin-top: 1rem;
+}
+
+.asm-services-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .55rem;
+}
+
+.asm-services-actions {
+  display: flex;
+  gap: .35rem;
+}
+
+.asm-svc {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .55rem .65rem;
+  border: 1px solid var(--am-border, #E7E6F2);
+  border-radius: 10px;
+  margin-bottom: .4rem;
+  cursor: pointer;
+  background: #fff;
+}
+
+.asm-svc:hover {
+  border-color: rgba(249, 115, 22, .4);
+}
+
+.asm-svc-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.asm-svc-branch {
+  font-size: .72rem;
+  color: var(--am-muted, #6E6E86);
+}
+
+/* Badge de rôle service (FRONTEND/BACKEND/WORKER) — retour utilisateur du 8 septembre 2026 :
+   trop épais/pas fin. Défini ici explicitement (au lieu de dépendre de app-management.shared.css,
+   qui utilise la classe .am-role alors que le template applique .ad-role) pour un rendu léger et
+   garanti, cohérent avec le même badge adouci dans project-deploy-modal. */
+.asm-svc .ad-role {
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: .12rem .4rem;
+  border-radius: 5px;
+  text-transform: uppercase;
+}
+
+.asm-svc .role-frontend { background: #eff6ff; color: #1d4ed8; }
+.asm-svc .role-backend { background: #fef3c7; color: #b45309; }
+.asm-svc .role-worker { background: #f3e8ff; color: #7c3aed; }
+
+.asm-hint {
+  margin: .5rem 0 0;
+  font-size: .82rem;
+}

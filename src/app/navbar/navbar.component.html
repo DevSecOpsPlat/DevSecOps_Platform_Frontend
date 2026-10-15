@@ -60,6 +60,7 @@
           <a *ngIf="isAdmin" routerLink="/admin/overview" class="user-dropdown-item" (click)="userMenuOpen = false">Vue d’ensemble</a>
           <a *ngIf="isAdmin" routerLink="/admin/users" class="user-dropdown-item" (click)="userMenuOpen = false">Utilisateurs</a>
           <a *ngIf="isAdmin" routerLink="/admin/inventory" class="user-dropdown-item" (click)="userMenuOpen = false">Inventaire</a>
+          <a *ngIf="isAdmin" routerLink="/admin/monitoring" class="user-dropdown-item" (click)="userMenuOpen = false">Monitoring</a>
           <a *ngIf="isAdmin" routerLink="/admin/observability" class="user-dropdown-item" (click)="userMenuOpen = false">Observabilité</a>
           <a *ngIf="isAdmin" routerLink="/admin/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Réclamations (admin)</a>
           <a routerLink="/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Mes réclamations</a>

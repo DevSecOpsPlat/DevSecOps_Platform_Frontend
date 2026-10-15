@@ -1,0 +1,23 @@
+<div class="et-ctxbar" *ngIf="serviceId">
+  <a class="et-ctxbar-back" [routerLink]="appLink">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6"/>
+    </svg>
+    {{ appLabel }}
+  </a>
+  <div class="et-ctxbar-picker" (click)="$event.stopPropagation()">
+    <button type="button" class="et-ctxbar-trigger" (click)="toggle($event)" [attr.aria-expanded]="menuOpen">
+      {{ currentService?.name || serviceId }}
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </button>
+    <div class="et-ctxbar-menu" *ngIf="menuOpen">
+      <button type="button" class="et-ctxbar-opt" *ngFor="let s of siblings"
+              [class.active]="s.id === serviceId" (click)="select(s)">
+        <strong>{{ s.name }}</strong>
+        <span>{{ (s.role || '') | lowercase }} · {{ s.gitBranch || 'main' }}</span>
+      </button>
+    </div>
+  </div>
+</div>

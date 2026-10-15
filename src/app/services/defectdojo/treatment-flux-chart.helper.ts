@@ -1,4 +1,3 @@
-import Chart from 'chart.js/auto';
 import {
   DefectDojoDashboardCharts,
   DefectDojoScanSnapshot,
@@ -36,104 +35,13 @@ export function hasFluxChartData(charts?: DefectDojoDashboardCharts | null): boo
   return !!charts?.scanSnapshots?.length || !!charts?.detailedMetrics?.openDayToDayBySeverity?.length;
 }
 
-interface FluxBucket {
+export interface FluxBucket {
   key: string;
   label: string;
   stock: number;
 }
 
-export function renderTreatmentFluxChart(
-  canvas: HTMLCanvasElement,
-  charts: DefectDojoDashboardCharts | null | undefined,
-  granularity: FluxGranularity,
-  previous?: Chart
-): Chart | undefined {
-  previous?.destroy();
-  Chart.getChart(canvas)?.destroy();
-
-  const buckets = buildBuckets(charts, granularity);
-  if (!buckets.length) return undefined;
-
-  const labels = buckets.map(b => b.label);
-  const stock = buckets.map(b => b.stock);
-  const nouvelles = buckets.map((b, i) => (i === 0 ? 0 : Math.max(0, b.stock - buckets[i - 1].stock)));
-  const resolues = buckets.map((b, i) => (i === 0 ? 0 : Math.max(0, buckets[i - 1].stock - b.stock)));
-
-  const axisTitles = {
-    run: 'Exécution de pipeline (date · heure)',
-    day: 'Jour',
-    week: 'Semaine (début)',
-    month: 'Mois'
-  }[granularity];
-
-  return new Chart(canvas, {
-    data: {
-      labels,
-      datasets: [
-        {
-          type: 'bar',
-          label: 'Nouvelles (vs période précédente)',
-          data: nouvelles,
-          backgroundColor: COLORS.nouvelles,
-          borderRadius: 3,
-          maxBarThickness: 26,
-          order: 2
-        },
-        {
-          type: 'bar',
-          label: 'Résolues (vs période précédente)',
-          data: resolues,
-          backgroundColor: COLORS.resolues,
-          borderRadius: 3,
-          maxBarThickness: 26,
-          order: 2
-        },
-        {
-          type: 'line',
-          label: 'Findings ouverts (stock)',
-          data: stock,
-          borderColor: COLORS.stock,
-          backgroundColor: COLORS.stockFill,
-          fill: true,
-          tension: 0.15,
-          pointRadius: 4,
-          borderWidth: 2,
-          order: 1
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'bottom' },
-        tooltip: {
-          callbacks: {
-            footer: items => {
-              const i = items[0]?.dataIndex ?? 0;
-              return i === 0 ? 'Première période : flux non calculables.' : '';
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          title: { display: true, text: axisTitles, font: { size: 11, weight: 'bold' } },
-          grid: { display: false },
-          ticks: { maxRotation: 45, font: { size: 10 } }
-        },
-        y: {
-          beginAtZero: true,
-          title: { display: true, text: 'Nombre de findings', font: { size: 11, weight: 'bold' } },
-          ticks: { stepSize: niceStep(Math.max(...stock, 1)), precision: 0 }
-        }
-      }
-    }
-  });
-}
-
-function buildBuckets(
+export function buildBuckets(
   charts: DefectDojoDashboardCharts | null | undefined,
   granularity: FluxGranularity
 ): FluxBucket[] {

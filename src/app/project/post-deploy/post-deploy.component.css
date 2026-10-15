@@ -1,0 +1,415 @@
+.pd-page {
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.pd-eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin: 0 0 0.25rem;
+}
+
+.pd-title {
+  font-size: 1.5rem;
+  margin: 0 0 0.35rem;
+}
+
+.pd-sub {
+  color: #6b7280;
+  margin: 0;
+  max-width: 42rem;
+}
+
+.pd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pd-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.pd-select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
+.pd-empty {
+  border: 1px dashed #d1d5db;
+  border-radius: 0.6rem;
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+.pd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.pd-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 1rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pd-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pd-card-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pd-card-body {
+  transition: opacity 0.2s ease;
+}
+
+/* §Objectif 5, point 5 : un résultat obsolète reste affiché (pas remplacé) pendant qu'un nouveau
+   scan tourne -- juste atténué, avec la légende pd-stale-flag--refreshing au-dessus qui explique
+   pourquoi. Jamais un vide silencieux pendant un rafraîchissement. */
+.pd-card-body--refreshing {
+  opacity: 0.55;
+}
+
+.pd-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 0.4rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.pd-foot-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.pd-inline-error {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+.pd-muted {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.pd-ok-text {
+  color: #15803d;
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.pd-error-text {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.pd-sev-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Forme (pastille) séparée de la couleur (héritée de security-list.styles.css .severity-*) --
+   même échelle de teintes que security-dashboard/managed-security-dashboard, pas de nouvelle
+   palette propre à cette page (§Objectif 4bis, point 1). */
+.pd-sev-pill {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pd-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.pd-badge--ok { background: #dcfce7; color: #15803d; }
+.pd-badge--bad { background: #fee2e2; color: #b91c1c; }
+
+/* ── Badges d'état (§Objectif 5) ──────────────────────────────────────────────────────────────
+   Emplacement fixe dans chaque carte, quel que soit l'état -- l'état "jamais scanné" n'est
+   jamais un badge vide (§point 2). Trois familles de forme distinctes (cercle / carré / triangle)
+   pour que la FORME soit le signal principal, la couleur secondaire (§point 3) -- lisible même en
+   simulation daltonienne. */
+.pd-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.pd-status-icon {
+  width: 0.6rem;
+  height: 0.6rem;
+  flex: none;
+  display: inline-block;
+}
+
+/* 1. Jamais scanné -- cercle creux, gris neutre. Même famille de forme que "en cours"/"ok"
+   (cercle), remplissage différent -- se lit comme un état au repos, pas une anomalie. */
+.pd-status--never {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.pd-status--never .pd-status-icon {
+  border-radius: 50%;
+  border: 2px solid #9ca3af;
+  background: transparent;
+}
+
+/* 2. En cours -- cercle qui tourne (mouvement = 3e signal, au-delà forme+couleur). */
+.pd-status--running {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.pd-status--running .pd-status-icon {
+  border-radius: 50%;
+  border: 2px solid #bfdbfe;
+  border-top-color: #1d4ed8;
+  animation: pd-spin 0.7s linear infinite;
+}
+@keyframes pd-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 3. 0 finding -- cercle plein + coche (même famille "cercle" que 1/2, rempli + coche = distinct). */
+.pd-status--ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.pd-status--ok .pd-status-icon {
+  border-radius: 50%;
+  background: #16a34a;
+  position: relative;
+}
+.pd-status--ok .pd-status-icon::after {
+  content: '';
+  position: absolute;
+  left: 0.13rem;
+  top: 0.02rem;
+  width: 0.22rem;
+  height: 0.12rem;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg);
+}
+
+/* 4. N findings -- carré arrondi (PAS un cercle) : silhouette différente de 1/2/3, couleur par
+   sévérité max (rouge/orange/jaune) appliquée en modificateur, jamais seule. */
+.pd-status--findings {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.pd-status--findings .pd-status-icon {
+  border-radius: 3px;
+  background: #dc2626;
+}
+
+/* 5. Échec -- triangle (3e silhouette distincte), bordure pointillée en plus de la couleur
+   (§point 3 : jamais la couleur seule, ici DEUX signaux non-couleur -- forme ET bordure). */
+.pd-status--failed {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px dashed #b91c1c;
+}
+.pd-status--failed .pd-status-icon {
+  width: 0;
+  height: 0;
+  border-left: 0.35rem solid transparent;
+  border-right: 0.35rem solid transparent;
+  border-bottom: 0.55rem solid #991b1b;
+  background: transparent;
+}
+
+/* 6. Obsolète -- PAS un état exclusif (pas de .pd-status--stale) : un indicateur orthogonal,
+   affiché en plus de l'état primaire (§point 5). Horloge, ambre, toujours au-dessus de la carte. */
+.pd-stale-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.pd-stale-flag--refreshing {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.pd-stale-icon {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid #92400e;
+  position: relative;
+}
+.pd-stale-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 0.2rem;
+  background: #92400e;
+  transform: translate(-50%, -100%);
+}
+.pd-stale-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.15rem;
+  height: 1px;
+  background: #92400e;
+  transform: translate(0, -50%);
+}
+
+.pd-smoke-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pd-smoke-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  background: #f9fafb;
+}
+
+.pd-smoke--bad {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.pd-smoke-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pd-smoke-url {
+  color: #6b7280;
+  margin: 0;
+  word-break: break-all;
+}
+
+.pd-smoke-msg {
+  color: #b91c1c;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* ---- Findings détaillés (ZAP) ---- */
+.pd-findings {
+  margin-top: 1.25rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+  padding: 1rem;
+}
+
+.pd-findings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pd-findings-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.pd-table-wrap {
+  overflow-x: auto;
+}
+
+.pd-findings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.pd-findings-table th {
+  text-align: left;
+  color: #6b7280;
+  font-weight: 600;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pd-findings-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+
+/* .pd-sev-badge : forme (padding/radius) uniquement -- la couleur vient de la classe partagée
+   security-*.* (security-list.styles.css), appliquée en plus via [ngClass] dans le template. */
+.pd-sev-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

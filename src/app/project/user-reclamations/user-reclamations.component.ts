@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ComplaintDto, ComplaintService } from '../../services/complaints/complaint.service';
 
 @Component({
@@ -15,15 +16,38 @@ export class UserReclamationsComponent implements OnInit {
   message = '';
   submitting = false;
 
+  /** Contexte application (depuis sidebar app gérée). */
+  managedAppId: string | null = null;
+  appName: string | null = null;
+
   /** Brouillon de réponse par id de réclamation. */
   replyDrafts: Record<string, string> = {};
   sendingReplyId: string | null = null;
   closingId: string | null = null;
 
-  constructor(private complaintService: ComplaintService) {}
+  constructor(
+    private complaintService: ComplaintService,
+    private route: ActivatedRoute,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
+    this.route.queryParamMap.subscribe(params => {
+      this.managedAppId = params.get('managedAppId');
+      this.appName = params.get('appName');
+      if (this.appName && !this.subject.trim()) {
+        this.subject = `[${this.appName}] `;
+      }
+      if (this.appName && !this.message.trim()) {
+        this.message = `Application : ${this.appName}\n\n`;
+      }
+    });
     this.load();
+  }
+
+  backToApp(): void {
+    if (!this.managedAppId) return;
+    this.router.navigate(['/projects', this.managedAppId, 'dashboard']);
   }
 
   load(): void {

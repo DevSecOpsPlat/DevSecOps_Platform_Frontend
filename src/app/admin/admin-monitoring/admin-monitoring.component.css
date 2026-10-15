@@ -1,0 +1,291 @@
+.admin-monitoring-root {
+  padding-top: 0.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-monitoring-root .md-section {
+  margin-top: 1.5rem;
+  margin-bottom: 0;
+}
+
+.btn-refresh {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 2px 14px rgba(15, 23, 42, 0.05);
+  padding: 1.1rem 1.25rem 1.35rem;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.node-filter-hint {
+  font-weight: 500;
+  font-size: 0.78rem;
+  margin-left: 0.3rem;
+}
+
+.panel-head .user-filter {
+  margin-bottom: 0;
+  min-width: 170px;
+}
+
+/* Bandeau KPI — vue d'ensemble cluster avant le détail par nœud */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.kpi-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.kpi-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grille de jauges circulaires — une par nœud × métrique, façon "Datastore Status" */
+.gauge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.gauge-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 96px;
+  height: 72px;
+}
+
+.gauge-node {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 0.2rem;
+}
+
+.gauge-label {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.capacity-bar-card {
+  padding: 1rem;
+}
+
+.capacity-bar-card .md-chart-wrap {
+  height: 220px;
+}
+
+.ns-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.user-filter {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  background: #fff;
+  min-width: 200px;
+}
+
+.user-filter:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
+.search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.6rem 0.95rem;
+  font-size: 0.88rem;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
+.empty {
+  margin: 0;
+  padding: 1.35rem 1rem 1.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+  background: #fafbfc;
+}
+
+.cell-metric {
+  min-width: 10.5rem;
+}
+
+/* Le tableau Nœuds est plus large que le gabarit partagé (métadonnées + résa + réel + sparkline) —
+   la classe partagée .admin-table-wrap est overflow:hidden (coupe plutôt que de scroller), donc on
+   la surcharge ici pour ce tableau précis plutôt que de toucher le fichier commun. */
+.node-table-wrap {
+  overflow-x: auto;
+}
+
+.mini-meter {
+  margin-top: 0.3rem;
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.mini-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--admin-accent, #ea580c);
+}
+
+/* Code couleur par seuil — vert < 70%, ambre < 90%, rouge au-delà. */
+.mini-meter-fill.sev-ok { background: #16a34a; }
+.mini-meter-fill.sev-warn { background: #d97706; }
+.mini-meter-fill.sev-crit { background: #dc2626; }
+
+.metric-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+  margin-left: 0.2rem;
+}
+
+.metric-real {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.pressure-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+
+.admin-badge-status.am-bad {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.row-clickable {
+  cursor: pointer;
+}
+
+.row-clickable:hover {
+  background: #fff7ed;
+}
+
+.row-expanded {
+  background: #fff7ed;
+}
+
+/* Flèche — pivote vers le bas quand la ligne est ouverte, dashboard complet juste en dessous. */
+.row-chevron {
+  display: inline-block;
+  font-size: 1rem;
+  color: #94a3b8;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.row-chevron--open {
+  transform: rotate(90deg);
+  color: var(--admin-accent, #ea580c);
+}
+
+.row-expand-panel td {
+  padding: 0;
+  background: #f8fafc;
+  border-top: none;
+}
+
+.expand-wrap {
+  padding: 0.5rem 1rem 1.25rem;
+}

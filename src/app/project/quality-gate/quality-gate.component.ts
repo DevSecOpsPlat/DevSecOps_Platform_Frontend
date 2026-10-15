@@ -29,6 +29,7 @@ import {
   SoftwareQualityDimension
 
 } from '../../services/quality-gate/quality-gate.service';
+import { PageHeroComponent } from '../shared/page-hero/page-hero.component';
 
 export interface DeploymentCondition {
   id: string;
@@ -44,7 +45,7 @@ export interface DeploymentCondition {
 
   standalone: true,
 
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PageHeroComponent],
 
   templateUrl: './quality-gate.component.html',
 
@@ -353,7 +354,16 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Recharge le snapshot enregistré et synchronise le statut GitLab. */
+  /**
+   * Synchronise le statut GitLab et reconstruit le résultat en LIVE (refresh=true) --
+   * pas seulement l'instantané figé en base. Sans ça, "Actualiser" ne resynchronisait que les
+   * statuts de stage et rechargeait le snapshot figé à l'ingestion CI, jamais les métriques Sonar
+   * réelles -- indiscernable pour l'utilisateur d'un bouton qui ne fait rien (retour utilisateur
+   * du 28 août 2026 : Software Quality restait à 0/— malgré un clic sur Actualiser).
+   * Seul point de rafraîchissement live disponible pour un pipeline SCAN sans environnement --
+   * `captureSnapshot()` ci-dessous fait aussi un live refresh mais exige un environmentId
+   * (déploiement), donc n'est jamais utilisable ici.
+   */
   refreshData(): void {
     const appId = this.appId;
     const pipelineId = this.selectedPipelineId;
@@ -364,7 +374,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     this.loading = true;
     this.error = null;
     this.qualityGateService.getQualityGate(
-      appId, this.selectedBranch, null, false, pipelineId
+      appId, this.selectedBranch, null, true, pipelineId
     ).pipe(
       catchError(err => {
         const msg = err?.error?.message || err?.error?.detail || 'Actualisation impossible';
@@ -527,7 +537,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   }
 
   get refreshButtonTitle(): string {
-    return 'Recharger le snapshot enregistré pour ce pipeline et synchroniser le statut GitLab';
+    return 'Reconstruire en direct (DefectDojo + SonarQube) et synchroniser le statut GitLab';
   }
 
   /** Données issues de quality_gate_snapshots (pas un recalcul live DefectDojo/Sonar). */
@@ -1288,7 +1298,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
-  ratingClass(rating?: string): string {
+  ratingClass(rating?: string | null): string {
 
     if (!rating) return '';
 

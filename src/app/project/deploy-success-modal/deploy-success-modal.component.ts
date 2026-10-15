@@ -23,14 +23,16 @@ export class DeploySuccessModalComponent {
       localStorage.setItem('envirotest-last-pipeline-env', this.environmentId);
       if (this.applicationId) {
         this.router.navigate(
-          ['/pipeline', this.environmentId],
-          { queryParams: { appId: this.applicationId } }
+          ['/project', this.applicationId, 'pipeline-detail'],
+          { queryParams: { kind: 'DEPLOY' } }
         );
       } else {
         this.router.navigate(['/pipeline', this.environmentId]);
       }
     } else if (this.applicationId) {
-      this.router.navigate(['/project', this.applicationId, 'overview']);
+      this.router.navigate(['/project', this.applicationId, 'pipeline-detail'], {
+        queryParams: { kind: 'DEPLOY' }
+      });
     }
     this.close.emit();
   }

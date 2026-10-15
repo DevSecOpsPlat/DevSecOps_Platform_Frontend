@@ -1,0 +1,55 @@
+<div class="am-modal-backdrop" (click)="cancel.emit()">
+  <div class="am-modal asm-modal" (click)="$event.stopPropagation()">
+    <h3 class="am-modal-title">Scanner l'application</h3>
+    <p class="am-subtitle">
+      Choisissez la branche et les services à inclure dans le lot.
+      Le verdict application sera calculé à la fin du scan.
+    </p>
+
+    <label class="am-field" style="display:block;">
+      <span class="am-field-label">Branche</span>
+      <input
+        class="am-input"
+        type="text"
+        [(ngModel)]="branch"
+        [placeholder]="defaultBranch"
+        [disabled]="running" />
+    </label>
+
+    <div class="asm-services">
+      <div class="asm-services-head">
+        <span class="am-field-label">Services à scanner</span>
+        <div class="asm-services-actions">
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="selectAll()" [disabled]="running">Tous</button>
+          <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="selectNone()" [disabled]="running">Aucun</button>
+        </div>
+      </div>
+      <div class="am-empty" *ngIf="!services.length">Aucun service configuré.</div>
+      <label class="asm-svc" *ngFor="let s of services">
+        <input
+          type="checkbox"
+          [checked]="isSelected(s.id)"
+          (change)="toggleService(s.id)"
+          [disabled]="running || !s.id" />
+        <span class="asm-svc-name">{{ s.name }}</span>
+        <span class="ad-role" [ngClass]="roleClass(s.role)">{{ s.role }}</span>
+        <code class="am-mono asm-svc-branch" *ngIf="s.gitBranch">{{ s.gitBranch }}</code>
+      </label>
+      <p class="am-subtitle asm-hint" *ngIf="selectedCount === 0">Sélectionnez au moins un service.</p>
+      <p class="am-subtitle asm-hint" *ngIf="selectedCount > 0">
+        {{ selectedCount }} service{{ selectedCount > 1 ? 's' : '' }} sélectionné{{ selectedCount > 1 ? 's' : '' }}.
+      </p>
+    </div>
+
+    <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+
+    <div class="am-form-actions">
+      <button type="button" class="am-btn am-btn-secondary" (click)="cancel.emit()" [disabled]="running">
+        Annuler
+      </button>
+      <button type="button" class="am-btn am-btn-primary" (click)="onConfirm()" [disabled]="!canConfirm">
+        {{ running ? 'Lancement…' : 'Lancer le scan' }}
+      </button>
+    </div>
+  </div>
+</div>

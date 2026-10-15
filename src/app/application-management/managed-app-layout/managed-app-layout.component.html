@@ -1,0 +1,8 @@
+<div class="mal-shell">
+  <app-envirotest-nav-sidebar></app-envirotest-nav-sidebar>
+  <main class="mal-main">
+    <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+    <div class="am-loading" *ngIf="loading && !error">Chargement…</div>
+    <router-outlet *ngIf="!error"></router-outlet>
+  </main>
+</div>

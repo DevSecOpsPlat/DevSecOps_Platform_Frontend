@@ -247,6 +247,8 @@
 .current-app {
   padding: 0.6rem 0.75rem 0.8rem;
   background: rgba(15, 23, 42, 0.7);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 .back-link {
   background: none;
@@ -256,6 +258,19 @@
   cursor: pointer;
   padding: 0.25rem 0;
   margin-bottom: 0.5rem;
+}
+
+.current-app-parent {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(243, 108, 33, 0.9);
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.current-app-parent:hover {
+  color: #ff8a4c;
+  text-decoration: underline;
 }
 
 .current-app-name {
@@ -271,6 +286,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.current-app-level {
+  margin-top: 0.4rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .nav-items {

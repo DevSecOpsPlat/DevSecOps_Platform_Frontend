@@ -1,9 +1,11 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Subject } from 'rxjs';
+import { distinctUntilChanged, map, takeUntil } from 'rxjs/operators';
 
-import Chart from 'chart.js/auto';
 import { SonarQubeService } from '../../services/sonarqube/sonarqube.service';
 import { UserService } from '../../services/user/user.service';
+import { smoothPath, areaPath } from '../../shared/svg-chart-utils';
 import {
   translateSonarMessage,
   translateSonarSeverity,
@@ -24,11 +26,6 @@ import {
 export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Active des logs console pour diagnostiquer les facets issues. */
   readonly debugIssues = false;
-
-  @ViewChild('donutCanvas') donutCanvas!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('coverageBarCanvas') coverageBarCanvas!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('severityBarCanvas') severityBarCanvas!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('activityCanvas') activityCanvas?: ElementRef<HTMLCanvasElement>;
 
   loading = true;
   error: string | null = null;
@@ -152,22 +149,37 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
 
   readonly overviewSeverityOrder = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
 
-  // Charts instances
-  private donutChart: Chart | null = null;
-  private coverageBarChart: Chart | null = null;
-  private severityBarChart: Chart | null = null;
-  private activityChart: Chart | null = null;
-
   constructor(
     private sonarService: SonarQubeService,
     private userService: UserService,
     private route: ActivatedRoute
   ) {}
 
+  private readonly destroy$ = new Subject<void>();
+
   ngOnInit(): void {
-    this.serviceId = this.route.parent?.snapshot.paramMap.get('appId') || null;
-    this.loadBranches();
-    this.load();
+    this.route.parent!.paramMap.pipe(
+      map(p => p.get('appId')),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(id => {
+      // Angular réutilise cette même instance de composant quand on navigue
+      // d'un service vers un autre (même route, juste :appId qui change) —
+      // ngOnInit ne se relance pas. Sans ce reset, currentBranch/branches
+      // gardent la valeur du service précédent et on affiche/interroge le
+      // mauvais projet SonarQube.
+      if (this.serviceId !== id) {
+        this.branches = ['main'];
+        this.currentBranch = 'main';
+        this.activeTab = 'overview';
+        this.donutSegments = [];
+        this.activityChartSeries = [];
+        this.activityChartLabels = [];
+      }
+      this.serviceId = id;
+      this.loadBranches();
+      this.load();
+    });
   }
 
   private loadBranches(): void {
@@ -195,14 +207,11 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // Charts are initialized after data loads + tab is active
   }
 
   ngOnDestroy(): void {
-    this.donutChart?.destroy();
-    this.coverageBarChart?.destroy();
-    this.severityBarChart?.destroy();
-    this.activityChart?.destroy();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   // ─── Data Loading ───────────────────────────────────────────────────────────
@@ -266,6 +275,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
           this.applyHotspotStatusFilter();
           this.selectFirstHotspotIfNeeded();
           this.selectFirstDuplicationIfNeeded();
+          this.recomputeCharts();
           this.loadActivityHistory();
         } catch (e) {
           // eslint-disable-next-line no-console
@@ -274,7 +284,6 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
         } finally {
           this.loading = false;
         }
-        setTimeout(() => this.initChartsForTab(this.activeTab), 80);
       },
       error: (err) => {
         this.loading = false;
@@ -326,154 +335,83 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeTab = tab;
     if (tab === 'hotspots') this.selectFirstHotspotIfNeeded();
     if (tab === 'duplication') this.selectFirstDuplicationIfNeeded();
-    setTimeout(() => this.initChartsForTab(tab), 80);
   }
 
-  private initChartsForTab(tab: string): void {
-    if (tab === 'overview') {
-      this.initDonutChart();
-      this.initSeverityBarChart();
-      if (this.activityAnalyses?.length) {
-        setTimeout(() => this.initActivityChart(), 80);
-      }
+  // ─── Charts (SVG pur — pas de canvas, pas de librairie) ─────────────────────
+  // Chart.js gelait systématiquement l'onglet dans cet environnement, y compris
+  // avec toutes les protections possibles. Ces graphiques sont dessinés à la
+  // main en SVG : aucune dépendance externe, aucun risque de blocage.
+
+  // Données des charts SVG — calculées une seule fois (voir recomputeCharts()),
+  // jamais réévaluées comme des appels de méthode depuis le template : sinon
+  // Angular détruit/recrée le DOM à chaque cycle de détection de changements
+  // (confirmé au profiler : c'est ce qui gelait complètement la page).
+  donutSegments: { label: string; value: number; color: string; dasharray: string; dashoffset: number }[] = [];
+  activityChartSeries: { label: string; color: string; dashed: boolean; path: string; areaPath: string; points: { x: number; y: number; value: number; date: string }[] }[] = [];
+  activityChartLabels: string[] = [];
+
+  private recomputeCharts(): void {
+    this.donutSegments = this.computeDonutSegments();
+    this.activityChartSeries = this.computeActivityChartSeries();
+    const points = this.activityChartSeries[0]?.points || [];
+    this.activityChartLabels = points.length < 2
+      ? points.map(p => this.formatActivityDate(p.date))
+      : [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]].map(p => this.formatActivityDate(p.date));
+  }
+
+  /** Segments du donut "Répartition par type" (technique du cercle en anneau SVG). */
+  private computeDonutSegments(): { label: string; value: number; color: string; dasharray: string; dashoffset: number }[] {
+    const data = [
+      { label: 'Bugs', value: this.typeCounts['BUG'] || 0, color: '#f87171' },
+      { label: 'Vulnérabilités', value: this.typeCounts['VULNERABILITY'] || 0, color: '#c4b5fd' },
+      { label: 'Code smells', value: this.typeCounts['CODE_SMELL'] || 0, color: '#1b3661' }
+    ];
+    const total = data.reduce((s, d) => s + d.value, 0);
+    if (!total) return [];
+    let cumulative = 0;
+    return data.filter(d => d.value > 0).map(d => {
+      const pct = (d.value / total) * 100;
+      const seg = { ...d, dasharray: `${pct} ${100 - pct}`, dashoffset: 25 - cumulative };
+      cumulative += pct;
+      return seg;
+    });
+  }
+
+  /** Séries du graphique d'activité (issues / couverture / duplications), en coordonnées 0-100 pour un viewBox SVG. */
+  private computeActivityChartSeries(): { label: string; color: string; dashed: boolean; path: string; areaPath: string; points: { x: number; y: number; value: number; date: string }[] }[] {
+    if (this.activityGraphType === 'issues') {
+      const s = this.toSvgSeries(this.parseMeasureHistory('violations'), '#3b82f6', false, 'Problèmes');
+      return s ? [s] : [];
     }
-    if (tab === 'quality') {
-      this.initCoverageBarChart();
+    if (this.activityGraphType === 'coverage') {
+      const s = this.toSvgSeries(this.parseMeasureHistory('coverage'), '#16a34a', false, 'Couverture');
+      return s ? [s] : [];
     }
+    const ncloc = this.toSvgSeries(this.parseMeasureHistory('ncloc'), '#3b82f6', false, 'Lignes de code');
+    const dup = this.toSvgSeries(this.parseMeasureHistory('duplicated_lines'), '#94a3b8', true, 'Lignes dupliquées');
+    return [ncloc, dup].filter((s): s is NonNullable<typeof s> => !!s);
   }
 
-  // ─── Charts ──────────────────────────────────────────────────────────────────
-
-  private initDonutChart(): void {
-    if (!this.donutCanvas?.nativeElement) return;
-    this.donutChart?.destroy();
-
-    const bugsCount = this.typeCounts['BUG'] || 0;
-    const vulnCount = this.typeCounts['VULNERABILITY'] || 0;
-    const smellCount = this.typeCounts['CODE_SMELL'] || 0;
-
-    this.donutChart = new Chart(this.donutCanvas.nativeElement, {
-      type: 'doughnut',
-      data: {
-        labels: ['Bugs', 'Vulnérabilités', 'Code smells'],
-        datasets: [{
-          data: [bugsCount, vulnCount, smellCount],
-          backgroundColor: ['#f87171', '#c4b5fd', '#1b3661'],
-          borderWidth: 0,
-          hoverOffset: 4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '72%',
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } }
-        }
-      }
-    });
-  }
-
-  private initCoverageBarChart(): void {
-    if (!this.coverageBarCanvas?.nativeElement) return;
-    this.coverageBarChart?.destroy();
-
-    const files = this.coverageFiles.slice(0, 8);
-    const labels = files.map(f => f.path.split('/').pop() || f.path);
-    const covered = files.map(f => Math.round(f.coverage));
-    const uncovered = files.map(f => Math.round(100 - f.coverage));
-
-    this.coverageBarChart = new Chart(this.coverageBarCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Couvert',
-            data: covered,
-            backgroundColor: '#16a34a',
-            borderRadius: 4,
-            stack: 'stack'
-          },
-          {
-            label: 'Non couvert',
-            data: uncovered,
-            backgroundColor: 'rgba(185,28,28,0.15)',
-            borderRadius: 4,
-            stack: 'stack'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        indexAxis: 'y',
-        scales: {
-          x: {
-            stacked: true,
-            max: 100,
-            ticks: { callback: (v) => v + '%', font: { size: 11 } },
-            grid: { color: 'rgba(100,116,139,0.1)' }
-          },
-          y: { stacked: true, ticks: { font: { size: 11 } } }
-        },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: { font: { size: 11 }, boxWidth: 10 }
-          },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x}%` } }
-        }
-      }
-    });
-  }
-
-  private initSeverityBarChart(): void {
-    if (!this.severityBarCanvas?.nativeElement) return;
-    this.severityBarChart?.destroy();
-
-    const labels = this.overviewSeverityOrder;
-    const data = labels.map(s => this.severityCounts[s] || 0);
-    const colors = ['#fecdd3', '#f87171', '#fb923c', '#fdba74', '#e2e8f0'];
-
-    this.severityBarChart = new Chart(this.severityBarCanvas.nativeElement, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Problèmes',
-          data,
-          backgroundColor: colors,
-          borderRadius: 4,
-          borderSkipped: false
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} issues` } }
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-          y: {
-            beginAtZero: true,
-            ticks: { stepSize: 1, font: { size: 11 } },
-            grid: { color: 'rgba(100,116,139,0.1)' }
-          }
-        },
-        onClick: (_, elements) => {
-          if (elements.length) {
-            const sev = this.overviewSeverityOrder[elements[0].index];
-            this.setTab('issues');
-            this.applyIssueFilters(sev, 'ALL');
-          }
-        }
-      }
-    });
+  private toSvgSeries(
+    points: { date: string; value: number }[],
+    color: string,
+    dashed: boolean,
+    label: string
+  ): { label: string; color: string; dashed: boolean; path: string; areaPath: string; points: { x: number; y: number; value: number; date: string }[] } | null {
+    if (!points.length) return null;
+    const values = points.map(p => p.value);
+    const min = Math.min(...values, 0);
+    const max = Math.max(...values, 1);
+    const range = max - min || 1;
+    const n = points.length;
+    const coords = points.map((p, i) => ({
+      x: n === 1 ? 50 : (i / (n - 1)) * 100,
+      y: 96 - ((p.value - min) / range) * 92,
+      value: p.value,
+      date: p.date
+    }));
+    const path = smoothPath(coords);
+    return { label, color, dashed, path, areaPath: dashed ? '' : areaPath(path, coords, 96), points: coords };
   }
 
   // ─── Metrics Helpers ─────────────────────────────────────────────────────────
@@ -712,7 +650,12 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     const s = String(value).trim().toUpperCase();
     if (s.length === 1 && s >= 'A' && s <= 'E') return s;
     const n = typeof value === 'string' ? parseInt(value, 10) : value;
-    if (isNaN(n as number) || (n as number) < 1 || (n as number) > 5) return String(value);
+    // 0 n'est jamais une note SonarQube valide (1-5 uniquement) -- c'est le symbole
+    // "note inconnue" utilisé côté backend (SecurityScoringService.ratingNumeric), à traiter
+    // comme absent plutôt que de l'afficher tel quel.
+    if (isNaN(n as number) || (n as number) < 1 || (n as number) > 5) {
+      return (n as number) === 0 ? '—' : String(value);
+    }
     return ['A', 'B', 'C', 'D', 'E'][(n as number) - 1];
   }
 
@@ -1947,9 +1890,7 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
         this.activityHistory = res;
         this.activityAnalyses = res?.analyses || [];
         this.activityLoading = false;
-        if (this.activeTab === 'overview') {
-          setTimeout(() => this.initActivityChart(), 80);
-        }
+        this.recomputeCharts();
       },
       error: () => {
         this.activityHistory = null;
@@ -1960,9 +1901,8 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   setActivityGraphType(type: 'issues' | 'coverage' | 'duplications'): void {
-    if (this.activityGraphType === type) return;
     this.activityGraphType = type;
-    setTimeout(() => this.initActivityChart(), 0);
+    this.recomputeCharts();
   }
 
   private parseMeasureHistory(metricName: string): { date: string; value: number }[] {
@@ -2001,89 +1941,6 @@ export class SonarqubeComponent implements OnInit, OnDestroy, AfterViewInit {
     return delta > 0 ? `+${delta} problème(s)` : `${delta} problème(s)`;
   }
 
-  private initActivityChart(): void {
-    const canvas = this.activityCanvas?.nativeElement;
-    if (!canvas) return;
-    this.activityChart?.destroy();
-
-    let labels: string[] = [];
-    let datasets: Chart['data']['datasets'] = [];
-
-    if (this.activityGraphType === 'issues') {
-      const points = this.parseMeasureHistory('violations');
-      labels = points.map(p => this.formatActivityDate(p.date));
-      datasets = [{
-        label: 'Problèmes',
-        data: points.map(p => p.value),
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.12)',
-        fill: true,
-        tension: 0.15,
-        pointRadius: 4
-      }];
-    } else if (this.activityGraphType === 'coverage') {
-      const points = this.parseMeasureHistory('coverage');
-      labels = points.map(p => this.formatActivityDate(p.date));
-      datasets = [{
-        label: 'Couverture',
-        data: points.map(p => p.value),
-        borderColor: '#16a34a',
-        backgroundColor: 'rgba(22,163,74,0.12)',
-        fill: true,
-        tension: 0.15,
-        pointRadius: 4
-      }];
-    } else {
-      const ncloc = this.parseMeasureHistory('ncloc');
-      const dupLines = this.parseMeasureHistory('duplicated_lines');
-      const len = Math.max(ncloc.length, dupLines.length);
-      labels = (ncloc.length ? ncloc : dupLines).map(p => this.formatActivityDate(p.date));
-      datasets = [
-        {
-          label: 'Lignes de code',
-          data: ncloc.map(p => p.value),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59,130,246,0.08)',
-          fill: true,
-          tension: 0.15,
-          pointRadius: 3
-        },
-        {
-          label: 'Lignes dupliquées',
-          data: dupLines.map(p => p.value),
-          borderColor: '#94a3b8',
-          borderDash: [4, 4],
-          fill: false,
-          tension: 0.15,
-          pointRadius: 3
-        }
-      ];
-    }
-
-    if (!labels.length) return;
-
-    this.activityChart = new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              title: items => items[0]?.label || ''
-            }
-          }
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
-          y: { beginAtZero: true, ticks: { precision: 0 } }
-        }
-      }
-    });
-  }
 
   // ─── Issue detail ────────────────────────────────────────────────────────────
 

@@ -472,7 +472,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const badges = CI_SCANNER_DEFS.map(def => ({
       name: def.name,
       iconUrl: def.icon,
-      active: !!this.findToolForScanner(def.matchers),
+      active: this.scannerHasExecuted(def.matchers),
       type: def.type,
       tooltip: def.tooltip
     }));
@@ -714,7 +714,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
 
   private buildMaturityScanAnalyses(): MaturityScanAnalysis[] {
     return CI_SCANNER_DEFS.map(def => {
-      const active = !!this.findToolForScanner(def.matchers);
+      const active = this.scannerHasExecuted(def.matchers);
       const findingCount = this.scannerFindingCount(def.matchers);
       return this.buildSingleScannerAnalysis(def, active, findingCount);
     });
@@ -2073,6 +2073,24 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * "Cet outil a-t-il tourné ?" -- à utiliser pour active/inactive (jamais findToolForScanner /
+   * toolList, qui excluent les entrées à 0 finding et confondent donc "a tourné, rien trouvé"
+   * avec "n'a jamais tourné").
+   */
+  private scannerHasExecuted(matchers: string[]): boolean {
+    const executed = this.dashboard?.toolsExecuted;
+    if (!executed?.length) {
+      // Repli : pas de signal dédié disponible (dashboard non scopé pipeline, etc.) -- se rabat
+      // sur l'ancien comportement plutôt que de tout marquer "non exécuté" à tort.
+      return !!this.findToolForScanner(matchers);
+    }
+    return executed.some(key => {
+      const hay = `${key} ${this.formatToolName(key)}`.toLowerCase();
+      return matchers.some(m => hay.includes(m));
+    });
+  }
+
   formatTtlRemaining(): string {
     if (this.isLatestEnvExpired) return 'Expiré';
     const dep = this.displayLatestDeployment;
@@ -2221,7 +2239,14 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   goToApplications(): void {
-    this.router.navigate(['/my-applications']);
+    try {
+      const managedId = localStorage.getItem('envirotest-last-managed-app-id');
+      if (managedId) {
+        this.router.navigate(['/projects', managedId, 'dashboard']);
+        return;
+      }
+    } catch { /* ignore */ }
+    this.router.navigate(['/projects']);
   }
 
   navigateToSeverity(sev: string): void {
@@ -2435,6 +2460,21 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.loadDeploymentsAndPipelines();
         if (this.appId) {
           this.requestSecurityReload(this.appId, this.isGlobalView ? GLOBAL_BRANCH : this.selectedBranch);
+        }
+        const pid = res.gitlabPipelineId;
+        if (pid && this.appId) {
+          try {
+            localStorage.setItem('envirotest-last-pipeline-id', String(pid));
+            localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pid));
+            localStorage.setItem('envirotest-last-pipeline-kind', 'SCAN');
+          } catch { /* ignore */ }
+          this.router.navigate(['/project', this.appId, 'pipeline-detail', String(pid)], {
+            queryParams: { kind: 'SCAN' }
+          });
+        } else if (this.appId) {
+          this.router.navigate(['/project', this.appId, 'pipeline-detail'], {
+            queryParams: { kind: 'SCAN' }
+          });
         }
       }
     });
@@ -3347,16 +3387,31 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   viewPipeline(envId: string, kind?: 'SCAN' | 'DEPLOY'): void {
-    const queryParams: Record<string, string> = { appId: this.appId || '' };
+    const queryParams: Record<string, string> = {};
     if (kind) queryParams['kind'] = kind;
+    if (this.appId) {
+      // Conserve l’env-id legacy pour les pipelines liés à un environnement
+      this.router.navigate(['/pipeline', envId], {
+        queryParams: { ...queryParams, appId: this.appId }
+      });
+      return;
+    }
     this.router.navigate(['/pipeline', envId], { queryParams });
   }
 
   viewPipelineById(pipelineId: number | string, branch?: string, kind?: 'SCAN' | 'DEPLOY'): void {
     const queryParams: Record<string, string> = {};
-    if (this.appId) queryParams['appId'] = this.appId;
-    if (branch) queryParams['branch'] = branch;
     if (kind) queryParams['kind'] = kind;
+    if (branch) queryParams['branch'] = branch;
+    try {
+      localStorage.setItem('envirotest-last-pipeline-id', String(pipelineId));
+      if (this.appId) localStorage.setItem(`envirotest-last-pipeline-id:${this.appId}`, String(pipelineId));
+      if (kind) localStorage.setItem('envirotest-last-pipeline-kind', kind);
+    } catch { /* ignore */ }
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'pipeline-detail', String(pipelineId)], { queryParams });
+      return;
+    }
     this.router.navigate(['/pipeline/id', String(pipelineId)], { queryParams });
   }
 

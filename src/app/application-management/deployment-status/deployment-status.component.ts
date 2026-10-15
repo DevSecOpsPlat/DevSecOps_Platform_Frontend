@@ -1,5 +1,7 @@
-import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
@@ -10,9 +12,14 @@ import {
   DeploymentMonitorAlert,
   DeploymentMonitoringResponse,
   DeploymentPodInfo,
+  DeploymentQuotaInfo,
+  ClusterCapacityInfo,
   SECRET_MASK
 } from '../../models/application-management/application-management.models';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
+import { AiAnalysisService } from '../../services/ai/ai-analysis.service';
+import { ExplainPipelineLogsResponse } from '../../models/ai/explain-pipeline-logs.model';
+import { sortStageNames } from '../../shared/ci-stage-order';
 
 interface StateEntry {
   name: string;
@@ -20,12 +27,17 @@ interface StateEntry {
   wave: number;
   internalHost: string;
   externalUrl?: string | null;
+  role?: string | null;
 }
+
+/** Viewport virtuel de l’aperçu (rendu desktop réduit pour remplir le cadre). */
+const PREVIEW_VW = 1280;
+const PREVIEW_VH = 800;
 
 @Component({
   selector: 'app-managed-deployment-status',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './deployment-status.component.html',
   styleUrls: ['../shared/app-management.shared.css']
 })
@@ -33,6 +45,104 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   @Input() appId!: string;
   @Input() deployment!: AppDeployment;
   @Input() services: AppServiceModel[] = [];
+  /** full = historique (CI, pods, DBs) ; banner = dashboard app (annexe §3.3). */
+  @Input() variant: 'full' | 'banner' = 'full';
+  /** true = détails techniques sous le banner (sans en-tête / TTL dupliqués). */
+  @Input() embed = false;
+  /** Affiche les onglets Pipeline / Services / BD / Pods / Connexions. */
+  @Input() showOpsTabs = false;
+  @Output() navigateSection = new EventEmitter<'monitoring' | 'alerts' | 'history' | 'deployments'>();
+
+  opsTab: 'pipeline' | 'services' | 'databases' | 'pods' | 'connections' = 'pipeline';
+
+  setOpsTab(tab: 'pipeline' | 'services' | 'databases' | 'pods' | 'connections'): void {
+    this.opsTab = tab;
+    if (tab !== 'pipeline') {
+      this.closeCiLogs();
+    }
+    if (tab !== 'pods' && tab !== 'services' && tab !== 'databases') {
+      this.closeLogs();
+    }
+    if (tab === 'pipeline' && this.ciPipeline?.jobs?.length) {
+      this.ensureDefaultCiJobSelected(this.ciPipeline.jobs);
+    }
+    if (tab === 'pods') {
+      this.selectedWorkload = null;
+      this.ensureDefaultPodSelected(true);
+    }
+    if (tab === 'services') {
+      this.selectedWorkload = null;
+      this.ensureDefaultServiceSelected(true);
+    }
+    if (tab === 'databases') {
+      this.selectedWorkload = null;
+      this.ensureDefaultDatabaseSelected(true);
+    }
+  }
+
+  /** Jobs CI regroupés par stage (ordre .gitlab-ci.yml). */
+  get ciStages(): { name: string; status: string; jobs: PipelineJobInfo[] }[] {
+    const jobs = this.ciPipeline?.jobs || [];
+    const map = new Map<string, PipelineJobInfo[]>();
+    for (const j of jobs) {
+      const stage = (j.stage || 'default').trim() || 'default';
+      if (!map.has(stage)) map.set(stage, []);
+      map.get(stage)!.push(j);
+    }
+    map.forEach(list => list.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0)));
+    const stageNames = sortStageNames(Array.from(map.keys()), (stage) =>
+      Math.min(...(map.get(stage) || []).map(j => j.id ?? 0))
+    );
+    return stageNames.map((name) => {
+      const stageJobs = map.get(name)!;
+      return {
+        name,
+        status: this.aggregateJobStatus(stageJobs),
+        jobs: stageJobs
+      };
+    });
+  }
+
+  private aggregateJobStatus(jobs: PipelineJobInfo[]): string {
+    const norms = jobs.map(j => this.normCiStatus(j.status));
+    if (norms.some(s => s === 'failed' || s === 'canceled')) return 'failed';
+    if (norms.some(s => s === 'running')) return 'running';
+    if (norms.some(s => s === 'pending' || s === 'created')) return 'pending';
+    if (norms.length && norms.every(s => s === 'success')) return 'success';
+    return 'pending';
+  }
+
+  formatJobDuration(seconds: number | null | undefined): string {
+    if (seconds == null || !Number.isFinite(seconds)) return '';
+    const s = Math.round(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return r ? `${m}m ${r}s` : `${m}m`;
+  }
+
+  jobRowClass(status: string): string {
+    const s = this.normCiStatus(status);
+    if (s === 'success' || s === 'ready') return 'job-success';
+    if (s === 'failed' || s === 'canceled' || s === 'stopped') return 'job-failed';
+    if (s === 'running' || s === 'pending' || s === 'created' || s === 'notready') return 'job-running';
+    return '';
+  }
+
+  podRowClass(phase: string | undefined, ready: boolean | undefined): string {
+    const p = (phase || '').toLowerCase();
+    if (ready || p === 'running') return 'job-success';
+    if (p === 'failed' || p === 'error' || p === 'crashloopbackoff') return 'job-failed';
+    return 'job-running';
+  }
+
+  /** Stage aperçu — scale dynamique pour remplir le conteneur. */
+  @ViewChild('previewStage') set previewStageEl(el: ElementRef<HTMLElement> | undefined) {
+    this.teardownPreviewScale();
+    if (el?.nativeElement) {
+      this.setupPreviewScale(el.nativeElement);
+    }
+  }
 
   /** Copie locale (mise à jour par le polling). */
   dep!: AppDeployment;
@@ -50,6 +160,9 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   monitorSummary: DeploymentMonitoringResponse['summary'] | null = null;
   monitorAppUrl: string | null = null;
   metricsAvailable = false;
+  /** Quota namespace (CPU/mem) — même donnée que le Monitoring dashboard. */
+  quota: DeploymentQuotaInfo | null = null;
+  clusterCapacity: ClusterCapacityInfo | null = null;
 
   selectedWorkload: string | null = null;
   logs = '';
@@ -65,6 +178,12 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   ciJobLogs = '';
   ciJobLogsLoading = false;
   ciJobLogsError: string | null = null;
+
+  /** Agent IA — explication des logs CI. */
+  logAiResult: ExplainPipelineLogsResponse | null = null;
+  logAiLoading = false;
+  logAiError: string | null = null;
+  logAiQuestion = '';
 
   rebuildingServiceId: string | null = null;
   rebuildError: string | null = null;
@@ -90,7 +209,12 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   readyAtMs: number | null = null;
   private ttlHours = 0;
 
-  constructor(private api: ApplicationManagementService) {}
+  constructor(
+    private api: ApplicationManagementService,
+    private sanitizer: DomSanitizer,
+    private cdr: ChangeDetectorRef,
+    private aiAnalysisService: AiAnalysisService
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['deployment'] && this.deployment) {
@@ -99,16 +223,26 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       this.closeCiLogs();
       this.setupPolling();
       this.setupPodsPolling();
-      this.setupCiPolling();
+      if (this.variant === 'full') {
+        this.setupCiPolling();
+      } else {
+        this.ciPoll?.unsubscribe();
+        this.ciPipeline = null;
+      }
       this.setupTtlCountdown();
+      this.syncPreviewUrl();
       if (this.isStopped) {
+        // Namespace supprimé : plus de pods à afficher (le template montre un message dédié).
         this.pods = [];
         this.podsError = null;
         this.podsLoading = false;
         this.rebuildMessage = null;
-        this.ciPipeline = null;
       } else {
         this.refreshPods();
+      }
+      // Pipeline CI (GitLab) et état des services : conservés même après arrêt de l'environnement,
+      // pour garder l'historique consultable (contrairement aux pods, réellement détruits).
+      if (this.variant === 'full') {
         this.refreshCiPipeline();
       }
     }
@@ -116,6 +250,128 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   get isStopped(): boolean {
     return this.dep?.status === 'STOPPED';
+  }
+
+  get isRunning(): boolean {
+    return (this.dep?.status || '').toUpperCase() === 'RUNNING';
+  }
+
+  /**
+   * Résumé TTL "gelé" pour un environnement arrêté (historique) : le countdown live
+   * n'a plus de sens, mais ttlHours/expiresAt restent en base — les montrer plutôt
+   * que le seul libellé générique "Environnement arrêté".
+   */
+  get frozenTtlSummary(): string {
+    if (!this.dep) return '';
+    const hrs = this.dep.ttlHours;
+    const expiresMs = this.parseInstantMs(this.dep.expiresAt);
+    if (expiresMs != null) {
+      const formatted = new Date(expiresMs).toLocaleString('fr-FR', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+      return hrs ? `Session ${hrs} h — expirée le ${formatted}` : `Expirée le ${formatted}`;
+    }
+    return hrs ? `Session ${hrs} h — terminée` : 'Session terminée';
+  }
+
+  get hasTtlData(): boolean {
+    return !!(this.dep && (this.dep.ttlHours || this.dep.expiresAt));
+  }
+
+  /** URL front : health/monitor, sinon service FRONTEND. */
+  get frontendUrl(): string | null {
+    const fromMonitor = (this.monitorAppUrl || '').trim();
+    if (fromMonitor) return fromMonitor;
+    const front = this.serviceEntries.find(s => (s.role || '').toUpperCase() === 'FRONTEND' && s.externalUrl);
+    if (front?.externalUrl) return front.externalUrl.trim();
+    // Fallback : première URL qui ne finit pas par /api
+    const any = this.serviceEntries.find(s => {
+      const u = (s.externalUrl || '').replace(/\/$/, '');
+      return u && !u.endsWith('/api');
+    });
+    return any?.externalUrl?.trim() || null;
+  }
+
+  get backendUrl(): string | null {
+    const back = this.serviceEntries.find(s => (s.role || '').toUpperCase() === 'BACKEND' && s.externalUrl);
+    if (back?.externalUrl) return back.externalUrl.trim();
+    const api = this.serviceEntries.find(s => (s.externalUrl || '').replace(/\/$/, '').endsWith('/api'));
+    const url = api?.externalUrl?.trim() || null;
+    if (url && url === this.frontendUrl) return null;
+    return url;
+  }
+
+  canEmbedPreview(url: string | null | undefined): boolean {
+    const u = (url || '').trim().toLowerCase();
+    return u.startsWith('http://') || u.startsWith('https://');
+  }
+
+  /**
+   * Message visible en permanence sous l'aperçu (pas juste un tooltip au survol) — un iframe
+   * bloqué (X-Frame-Options) ou pointant vers un pod pas encore Ready ne déclenche pas d'erreur
+   * fiable côté Angular (l'échec reste dans la console navigateur, invisible pour l'utilisateur),
+   * donc on explique la cause probable au lieu de laisser un cadre vide sans contexte (retour
+   * utilisateur du 18 août 2026 : « je regarde une erreur, l'enregistrement s'est-il fait ? »).
+   */
+  get previewHint(): string | null {
+    const s = this.monitorSummary;
+    if (s && (s.totalPods || 0) > 0 && (s.readyPods || 0) < (s.totalPods || 0)) {
+      return `Aperçu peut-être vide : ${s.readyPods}/${s.totalPods} pods prêts sur ce déploiement — `
+        + `le service n'a pas fini de démarrer (voir Alertes pour la cause). Le lien direct fonctionne dès que le pod est prêt.`;
+    }
+    return `Si l'aperçu reste vide, le site refuse d'être intégré dans un cadre — utilise le lien direct.`;
+  }
+
+  /**
+   * URL iframe stable (propriété, pas getter).
+   * Sinon le tick TTL (1s) recrée un SafeResourceUrl → reload / scintillement.
+   * On conserve la dernière URL valide tant que l'env tourne.
+   */
+  previewSafeUrl: SafeResourceUrl | null = null;
+  private previewRawUrl = '';
+  /** Scale pour que l’iframe desktop couvre tout le stage. */
+  previewScale = 1;
+  readonly previewVw = PREVIEW_VW;
+  readonly previewVh = PREVIEW_VH;
+  private previewResizeObs?: ResizeObserver;
+
+  private syncPreviewUrl(): void {
+    if (!this.isRunning) {
+      this.previewSafeUrl = null;
+      this.previewRawUrl = '';
+      this.teardownPreviewScale();
+      return;
+    }
+    const url = this.frontendUrl;
+    if (!url || !this.canEmbedPreview(url)) {
+      return;
+    }
+    if (url === this.previewRawUrl && this.previewSafeUrl) {
+      return;
+    }
+    this.previewRawUrl = url;
+    this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  private setupPreviewScale(stage: HTMLElement): void {
+    const apply = () => {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      if (w < 8 || h < 8) return;
+      // cover : remplit tout le conteneur (peut rogner un peu les bords)
+      const next = Math.max(w / PREVIEW_VW, h / PREVIEW_VH);
+      if (Math.abs(next - this.previewScale) < 0.001) return;
+      this.previewScale = next;
+      this.cdr.detectChanges();
+    };
+    apply();
+    this.previewResizeObs = new ResizeObserver(() => apply());
+    this.previewResizeObs.observe(stage);
+  }
+
+  private teardownPreviewScale(): void {
+    this.previewResizeObs?.disconnect();
+    this.previewResizeObs = undefined;
   }
 
   /** Ingress manquant alors que le déploiement est RUNNING. */
@@ -148,6 +404,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.podsPoll?.unsubscribe();
     this.ciPoll?.unsubscribe();
     this.clearTtlTimer();
+    this.teardownPreviewScale();
   }
 
   private setupTtlCountdown(): void {
@@ -303,6 +560,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         next: (updated) => {
           this.dep = updated;
           this.setupTtlCountdown();
+          this.syncPreviewUrl();
           if (updated.gitlabPipelineId) {
             this.refreshCiPipeline(true);
             this.setupCiPolling();
@@ -338,6 +596,8 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       this.monitorSummary = null;
       this.monitorAppUrl = null;
       this.metricsAvailable = false;
+      this.quota = null;
+      this.clusterCapacity = null;
       this.podsLoading = false;
       this.podsError = null;
       this.podsPoll?.unsubscribe();
@@ -360,8 +620,12 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.monitorSummary = res.summary || null;
         this.monitorAppUrl = res.appUrl || null;
         this.metricsAvailable = !!res.summary?.metricsAvailable;
+        this.quota = res.quota || null;
+        this.clusterCapacity = res.clusterCapacity || null;
         this.podsLoading = false;
         this.podsError = null;
+        this.syncPreviewUrl();
+        this.ensureDefaultPodSelected();
       },
       error: (e) => {
         this.podsLoading = false;
@@ -370,6 +634,49 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         }
       }
     });
+  }
+
+  /** Jauge de quota namespace (CPU/mem) — même calcul que le Monitoring dashboard. */
+  get quotaCpuAllocPct(): number {
+    const p = this.quota?.pctAllocated?.cpu;
+    return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  get quotaMemAllocPct(): number {
+    const p = this.quota?.pctAllocated?.memory;
+    return p != null ? Math.min(100, Math.round(p * 100)) : 0;
+  }
+
+  formatQuotaCpu(cores: number | null | undefined): string {
+    if (cores == null || !Number.isFinite(cores)) return '—';
+    if (cores < 1) return Math.round(cores * 1000) + 'm';
+    return cores.toFixed(2);
+  }
+
+  formatQuotaMem(bytes: number | null | undefined): string {
+    if (bytes == null || !Number.isFinite(bytes)) return '—';
+    const gi = bytes / (1024 * 1024 * 1024);
+    if (gi >= 1) return gi.toFixed(2) + ' Gi';
+    return (bytes / (1024 * 1024)).toFixed(0) + ' Mi';
+  }
+
+  /** Capacité réelle du nœud — diagnostic secondaire d'un pod bloqué en Pending (audit-deploiement.md). */
+  get nodeCpuUsedPct(): number {
+    const c = this.clusterCapacity;
+    if (!c?.enabled || !c.allocatableCpuCores) return 0;
+    return Math.min(100, Math.round(((c.usedCpuCores || 0) / c.allocatableCpuCores) * 100));
+  }
+
+  get nodeMemUsedPct(): number {
+    const c = this.clusterCapacity;
+    if (!c?.enabled || !c.allocatableMemoryBytes) return 0;
+    return Math.min(100, Math.round(((c.usedMemoryBytes || 0) / c.allocatableMemoryBytes) * 100));
+  }
+
+  get nodeCapacityTight(): boolean {
+    const c = this.clusterCapacity;
+    if (!c?.enabled) return false;
+    return this.nodeCpuUsedPct >= 90 || this.nodeMemUsedPct >= 90;
   }
 
   healthBadgeClass(): string {
@@ -393,14 +700,68 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.api.getDeploymentLogs(this.appId, this.dep.id, workload, 400).subscribe({
       next: (res) => {
         this.logs = res.logs || '(vide)';
-        this.logsPod = res.pod;
+        this.logsPod = res.pod || '';
         this.logsLoading = false;
+        this.cdr.markForCheck();
       },
       error: (e) => {
         this.logsLoading = false;
-        this.logsError = e?.error?.message || 'Impossible de lire les logs.';
+        this.logsError = e?.error?.message || e?.message || 'Impossible de lire les logs.';
+        this.logs = '';
+        this.cdr.markForCheck();
       }
     });
+  }
+
+  /** Ouvre les logs d’un service / d’une base (résolution du label K8s `app`). */
+  openEntryLogs(entry: StateEntry, kind: 'service' | 'database' = 'service'): void {
+    const wl = this.resolveEntryWorkload(entry, kind);
+    if (wl) this.openLogs(wl);
+  }
+
+  entryWorkloadKey(entry: StateEntry, kind: 'service' | 'database' = 'service'): string {
+    return this.resolveEntryWorkload(entry, kind) || entry.name;
+  }
+
+  /** Premier pod sélectionné par défaut (onglet Pods). */
+  private ensureDefaultPodSelected(force = false): void {
+    if (!force && this.showOpsTabs && this.opsTab !== 'pods') return;
+    if (!this.pods.length) {
+      this.selectedWorkload = null;
+      return;
+    }
+    if (!force && this.selectedWorkload) {
+      const still = this.pods.some(p => (p.workload || p.name) === this.selectedWorkload);
+      if (still) return;
+    }
+    const first = this.pods[0];
+    this.openLogs(first.name || first.workload || '');
+  }
+
+  private ensureDefaultServiceSelected(force = false): void {
+    if (this.isStopped || !this.serviceEntries.length) {
+      this.closeLogs();
+      return;
+    }
+    if (!force && this.showOpsTabs && this.opsTab !== 'services') return;
+    if (!force && this.selectedWorkload) {
+      const still = this.serviceEntries.some(s => this.entryWorkloadKey(s, 'service') === this.selectedWorkload);
+      if (still) return;
+    }
+    this.openEntryLogs(this.serviceEntries[0], 'service');
+  }
+
+  private ensureDefaultDatabaseSelected(force = false): void {
+    if (this.isStopped || !this.databaseEntries.length) {
+      this.closeLogs();
+      return;
+    }
+    if (!force && this.showOpsTabs && this.opsTab !== 'databases') return;
+    if (!force && this.selectedWorkload) {
+      const still = this.databaseEntries.some(d => this.entryWorkloadKey(d, 'database') === this.selectedWorkload);
+      if (still) return;
+    }
+    this.openEntryLogs(this.databaseEntries[0], 'database');
   }
 
   closeLogs(): void {
@@ -412,7 +773,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   private setupCiPolling(): void {
     this.ciPoll?.unsubscribe();
-    if (!this.dep?.gitlabPipelineId || !this.appId) return;
+    if (!this.dep?.gitlabPipelineId || !this.appId || this.isStopped) return;
 
     this.ciPoll = interval(5000).subscribe(() => {
       if (!this.shouldPollCi()) {
@@ -425,15 +786,19 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   private shouldPollCi(): boolean {
     if (!this.dep?.gitlabPipelineId) return false;
+    if (this.isStopped || this.dep.status === 'FAILED') return false;
     if (this.dep.status === 'DEPLOYING' || this.dep.status === 'PENDING') return true;
     const st = (this.ciPipeline?.status || '').toLowerCase();
     return st === 'running' || st === 'pending' || st === 'created' || st === 'waiting_for_resource';
   }
 
   refreshCiPipeline(silent = false): void {
+    // Le pipeline GitLab reste consultable après arrêt de l'environnement (historique) ;
+    // seul le rafraîchissement automatique (setupCiPolling/shouldPollCi) s'arrête.
     if (!this.appId || !this.dep?.id || !this.dep.gitlabPipelineId) {
       this.ciPipeline = null;
       this.ciError = null;
+      this.ciLoading = false;
       return;
     }
     if (!silent) {
@@ -445,12 +810,14 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
         this.ciPipeline = res;
         this.ciLoading = false;
         this.ciError = null;
+        // Sélection par défaut : premier job (ou conserver le job courant)
+        this.ensureDefaultCiJobSelected(res.jobs || []);
         // Rafraîchir les logs du job sélectionné s'il est encore en cours
         if (this.selectedCiJob && this.isCiJobActive(this.selectedCiJob)) {
-          const updated = (res.jobs || []).find((j) => j.id === this.selectedCiJob!.id);
+          const updated = (res.jobs || []).find((j) => Number(j.id) === Number(this.selectedCiJob!.id));
           if (updated) {
             this.selectedCiJob = updated;
-            this.loadCiJobLogs(updated.id, true);
+            this.loadCiJobLogs(Number(updated.id), true);
           }
         }
         if (!this.shouldPollCi()) {
@@ -468,11 +835,63 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /** Choisit un job par défaut si aucun n'est sélectionné. */
+  private ensureDefaultCiJobSelected(jobs: PipelineJobInfo[]): void {
+    if (!jobs.length) {
+      this.selectedCiJob = null;
+      this.ciJobLogs = '';
+      return;
+    }
+    if (this.selectedCiJob) {
+      const stillThere = jobs.find(j => Number(j.id) === Number(this.selectedCiJob!.id));
+      if (stillThere) {
+        this.selectedCiJob = stillThere;
+        // Recharger les logs si le panneau est vide (ex. après changement d'onglet)
+        if (!this.ciJobLogs && !this.ciJobLogsLoading && !this.ciJobLogsError) {
+          this.loadCiJobLogs(Number(stillThere.id), false);
+        }
+        return;
+      }
+    }
+    // Préférer un job failed, sinon running, sinon le premier
+    const preferred =
+      jobs.find(j => {
+        const s = this.normCiStatus(j.status);
+        return s === 'failed' || s === 'canceled';
+      }) ||
+      jobs.find(j => this.isCiJobActive(j)) ||
+      jobs[0];
+    this.selectCiJob(preferred);
+  }
+
+  /** Clic sur un stage → sélectionne le premier job du stage. */
+  selectCiStage(stage: { name: string; jobs: PipelineJobInfo[] }): void {
+    const jobs = stage?.jobs || [];
+    if (!jobs.length) return;
+    const preferred =
+      jobs.find(j => {
+        const s = this.normCiStatus(j.status);
+        return s === 'failed' || s === 'canceled';
+      }) ||
+      jobs.find(j => this.isCiJobActive(j)) ||
+      jobs[0];
+    this.selectCiJob(preferred);
+  }
+
   selectCiJob(job: PipelineJobInfo): void {
-    if (!job?.id) return;
+    const id = Number(job?.id);
+    if (!job || !Number.isFinite(id) || id <= 0) {
+      this.ciJobLogsError = 'Job sans identifiant GitLab — logs indisponibles.';
+      this.selectedCiJob = job || null;
+      this.ciJobLogs = '';
+      return;
+    }
     this.closeLogs();
     this.selectedCiJob = job;
-    this.loadCiJobLogs(job.id, false);
+    this.logAiResult = null;
+    this.logAiError = null;
+    this.logAiQuestion = '';
+    this.loadCiJobLogs(id, false);
   }
 
   private loadCiJobLogs(jobId: number, silent: boolean): void {
@@ -505,6 +924,105 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     this.ciJobLogs = '';
     this.ciJobLogsError = null;
     this.ciJobLogsLoading = false;
+    // garde la conversation IA (questions projet / URL)
+  }
+
+  explainLogsWithAi(): void {
+    this.askPipelineAi(true);
+  }
+
+  /**
+   * @param explainLog true = bouton « Expliquer ce log » (question défaut sur l’échec)
+   */
+  askPipelineAi(explainLog = false): void {
+    if (this.logAiLoading) return;
+    const typed = this.logAiQuestion?.trim() || '';
+    if (!explainLog && !typed) return;
+    if (explainLog && !this.ciJobLogs?.trim()) {
+      this.logAiError = 'Charge d’abord les logs du job, ou pose une question libre (URL, statut…).';
+      return;
+    }
+    this.logAiLoading = true;
+    this.logAiError = null;
+    const question = typed || (explainLog
+      ? 'Explique-moi ce log : qu\'est-ce qui a échoué et quelles sont les causes probables ?'
+      : '');
+    const stagesOverview = this.ciStages
+      .map(s => `${s.name}=${(s.status || '').toLowerCase()}`)
+      .join('; ');
+    this.aiAnalysisService.explainPipelineLogs({
+      logs: this.ciJobLogs || undefined,
+      jobName: this.selectedCiJob?.name,
+      stageName: this.selectedCiJob?.stage,
+      jobStatus: this.selectedCiJob?.status,
+      pipelineKind: 'DEPLOY',
+      stagesOverview,
+      projectHint: 'EnviroTest — déploiement K8s géré',
+      projectContext: this.buildAiProjectContext(),
+      userQuestion: question
+    }).subscribe({
+      next: (res) => {
+        this.logAiResult = res;
+        this.logAiLoading = false;
+        this.cdr.detectChanges();
+        setTimeout(() => this.scrollLogAiIntoView(), 50);
+      },
+      error: (err) => {
+        this.logAiLoading = false;
+        this.logAiError = err?.error?.message || err?.message || 'Erreur lors de l\'explication IA.';
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  private buildAiProjectContext(): string {
+    const lines: string[] = [];
+    lines.push(`appId: ${this.appId || '—'}`);
+    if (this.dep) {
+      lines.push(`deploymentId: ${this.dep.id}`);
+      lines.push(`namespace: ${this.dep.namespace || '—'}`);
+      lines.push(`deploymentStatus: ${this.dep.status}`);
+      lines.push(`gitlabPipelineId: ${this.dep.gitlabPipelineId ?? '—'}`);
+      lines.push(`pipelineStatus: ${this.ciPipeline?.status || '—'}`);
+      if (this.ciPipeline?.webUrl) lines.push(`gitlabPipelineUrl: ${this.ciPipeline.webUrl}`);
+    }
+    const appUrl = this.frontendUrl;
+    if (appUrl) lines.push(`appUrl: ${appUrl}`);
+    if (this.monitorAppUrl) lines.push(`monitorAppUrl: ${this.monitorAppUrl}`);
+    const backendUrl = this.backendUrl;
+    if (backendUrl) lines.push(`backendUrl: ${backendUrl}`);
+    const services = this.serviceEntries || [];
+    if (services.length) {
+      lines.push('services:');
+      for (const s of services) {
+        lines.push(
+          `  - name=${s.name}; role=${s.role || '—'}; status=${s.status}; host=${s.internalHost || '—'}; externalUrl=${s.externalUrl || '—'}`
+        );
+      }
+    }
+    if (this.services?.length) {
+      lines.push('configuredServices:');
+      for (const s of this.services) {
+        lines.push(`  - id=${s.id}; name=${s.name}; role=${s.role || '—'}`);
+      }
+    }
+    const pods = this.pods || [];
+    if (pods.length) {
+      lines.push('pods:');
+      for (const p of pods.slice(0, 20)) {
+        lines.push(
+          `  - name=${p.name}; phase=${p.phase || '—'}; ready=${p.ready}; workload=${p.workload || '—'}`
+        );
+      }
+    }
+    return lines.join('\n');
+  }
+
+  private scrollLogAiIntoView(): void {
+    try {
+      const el = document.querySelector('.ds-log-ai-result') as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch { /* ignore */ }
   }
 
   isCiJobActive(job: PipelineJobInfo | null | undefined): boolean {
@@ -538,7 +1056,7 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   rebuildService(s: StateEntry): void {
     const sid = this.serviceIdFor(s.name);
     if (!sid || !this.appId) return;
-    if (!confirm(`Rebuild « ${s.name} » uniquement (même namespace) ?\nLes autres services ne seront pas reconstruits.`)) {
+    if (!confirm(`Rebuild « ${s.name} » uniquement (même namespace) — relance aussi le scan ZAP sur l'environnement.\nLes autres services ne seront pas reconstruits.`)) {
       return;
     }
     this.rebuildingServiceId = sid;
@@ -561,27 +1079,88 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     });
   }
 
-  /** Extrait le nom K8s (label app) depuis internalHost. */
+  /** Extrait le nom K8s (label app) depuis internalHost / URL. */
   workloadFromHost(host: string): string | null {
     if (!host) return null;
-    const first = host.split('.')[0];
+    let h = host.trim();
+    // jdbc:postgresql://db-x.ns.svc… → db-x.ns.svc…
+    const schemeIdx = h.indexOf('://');
+    if (schemeIdx >= 0) h = h.slice(schemeIdx + 3);
+    h = h.split('/')[0].split(':')[0]; // drop path / port
+    const first = h.split('.')[0];
     return first || null;
+  }
+
+  /** Normalise comme AppNaming.k8sName côté backend. */
+  k8sWorkloadName(input: string): string {
+    if (!input?.trim()) return 'x';
+    let s = input.toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+    if (!s) s = 'x';
+    if (s.length > 50) s = s.slice(0, 50).replace(/-+$/, '');
+    return s || 'x';
+  }
+
+  /**
+   * Résout le label K8s `app` pour un service / une base :
+   * pods → DNS interne → nom normalisé (db-… pour les bases).
+   */
+  resolveEntryWorkload(entry: StateEntry, kind: 'service' | 'database' = 'service'): string | null {
+    if (!entry) return null;
+    const fromHost = this.workloadFromHost(entry.internalHost || '');
+    const slug = this.k8sWorkloadName(entry.name);
+    const candidates = kind === 'database'
+      ? [fromHost, slug.startsWith('db-') ? slug : `db-${slug}`, slug, entry.name]
+      : [fromHost, slug, entry.name];
+    const uniq = [...new Set(candidates.filter((c): c is string => !!c))];
+
+    for (const c of uniq) {
+      const pod = this.pods.find(p =>
+        p.workload === c || p.name === c || (p.name || '').startsWith(c + '-')
+      );
+      if (pod?.workload) return pod.workload;
+      if (pod?.name) return pod.workload || c;
+    }
+    return uniq[0] || null;
+  }
+
+  serviceEntryForWorkload(workload: string | null): StateEntry | null {
+    if (!workload) return null;
+    return this.serviceEntries.find(s => this.entryWorkloadKey(s, 'service') === workload) || null;
   }
 
   private entries(section: 'services' | 'databases'): StateEntry[] {
     const state = this.dep?.servicesState?.[section];
     if (!state) return [];
-    return Object.keys(state).map((name) => ({
-      name,
-      status: state[name]?.status || 'NotReady',
-      wave: state[name]?.wave ?? 0,
-      internalHost: state[name]?.internalHost || '',
-      externalUrl: state[name]?.externalUrl || null
-    }));
+    return Object.keys(state).map((name) => {
+      const roleFromState = state[name]?.role || null;
+      const roleFromApp = this.services?.find(s => s.name === name)?.role || null;
+      return {
+        name,
+        status: state[name]?.status || 'NotReady',
+        wave: state[name]?.wave ?? 0,
+        internalHost: state[name]?.internalHost || '',
+        externalUrl: state[name]?.externalUrl || null,
+        role: roleFromState || roleFromApp
+      };
+    });
   }
 
   get serviceEntries(): StateEntry[] {
     return this.entries('services');
+  }
+
+  /** Libellé clair : URL app vs API backend (path /api). */
+  externalUrlLabel(s: StateEntry): string {
+    const role = (s.role || '').toUpperCase();
+    if (role === 'FRONTEND') return 'URL app (frontend)';
+    if (role === 'BACKEND') return 'URL API (backend)';
+    const url = (s.externalUrl || '').replace(/\/$/, '');
+    if (url.endsWith('/api')) return 'URL API (backend)';
+    return 'URL externe';
   }
 
   get databaseEntries(): StateEntry[] {
@@ -597,9 +1176,18 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   }
 
   podPhaseClass(phase: string, ready: boolean): string {
-    if (ready && phase === 'Running') return 'status-running';
-    if (phase === 'Failed' || phase === 'Unknown') return 'status-failed';
+    // Aligné sur les pastilles pipeline (success / failed / pending)
+    if (ready || (phase || '').toLowerCase() === 'running') return 'status-running';
+    const p = (phase || '').toLowerCase();
+    if (p === 'failed' || p === 'unknown' || p === 'error' || p === 'crashloopbackoff') return 'status-failed';
     return 'status-pending';
+  }
+
+  podStatusLabel(phase: string, ready: boolean): string {
+    if (ready || (phase || '').toLowerCase() === 'running') return 'success';
+    const p = (phase || '').toLowerCase();
+    if (p === 'failed' || p === 'unknown' || p === 'error' || p === 'crashloopbackoff') return 'failed';
+    return (phase || 'pending').toLowerCase();
   }
 
   displayUrl(db: AppDatabaseModel): string {
