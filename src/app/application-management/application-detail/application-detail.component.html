@@ -297,14 +297,20 @@
             <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('deployments')">Gérer →</button>
           </div>
           <div class="ad-active-stack" *ngIf="activeDeployments.length">
-            <app-managed-deployment-status
-              *ngIf="primaryActiveDeployment as live"
-              [appId]="appId"
-              [deployment]="live"
-              [services]="app.services || []"
-              variant="banner"
-              (navigateSection)="goSection($event)">
-            </app-managed-deployment-status>
+            <ng-container *ngIf="primaryActiveDeployment as live">
+              <app-managed-deployment-status
+                [appId]="appId"
+                [deployment]="live"
+                [services]="app.services || []"
+                variant="banner"
+                (navigateSection)="goSection($event)">
+              </app-managed-deployment-status>
+              <div class="ad-rt-ops-actions" *ngIf="live.status !== 'STOPPED'" style="margin-top:.75rem;">
+                <button type="button" class="am-btn am-btn-danger am-btn-sm" (click)="teardown(live)">
+                  Arrêter l'environnement (teardown)
+                </button>
+              </div>
+            </ng-container>
 
             <!-- Autres environnements actifs : repliés par défaut, pour rester compact et lisible. -->
             <div class="ad-extra-envs" *ngIf="otherActiveDeployments.length">
@@ -319,14 +325,20 @@
                     {{ isExtraEnvExpanded(extra.id) ? 'Masquer ▾' : 'Afficher ▸' }}
                   </span>
                 </button>
-                <app-managed-deployment-status
-                  *ngIf="isExtraEnvExpanded(extra.id)"
-                  [appId]="appId"
-                  [deployment]="extra"
-                  [services]="app.services || []"
-                  variant="banner"
-                  (navigateSection)="goSection($event)">
-                </app-managed-deployment-status>
+                <ng-container *ngIf="isExtraEnvExpanded(extra.id)">
+                  <app-managed-deployment-status
+                    [appId]="appId"
+                    [deployment]="extra"
+                    [services]="app.services || []"
+                    variant="banner"
+                    (navigateSection)="goSection($event)">
+                  </app-managed-deployment-status>
+                  <div class="ad-rt-ops-actions" *ngIf="extra.status !== 'STOPPED'" style="margin-top:.75rem;">
+                    <button type="button" class="am-btn am-btn-danger am-btn-sm" (click)="teardown(extra)">
+                      Arrêter l'environnement (teardown)
+                    </button>
+                  </div>
+                </ng-container>
               </ng-container>
             </div>
           </div>

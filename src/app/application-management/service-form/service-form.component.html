@@ -30,7 +30,7 @@
     </div>
   </div>
 
-  <div class="am-grid-3">
+  <div [class]="requiresPort ? 'am-grid-3' : 'am-grid-2'">
     <div class="am-field">
       <label class="am-label">Dockerfile</label>
       <input class="am-input" formControlName="dockerfilePath" placeholder="Dockerfile" />
@@ -39,11 +39,12 @@
       <label class="am-label">Contexte de build</label>
       <input class="am-input" formControlName="buildContext" placeholder="." />
     </div>
-    <div class="am-field">
+    <div class="am-field" *ngIf="requiresPort">
       <label class="am-label">Port exposé *</label>
       <input class="am-input" type="number" formControlName="exposedPort" placeholder="8080" />
     </div>
   </div>
+  <p class="am-hint" *ngIf="!requiresPort">Un worker n'expose aucun port — rien à renseigner ici.</p>
 
   <!-- Dépendance base de données -->
   <div class="am-field">
@@ -78,7 +79,7 @@
       <label class="am-label">Réplicas</label>
       <input class="am-input" type="number" formControlName="replicas" />
     </div>
-    <div class="am-field">
+    <div class="am-field" *ngIf="requiresPort">
       <label class="am-label">Health check path</label>
       <input class="am-input" formControlName="healthCheckPath" placeholder="/health (optionnel)" />
     </div>

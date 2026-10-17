@@ -54,6 +54,25 @@ export class ServiceFormComponent implements OnInit {
     });
 
     (s?.envVars || []).forEach((v) => this.envVars.push(this.buildEnvRow(v)));
+
+    // Port exposé : requis uniquement pour FRONTEND/BACKEND (cf. AppServiceRules côté backend
+    // -- un WORKER n'écoute jamais sur un port, le champ ne doit donc jamais bloquer l'envoi).
+    this.applyPortValidators(this.form.get('role')!.value);
+    this.form.get('role')!.valueChanges.subscribe((role) => this.applyPortValidators(role));
+  }
+
+  get requiresPort(): boolean {
+    return this.form?.get('role')?.value !== 'WORKER';
+  }
+
+  private applyPortValidators(role: AppServiceRole): void {
+    const portControl = this.form.get('exposedPort')!;
+    if (role === 'WORKER') {
+      portControl.clearValidators();
+    } else {
+      portControl.setValidators([Validators.required, Validators.min(1)]);
+    }
+    portControl.updateValueAndValidity({ emitEvent: false });
   }
 
   get envVars(): FormArray<FormGroup> {
