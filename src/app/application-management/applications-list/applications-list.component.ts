@@ -4,6 +4,7 @@ import { Router, RouterModule } from '@angular/router';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import { ManagedApp } from '../../models/application-management/application-management.models';
 import { ProjectFormComponent, ProjectFormPayload } from '../project-form/project-form.component';
+import { ToastService } from '../../services/ui/toast.service';
 
 @Component({
   selector: 'app-managed-applications-list',
@@ -21,8 +22,13 @@ export class ApplicationsListComponent implements OnInit {
   showCreateForm = false;
   creating = false;
   createError: string | null = null;
+  deletingId: string | null = null;
 
-  constructor(private api: ApplicationManagementService, private router: Router) {}
+  constructor(
+    private api: ApplicationManagementService,
+    private router: Router,
+    private toastService: ToastService
+  ) {}
 
   ngOnInit(): void {
     this.load();
@@ -57,6 +63,24 @@ export class ApplicationsListComponent implements OnInit {
 
   open(app: ManagedApp): void {
     this.router.navigate(['/projects', app.id, 'dashboard']);
+  }
+
+  deleteApp(app: ManagedApp, event: Event): void {
+    event.stopPropagation();
+    if (this.deletingId) return;
+    if (!confirm(`Supprimer le projet « ${app.name} » et tout son contenu (services, bases, historique) ?`)) return;
+    this.deletingId = app.id;
+    this.api.delete(app.id).subscribe({
+      next: () => {
+        this.deletingId = null;
+        this.apps = this.apps.filter(a => a.id !== app.id);
+        this.toastService.push('success', 'Projet supprimé', `« ${app.name} » a été supprimé.`);
+      },
+      error: (e) => {
+        this.deletingId = null;
+        this.toastService.push('error', 'Suppression impossible', e?.error?.message || 'Une erreur est survenue.');
+      }
+    });
   }
 
   deployStatus(app: ManagedApp): string | null {

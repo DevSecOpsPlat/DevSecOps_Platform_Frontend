@@ -44,6 +44,14 @@
           <code class="pj-slug">{{ app.slug }}</code>
         </div>
         <span class="pj-open-cta">Ouvrir</span>
+        <button
+          type="button"
+          class="am-btn am-btn-danger am-btn-sm pj-delete-btn"
+          title="Supprimer le projet"
+          [disabled]="deletingId === app.id"
+          (click)="deleteApp(app, $event)">
+          {{ deletingId === app.id ? '…' : '✕' }}
+        </button>
       </div>
 
       <p class="pj-card-desc">{{ app.description || 'Sans description' }}</p>

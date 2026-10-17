@@ -1463,7 +1463,10 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
 
   deleteApp(): void {
     if (!confirm(`Supprimer l'application « ${this.app?.name} » et tout son contenu ?`)) return;
-    this.api.delete(this.appId).subscribe({ next: () => this.back() });
+    this.api.delete(this.appId).subscribe({
+      next: () => this.back(),
+      error: (e) => this.toastService.push('error', 'Suppression impossible', e?.error?.message || 'Une erreur est survenue.')
+    });
   }
 
   saveCustomHostname(): void {
