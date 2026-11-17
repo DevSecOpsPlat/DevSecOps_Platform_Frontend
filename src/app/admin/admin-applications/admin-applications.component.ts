@@ -19,7 +19,7 @@ export interface AppRow extends AdminUserApplicationDetail {
 @Component({
   selector: 'app-admin-applications',
   templateUrl: './admin-applications.component.html',
-  styleUrls: ['../admin-design-system.css', './admin-applications.component.css']
+  styleUrls: ['./admin-applications.component.css']
 })
 export class AdminApplicationsComponent implements OnInit {
   loading = true;
@@ -32,7 +32,19 @@ export class AdminApplicationsComponent implements OnInit {
   allRows: AppRow[] = [];
   owners: string[] = [];
 
+  readonly pageSize = 10;
+  page = 0;
+
   constructor(private adminService: AdminService, private router: Router) {}
+
+  get pageCount(): number {
+    return Math.ceil(this.filteredRows.length / this.pageSize);
+  }
+
+  get pagedRows(): AppRow[] {
+    const start = this.page * this.pageSize;
+    return this.filteredRows.slice(start, start + this.pageSize);
+  }
 
   ngOnInit(): void {
     this.load();
@@ -92,6 +104,7 @@ export class AdminApplicationsComponent implements OnInit {
     }
     this.allRows = rows.sort((x, y) => x.name.localeCompare(y.name));
     this.owners = [...ownerSet].sort();
+    this.page = 0;
   }
 
   compositionLabel(r: AppRow): string {
@@ -101,6 +114,23 @@ export class AdminApplicationsComponent implements OnInit {
       parts.push(r.databasesCount === 1 ? '1 base de données' : `${r.databasesCount} bases de données`);
     }
     return parts.join(' · ');
+  }
+
+  pipelineSuccess(r: AppRow): number {
+    return r.pipelineCounts?.success || 0;
+  }
+
+  successRate(r: AppRow): number {
+    const total = this.pipelineTotal(r);
+    return total ? Math.round((this.pipelineSuccess(r) / total) * 100) : 0;
+  }
+
+  formatDate(value: string | number[] | null | undefined): string {
+    if (!value) return '—';
+    const d = Array.isArray(value)
+      ? new Date(value[0], value[1] - 1, value[2])
+      : new Date(value);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR');
   }
 
   pipelineTotal(r: AppRow): number {

@@ -8,15 +8,19 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import Chart from 'chart.js/auto';
+import { Subscription } from 'rxjs';
+import { skip } from 'rxjs/operators';
 import {
   AdminAlert,
   AdminBlockedIpDetail,
   AdminKpiPanel,
+  AdminKpiPanelItem,
   AdminSecurityDashboard,
   AdminService,
-  BlockedIpEntry,
   DataProtectionSummary
 } from '../../services/admin/admin.service';
+import { ThemeService } from '../../services/ui/theme.service';
+import { adminChartPalette } from '../shared/admin-chart-palette';
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   LOGIN_FAILED: 'Connexion échouée',
@@ -58,6 +62,23 @@ const DOUGHNUT_COLORS: Record<string, string> = {
   SUSPICIOUS_ACTIVITY: '#64748b'
 };
 
+type TrendRangeKey = 'week' | 'month' | 'quarter' | 'half';
+
+interface TrendRange {
+  key: TrendRangeKey;
+  label: string;
+  days: number;
+  /** Au-delà d'un mois, un point par semaine : 180 points quotidiens seraient illisibles. */
+  bucket: 'day' | 'week';
+}
+
+const TREND_RANGES: TrendRange[] = [
+  { key: 'week', label: 'Semaine', days: 7, bucket: 'day' },
+  { key: 'month', label: 'Mois', days: 30, bucket: 'day' },
+  { key: 'quarter', label: '3 mois', days: 91, bucket: 'week' },
+  { key: 'half', label: '6 mois', days: 182, bucket: 'week' }
+];
+
 @Component({
   selector: 'app-admin-alerts',
   templateUrl: './admin-alerts.component.html',
@@ -72,8 +93,6 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   error: string | null = null;
   dashboard: AdminSecurityDashboard | null = null;
   alerts: AdminAlert[] = [];
-  blockedIps: BlockedIpEntry[] = [];
-  loadingBlocked = false;
   dataProtection: DataProtectionSummary | null = null;
   dataProtectionOpen = false;
 
@@ -93,6 +112,10 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   expandedKpiKey: string | null = null;
 
   readonly typeOptions = FILTER_TYPES;
+  readonly trendRanges = TREND_RANGES;
+  trendRange: TrendRangeKey = 'month';
+  /** Total de la période affichée, repris dans le sous-titre du graphique. */
+  trendTotal = 0;
 
   private lineChart?: Chart;
   private doughnutChart?: Chart;
@@ -100,12 +123,23 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   private chartsReady = false;
   private pendingChartBuild = false;
   private refreshTimer?: ReturnType<typeof setInterval>;
+  private themeSub?: Subscription;
 
-  constructor(private adminService: AdminService, private router: Router) {}
+  constructor(
+    private adminService: AdminService,
+    private router: Router,
+    private themeService: ThemeService
+  ) {}
 
   ngOnInit(): void {
     this.loadAll();
     this.refreshTimer = setInterval(() => this.loadAll(false), 60000);
+    // Les couleurs des graphiques suivent le thème : on les redessine quand il change.
+    this.themeSub = this.themeService.theme$.pipe(skip(1)).subscribe(() => {
+      if (this.lineChart || this.doughnutChart || this.barChart) {
+        this.buildCharts();
+      }
+    });
     this.adminService.getDataProtection().subscribe({
       next: (d) => (this.dataProtection = d),
       error: () => (this.dataProtection = null)
@@ -124,6 +158,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.themeSub?.unsubscribe();
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
@@ -137,18 +172,9 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.loading = true;
     }
     this.error = null;
-    this.loadBlockedIps();
     this.adminService.getSecurityDashboard().subscribe({
       next: dash => {
         this.dashboard = dash;
-        this.blockedIps = (dash.blockedIps ?? []).map(b => ({
-          ip: b.ip,
-          reason: b.reason,
-          blockedUntil: b.blockedUntil,
-          createdAt: b.createdAt,
-          source: b.source,
-          currentlyActive: b.currentlyActive
-        }));
         this.scheduleChartBuild();
       },
       error: () => {
@@ -214,6 +240,15 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.dashboard?.kpiPanels?.find(p => p.key === key);
   }
 
+  /** Listes du panneau de détail, vides plutôt que nulles si l'API omet le champ. */
+  get blockedIpDetails(): AdminBlockedIpDetail[] {
+    return this.dashboard?.blockedIps ?? [];
+  }
+
+  get panelItems(): AdminKpiPanelItem[] {
+    return this.activeKpiPanel?.items ?? [];
+  }
+
   kpiHover(key: string): string {
     return this.kpiPanel(key)?.hoverDescription ?? '';
   }
@@ -245,7 +280,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  /** Même action que unblockFromPanel, depuis une ligne du journal des alertes (retour utilisateur du 6 septembre 2026 : débloquer directement depuis cette liste plutôt que par le panneau KPI séparé). */
+  /** Même action que unblockFromPanel, depuis une ligne du journal des alertes. */
   unblockIpFromRow(alert: AdminAlert, event: Event): void {
     event.stopPropagation();
     const ip = alert.ipAddress?.trim();
@@ -254,13 +289,8 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.blockingIp = ip;
     this.adminService.unblockIp(ip).subscribe({
-      next: () => {
-        this.blockingIp = null;
-        this.loadBlockedIps();
-      },
-      error: () => {
-        this.blockingIp = null;
-      }
+      next: () => this.afterIpChange(),
+      error: () => (this.blockingIp = null)
     });
   }
 
@@ -340,21 +370,22 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.blockingIp = ip;
     this.adminService.blockIp(ip, `Blocage manuel depuis alerte ${this.typeLabel(alert.type)}`, 60).subscribe({
-      next: () => {
-        this.blockingIp = null;
-        this.loadBlockedIps();
-      },
-      error: () => {
-        this.blockingIp = null;
-      }
+      next: () => this.afterIpChange(),
+      error: () => (this.blockingIp = null)
     });
+  }
+
+  /** La liste des IP bloquées vient du tableau de bord : on le recharge après chaque (dé)blocage. */
+  private afterIpChange(): void {
+    this.blockingIp = null;
+    this.loadAll(false);
   }
 
   isIpBlocked(ip?: string | null): boolean {
     if (!ip) {
       return false;
     }
-    return this.blockedIps.some(b => b.ip === ip && b.currentlyActive !== false);
+    return this.blockedIpDetails.some(b => b.ip === ip && b.currentlyActive !== false);
   }
 
   markRead(alert: AdminAlert, event: Event): void {
@@ -387,28 +418,6 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  unblockIp(entry: BlockedIpEntry, event: Event): void {
-    event.stopPropagation();
-    this.adminService.unblockIp(entry.ip).subscribe({
-      next: () => this.loadAll(false)
-    });
-  }
-
-  private loadBlockedIps(): void {
-    this.loadingBlocked = true;
-    this.adminService.getBlockedIps().subscribe({
-      next: list => {
-        if (!this.dashboard) {
-          this.blockedIps = list ?? [];
-        }
-        this.loadingBlocked = false;
-      },
-      error: () => {
-        this.loadingBlocked = false;
-      }
-    });
-  }
-
   private scheduleChartBuild(): void {
     this.pendingChartBuild = true;
     if (this.chartsReady) {
@@ -426,31 +435,107 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.buildBarChart();
   }
 
+  get activeTrendRange(): TrendRange {
+    return TREND_RANGES.find(r => r.key === this.trendRange) ?? TREND_RANGES[1];
+  }
+
+  get trendSubtitle(): string {
+    const r = this.activeTrendRange;
+    const period = { week: '7 derniers jours', month: '30 derniers jours', quarter: '3 derniers mois', half: '6 derniers mois' }[r.key];
+    const unit = r.bucket === 'day' ? 'par jour' : 'par semaine';
+    return `${this.trendTotal} alerte(s) sur les ${period}, ${unit}. Survolez un point pour le détail.`;
+  }
+
+  setTrendRange(key: TrendRangeKey): void {
+    if (key === this.trendRange) {
+      return;
+    }
+    this.trendRange = key;
+    this.buildLineChart();
+  }
+
+  /**
+   * Série du graphique pour la période choisie. L'API renvoie un point par jour depuis la
+   * première alerte : les jours antérieurs sont complétés à 0, puis regroupés par semaine
+   * (du lundi au dimanche) pour 3 et 6 mois.
+   */
+  private trendSeries(): { labels: string[]; data: number[]; titles: string[]; tooltips: string[] } {
+    const range = this.activeTrendRange;
+    const byDay = new Map<string, { count: number; tooltip: string }>();
+    for (const p of this.dashboard?.hourlyTrend ?? []) {
+      byDay.set(p.hour, { count: p.count, tooltip: p.tooltip });
+    }
+    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const short = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - (range.days - 1));
+
+    const days: { date: Date; count: number; tooltip: string }[] = [];
+    for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+      const point = byDay.get(dayKey(d));
+      days.push({ date: new Date(d), count: point?.count ?? 0, tooltip: point?.tooltip ?? '' });
+    }
+    this.trendTotal = days.reduce((sum, d) => sum + d.count, 0);
+
+    if (range.bucket === 'day') {
+      return {
+        labels: days.map(d => short(d.date)),
+        data: days.map(d => d.count),
+        titles: days.map(d => d.date.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' })),
+        tooltips: days.map(d => (d.count ? d.tooltip : 'Aucune alerte ce jour-là.'))
+      };
+    }
+
+    const weeks: { from: Date; to: Date; days: typeof days }[] = [];
+    for (const day of days) {
+      const monday = new Date(day.date);
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      const last = weeks[weeks.length - 1];
+      if (last && last.from.getTime() === monday.getTime()) {
+        last.days.push(day);
+        last.to = day.date;
+      } else {
+        weeks.push({ from: monday, to: day.date, days: [day] });
+      }
+    }
+    return {
+      labels: weeks.map(w => short(w.from)),
+      data: weeks.map(w => w.days.reduce((sum, d) => sum + d.count, 0)),
+      titles: weeks.map(w => `Semaine du ${short(w.from)} au ${short(w.to)}`),
+      tooltips: weeks.map(w => {
+        const total = w.days.reduce((sum, d) => sum + d.count, 0);
+        if (!total) {
+          return 'Aucune alerte cette semaine.';
+        }
+        const peak = w.days.reduce((a, b) => (b.count > a.count ? b : a));
+        const active = w.days.filter(d => d.count > 0).length;
+        return `${active} jour(s) avec alertes. Jour le plus chargé : ${short(peak.date)} (${peak.count} alerte(s)).`;
+      })
+    };
+  }
+
   private buildLineChart(): void {
     const canvas = this.lineCanvas?.nativeElement;
     if (!canvas || !this.dashboard) {
       return;
     }
     this.lineChart?.destroy();
-    const trend = this.dashboard.hourlyTrend ?? [];
-    const labels = trend.map(p => {
-      const d = new Date(p.hour + 'T00:00:00');
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-    });
-    const data = trend.map(p => p.count);
-    const tooltips = trend.map(p => p.tooltip);
+    const { labels, data, titles, tooltips } = this.trendSeries();
+    const pal = adminChartPalette(this.themeService.current);
 
     this.lineChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
         datasets: [{
-          label: 'Alertes de sécurité / jour',
+          label: 'Alertes de sécurité',
           data,
-          borderColor: '#0f172a',
-          backgroundColor: 'rgba(15, 23, 42, 0.08)',
+          borderColor: pal.ink,
+          backgroundColor: pal.inkFill,
           borderWidth: 2,
-          pointBackgroundColor: '#ea580c',
+          pointBackgroundColor: pal.accent,
           pointRadius: 3,
           pointHoverRadius: 6,
           fill: true,
@@ -463,10 +548,10 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 14,
             callbacks: {
-              title: items => labels[items[0]?.dataIndex ?? 0] ?? '',
+              title: items => titles[items[0]?.dataIndex ?? 0] ?? '',
               label: ctx => ` ${ctx.parsed.y} alerte(s)`,
               afterBody: items => {
                 const idx = items[0]?.dataIndex ?? 0;
@@ -477,8 +562,8 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         },
         scales: {
-          x: { grid: { color: '#f1f5f9' }, ticks: { maxTicksLimit: 12, color: '#64748b' } },
-          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#64748b' }, grid: { color: '#f1f5f9' } }
+          x: { grid: { color: pal.grid }, ticks: { maxTicksLimit: 12, color: pal.tick } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: pal.tick }, grid: { color: pal.grid } }
         }
       }
     });
@@ -495,6 +580,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     const data = slices.map(s => s.count);
     const colors = slices.map(s => DOUGHNUT_COLORS[s.type] ?? '#94a3b8');
     const tooltips = slices.map(s => s.tooltip);
+    const pal = adminChartPalette(this.themeService.current);
 
     this.doughnutChart = new Chart(canvas, {
       type: 'doughnut',
@@ -504,7 +590,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
           data,
           backgroundColor: colors,
           borderWidth: 2,
-          borderColor: '#fff',
+          borderColor: pal.surface,
           hoverOffset: 8
         }]
       },
@@ -515,10 +601,10 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: {
             position: 'bottom',
-            labels: { boxWidth: 12, padding: 14, color: '#334155' }
+            labels: { boxWidth: 12, padding: 14, color: pal.label }
           },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 14,
             callbacks: {
               label: ctx => ` ${ctx.label} : ${ctx.parsed} alerte(s)`,
@@ -544,6 +630,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
     const labels = top.map(t => t.ip);
     const data = top.map(t => t.count);
     const tooltips = top.map(t => t.tooltip);
+    const pal = adminChartPalette(this.themeService.current);
 
     this.barChart = new Chart(canvas, {
       type: 'bar',
@@ -552,7 +639,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Alertes',
           data,
-          backgroundColor: 'rgba(234, 88, 12, 0.85)',
+          backgroundColor: pal.accentBar,
           borderRadius: 6,
           maxBarThickness: 48
         }]
@@ -564,7 +651,7 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 14,
             callbacks: {
               label: ctx => ` ${ctx.parsed.x} alerte(s)`,
@@ -577,8 +664,8 @@ export class AdminAlertsComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         },
         scales: {
-          x: { beginAtZero: true, ticks: { stepSize: 1, color: '#64748b' }, grid: { color: '#f1f5f9' } },
-          y: { ticks: { color: '#334155', font: { family: 'monospace' } }, grid: { display: false } }
+          x: { beginAtZero: true, ticks: { stepSize: 1, color: pal.tick }, grid: { color: pal.grid } },
+          y: { ticks: { color: pal.label, font: { family: 'monospace' } }, grid: { display: false } }
         }
       }
     });

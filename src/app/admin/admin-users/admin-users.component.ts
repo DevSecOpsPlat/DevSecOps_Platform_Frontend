@@ -8,6 +8,8 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import Chart from 'chart.js/auto';
+import { Subscription } from 'rxjs';
+import { skip } from 'rxjs/operators';
 import {
   AdminFailedLoginEntry,
   AdminPipelineCounts,
@@ -16,6 +18,8 @@ import {
   AdminUserMetrics,
   AdminUsersDashboardStats
 } from '../../services/admin/admin.service';
+import { ThemeService } from '../../services/ui/theme.service';
+import { adminChartPalette } from '../shared/admin-chart-palette';
 
 interface CreationMonthPoint {
   label: string;
@@ -33,7 +37,7 @@ interface FailedUserGroup {
 @Component({
   selector: 'app-admin-users',
   templateUrl: './admin-users.component.html',
-  styleUrls: ['../admin-route-page.css', './admin-users.component.css']
+  styleUrls: ['./admin-users.component.css']
 })
 export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
   private static readonly DISMISSED_ALERTS_KEY = 'admin-dismissed-security-alerts';
@@ -57,12 +61,23 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
   private loginChart?: Chart;
   private chartsReady = false;
   private pendingChartBuild = false;
+  private themeSub?: Subscription;
 
-  constructor(private adminService: AdminService, private router: Router) {}
+  constructor(
+    private adminService: AdminService,
+    private router: Router,
+    private themeService: ThemeService
+  ) {}
 
   ngOnInit(): void {
     this.restoreDismissedAlerts();
     this.loadAll();
+    // Les couleurs des graphiques suivent le thème : on les redessine quand il change.
+    this.themeSub = this.themeService.theme$.pipe(skip(1)).subscribe(() => {
+      if (this.creationChart || this.loginChart) {
+        this.buildCharts();
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -73,6 +88,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.themeSub?.unsubscribe();
     this.creationChart?.destroy();
     this.loginChart?.destroy();
   }
@@ -208,11 +224,12 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
     return map[(u.accountStatus || '').toUpperCase()] || u.accountStatus || '—';
   }
 
+  isAdmin(u: AdminUserMetrics): boolean {
+    return !!u.roles?.includes('ROLE_ADMIN');
+  }
+
   rolesText(u: AdminUserMetrics): string {
-    if (u.roles?.includes('ROLE_ADMIN')) {
-      return 'Administrateur';
-    }
-    return 'Développeur';
+    return this.isAdmin(u) ? 'Administrateur' : 'Développeur';
   }
 
   isSecurityRisk(u: AdminUserMetrics): boolean {
@@ -308,6 +325,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
     const labels = months.map(m => m.label);
     const data = months.map(m => m.count);
     const monthsRef = this.creationMonthsData;
+    const p = adminChartPalette(this.themeService.current);
 
     this.creationChart = new Chart(canvas, {
       type: 'line',
@@ -316,11 +334,11 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Créations',
           data,
-          borderColor: '#ea580c',
-          backgroundColor: 'rgba(234, 88, 12, 0.12)',
+          borderColor: p.accent,
+          backgroundColor: p.accentFill,
           borderWidth: 2.5,
-          pointBackgroundColor: '#ea580c',
-          pointBorderColor: '#fff',
+          pointBackgroundColor: p.accent,
+          pointBorderColor: p.surface,
           pointBorderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
@@ -334,7 +352,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: p.tooltipBg,
             titleFont: { family: 'Inter', weight: 'normal' },
             bodyFont: { family: 'Inter', weight: 'normal' },
             padding: 12,
@@ -353,13 +371,13 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
         },
         scales: {
           x: {
-            grid: { color: '#f1f5f9' },
-            ticks: { color: '#64748b', font: { family: 'Inter', size: 11 } }
+            grid: { color: p.grid },
+            ticks: { color: p.tick, font: { family: 'Inter', size: 11 } }
           },
           y: {
             beginAtZero: true,
-            ticks: { stepSize: 1, color: '#64748b', font: { family: 'Inter', size: 11 } },
-            grid: { color: '#f1f5f9' }
+            ticks: { stepSize: 1, color: p.tick, font: { family: 'Inter', size: 11 } },
+            grid: { color: p.grid }
           }
         }
       }
@@ -377,6 +395,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     const successData = stats.map(s => s.success);
     const failedData = stats.map(s => s.failed);
+    const p = adminChartPalette(this.themeService.current);
 
     this.loginChart = new Chart(canvas, {
       type: 'line',
@@ -386,7 +405,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
           {
             label: 'Réussies',
             data: successData,
-            borderColor: '#ea580c',
+            borderColor: p.accent,
             backgroundColor: 'transparent',
             borderWidth: 2,
             pointRadius: 0,
@@ -396,7 +415,7 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
           {
             label: 'Échouées',
             data: failedData,
-            borderColor: '#0f172a',
+            borderColor: p.ink,
             backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [4, 3],
@@ -418,11 +437,11 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
               boxHeight: 10,
               usePointStyle: true,
               font: { family: 'Inter', size: 11 },
-              color: '#475569'
+              color: p.label
             }
           },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: p.tooltipBg,
             titleFont: { family: 'Inter', weight: 'normal' },
             bodyFont: { family: 'Inter', weight: 'normal' }
           }
@@ -430,12 +449,12 @@ export class AdminUsersComponent implements OnInit, AfterViewInit, OnDestroy {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { maxTicksLimit: 8, color: '#64748b', font: { family: 'Inter', size: 10 } }
+            ticks: { maxTicksLimit: 8, color: p.tick, font: { family: 'Inter', size: 10 } }
           },
           y: {
             beginAtZero: true,
-            ticks: { stepSize: 1, color: '#64748b', font: { family: 'Inter', size: 10 } },
-            grid: { color: '#f1f5f9' }
+            ticks: { stepSize: 1, color: p.tick, font: { family: 'Inter', size: 10 } },
+            grid: { color: p.grid }
           }
         }
       }

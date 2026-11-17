@@ -17,6 +17,10 @@ export interface DeploymentHistoryItem {
   createdAt: string;
   finishedAt: string | null;
   triggeredByUsername: string | null;
-  jobs?: PipelineJobInfo[]; 
+  jobs?: PipelineJobInfo[];
+  /** Environnement issu d'un déploiement de l'application entière (rattaché au service représentant). */
+  applicationDeployment?: boolean;
+  /** Service auquel l'environnement est rattaché. */
+  serviceName?: string | null;
 }
 

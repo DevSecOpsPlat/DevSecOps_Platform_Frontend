@@ -15,6 +15,7 @@ import { AdminCreateUserComponent } from './admin/admin-create-user/admin-create
 import { AdminUserDetailComponent } from './admin/admin-user-detail/admin-user-detail.component';
 import { PipelineDetailsComponent } from './project/pipeline-details/pipeline-details.component';
 import { PageHeroComponent } from './project/shared/page-hero/page-hero.component';
+import { AdminIconComponent } from './admin/shared/admin-icon/admin-icon.component';
 import { PipelinesListComponent } from './project/pipelines-list/pipelines-list.component';
 import { AdminOverviewComponent } from './admin/admin-overview/admin-overview.component';
 import { AdminApplicationsComponent } from './admin/admin-applications/admin-applications.component';
@@ -102,7 +103,8 @@ import { ServiceContextBarComponent } from './shared/service-context-bar/service
     DefectDojoFindingDetailsComponent,
     EnvirotestNavSidebarComponent,
     ServiceContextBarComponent,
-    PageHeroComponent
+    PageHeroComponent,
+    AdminIconComponent
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },

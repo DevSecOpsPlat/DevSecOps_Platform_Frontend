@@ -571,3 +571,28 @@
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   animation: sidebarSlideIn 0.3s ease-out;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .user-sidebar { border-right: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .filter-chip { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .clear-filter { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .sidebar-header { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .brand-title { background: linear-gradient(135deg, #111827 0%, rgba(17, 24, 39, 0.9) 100%); }
+:host-context([data-theme="dark"]) .sidebar-search { background: rgba(17, 24, 39, 0.06); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .sidebar-search:focus-within { background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) .search-shortcut { background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) .sidebar-sections::-webkit-scrollbar-thumb { background: rgba(17, 24, 39, 0.2); }
+:host-context([data-theme="dark"]) .section-badge { background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) .current-app { background: rgba(255, 255, 255, 0.12); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .nav-item:hover { background: rgba(17, 24, 39, 0.08); }
+:host-context([data-theme="dark"]) .nav-dot { background: rgba(17, 24, 39, 0.4); }
+:host-context([data-theme="dark"]) .nav-count { background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) .nav-count.success { color: hsl(160, 84%, 70%); }
+:host-context([data-theme="dark"]) .nav-badge { background: rgba(17, 24, 39, 0.15); }
+:host-context([data-theme="dark"]) .nav-shortcut { background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) .sidebar-footer { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .user-profile:hover { background: rgba(17, 24, 39, 0.05); }
+:host-context([data-theme="dark"]) .user-status { background: rgba(17, 24, 39, 0.3); }
+:host-context([data-theme="dark"]) .logout-button { background: rgba(17, 24, 39, 0.05); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .project-sidebar { border-right: 1px solid #1f2937; }
+/* === Fin du mode nuit généré === */

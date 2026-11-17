@@ -1,180 +1,229 @@
-<div class="ads-page">
-  <header class="ads-hero">
-    <div class="ads-hero-row">
-      <div>
-        <p class="ads-hero-eyebrow">Pilotage · console séparée du portail métier</p>
-        <h1 class="ads-hero-title">Bonjour, {{ user?.username }}</h1>
-        <p class="ads-hero-lead">Ce qui se passe sur la plateforme, en un coup d'œil : qui l'utilise, ce qui tourne, ce qui a besoin de vous.</p>
-      </div>
-      <button type="button" class="ads-btn-ghost-dark" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+<div class="adm-page">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <p class="adm-eyebrow">Pilotage de la plateforme</p>
+      <h1 class="adm-hero-title">Bonjour, {{ user?.username }}</h1>
+      <p class="adm-hero-lead">
+        Ce qui se passe sur la plateforme, en un coup d'œil : qui l'utilise, ce qui tourne, ce qui a besoin de vous.
+      </p>
+    </div>
+    <div class="adm-hero-actions">
+      <button type="button" class="adm-btn adm-btn--on-dark" [class.is-busy]="loading" (click)="load()" [disabled]="loading">
+        Actualiser
+      </button>
     </div>
   </header>
 
-  <div *ngIf="loading" class="ads-state-load"><span class="ads-spinner"></span> Chargement des indicateurs…</div>
-  <div *ngIf="error" class="ads-state-err">{{ error }}</div>
+  <div *ngIf="loading" class="adm-state"><span class="adm-spinner"></span> Chargement des indicateurs…</div>
+  <div *ngIf="error" class="adm-alert adm-alert--danger">
+    <span class="adm-alert-body">{{ error }}</span>
+  </div>
 
   <ng-container *ngIf="!loading && !error">
-    <section class="ads-section">
-      <div class="ads-section-head">
-        <div>
-          <h2 class="ads-section-title">Accès rapides</h2>
-          <p class="ads-section-sub">Application d'administration séparée du portail métier : création des comptes, inventaire agrégé, liens d'infra en lecture seule.</p>
-        </div>
+    <section class="adm-kpis" aria-label="Indicateurs clés">
+      <a class="adm-kpi" routerLink="/admin/users">
+        <span class="adm-kpi-icon adm-kpi-icon--info"><app-admin-icon name="users"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Utilisateurs actifs</span>
+          <span class="adm-kpi-value">{{ activeUsersCount }}</span>
+          <span class="adm-kpi-meta">sur {{ totalUsersCount }} comptes</span>
+        </span>
+      </a>
+      <a class="adm-kpi" routerLink="/admin/environments">
+        <span class="adm-kpi-icon adm-kpi-icon--success"><app-admin-icon name="layers"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Environnements actifs</span>
+          <span class="adm-kpi-value">{{ activeEnvironmentsCount }}</span>
+          <span class="adm-kpi-meta">{{ anomalyEnvironmentsCount }} en anomalie</span>
+        </span>
+      </a>
+      <a class="adm-kpi" routerLink="/admin/applications">
+        <span class="adm-kpi-icon"><app-admin-icon name="package"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Applications déployées</span>
+          <span class="adm-kpi-value">{{ deployedApplicationsCount }}</span>
+          <span class="adm-kpi-meta">sur {{ totalApplicationsCount }} applications</span>
+        </span>
+      </a>
+      <div class="adm-kpi">
+        <span class="adm-kpi-icon adm-kpi-icon--neutral"><app-admin-icon name="activity"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Exécutions (24 h)</span>
+          <span class="adm-kpi-value">{{ executions24h }}</span>
+          <span class="adm-kpi-meta">{{ executions24h - executions24hFailed }} réussies · {{ executions24hFailed }} échecs</span>
+        </span>
       </div>
-      <div class="ads-cards">
-        <div class="ads-ecard" *ngFor="let q of quickLinks" [routerLink]="q.link">
-          <div class="ads-ecard-top">
-            <div class="ads-app-icon" style="font-size:1.3rem;">{{ q.icon }}</div>
-          </div>
-          <div style="margin-top:.6rem;">
-            <div class="ads-ecard-name">{{ q.label }}</div>
-            <div class="ads-ecard-owner">{{ q.description }}</div>
-          </div>
-          <div class="ads-ecard-foot"><span></span><span class="ads-ecard-cta">Ouvrir →</span></div>
-        </div>
-      </div>
+      <a class="adm-kpi" routerLink="/admin/alerts" [class.adm-kpi--danger]="attentionCount > 0">
+        <span class="adm-kpi-icon adm-kpi-icon--danger"><app-admin-icon name="shield-alert"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">À traiter</span>
+          <span class="adm-kpi-value" [class.adm-kpi-value--danger]="attentionCount > 0">{{ attentionCount }}</span>
+          <span class="adm-kpi-meta">alertes des dernières 48 h</span>
+        </span>
+      </a>
     </section>
 
-    <div class="ads-kpi-row">
-      <a class="ads-kpi" routerLink="/admin/users">
-        <div class="ads-kpi-label">Utilisateurs actifs</div>
-        <div class="ads-kpi-value">{{ activeUsersCount }}</div>
-        <div class="ads-kpi-ctx">sur {{ totalUsersCount }} comptes</div>
-      </a>
-      <a class="ads-kpi" routerLink="/admin/environments">
-        <div class="ads-kpi-label">Environnements actifs</div>
-        <div class="ads-kpi-value">{{ activeEnvironmentsCount }}</div>
-        <div class="ads-kpi-ctx">{{ anomalyEnvironmentsCount }} en anomalie</div>
-      </a>
-      <a class="ads-kpi" routerLink="/admin/applications">
-        <div class="ads-kpi-label">Applications déployées</div>
-        <div class="ads-kpi-value">{{ deployedApplicationsCount }}</div>
-        <div class="ads-kpi-ctx">sur {{ totalApplicationsCount }} applications</div>
-      </a>
-      <div class="ads-kpi">
-        <div class="ads-kpi-label">Exécutions (24h)</div>
-        <div class="ads-kpi-value">{{ executions24h }}</div>
-        <div class="ads-kpi-ctx">{{ executions24h - executions24hFailed }} réussies · {{ executions24hFailed }} échecs</div>
-      </div>
-      <div class="ads-kpi">
-        <div class="ads-kpi-label">À traiter</div>
-        <div class="ads-kpi-value" [class.warn]="attentionCount > 0">{{ attentionCount }}</div>
-        <div class="ads-kpi-ctx">alertes non résolues</div>
-      </div>
-    </div>
-
-    <section class="ads-section" *ngIf="!activityLoading && attentionEvents.length">
-      <div class="ads-section-head">
+    <section class="adm-section" *ngIf="!activityLoading && attentionEvents.length">
+      <div class="adm-section-head">
         <div>
-          <h2 class="ads-section-title">⚠ Attention requise</h2>
-          <p class="ads-section-sub">Chaque alerte avec assez de contexte pour agir directement.</p>
+          <h2 class="adm-section-title">Attention requise</h2>
+          <p class="adm-section-sub">Chaque alerte avec assez de contexte pour agir directement.</p>
         </div>
+        <a class="adm-link" routerLink="/admin/alerts">
+          {{ attentionCount > attentionEvents.length ? 'Voir les ' + attentionCount + ' alertes' : 'Centre de sécurité' }} →
+        </a>
       </div>
-      <div class="ads-attn-card" *ngFor="let e of attentionEvents" [ngClass]="attentionSeverityClass(e)">
-        <div class="ads-attn-icon">{{ e.severity === 'CRITICAL' ? '🔴' : '🟠' }}</div>
-        <div style="flex:1">
-          <div class="ads-attn-title">{{ e.eventType }} — {{ e.message }}</div>
-          <div class="ads-attn-why">
-            <span *ngIf="e.applicationName">Application <b>{{ e.applicationName }}</b>, </span>
-            <span *ngIf="e.actorUsername">{{ e.actorUsername }}, </span>
-            {{ timeAgoShort(e.occurredAt) }}.
-          </div>
-          <div class="ads-attn-actions">
-            <button type="button" class="ads-btn-mini primary" *ngIf="e.applicationId || e.environmentId" (click)="openFromEvent(e)">
+      <div class="adm-card adm-card--flush">
+        <ul class="ov-attention">
+          <li class="ov-attention-item" *ngFor="let e of attentionEvents" [class.is-critical]="e.severity === 'CRITICAL'">
+            <span class="ov-attention-icon"><app-admin-icon [name]="attentionIcon(e)"></app-admin-icon></span>
+            <div class="ov-attention-body">
+              <p class="ov-attention-title">{{ e.message || eventLabel(e) }}</p>
+              <p class="ov-attention-meta">
+                <span class="ov-attention-type">{{ eventLabel(e) }}</span> ·
+                <span *ngIf="e.applicationName">Application <strong>{{ e.applicationName }}</strong> · </span>
+                <span *ngIf="e.actorUsername">{{ e.actorUsername }} · </span>
+                {{ timeAgoShort(e.occurredAt) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="adm-btn adm-btn--secondary adm-btn--sm"
+              *ngIf="e.applicationId || e.environmentId"
+              (click)="openFromEvent(e)"
+            >
               {{ e.environmentId ? "Voir l'environnement" : "Voir l'application" }}
+              →
             </button>
-          </div>
-        </div>
+          </li>
+        </ul>
       </div>
     </section>
 
-    <section class="ads-section">
-      <div class="ads-section-head">
+    <section class="adm-section">
+      <div class="adm-section-head">
         <div>
-          <h2 class="ads-section-title">Utilisateurs</h2>
-          <p class="ads-section-sub">Activité par compte — pas juste une liste de noms.</p>
-        </div>
-        <button type="button" class="ads-section-link" routerLink="/admin/users">Tous les utilisateurs →</button>
-      </div>
-      <div class="ads-cards">
-        <div class="ads-ecard" *ngFor="let u of users" (click)="openUser(u.id)">
-          <div class="ads-ecard-top">
-            <div>
-              <div class="ads-ecard-name">{{ u.username }}</div>
-              <div class="ads-ecard-owner">{{ u.email }}</div>
-            </div>
-            <span class="ads-status" [ngClass]="u.accountStatus === 'ACTIVE' ? 'running' : 'stopped'">{{ u.accountStatus }}</span>
-          </div>
-          <div class="ads-ecard-meta">
-            <span class="ads-meta-chip">{{ u.applicationsCount }} application{{ u.applicationsCount > 1 ? 's' : '' }}</span>
-            <span class="ads-meta-chip" *ngIf="u.activeEnvironmentsCount > 0">{{ u.activeEnvironmentsCount }} env. actif{{ u.activeEnvironmentsCount > 1 ? 's' : '' }}</span>
-          </div>
-          <div class="ads-ecard-foot">
-            <span>{{ u.lastLoginAt ? 'connecté ' + timeAgoShort(u.lastLoginAt) : 'jamais connecté' }}</span>
-            <span class="ads-ecard-cta">Détail →</span>
-          </div>
+          <h2 class="adm-section-title">Accès rapides</h2>
+          <p class="adm-section-sub">Création des comptes, inventaire agrégé, sécurité et support.</p>
         </div>
       </div>
-      <p class="ads-empty" *ngIf="!users.length">
-        <span class="ads-empty-sub">Aucun compte utilisateur.</span>
-      </p>
+      <div class="ov-shortcuts">
+        <a class="ov-shortcut" *ngFor="let q of quickLinks" [routerLink]="q.link">
+          <span class="adm-kpi-icon" [ngClass]="q.tone ? 'adm-kpi-icon--' + q.tone : ''"><app-admin-icon [name]="q.icon"></app-admin-icon></span>
+          <span class="ov-shortcut-text">
+            <span class="ov-shortcut-label">{{ q.label }}</span>
+            <span class="ov-shortcut-desc">{{ q.description }}</span>
+          </span>
+          <span class="ov-shortcut-arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
     </section>
 
-    <section class="ads-section">
-      <div class="ads-section-head">
+    <section class="adm-section">
+      <div class="adm-section-head">
         <div>
-          <h2 class="ads-section-title">Environnements actifs</h2>
-          <p class="ads-section-sub">Nom, propriétaire, services, durée — pas juste un badge « Active ».</p>
+          <h2 class="adm-section-title">Utilisateurs</h2>
+          <p class="adm-section-sub">Comptes les plus récemment connectés, avec leur activité.</p>
         </div>
-        <button type="button" class="ads-section-link" routerLink="/admin/environments">Tous les environnements →</button>
+        <a class="adm-link" routerLink="/admin/users">Tous les utilisateurs →</a>
       </div>
-      <div class="ads-cards">
-        <div class="ads-ecard" *ngFor="let e of activeEnvironments" (click)="openEnvironment(e.id)">
-          <div class="ads-ecard-top">
-            <div>
-              <div class="ads-ecard-name mono">{{ e.environmentName }}</div>
-              <div class="ads-ecard-owner">{{ e.applicationName }} · {{ e.ownerUsername }}</div>
+      <div class="adm-cards" *ngIf="users.length; else noUsers">
+        <div class="adm-entity" *ngFor="let u of users" (click)="openUser(u.id)">
+          <div class="adm-entity-head">
+            <div class="adm-entity-id">
+              <span class="adm-avatar">{{ initials(u.username) }}</span>
+              <div class="adm-grow">
+                <div class="adm-entity-name">{{ u.username }}</div>
+                <div class="adm-entity-sub">{{ u.email }}</div>
+              </div>
             </div>
-            <span class="ads-status running">Running</span>
+            <span class="adm-badge" [ngClass]="'adm-badge--' + statusClass(u.accountStatus)">{{ accountStatusLabel(u.accountStatus) }}</span>
           </div>
-          <div class="ads-ecard-meta">
-            <span class="ads-meta-chip mono">{{ e.gitBranch }}</span>
-            <span class="ads-meta-chip">{{ e.servicesCount }} service{{ e.servicesCount > 1 ? 's' : '' }}</span>
+          <div class="adm-entity-meta">
+            <span class="adm-chip">{{ u.applicationsCount }} application{{ u.applicationsCount > 1 ? 's' : '' }}</span>
+            <span class="adm-chip" *ngIf="u.activeEnvironmentsCount > 0">{{ u.activeEnvironmentsCount }} env. actif{{ u.activeEnvironmentsCount > 1 ? 's' : '' }}</span>
           </div>
-          <div class="ads-ecard-foot"><span>{{ timeAgoShort(e.createdAt) }}</span><span class="ads-ecard-cta">Détail →</span></div>
+          <div class="adm-entity-foot">
+            <span>{{ u.lastLoginAt ? 'Connecté ' + timeAgoShort(u.lastLoginAt) : 'Jamais connecté' }}</span>
+            <span class="adm-entity-cta">Détail →</span>
+          </div>
         </div>
       </div>
-      <p class="ads-empty" *ngIf="!activeEnvironments.length">
-        <span class="ads-empty-sub">Aucun environnement actif pour l'instant.</span>
-      </p>
+      <ng-template #noUsers>
+        <div class="adm-card adm-empty">
+          <p class="adm-empty-text">Aucun compte utilisateur.</p>
+        </div>
+      </ng-template>
     </section>
 
-    <section class="ads-section">
-      <div class="ads-section-head">
+    <section class="adm-section">
+      <div class="adm-section-head">
         <div>
-          <h2 class="ads-section-title">Applications</h2>
-          <p class="ads-section-sub">Composition et santé, pas un simple nom de dépôt.</p>
+          <h2 class="adm-section-title">Environnements actifs</h2>
+          <p class="adm-section-sub">Nom, propriétaire, services, durée — pas juste un badge.</p>
         </div>
-        <button type="button" class="ads-section-link" routerLink="/admin/applications">Toutes les applications →</button>
+        <a class="adm-link" routerLink="/admin/environments">Tous les environnements →</a>
       </div>
-      <div class="ads-cards">
-        <div class="ads-ecard" *ngFor="let a of applications" (click)="openApplication(a.id)">
-          <div class="ads-ecard-top">
-            <div>
-              <div class="ads-ecard-name">{{ a.name }}</div>
-              <div class="ads-ecard-owner">{{ a.ownerUsername }}</div>
+      <div class="adm-cards" *ngIf="activeEnvironments.length; else noEnvs">
+        <div class="adm-entity" *ngFor="let e of activeEnvironments" (click)="openEnvironment(e.id)">
+          <div class="adm-entity-head">
+            <div class="adm-grow">
+              <div class="adm-entity-name adm-mono">{{ e.environmentName }}</div>
+              <div class="adm-entity-sub">{{ e.applicationName }} · {{ e.ownerUsername }}</div>
+            </div>
+            <span class="adm-badge adm-badge--running">Actif</span>
+          </div>
+          <div class="adm-entity-meta">
+            <span class="adm-chip adm-chip--mono">{{ e.gitBranch }}</span>
+            <span class="adm-chip">{{ e.servicesCount }} service{{ e.servicesCount > 1 ? 's' : '' }}</span>
+          </div>
+          <div class="adm-entity-foot">
+            <span>Créé {{ timeAgoShort(e.createdAt) }}</span>
+            <span class="adm-entity-cta">Détail →</span>
+          </div>
+        </div>
+      </div>
+      <ng-template #noEnvs>
+        <div class="adm-card adm-empty">
+          <p class="adm-empty-text">Aucun environnement actif pour l'instant.</p>
+        </div>
+      </ng-template>
+    </section>
+
+    <section class="adm-section">
+      <div class="adm-section-head">
+        <div>
+          <h2 class="adm-section-title">Applications</h2>
+          <p class="adm-section-sub">Composition et santé, pas un simple nom de dépôt.</p>
+        </div>
+        <a class="adm-link" routerLink="/admin/applications">Toutes les applications →</a>
+      </div>
+      <div class="adm-cards" *ngIf="applications.length; else noApps">
+        <div class="adm-entity" *ngFor="let a of applications" (click)="openApplication(a.id)">
+          <div class="adm-entity-head">
+            <div class="adm-entity-id">
+              <span class="adm-avatar">{{ initials(a.name) }}</span>
+              <div class="adm-grow">
+                <div class="adm-entity-name">{{ a.name }}</div>
+                <div class="adm-entity-sub">{{ a.ownerUsername }}</div>
+              </div>
             </div>
           </div>
-          <div class="ads-ecard-meta">
-            <span class="ads-meta-chip">{{ compositionLabel(a) }}</span>
-            <span class="ads-meta-chip" *ngIf="a.activeEnvironmentsCount > 0">{{ a.activeEnvironmentsCount }} env. actif{{ a.activeEnvironmentsCount > 1 ? 's' : '' }}</span>
+          <div class="adm-entity-meta">
+            <span class="adm-chip">{{ compositionLabel(a) }}</span>
+            <span class="adm-chip" *ngIf="a.activeEnvironmentsCount > 0">{{ a.activeEnvironmentsCount }} env. actif{{ a.activeEnvironmentsCount > 1 ? 's' : '' }}</span>
           </div>
-          <div class="ads-ecard-foot"><span>créée {{ timeAgoShort(a.createdAt) }}</span><span class="ads-ecard-cta">Détail →</span></div>
+          <div class="adm-entity-foot">
+            <span>Créée {{ timeAgoShort(a.createdAt) }}</span>
+            <span class="adm-entity-cta">Détail →</span>
+          </div>
         </div>
       </div>
-      <p class="ads-empty" *ngIf="!applications.length">
-        <span class="ads-empty-sub">Aucune application enregistrée.</span>
-      </p>
+      <ng-template #noApps>
+        <div class="adm-card adm-empty">
+          <p class="adm-empty-text">Aucune application enregistrée.</p>
+        </div>
+      </ng-template>
     </section>
   </ng-container>
 </div>

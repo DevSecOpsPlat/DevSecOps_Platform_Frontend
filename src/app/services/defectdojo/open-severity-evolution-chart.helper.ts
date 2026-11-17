@@ -36,15 +36,15 @@ export function openSeverityChartSubtitle(
   const branchSuffix = branchLabel?.trim() ? ` · branche ${branchLabel.trim()}` : '';
   switch (granularity) {
     case 'hour':
-      return `Open by Severity · dernier scan connu par heure${branchSuffix}`;
+      return `Vulnérabilités ouvertes par sévérité · dernier scan connu par heure${branchSuffix}`;
     case 'day':
       return branchLabel?.trim()
-        ? `Open Day to Day · branche sélectionnée · un point par jour${branchSuffix}`
-        : 'Open Day to Day · branche sélectionnée · un point par jour';
+        ? `Vulnérabilités ouvertes au jour le jour · un point par jour${branchSuffix}`
+        : 'Vulnérabilités ouvertes au jour le jour · un point par jour';
     case 'week':
-      return `Open by Severity · dernier état connu par semaine${branchSuffix}`;
+      return `Vulnérabilités ouvertes par sévérité · dernier état connu par semaine${branchSuffix}`;
     case 'month':
-      return `Open by Severity · dernier état connu par mois${branchSuffix}`;
+      return `Vulnérabilités ouvertes par sévérité · dernier état connu par mois${branchSuffix}`;
     default:
       return `Évolution des vulnérabilités ouvertes par sévérité${branchSuffix}`;
   }

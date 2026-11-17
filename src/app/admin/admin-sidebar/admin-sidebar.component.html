@@ -1,104 +1,28 @@
-<aside class="user-sidebar">
-  <div class="sidebar-header">
-    <div class="brand">
-      <div class="brand-title">EnviroTest</div>
-      <div class="brand-badge">admin</div>
+<aside class="adm-sidebar">
+  <div class="adm-sidebar-brand">
+    <div class="adm-sidebar-name">EnviroTest <span class="adm-sidebar-tag">Admin</span></div>
+    <div class="adm-sidebar-sub">Console de gouvernance</div>
+  </div>
+
+  <nav class="adm-nav" aria-label="Navigation administration">
+    <div class="adm-nav-group" *ngFor="let group of groups">
+      <p class="adm-nav-label">{{ group.label }}</p>
+      <a
+        *ngFor="let item of group.items"
+        class="adm-nav-item"
+        [routerLink]="item.link"
+        routerLinkActive="is-active"
+        [routerLinkActiveOptions]="{ exact: !!item.exact }"
+      >
+        <span class="adm-nav-text">{{ item.label }}</span>
+        <span class="adm-nav-badge" *ngIf="item.badge === 'alerts' && unreadAlerts > 0">{{ unreadAlerts }}</span>
+      </a>
     </div>
-    <div class="brand-subtitle">Console gouvernance</div>
-  </div>
-
-  <div class="sidebar-search">
-    <span class="search-icon">🔍</span>
-    <input type="search" placeholder="Recherche (à venir)" readonly tabindex="-1" />
-    <span class="search-shortcut">⌘K</span>
-  </div>
-
-  <nav class="sidebar-sections" aria-label="Navigation administration">
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Tableau de bord</span></h3>
-      <div class="nav-items">
-        <a
-          routerLink="/admin/overview"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
-          class="nav-item"
-        >
-          <span class="nav-dot"></span>
-          <span class="nav-text">Vue d’ensemble</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Support</span></h3>
-      <div class="nav-items">
-        <a routerLink="/admin/reclamations" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Réclamations</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Sécurité</span></h3>
-      <div class="nav-items">
-        <a routerLink="/admin/alerts" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Alertes</span>
-          <span class="nav-badge" *ngIf="unreadAlerts > 0">{{ unreadAlerts }}</span>
-        </a>
-        <a routerLink="/admin/audit" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Journal d'audit</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Gouvernance accès</span></h3>
-      <div class="nav-items">
-        <a routerLink="/admin/users" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Utilisateurs &amp; activité</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Ressources</span></h3>
-      <div class="nav-items">
-        <a routerLink="/admin/applications" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Applications</span>
-        </a>
-        <a routerLink="/admin/environments" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Environnements</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3 class="section-label"><span>Infra (lecture)</span></h3>
-      <div class="nav-items">
-        <a routerLink="/admin/monitoring" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Monitoring</span>
-        </a>
-        <a routerLink="/admin/observability" routerLinkActive="active" class="nav-item">
-          <span class="nav-dot"></span>
-          <span class="nav-text">Observabilité</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="sidebar-section">
-      <div class="nav-items">
-        <a routerLink="/home" class="nav-item">
-          <span class="nav-icon">←</span>
-          <span class="nav-text">Portail</span>
-        </a>
-      </div>
-    </section>
   </nav>
+
+  <div class="adm-sidebar-foot">
+    <a class="adm-nav-item" routerLink="/home">
+      <span class="adm-nav-text">← Retour au portail</span>
+    </a>
+  </div>
 </aside>

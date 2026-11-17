@@ -1,65 +1,174 @@
-<div class="ads-page" *ngIf="!loading && !error && app">
-  <header class="ads-hero">
-    <p class="ads-breadcrumb"><a [routerLink]="['/admin/applications']">← Applications</a></p>
-    <div class="ads-hero-row">
-      <div>
-        <h1 class="ads-hero-title">
-          {{ app.name }}
-          <span class="ads-app-tag" *ngIf="app.standalone" style="vertical-align:middle;">projet autonome</span>
-        </h1>
-        <p class="ads-hero-lead">{{ ownerUsername }} ({{ ownerEmail }})<ng-container *ngIf="accountStatus !== 'ACTIVE'"> · compte {{ accountStatus | lowercase }}</ng-container></p>
-      </div>
+<div class="adm-page" *ngIf="!loading && !error && app">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <a class="adm-breadcrumb" routerLink="/admin/applications">← Applications</a>
+      <h1 class="adm-hero-title">
+        {{ app.name }}
+        <span class="adm-count-pill">{{ app.standalone ? 'Projet autonome' : 'Multi-services' }}</span>
+      </h1>
+      <p class="adm-hero-lead">
+        <ng-container *ngIf="app.description">{{ app.description }} · </ng-container>
+        Propriétaire <strong>{{ ownerUsername }}</strong> ({{ ownerEmail }})
+        <ng-container *ngIf="accountStatus !== 'ACTIVE'"> · compte {{ accountStatus | lowercase }}</ng-container>
+      </p>
     </div>
-    <div class="ads-hero-meta">
-      <div><strong>{{ app.services.length }}</strong>service{{ app.services.length > 1 ? 's' : '' }}</div>
-      <div><strong>{{ app.databasesCount }}</strong>base{{ app.databasesCount > 1 ? 's' : '' }} de données</div>
-      <div><strong>{{ activeEnvironmentsCount() }}</strong>environnement{{ activeEnvironmentsCount() > 1 ? 's' : '' }} actif{{ activeEnvironmentsCount() > 1 ? 's' : '' }}</div>
-      <div><strong>{{ app.pipelineCounts?.success || 0 }}/{{ pipelineTotal() }}</strong>pipelines réussis</div>
+    <div class="adm-hero-stats">
+      <div class="adm-hero-stat"><strong>{{ app.services.length }}</strong><span>service{{ app.services.length > 1 ? 's' : '' }}</span></div>
+      <div class="adm-hero-stat"><strong>{{ app.databasesCount }}</strong><span>base{{ app.databasesCount > 1 ? 's' : '' }} de données</span></div>
+      <div class="adm-hero-stat"><strong>{{ environments.length }}</strong><span>environnement{{ environments.length > 1 ? 's' : '' }} créé{{ environments.length > 1 ? 's' : '' }}</span></div>
+      <div class="adm-hero-stat"><strong>{{ activeEnvironmentsCount() }}</strong><span>actif{{ activeEnvironmentsCount() > 1 ? 's' : '' }} maintenant</span></div>
+      <div class="adm-hero-stat"><strong>{{ successRate() }} %</strong><span>de pipelines réussis</span></div>
     </div>
   </header>
 
-  <div class="ads-detail-grid">
-    <div>
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">🧩 Services</h3>
-        <div class="ads-svc-line" *ngFor="let s of app.services">
-          <span class="ads-svc-name">{{ s.name }}</span>
-          <span class="ads-svc-role" *ngIf="s.role">{{ s.role }}</span>
-          <span class="ads-status" [ngClass]="statusClass(liveStatus(s.id)?.status)" *ngIf="liveStatus(s.id) as st">{{ st.status }}</span>
-          <span class="ads-svc-res" *ngIf="liveStatus(s.id)?.cpuUsage">{{ liveStatus(s.id)?.cpuUsage }} · {{ liveStatus(s.id)?.memoryUsage }}</span>
-          <span class="ads-svc-res mono" *ngIf="s.gitBranch">{{ s.gitBranch }}</span>
+  <div class="adm-grid adm-grid--aside">
+    <div class="adm-stack">
+      <!-- Composition -->
+      <section class="adm-card adm-card--flush">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Composition</h2>
+            <p class="adm-card-sub">Services déclarés et dépôts Git d'origine.</p>
+          </div>
+        </div>
+        <div class="adm-table-wrap">
+          <table class="adm-table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Dépôt</th>
+                <th>Branche</th>
+                <th>État</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let s of app.services">
+                <td>
+                  <span class="adm-cell-title">{{ s.name }}</span>
+                  <span class="adm-cell-sub">{{ roleLabel(s.role) }}</span>
+                </td>
+                <td>
+                  <a class="ad-repo" [href]="s.gitRepositoryUrl" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ repoLabel(s.gitRepositoryUrl) }}</a>
+                </td>
+                <td><span class="adm-chip adm-chip--mono">{{ s.gitBranch || 'main' }}</span></td>
+                <td>
+                  <span class="adm-badge" [ngClass]="'adm-badge--' + serviceTone(s.id)">{{ serviceStateLabel(s.id) }}</span>
+                  <span class="adm-cell-sub adm-mono" *ngIf="liveStatus(s.id)?.cpuUsage">{{ liveStatus(s.id)?.cpuUsage }} · {{ liveStatus(s.id)?.memoryUsage }}</span>
+                </td>
+              </tr>
+              <tr *ngIf="!app.services.length">
+                <td colspan="4" class="adm-table-empty">Aucun service déclaré pour cette application.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">🌍 Environnements ({{ environments.length }})</h3>
-        <div class="ads-svc-line" *ngFor="let e of environments" style="cursor:pointer;" (click)="openEnvironment(e)">
-          <span class="ads-svc-name">{{ e.environmentName }}</span>
-          <span class="ads-status" [ngClass]="statusClass(e.status)">{{ e.status }}</span>
-          <span class="ads-svc-res mono">{{ e.gitBranch }}</span>
-          <span class="ads-app-row-chev" aria-hidden="true">›</span>
+      <!-- Environnements -->
+      <section class="adm-card adm-card--flush">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Environnements <span class="adm-badge adm-badge--plain">{{ environments.length }}</span></h2>
+            <p class="adm-card-sub">Du plus récent au plus ancien, les actifs en tête.</p>
+          </div>
         </div>
-        <p class="ads-empty" *ngIf="!environments.length">
-          <span class="ads-empty-sub">Aucun environnement pour cette application.</span>
-        </p>
+        <div class="adm-table-wrap" *ngIf="environments.length; else noEnvs">
+          <table class="adm-table">
+            <thead>
+              <tr>
+                <th>Environnement</th>
+                <th>Statut</th>
+                <th>Dernier pipeline</th>
+                <th>Créé le</th>
+                <th>Durée de vie</th>
+                <th class="shrink"><span class="adm-sr-only">Ouvrir</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of pagedEnvironments" class="is-clickable" (click)="openEnvironment(e)">
+                <td>
+                  <span class="adm-cell-title adm-mono">{{ e.environmentName }}</span>
+                  <span class="adm-cell-sub">branche {{ e.gitBranch }}</span>
+                </td>
+                <td><span class="adm-badge" [ngClass]="'adm-badge--' + statusClass(e.status)">{{ statusLabel(e.status) }}</span></td>
+                <td>
+                  <ng-container *ngIf="e.pipelineStatus; else noPipeline">
+                    <span class="ad-pipeline" [ngClass]="'ad-pipeline--' + statusClass(e.pipelineStatus)">{{ pipelineLabel(e.pipelineStatus) }}</span>
+                    <span class="adm-cell-sub adm-mono" *ngIf="e.gitlabPipelineId">#{{ e.gitlabPipelineId }}</span>
+                  </ng-container>
+                  <ng-template #noPipeline><span class="adm-muted">—</span></ng-template>
+                </td>
+                <td class="adm-nowrap">{{ formatDate(e.createdAt) }}</td>
+                <td>{{ e.ttlHours }} h</td>
+                <td class="shrink"><span class="adm-row-chevron" aria-hidden="true">›</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <nav class="adm-pager" *ngIf="envPageCount > 1" aria-label="Pagination des environnements">
+          <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="envPage === 0" (click)="envPage = envPage - 1">‹ Précédent</button>
+          <span>Page {{ envPage + 1 }} / {{ envPageCount }}</span>
+          <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="envPage >= envPageCount - 1" (click)="envPage = envPage + 1">Suivant ›</button>
+        </nav>
+        <ng-template #noEnvs>
+          <div class="adm-empty"><p class="adm-empty-text">Aucun environnement n'a encore été créé pour cette application.</p></div>
+        </ng-template>
       </section>
     </div>
 
-    <div>
-      <section class="ads-panel" *ngIf="previewUrl">
-        <h3 class="ads-panel-title">🔗 Aperçu en direct</h3>
-        <div class="ads-url-chip">🌐 {{ previewRawUrl }}</div>
-        <div class="ads-preview-frame">
-          <iframe [src]="previewUrl" title="Aperçu de l'application"></iframe>
+    <div class="adm-stack">
+      <!-- Informations -->
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Informations</h2></div>
+        <dl class="adm-kv">
+          <dt>Propriétaire</dt><dd>{{ ownerUsername }}</dd>
+          <dt>E-mail</dt><dd>{{ ownerEmail }}</dd>
+          <dt>Créée le</dt><dd>{{ formatDate(app.createdAt) }}</dd>
+          <dt>Type</dt><dd>{{ app.standalone ? 'Projet autonome' : 'Application multi-services' }}</dd>
+          <dt>Dépôt principal</dt>
+          <dd><a class="ad-repo" [href]="app.gitRepositoryUrl" target="_blank" rel="noopener noreferrer">{{ repoLabel(app.gitRepositoryUrl) }}</a></dd>
+        </dl>
+      </section>
+
+      <!-- Pipelines -->
+      <section class="adm-card">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Pipelines</h2>
+            <p class="adm-card-sub">Analyses de sécurité et déploiements, tous services confondus.</p>
+          </div>
+        </div>
+        <div class="ad-pipes">
+          <div class="ad-pipes-rate">
+            <strong>{{ successRate() }} %</strong>
+            <span>de réussite sur {{ pipelineTotal() }} exécution{{ pipelineTotal() > 1 ? 's' : '' }}</span>
+          </div>
+          <div class="ad-pipes-bar" *ngIf="pipelineTotal() > 0" role="img" [attr.aria-label]="successRate() + ' % de pipelines réussis'">
+            <span *ngFor="let seg of pipelineSegments" class="ad-pipes-seg" [ngClass]="'ad-pipes-seg--' + seg.tone" [style.width.%]="seg.pct"></span>
+          </div>
+          <ul class="ad-pipes-legend">
+            <li *ngFor="let seg of pipelineSegments"><span class="ad-dot" [ngClass]="'ad-dot--' + seg.tone"></span>{{ seg.label }} <strong>{{ seg.count }}</strong></li>
+          </ul>
         </div>
       </section>
 
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">🕒 Activité récente</h3>
-        <div *ngIf="activityLoading" class="ads-state-load"><span class="ads-spinner"></span></div>
+      <!-- Aperçu -->
+      <section class="adm-card" *ngIf="previewUrl">
+        <div class="adm-card-head">
+          <h2 class="adm-card-title">Aperçu en direct</h2>
+          <a class="adm-btn adm-btn--secondary adm-btn--sm" [href]="previewRawUrl" target="_blank" rel="noopener noreferrer">Ouvrir →</a>
+        </div>
+        <p class="adm-url"><span>{{ previewRawUrl }}</span></p>
+        <div class="adm-preview"><iframe [src]="previewUrl" title="Aperçu de l'application"></iframe></div>
+      </section>
+
+      <!-- Activité -->
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Activité récente</h2></div>
+        <div *ngIf="activityLoading" class="adm-state"><span class="adm-spinner"></span> Chargement…</div>
         <app-admin-activity-timeline
           *ngIf="!activityLoading"
-          [events]="activity"
+          [events]="recentActivity"
           emptyText="Aucune activité récente pour cette application."
         ></app-admin-activity-timeline>
       </section>
@@ -67,5 +176,10 @@
   </div>
 </div>
 
-<div *ngIf="loading" class="ads-page"><div class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div></div>
-<div *ngIf="error" class="ads-page"><div class="ads-state-err">{{ error }}</div></div>
+<div class="adm-page" *ngIf="loading">
+  <div class="adm-state"><span class="adm-spinner"></span> Chargement de l'application…</div>
+</div>
+<div class="adm-page" *ngIf="error">
+  <a class="adm-link" routerLink="/admin/applications">← Applications</a>
+  <div class="adm-alert adm-alert--danger"><span class="adm-alert-body">{{ error }}</span></div>
+</div>

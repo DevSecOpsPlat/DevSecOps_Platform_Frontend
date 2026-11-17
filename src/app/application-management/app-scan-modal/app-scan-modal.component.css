@@ -67,3 +67,11 @@
   margin: .5rem 0 0;
   font-size: .82rem;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .asm-svc { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .asm-svc-branch { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .asm-svc .role-frontend { background: #0b1220; }
+:host-context([data-theme="dark"]) .asm-svc .role-backend { background: hsla(48, 75%, 50%, 0.14); color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .asm-svc .role-worker { background: hsla(269, 75%, 50%, 0.14); }
+/* === Fin du mode nuit généré === */

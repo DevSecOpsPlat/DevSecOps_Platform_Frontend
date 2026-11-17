@@ -110,3 +110,16 @@ h1 {
   color: #ea580c;
   text-decoration: none;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .activate-page { background: #0b1220; }
+:host-context([data-theme="dark"]) .activate-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) h1 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .lead { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .field label { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .field input { border: 1px solid #334155; }
+:host-context([data-theme="dark"]) .hint { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .hint.error { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .banner.success { background: #0b1220; color: hsl(163, 85%, 70%); border: 1px solid hsla(152, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .banner.error { background: #0b1220; color: hsl(0, 74%, 70%); border: 1px solid hsla(0, 75%, 50%, 0.38); }
+/* === Fin du mode nuit généré === */

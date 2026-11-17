@@ -74,3 +74,13 @@
 @media (prefers-reduced-motion: reduce) {
   .et-ctxbar-menu { animation: none; }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .et-ctxbar { background: #111827; border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .et-ctxbar-back { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .et-ctxbar-back:hover { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .et-ctxbar-trigger { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .et-ctxbar-menu { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .et-ctxbar-opt span { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .et-ctxbar-opt:hover { background: #0b1220; }
+/* === Fin du mode nuit généré === */

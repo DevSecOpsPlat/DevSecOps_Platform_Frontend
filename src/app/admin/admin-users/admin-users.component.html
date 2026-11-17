@@ -1,17 +1,21 @@
-<div class="admin-route-page users-dashboard">
-  <!-- En-tête -->
-  <header class="dash-head">
-    <div class="dash-head-text">
-      <p class="page-kicker">Administration · Gouvernance accès</p>
-      <h1 class="page-title">
+<div class="adm-page">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <p class="adm-eyebrow">Gouvernance des accès</p>
+      <h1 class="adm-hero-title">
         Utilisateurs
-        <span class="count-badge" *ngIf="!loading">{{ users.length }}</span>
+        <span class="adm-count-pill" *ngIf="!loading">{{ users.length }}</span>
       </h1>
-      <p class="page-lead">Vue d'ensemble des comptes, connexions et alertes de sécurité.</p>
+      <p class="adm-hero-lead">Comptes, connexions et alertes de sécurité de la plateforme.</p>
     </div>
-    <button type="button" class="btn-add-user" (click)="openCreateModal()">
-      <span aria-hidden="true">+</span> Nouvel utilisateur
-    </button>
+    <div class="adm-hero-actions">
+      <button type="button" class="adm-btn adm-btn--on-dark" [class.is-busy]="loading" (click)="loadAll()" [disabled]="loading">
+        Actualiser
+      </button>
+      <button type="button" class="adm-btn adm-btn--primary" (click)="openCreateModal()">
+        Nouvel utilisateur
+      </button>
+    </div>
   </header>
 
   <app-admin-create-user
@@ -20,232 +24,242 @@
     (userCreated)="onUserCreated()"
   ></app-admin-create-user>
 
-  <div *ngIf="loading" class="state state-load">
-    <span class="spinner" aria-hidden="true"></span>
-    Chargement…
+  <div *ngIf="loading" class="adm-state"><span class="adm-spinner"></span> Chargement des utilisateurs…</div>
+  <div *ngIf="error" class="adm-alert adm-alert--danger">
+    <span class="adm-alert-body">{{ error }}</span>
   </div>
 
-  <div *ngIf="error" class="state state-err">{{ error }}</div>
-
   <ng-container *ngIf="!loading && !error">
-    <!-- Alertes sécurité : ≥ 3 tentatives échouées -->
-    <section class="alert-panel" *ngIf="visibleAlerts.length">
-      <div class="alert-panel-head">
-        <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        </svg>
+    <!-- Alertes sécurité : 3 échecs consécutifs ou compte verrouillé -->
+    <section class="adm-card us-alerts" *ngIf="visibleAlerts.length">
+      <div class="adm-card-head">
         <div>
-          <h2 class="alert-panel-title">Alertes sécurité</h2>
-          <p class="alert-panel-sub">{{ visibleAlerts.length }} utilisateur(s) avec 3 échecs consécutifs ou compte verrouillé</p>
-          <a routerLink="/admin/alerts" class="alert-all-link">Voir le centre d'alertes →</a>
+          <h2 class="adm-card-title">Alertes de sécurité</h2>
+          <p class="adm-card-sub">{{ visibleAlerts.length }} compte(s) avec 3 échecs consécutifs ou verrouillé.</p>
         </div>
+        <a class="adm-link" routerLink="/admin/alerts">Centre d'alertes →</a>
       </div>
 
-      <div class="alert-list">
-        <article class="alert-item" *ngFor="let alert of visibleAlerts; trackBy: trackAlert" (click)="openUserById(alert.userId)">
-          <div class="alert-item-main">
-            <span class="alert-user">{{ alert.username }}</span>
-            <span class="alert-email">{{ alert.email }}</span>
-            <span class="alert-count">{{ alert.failedCount }} échec(s) consécutif(s) sans connexion réussie</span>
-            <ul class="alert-times">
-              <li *ngFor="let att of alert.attempts; let i = index">
-                <span class="time-dot"></span>
+      <div class="us-alert-list">
+        <article class="us-alert" *ngFor="let alert of visibleAlerts; trackBy: trackAlert" (click)="openUserById(alert.userId)">
+          <span class="adm-avatar adm-avatar--sm us-alert-avatar">{{ (alert.username || '?')[0] }}</span>
+          <div class="us-alert-main">
+            <p class="us-alert-name">{{ alert.username }} <span>{{ alert.email }}</span></p>
+            <p class="us-alert-count">{{ alert.failedCount }} échec(s) consécutif(s) sans connexion réussie</p>
+            <ul class="us-attempts">
+              <li *ngFor="let att of alert.attempts">
                 {{ formatAttemptTime(att.attemptedAt) }}
-                <span class="failures-ip" *ngIf="att.ipAddress"> · {{ att.ipAddress }}</span>
+                <span class="adm-mono" *ngIf="att.ipAddress">· {{ att.ipAddress }}</span>
               </li>
             </ul>
           </div>
-          <button type="button" class="alert-dismiss" (click)="dismissAlert(alert, $event)" aria-label="Masquer">×</button>
+          <button
+            type="button"
+            class="adm-btn adm-btn--ghost adm-btn--sm adm-btn--icon"
+            (click)="dismissAlert(alert, $event)"
+            aria-label="Masquer cette alerte"
+            title="Masquer"
+          >
+            ×
+          </button>
         </article>
       </div>
     </section>
 
-    <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-icon kpi-icon-navy">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-        </div>
-        <div class="kpi-body">
-          <span class="kpi-value">{{ users.length }}</span>
-          <span class="kpi-label">Comptes</span>
-        </div>
+    <section class="adm-kpis" aria-label="Indicateurs des comptes">
+      <div class="adm-kpi">
+        <span class="adm-kpi-icon adm-kpi-icon--info"><app-admin-icon name="users"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Comptes</span>
+          <span class="adm-kpi-value">{{ users.length }}</span>
+        </span>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-icon kpi-icon-orange">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        </div>
-        <div class="kpi-body">
-          <span class="kpi-value kpi-accent">{{ activeCount }}</span>
-          <span class="kpi-label">Actifs</span>
-        </div>
+      <div class="adm-kpi">
+        <span class="adm-kpi-icon adm-kpi-icon--success"><app-admin-icon name="user-check"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Actifs</span>
+          <span class="adm-kpi-value">{{ activeCount }}</span>
+        </span>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-icon kpi-icon-muted">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-        </div>
-        <div class="kpi-body">
-          <span class="kpi-value">{{ disabledCount }}</span>
-          <span class="kpi-label">Désactivés</span>
-        </div>
+      <div class="adm-kpi">
+        <span class="adm-kpi-icon adm-kpi-icon--neutral"><app-admin-icon name="user-x"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Désactivés</span>
+          <span class="adm-kpi-value">{{ disabledCount }}</span>
+        </span>
       </div>
       <button
         type="button"
-        class="kpi-card kpi-card-clickable"
-        [class.kpi-card-alert]="(dashboard?.totalFailedAttempts ?? 0) > 0"
+        class="adm-kpi"
+        [class.adm-kpi--danger]="(dashboard?.totalFailedAttempts ?? 0) > 0"
         (click)="openFailuresModal($event)"
-        [attr.title]="(dashboard?.totalFailedAttempts ?? 0) > 0 ? 'Cliquer pour voir le détail' : ''"
+        [attr.title]="(dashboard?.totalFailedAttempts ?? 0) > 0 ? 'Voir le détail des tentatives' : null"
       >
-        <div class="kpi-icon kpi-icon-warn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <div class="kpi-body">
-          <span class="kpi-value">{{ dashboard?.totalFailedAttempts ?? 0 }}</span>
-          <span class="kpi-label">Tentatives échouées <span class="kpi-meta">30 jours · détail</span></span>
-        </div>
+        <span class="adm-kpi-icon adm-kpi-icon--danger"><app-admin-icon name="key"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Tentatives échouées</span>
+          <span class="adm-kpi-value" [class.adm-kpi-value--danger]="(dashboard?.totalFailedAttempts ?? 0) > 0">
+            {{ dashboard?.totalFailedAttempts ?? 0 }}
+          </span>
+          <span class="adm-kpi-meta">30 jours · voir le détail</span>
+        </span>
       </button>
-    </div>
+    </section>
 
-    <!-- Graphiques -->
-    <div class="charts-grid">
-      <div class="chart-panel">
-        <div class="chart-panel-head">
-          <h2 class="chart-panel-title">Créations de comptes</h2>
-          <span class="chart-panel-sub">12 derniers mois</span>
+    <div class="adm-grid adm-grid--2">
+      <section class="adm-card">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Créations de comptes</h2>
+            <p class="adm-card-sub">12 derniers mois</p>
+          </div>
         </div>
-        <div class="chart-canvas-wrap">
+        <div class="adm-chart">
           <canvas #creationCanvas aria-label="Graphique des créations de comptes"></canvas>
         </div>
-      </div>
-      <div class="chart-panel">
-        <div class="chart-panel-head">
-          <h2 class="chart-panel-title">Connexions réussies vs échouées</h2>
-          <span class="chart-panel-sub">30 derniers jours</span>
+      </section>
+      <section class="adm-card">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Connexions réussies et échouées</h2>
+            <p class="adm-card-sub">30 derniers jours</p>
+          </div>
         </div>
-        <div class="chart-canvas-wrap">
+        <div class="adm-chart">
           <canvas #loginCanvas aria-label="Graphique des connexions"></canvas>
         </div>
+      </section>
+    </div>
+
+    <section class="adm-card adm-card--flush us-table-card">
+      <div class="adm-card-head">
+        <div class="adm-toolbar us-toolbar">
+          <label class="adm-search">
+            <input
+              type="search"
+              class="adm-input"
+              [(ngModel)]="search"
+              placeholder="Rechercher un nom ou un e-mail…"
+              autocomplete="off"
+              aria-label="Rechercher un utilisateur"
+            />
+          </label>
+          <div class="adm-tabs" role="group" aria-label="Filtrer par statut">
+            <button type="button" class="adm-tab" [class.is-active]="statusFilter === ''" (click)="statusFilter = ''">Tous</button>
+            <button type="button" class="adm-tab" [class.is-active]="statusFilter === 'ACTIVE'" (click)="statusFilter = 'ACTIVE'">Actifs</button>
+            <button type="button" class="adm-tab" [class.is-active]="statusFilter === 'DISABLED'" (click)="statusFilter = 'DISABLED'">Désactivés</button>
+          </div>
+          <span class="adm-toolbar-end adm-count"><strong>{{ filteredUsers.length }}</strong> sur {{ users.length }}</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Filtres -->
-    <div class="toolbar">
-      <input
-        type="search"
-        class="search-input"
-        [(ngModel)]="search"
-        placeholder="Rechercher un nom ou un e-mail…"
-        autocomplete="off"
-      />
-      <select class="filter-select" [(ngModel)]="statusFilter">
-        <option value="">Tous les statuts</option>
-        <option value="ACTIVE">Actif</option>
-        <option value="DISABLED">Désactivé</option>
-      </select>
-    </div>
-
-    <p class="hint" *ngIf="!filteredUsers.length">Aucun utilisateur ne correspond aux filtres.</p>
-
-    <!-- Table -->
-    <div class="table-panel" *ngIf="filteredUsers.length">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>Utilisateur</th>
-            <th>Statut</th>
-            <th>Dernière connexion</th>
-            <th>Rôle</th>
-            <th>Créé le</th>
-            <th class="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            *ngFor="let u of filteredUsers"
-            [class.row-disabled]="accountStatusLower(u) === 'disabled'"
-            [class.row-risk]="isSecurityRisk(u)"
-            (click)="openUser(u)"
-          >
-            <td>
-              <div class="user-cell">
-                <span class="user-avatar">{{ (u.username || '?')[0] | uppercase }}</span>
-                <div class="user-cell-text">
-                  <span class="user-name">
-                    {{ u.username }}
-                    <span class="risk-badge" *ngIf="isSecurityRisk(u)" title="Tentatives échouées">!</span>
-                  </span>
-                  <span class="user-mail">{{ u.email }}</span>
-                </div>
-
-                <!-- Aperçu au survol -->
-                <div class="user-pop" role="presentation">
-                  <p class="pop-title">Résumé du compte</p>
-                  <div class="pop-stats">
-                    <div class="pop-stat">
-                      <span class="pop-stat-value">{{ u.applicationsCount }}</span>
-                      <span class="pop-stat-label">Applications</span>
-                    </div>
-                    <div class="pop-stat">
-                      <span class="pop-stat-value pop-accent">{{ u.activeEnvironmentsCount }}</span>
-                      <span class="pop-stat-label">Envs actifs</span>
-                    </div>
-                    <div class="pop-stat">
-                      <span class="pop-stat-value">{{ pipelineTotal(u.pipelineCounts) }}</span>
-                      <span class="pop-stat-label">Pipelines</span>
-                    </div>
+      <div class="adm-table-wrap us-table-wrap" *ngIf="filteredUsers.length; else noUsers">
+        <table class="adm-table">
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Statut</th>
+              <th>Dernière connexion</th>
+              <th>Rôle</th>
+              <th>Créé le</th>
+              <th class="shrink"><span class="adm-sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let u of filteredUsers"
+              class="is-clickable"
+              [class.is-dimmed]="accountStatusLower(u) === 'disabled'"
+              [class.is-critical]="isSecurityRisk(u)"
+              (click)="openUser(u)"
+            >
+              <td>
+                <div class="us-user">
+                  <span class="adm-avatar adm-avatar--sm">{{ (u.username || '?')[0] }}</span>
+                  <div class="us-user-text">
+                    <span class="adm-cell-title">
+                      {{ u.username }}
+                      <span class="adm-badge adm-badge--danger adm-badge--plain us-risk" *ngIf="isSecurityRisk(u)" title="Tentatives échouées récentes">
+                        Risque
+                      </span>
+                    </span>
+                    <span class="adm-cell-sub">{{ u.email }}</span>
                   </div>
-                  <p class="pop-pwd" *ngIf="u.lastPasswordChangedAt">
-                    Dernier changement de mot de passe : {{ formatDateTime(u.lastPasswordChangedAt) }}
-                  </p>
-                  <p class="pop-pwd pop-muted" *ngIf="!u.lastPasswordChangedAt">Mot de passe jamais modifié</p>
-                  <span class="pop-cta">Ouvrir la fiche ›</span>
+
+                  <!-- Résumé au survol -->
+                  <div class="us-pop" role="presentation">
+                    <p class="us-pop-title">Résumé du compte</p>
+                    <div class="us-pop-stats">
+                      <div><strong>{{ u.applicationsCount }}</strong><span>Applications</span></div>
+                      <div><strong class="us-pop-accent">{{ u.activeEnvironmentsCount }}</strong><span>Envs actifs</span></div>
+                      <div><strong>{{ pipelineTotal(u.pipelineCounts) }}</strong><span>Pipelines</span></div>
+                    </div>
+                    <p class="us-pop-note" *ngIf="u.lastPasswordChangedAt">
+                      Mot de passe modifié le {{ formatDateTime(u.lastPasswordChangedAt) }}
+                    </p>
+                    <p class="us-pop-note" *ngIf="!u.lastPasswordChangedAt">Mot de passe jamais modifié</p>
+                  </div>
                 </div>
-              </div>
-            </td>
-            <td>
-              <span class="status-pill status-{{ accountStatusLower(u) }}">{{ accountStatusLabel(u) }}</span>
-            </td>
-            <td class="nowrap">{{ formatDateTime(u.lastLoginAt) }}</td>
-            <td><span class="role-pill">{{ rolesText(u) }}</span></td>
-            <td class="nowrap">{{ formatDt(u.createdAt) }}</td>
-            <td class="actions-col">
-              <button type="button" class="btn-details" (click)="openUser(u, $event)">Détails</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+              </td>
+              <td><span class="adm-badge" [ngClass]="'adm-badge--' + accountStatusLower(u)">{{ accountStatusLabel(u) }}</span></td>
+              <td class="adm-nowrap">{{ formatDateTime(u.lastLoginAt) }}</td>
+              <td>
+                <span class="adm-badge adm-badge--plain" [ngClass]="isAdmin(u) ? 'adm-badge--accent' : 'adm-badge--neutral'">
+                  {{ rolesText(u) }}
+                </span>
+              </td>
+              <td class="adm-nowrap">{{ formatDt(u.createdAt) }}</td>
+              <td class="shrink">
+                <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" (click)="openUser(u, $event)">
+                  Détails ›
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ng-template #noUsers>
+        <div class="adm-empty">
+          <p class="adm-empty-title">Aucun résultat</p>
+          <p class="adm-empty-text">Aucun utilisateur ne correspond aux filtres.</p>
+        </div>
+      </ng-template>
+    </section>
   </ng-container>
 
   <!-- Modale : détail des tentatives échouées -->
-  <div class="modal-backdrop" *ngIf="showFailuresModal" (click)="closeFailuresModal()" role="presentation"></div>
-  <div class="failures-modal" *ngIf="showFailuresModal" role="dialog" aria-modal="true" aria-labelledby="failures-title">
-    <header class="failures-modal-head">
+  <div class="adm-modal-backdrop" *ngIf="showFailuresModal" (click)="closeFailuresModal()" role="presentation"></div>
+  <div class="adm-modal adm-modal--wide" *ngIf="showFailuresModal" role="dialog" aria-modal="true" aria-labelledby="failures-title">
+    <header class="adm-modal-head">
       <div>
-        <p class="modal-kicker">Sécurité · 30 derniers jours</p>
-        <h2 id="failures-title" class="modal-title">Tentatives de connexion échouées</h2>
-        <p class="modal-lead">{{ dashboard?.totalFailedAttempts ?? 0 }} tentative(s) · {{ failuresByUser.length }} compte(s) concerné(s)</p>
+        <p class="adm-modal-kicker">Sécurité · 30 derniers jours</p>
+        <h2 id="failures-title" class="adm-modal-title">Tentatives de connexion échouées</h2>
+        <p class="adm-modal-lead">
+          {{ dashboard?.totalFailedAttempts ?? 0 }} tentative(s) · {{ failuresByUser.length }} compte(s) concerné(s)
+        </p>
       </div>
-      <button type="button" class="modal-close" (click)="closeFailuresModal()" aria-label="Fermer">×</button>
+      <button type="button" class="adm-btn adm-btn--ghost adm-btn--icon" (click)="closeFailuresModal()" aria-label="Fermer">
+        ×
+      </button>
     </header>
 
-    <p class="empty-block" *ngIf="!failuresByUser.length">Aucune tentative échouée enregistrée.</p>
-
-    <div class="failures-groups" *ngIf="failuresByUser.length">
-      <article class="failures-group" *ngFor="let group of failuresByUser">
-        <div class="failures-group-head">
-          <div>
-            <span class="failures-user">{{ group.username }}</span>
-            <span class="failures-email">{{ group.email }}</span>
+    <div class="adm-modal-body">
+      <p class="adm-muted" *ngIf="!failuresByUser.length">Aucune tentative échouée enregistrée.</p>
+      <article class="us-fail-group" *ngFor="let group of failuresByUser">
+        <div class="us-fail-head">
+          <span class="adm-avatar adm-avatar--sm">{{ (group.username || '?')[0] }}</span>
+          <div class="adm-grow">
+            <span class="adm-cell-title">{{ group.username }}</span>
+            <span class="adm-cell-sub">{{ group.email }}</span>
           </div>
-          <span class="failures-count">{{ group.attempts.length }} échec(s)</span>
-          <button type="button" class="btn-details" (click)="openUserById(group.userId)">Fiche</button>
+          <span class="adm-badge adm-badge--danger">{{ group.attempts.length }} échec(s)</span>
+          <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" (click)="openUserById(group.userId)">Fiche</button>
         </div>
-        <ul class="failures-times">
+        <ul class="us-attempts">
           <li *ngFor="let att of group.attempts">
-            <span class="time-dot"></span>
             {{ formatAttemptTime(att.attemptedAt) }}
-            <span class="failures-ip" *ngIf="att.ipAddress"> · IP {{ att.ipAddress }}</span>
+            <span class="adm-mono" *ngIf="att.ipAddress">· IP {{ att.ipAddress }}</span>
           </li>
         </ul>
       </article>

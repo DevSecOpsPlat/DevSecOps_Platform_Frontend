@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 @Component({
   selector: 'app-admin-observability',
   templateUrl: './admin-observability.component.html',
-  styleUrls: ['../admin-route-page.css', './admin-observability.component.css']
+  styleUrls: ['./admin-observability.component.css']
 })
 export class AdminObservabilityComponent implements OnInit {
   readonly sonarOrgUrl = environment.adminObservability?.sonarCloudOrgUrl ?? 'https://sonarcloud.io';

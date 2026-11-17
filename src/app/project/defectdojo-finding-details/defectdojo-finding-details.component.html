@@ -131,14 +131,20 @@
         </div>
       </section>
 
-      <section class="vuln-detail-section" *ngIf="detail.description">
-        <div class="vuln-section-title"><span class="vuln-section-icon">📝</span><h4>Description du scanner</h4></div>
-        <div class="vuln-description">{{ detail.description }}</div>
+      <section class="vuln-detail-section" *ngIf="detail.description || scannerFieldList.length">
+        <div class="vuln-section-title"><span class="vuln-section-icon">📝</span><h4>Ce que dit le scanner</h4></div>
+        <div class="vuln-description vuln-markdown" *ngIf="detail.description" [innerHTML]="detail.description | chatMarkdown"></div>
+        <dl class="vuln-scanner-fields" *ngIf="scannerFieldList.length">
+          <div class="vuln-scanner-field" *ngFor="let f of scannerFieldList">
+            <dt>{{ f.label }}</dt>
+            <dd><code>{{ f.value }}</code></dd>
+          </div>
+        </dl>
       </section>
 
       <section class="vuln-detail-section" *ngIf="detail.mitigation">
-        <div class="vuln-section-title"><span class="vuln-section-icon">🔧</span><h4>Mitigation scanner</h4></div>
-        <div class="vuln-description">{{ detail.mitigation }}</div>
+        <div class="vuln-section-title"><span class="vuln-section-icon">🔧</span><h4>Correctif proposé par le scanner</h4></div>
+        <div class="vuln-description vuln-markdown" [innerHTML]="detail.mitigation | chatMarkdown"></div>
       </section>
 
       <section class="vuln-detail-section ai-section" id="vuln-ai-analysis">

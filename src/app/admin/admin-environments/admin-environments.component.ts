@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminService, AdminUserEnvironmentDetail, AdminUserMetrics } from '../../services/admin/admin.service';
+import { environmentStatusLabel, statusTone } from '../shared/admin-status';
 
 export interface EnvRow extends AdminUserEnvironmentDetail {
   ownerId: string;
@@ -16,8 +17,7 @@ export interface EnvRow extends AdminUserEnvironmentDetail {
  */
 @Component({
   selector: 'app-admin-environments',
-  templateUrl: './admin-environments.component.html',
-  styleUrls: ['../admin-design-system.css', './admin-environments.component.css']
+  templateUrl: './admin-environments.component.html'
 })
 export class AdminEnvironmentsComponent implements OnInit {
   loading = true;
@@ -31,7 +31,26 @@ export class AdminEnvironmentsComponent implements OnInit {
   owners: string[] = [];
   statuses = ['RUNNING', 'BUILDING', 'PENDING', 'FAILED', 'DESTROYED', 'EXPIRED'];
 
+  /** Pagination côté client : 12 cartes = 4 rangées de 3 sur un écran large. */
+  readonly pageSize = 12;
+  page = 0;
+  readonly Math = Math;
+
   constructor(private adminService: AdminService, private router: Router) {}
+
+  get pageCount(): number {
+    return Math.ceil(this.filteredRows.length / this.pageSize);
+  }
+
+  get pagedRows(): EnvRow[] {
+    const start = this.page * this.pageSize;
+    return this.filteredRows.slice(start, start + this.pageSize);
+  }
+
+  goPage(page: number): void {
+    this.page = Math.max(0, Math.min(page, this.pageCount - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   ngOnInit(): void {
     this.load();
@@ -95,6 +114,7 @@ export class AdminEnvironmentsComponent implements OnInit {
     });
     this.allRows = rows;
     this.owners = [...ownerSet].sort();
+    this.page = 0;
   }
 
   private toTime(value: string | number[] | null | undefined): number {
@@ -120,7 +140,11 @@ export class AdminEnvironmentsComponent implements OnInit {
   }
 
   statusClass(status: string | null | undefined): string {
-    return (status || '').toLowerCase();
+    return statusTone(status);
+  }
+
+  statusLabel(status: string | null | undefined): string {
+    return environmentStatusLabel(status);
   }
 
   open(r: EnvRow): void {

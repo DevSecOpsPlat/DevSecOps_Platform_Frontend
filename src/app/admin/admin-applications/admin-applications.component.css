@@ -1,1 +1,19 @@
-/* Toute la mise en forme vient de admin-design-system.css (classes ads-*). */
+/* Applications — blocs propres à la page ; le reste vient de admin-theme.css. */
+.ap-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ap-rate {
+  display: block;
+  font-weight: 600;
+  color: var(--adm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ap-meter {
+  display: block;
+  width: 96px;
+  margin: 6px 0 0 auto;
+}

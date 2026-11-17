@@ -1170,3 +1170,52 @@
   padding: 0 2px;
   flex: 0 0 auto;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .dd-metrics-foot { color: #e2e8f0; background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-metric-cell { border-right: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .dd-granularity-btn { background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-granularity-btn:hover { color: hsl(200, 85%, 70%); }
+:host-context([data-theme="dark"]) .dd-chart-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-section-head h2 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-overview-icon { background: rgba(17, 24, 39, 0.12); }
+:host-context([data-theme="dark"]) .dd-overview-foot { background: #0b1220; }
+:host-context([data-theme="dark"]) .tone-closed .dd-metric-icon { background: rgba(255, 255, 255, 0.12); color: hsl(217, 33%, 70%); }
+:host-context([data-theme="dark"]) .tone-verified .dd-metric-icon { background: rgba(255, 255, 255, 0.12); color: #e2e8f0; }
+:host-context([data-theme="dark"]) .dd-metric-count { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-metric-bar-track { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-status-chip { background: #0b1220; color: #e2e8f0; }
+@media (max-width: 900px) {
+  :host-context([data-theme="dark"]) .dd-metric-cell { border-bottom: 1px solid #1f2937; }
+}
+:host-context([data-theme="dark"]) .dd-evolution-chart-card { background: #111827; }
+:host-context([data-theme="dark"]) .dd-evolution-chart-head { border-bottom: 1px solid #1f2937; background: linear-gradient(180deg, #0b1220 0%, #111827 100%); }
+:host-context([data-theme="dark"]) .dd-evolution-chart-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-evolution-legend { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .dd-evolution-legend-item { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .dd-evolution-chart-empty p { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-row-actions-bar { background: linear-gradient(180deg, #0b1220 0%, #111827 100%); }
+:host-context([data-theme="dark"]) .dd-bulk-edit-panel { background: #111827; }
+:host-context([data-theme="dark"]) .dd-bulk-edit-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-toolbar-delete { border: 1px solid hsla(0, 75%, 50%, 0.38); background: #111827; }
+:host-context([data-theme="dark"]) .dd-toolbar-delete:not(:disabled):hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-row-menu-btn { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .dd-row-menu-btn:hover { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-row-menu { background: #111827; }
+:host-context([data-theme="dark"]) .dd-row-menu-item:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-row-actions-snippet { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .dd-action-group-label { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .dd-action-btn { background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-row-actions-hint { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .dd-import-badge { color: #e2e8f0; background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-mini-bar-track { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-bar-row:not(.dd-bar-row--static):hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-bar-row-label { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-bar-row-track { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-bar-row-value { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-svg-yaxis span { color: #e2e8f0; background: rgba(17, 24, 39, 0.88); }
+:host-context([data-theme="dark"]) .dd-flux-values { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-flux-delta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .dd-flux-delta--up { color: hsl(17, 85%, 70%); }
+:host-context([data-theme="dark"]) .dd-flux-delta--down { color: hsl(142, 76%, 70%); }
+/* === Fin du mode nuit généré === */

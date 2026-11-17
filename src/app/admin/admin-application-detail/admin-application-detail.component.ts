@@ -8,8 +8,22 @@ import {
   AdminUserEnvironmentDetail,
   AdminUserMetrics
 } from '../../services/admin/admin.service';
+import { environmentStatusLabel, pipelineStatusLabel, statusTone } from '../shared/admin-status';
 
 interface EnvRow extends AdminUserEnvironmentDetail {}
+
+interface PipelineSegment {
+  label: string;
+  count: number;
+  pct: number;
+  tone: 'ok' | 'crit' | 'warn' | 'neutral';
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  FRONTEND: 'Frontend',
+  BACKEND: 'Backend',
+  WORKER: 'Worker'
+};
 
 /** Statut live d'un service, apparié au workload K8s de l'environnement actif (cf. §C du plan). */
 interface ServiceLiveStatus {
@@ -21,7 +35,7 @@ interface ServiceLiveStatus {
 @Component({
   selector: 'app-admin-application-detail',
   templateUrl: './admin-application-detail.component.html',
-  styleUrls: ['../admin-design-system.css', './admin-application-detail.component.css']
+  styleUrls: ['./admin-application-detail.component.css']
 })
 export class AdminApplicationDetailComponent implements OnInit {
   loading = true;
@@ -41,6 +55,10 @@ export class AdminApplicationDetailComponent implements OnInit {
    * utilisateur du 7 septembre 2026 : disponible sur le détail Environnement, demandé aussi ici). */
   previewUrl: SafeResourceUrl | null = null;
   previewRawUrl: string | null = null;
+
+  /** Une application peut accumuler des dizaines d'environnements : pagination côté client. */
+  readonly envPageSize = 8;
+  envPage = 0;
 
   constructor(
     private route: ActivatedRoute,
@@ -73,7 +91,10 @@ export class AdminApplicationDetailComponent implements OnInit {
         this.ownerUsername = found.owner.username;
         this.ownerEmail = found.owner.email;
         this.accountStatus = found.owner.accountStatus;
-        this.environments = (found.owner.environments || []).filter(e => e.applicationId === id);
+        this.environments = this.sortEnvironments(
+          (found.owner.environments || []).filter(e => e.applicationId === id)
+        );
+        this.envPage = 0;
         this.loading = false;
         this.loadActivity(id);
         this.loadLiveServiceStatus();
@@ -172,6 +193,10 @@ export class AdminApplicationDetailComponent implements OnInit {
     return this.serviceStatus.get(serviceId) || null;
   }
 
+  pipelineSuccess(): number {
+    return this.app?.pipelineCounts?.success || 0;
+  }
+
   pipelineTotal(): number {
     const pc = this.app?.pipelineCounts;
     if (!pc) return 0;
@@ -188,6 +213,96 @@ export class AdminApplicationDetailComponent implements OnInit {
   }
 
   statusClass(status: string | null | undefined): string {
-    return (status || '').toLowerCase();
+    return statusTone(status);
+  }
+
+  statusLabel(status: string | null | undefined): string {
+    return environmentStatusLabel(status);
+  }
+
+  pipelineLabel(status: string | null | undefined): string {
+    return pipelineStatusLabel(status);
+  }
+
+  get envPageCount(): number {
+    return Math.ceil(this.environments.length / this.envPageSize);
+  }
+
+  get pagedEnvironments(): EnvRow[] {
+    const start = this.envPage * this.envPageSize;
+    return this.environments.slice(start, start + this.envPageSize);
+  }
+
+  get recentActivity(): AdminActivityEvent[] {
+    return this.activity.slice(0, 8);
+  }
+
+  successRate(): number {
+    const total = this.pipelineTotal();
+    return total ? Math.round((this.pipelineSuccess() / total) * 100) : 0;
+  }
+
+  /** Répartition des exécutions pour la barre empilée de la carte « Pipelines ». */
+  get pipelineSegments(): PipelineSegment[] {
+    const pc = this.app?.pipelineCounts;
+    const total = this.pipelineTotal();
+    if (!pc) return [];
+    const seg = (label: string, count: number, tone: PipelineSegment['tone']): PipelineSegment =>
+      ({ label, count, tone, pct: total ? (count / total) * 100 : 0 });
+    return [
+      seg('Réussis', pc.success || 0, 'ok'),
+      seg('Échecs', pc.failed || 0, 'crit'),
+      seg('En cours', (pc.running || 0) + (pc.pending || 0), 'warn'),
+      seg('Annulés', (pc.canceled || 0) + (pc.skipped || 0), 'neutral')
+    ];
+  }
+
+  roleLabel(role: string | null | undefined): string {
+    return role ? ROLE_LABELS[role.toUpperCase()] ?? role : 'Service';
+  }
+
+  repoLabel(url: string | null | undefined): string {
+    if (!url) return '—';
+    return url.replace(/^https?:\/\//, '').replace(/\.git$/, '');
+  }
+
+  /** État d'un service : le workload réel si un environnement tourne, sinon « Non déployé ». */
+  serviceStateLabel(serviceId: string): string {
+    const live = this.liveStatus(serviceId);
+    if (live) return environmentStatusLabel(live.status);
+    return this.activeEnvironmentsCount() > 0 ? 'Vérification…' : 'Non déployé';
+  }
+
+  serviceTone(serviceId: string): string {
+    const live = this.liveStatus(serviceId);
+    if (live) return statusTone(live.status);
+    return this.activeEnvironmentsCount() > 0 ? 'pending' : 'neutral';
+  }
+
+  formatDate(value: string | number[] | null | undefined): string {
+    const t = this.toTime(value);
+    return t ? new Date(t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  }
+
+  private sortEnvironments(envs: EnvRow[]): EnvRow[] {
+    return [...envs].sort((a, b) => {
+      const aRunning = (a.status || '').toUpperCase() === 'RUNNING';
+      const bRunning = (b.status || '').toUpperCase() === 'RUNNING';
+      if (aRunning !== bRunning) return aRunning ? -1 : 1;
+      return this.toTime(b.createdAt) - this.toTime(a.createdAt);
+    });
+  }
+
+  private toTime(value: string | number[] | null | undefined): number {
+    if (!value) return 0;
+    if (typeof value === 'string') {
+      const t = new Date(value).getTime();
+      return isNaN(t) ? 0 : t;
+    }
+    if (Array.isArray(value) && value.length >= 3) {
+      const [y, m, d, h = 0, min = 0, s = 0] = value;
+      return new Date(y, m - 1, d, h, min, s).getTime();
+    }
+    return 0;
   }
 }

@@ -214,6 +214,7 @@ export class ApplicationService {
       description: item.description,
       gitRepositoryUrl: item.gitRepositoryUrl,
       dockerfilePath: item.dockerfilePath,
+      gitBranch: item.gitBranch || 'main',
       createdAt: this.convertDateArray(item.createdAt),
       createdByUsername: item.createdByUsername,
       hasGithubToken: !!item.hasGithubToken

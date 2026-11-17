@@ -4,7 +4,7 @@ import { ComplaintDto, ComplaintService } from '../../services/complaints/compla
 @Component({
   selector: 'app-admin-reclamations',
   templateUrl: './admin-reclamations.component.html',
-  styleUrls: ['../admin-route-page.css', './admin-reclamations.component.css']
+  styleUrls: ['./admin-reclamations.component.css']
 })
 export class AdminReclamationsComponent implements OnInit {
   list: ComplaintDto[] = [];
@@ -43,6 +43,10 @@ export class AdminReclamationsComponent implements OnInit {
   setFilter(f: '' | 'OPEN' | 'CLOSED'): void {
     this.filterStatus = f;
     this.load();
+  }
+
+  statusLabel(status: string | null | undefined): string {
+    return status === 'OPEN' ? 'Ouverte' : status === 'CLOSED' ? 'Clôturée' : status || '—';
   }
 
   firstMessagePreview(c: ComplaintDto): string {

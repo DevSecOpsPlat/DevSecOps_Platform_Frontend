@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import Chart from 'chart.js/auto';
 import { Subject, forkJoin, interval } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { skip, takeUntil } from 'rxjs/operators';
 import {
   AdminNamespaceSummary,
   AdminService
@@ -17,13 +17,15 @@ import {
 } from '../../models/application-management/application-management.models';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import { MonitoringDashboardComponent } from '../../application-management/monitoring-dashboard/monitoring-dashboard.component';
+import { ThemeService } from '../../services/ui/theme.service';
+import { AdminChartPalette, adminChartPalette } from '../shared/admin-chart-palette';
+import { AdminIconComponent } from '../shared/admin-icon/admin-icon.component';
 
 const POLL_MS = 30000;
 const HISTORY_MAX = 20;
 /** Une couleur stable par nœud, dans l'ordre d'apparition — partagée par les 3 charts + la légende. */
 const NODE_COLORS = ['#ea580c', '#0284c7', '#7c3aed', '#16a34a', '#db2777', '#0f766e'];
 const SEVERITY_COLORS = { ok: '#16a34a', warn: '#d97706', crit: '#dc2626' };
-const GAUGE_TRACK_COLOR = '#e2e8f0';
 
 interface GaugeItem {
   key: string;
@@ -38,21 +40,28 @@ interface GaugeItem {
  * Jauge circulaire façon Grafana (270°, anneau, % au centre) — un doughnut Chart.js détourné,
  * pas de librairie de jauge supplémentaire. `afterDraw` dessine le texte au centre.
  */
-function gaugeCenterTextPlugin(getLabel: (chart: Chart) => { big: string; small: string }): any {
+function gaugeCenterTextPlugin(
+  getLabel: (chart: Chart) => { big: string; small: string },
+  palette: AdminChartPalette
+): any {
   return {
     id: 'gaugeCenterText',
     afterDraw(chart: Chart) {
       const { ctx, chartArea } = chart;
+      // Chart.js peut dessiner (redimensionnement) avant d'avoir calculé la zone du graphique :
+      // sans cette garde, l'exception remontait jusqu'à `new Chart` et les jauges suivantes
+      // n'étaient jamais créées (cartes Mémoire / Disque / Pods vides).
+      if (!chartArea) return;
       const { big, small } = getLabel(chart);
       const cx = (chartArea.left + chartArea.right) / 2;
       const cy = (chartArea.top + chartArea.bottom) / 2;
       ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = palette.text;
       ctx.font = '700 20px system-ui, sans-serif';
       ctx.fillText(big, cx, cy - 6);
-      ctx.fillStyle = '#64748b';
+      ctx.fillStyle = palette.tick;
       ctx.font = '600 10px system-ui, sans-serif';
       ctx.fillText(small, cx, cy + 14);
       ctx.restore();
@@ -72,15 +81,9 @@ function gaugeCenterTextPlugin(getLabel: (chart: Chart) => { big: string; small:
 @Component({
   selector: 'app-admin-monitoring',
   standalone: true,
-  imports: [CommonModule, FormsModule, MonitoringDashboardComponent],
+  imports: [CommonModule, FormsModule, MonitoringDashboardComponent, AdminIconComponent],
   templateUrl: './admin-monitoring.component.html',
-  styleUrls: [
-    '../admin-route-page.css',
-    // Réutilise les styles .md-section/.md-charts-2/.md-chart-card du dashboard appli pour les
-    // charts "Métriques nœuds" — même rendu visuel, pas de CSS dupliqué.
-    '../../application-management/monitoring-dashboard/monitoring-dashboard.component.css',
-    './admin-monitoring.component.css'
-  ]
+  styleUrls: ['./admin-monitoring.component.css']
 })
 export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('nodeCpuCanvas') cpuCanvasRef?: ElementRef<HTMLCanvasElement>;
@@ -130,12 +133,26 @@ export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestro
 
   constructor(
     private adminService: AdminService,
-    private appMgmt: ApplicationManagementService
+    private appMgmt: ApplicationManagementService,
+    private themeService: ThemeService
   ) {}
 
   ngOnInit(): void {
     this.load();
     interval(POLL_MS).pipe(takeUntil(this.destroy$)).subscribe(() => this.load(true));
+    // Les couleurs des graphiques suivent le thème : les charts mis à jour en place
+    // (upsert) sont recréés pour reprendre la nouvelle palette.
+    this.themeService.theme$.pipe(skip(1), takeUntil(this.destroy$)).subscribe(() => {
+      [this.cpuChart, this.memChart, this.diskChart, this.capacityBarChart].forEach(c => c?.destroy());
+      this.cpuChart = this.memChart = this.diskChart = this.capacityBarChart = undefined;
+      if (this.nodes?.enabled) {
+        this.renderAllCharts();
+      }
+    });
+  }
+
+  private get palette(): AdminChartPalette {
+    return adminChartPalette(this.themeService.current);
   }
 
   ngAfterViewInit(): void {
@@ -398,31 +415,37 @@ export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestro
     this.gaugeCharts = [];
     const items = this.gaugeItems;
     const canvases = this.gaugeCanvasList.toArray();
+    const pal = this.palette;
     items.forEach((item, i) => {
       const canvas = canvases[i]?.nativeElement;
       if (!canvas) return;
       Chart.getChart(canvas)?.destroy();
-      const chart = new Chart(canvas, {
-        type: 'doughnut',
-        data: {
-          datasets: [{
-            data: [item.pct, Math.max(0, 100 - item.pct)],
-            backgroundColor: [item.color, GAUGE_TRACK_COLOR],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          circumference: 270,
-          rotation: 225,
-          cutout: '72%',
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: { legend: { display: false }, tooltip: { enabled: false } }
-        },
-        plugins: [gaugeCenterTextPlugin(() => ({ big: item.pct + '%', small: item.valueLabel }))]
-      });
-      this.gaugeCharts.push(chart);
+      // Une jauge en échec ne doit pas empêcher la création des suivantes.
+      try {
+        const chart = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            datasets: [{
+              data: [item.pct, Math.max(0, 100 - item.pct)],
+              backgroundColor: [item.color, pal.track],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            circumference: 270,
+            rotation: 225,
+            cutout: '72%',
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } }
+          },
+          plugins: [gaugeCenterTextPlugin(() => ({ big: item.pct + '%', small: item.valueLabel }), pal)]
+        });
+        this.gaugeCharts.push(chart);
+      } catch (e) {
+        console.error(`Jauge « ${item.label} » non rendue`, e);
+      }
     });
   }
 
@@ -443,23 +466,24 @@ export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestro
       return;
     }
     Chart.getChart(canvas)?.destroy();
+    const pal = this.palette;
     this.capacityBarChart = new Chart(canvas, {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: 'Utilisé (Gi)', data: usedGi, backgroundColor: '#ea580c', stack: 'disk' },
-          { label: 'Libre (Gi)', data: freeGi, backgroundColor: '#e2e8f0', stack: 'disk' }
+          { label: 'Utilisé (Gi)', data: usedGi, backgroundColor: pal.accent, stack: 'disk' },
+          { label: 'Libre (Gi)', data: freeGi, backgroundColor: pal.track, stack: 'disk' }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { legend: { display: true, labels: { color: '#6E6E86', boxWidth: 10, font: { size: 10 } } } },
+        plugins: { legend: { display: true, labels: { color: pal.tick, boxWidth: 10, font: { size: 10 } } } },
         scales: {
-          x: { stacked: true, ticks: { color: '#6E6E86', font: { size: 10 } }, grid: { display: false } },
-          y: { stacked: true, beginAtZero: true, ticks: { color: '#6E6E86', font: { size: 10 } }, grid: { color: 'rgba(28,28,46,0.05)' } }
+          x: { stacked: true, ticks: { color: pal.tick, font: { size: 10 } }, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { color: pal.tick, font: { size: 10 } }, grid: { color: pal.grid } }
         }
       }
     });
@@ -493,6 +517,7 @@ export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestro
     const canvas = canvasRef?.nativeElement;
     if (!canvas) return undefined;
     Chart.getChart(canvas)?.destroy();
+    const pal = this.palette;
     return new Chart(canvas, {
       type: 'line',
       data: { labels: this.historyLabels, datasets },
@@ -502,12 +527,12 @@ export class AdminMonitoringComponent implements OnInit, AfterViewInit, OnDestro
         animation: false,
         interaction: { mode: 'nearest' as const, intersect: false },
         plugins: {
-          legend: { display: true, labels: { color: '#6E6E86', boxWidth: 10, font: { size: 10 } } },
+          legend: { display: true, labels: { color: pal.tick, boxWidth: 10, font: { size: 10 } } },
           tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}${unit}` } }
         },
         scales: {
-          x: { ticks: { color: '#6E6E86', maxTicksLimit: 6, font: { size: 10 } }, grid: { color: 'rgba(28,28,46,0.05)' } },
-          y: { beginAtZero: true, max: 100, ticks: { color: '#6E6E86', font: { size: 10 } }, grid: { color: 'rgba(28,28,46,0.05)' } }
+          x: { ticks: { color: pal.tick, maxTicksLimit: 6, font: { size: 10 } }, grid: { color: pal.grid } },
+          y: { beginAtZero: true, max: 100, ticks: { color: pal.tick, font: { size: 10 } }, grid: { color: pal.grid } }
         }
       }
     });

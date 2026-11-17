@@ -1,1 +1,101 @@
-/* Toute la mise en forme vient de admin-design-system.css (classes ads-*). */
+/* Détail application — blocs propres à la page ; le reste vient de admin-theme.css. */
+.ad-repo {
+  font-family: var(--adm-mono);
+  font-size: 12px;
+  color: var(--adm-accent-text);
+  overflow-wrap: anywhere;
+}
+
+.ad-repo:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Statut du dernier pipeline : simple texte coloré, sans pastille. */
+.ad-pipeline {
+  font-weight: 600;
+  color: var(--adm-text-2);
+}
+
+.ad-pipeline--success { color: var(--adm-success); }
+.ad-pipeline--failed { color: var(--adm-danger); }
+.ad-pipeline--running,
+.ad-pipeline--pending { color: var(--adm-warning); }
+
+/* ---------- Carte Pipelines ---------- */
+.ad-pipes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ad-pipes-rate {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ad-pipes-rate strong {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--adm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-pipes-rate span {
+  font-size: 13px;
+  color: var(--adm-muted);
+}
+
+.ad-pipes-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--adm-surface-2);
+}
+
+.ad-pipes-seg {
+  height: 100%;
+  transition: width 0.7s var(--adm-ease);
+}
+
+.ad-pipes-seg--ok { background: var(--adm-success); }
+.ad-pipes-seg--crit { background: var(--adm-danger); }
+.ad-pipes-seg--warn { background: var(--adm-warning); }
+.ad-pipes-seg--neutral { background: var(--adm-faint); }
+
+.ad-pipes-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--adm-text-2);
+}
+
+.ad-pipes-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-pipes-legend strong {
+  margin-left: auto;
+  color: var(--adm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.ad-dot--ok { background: var(--adm-success); }
+.ad-dot--crit { background: var(--adm-danger); }
+.ad-dot--warn { background: var(--adm-warning); }
+.ad-dot--neutral { background: var(--adm-faint); }

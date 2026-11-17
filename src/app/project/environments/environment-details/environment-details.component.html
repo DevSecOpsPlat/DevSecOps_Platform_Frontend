@@ -1,7 +1,6 @@
 
-<div class="user-shell">
-  <app-user-sidebar></app-user-sidebar>
-  <div class="user-main">
+<!-- Dans un service : rendu dans sa mise en page (barre latérale du service) ; seul : pleine largeur. -->
+<div class="env-page" [class.env-page--in-project]="inProject">
 <div class="env-details-container" *ngIf="!loading && environment">
   <header class="env-header">
     <button class="back-btn" (click)="goBack()">← Retour</button>
@@ -137,6 +136,5 @@
   <span class="error-icon">⚠️</span>
   <p>{{ error }}</p>
   <button class="retry-btn" (click)="loadEnvironment()">Réessayer</button>
-</div>
 </div>
 </div>

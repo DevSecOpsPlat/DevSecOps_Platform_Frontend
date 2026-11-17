@@ -1,6 +1,9 @@
 <section class="monitoring">
   <div class="am-loading" *ngIf="loading">Chargement du monitoring…</div>
-  <div class="am-alert am-alert-error" *ngIf="error">{{ error }}</div>
+  <div class="am-alert am-alert-error" *ngIf="error">
+    {{ error }}
+    <button type="button" class="monitoring-retry" (click)="retry()">Réessayer</button>
+  </div>
 
   <app-monitoring-dashboard
     *ngIf="!loading && !error && managedApp?.lastDeployment"

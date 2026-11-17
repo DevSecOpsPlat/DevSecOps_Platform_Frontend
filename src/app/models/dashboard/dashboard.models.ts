@@ -23,6 +23,8 @@ export interface DashboardPipelineItem {
   environmentId: string;
   environmentName: string;
   triggeredBy?: string;
+  /** SCAN ou DEPLOY (exécution d'origine). */
+  kind?: string;
 }
 
 export interface DashboardEnvironmentItem {

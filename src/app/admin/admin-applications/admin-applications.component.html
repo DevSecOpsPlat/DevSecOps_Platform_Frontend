@@ -1,61 +1,98 @@
-<div class="ads-page">
-  <header class="ads-hero">
-    <p class="ads-hero-eyebrow">Ressources</p>
-    <div class="ads-hero-row">
-      <div>
-        <h1 class="ads-hero-title">Applications</h1>
-        <p class="ads-hero-lead">
-          Une ligne = une vraie application. Cliquez pour voir sa composition, ses environnements et son activité récente.
-        </p>
-      </div>
-      <button type="button" class="ads-btn-ghost-dark" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+<div class="adm-page">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <p class="adm-eyebrow">Ressources</p>
+      <h1 class="adm-hero-title">
+        Applications
+        <span class="adm-count-pill" *ngIf="!loading && !error">{{ allRows.length }}</span>
+      </h1>
+      <p class="adm-hero-lead">
+        Une ligne = une vraie application. Ouvrez-la pour voir sa composition, ses environnements et son activité récente.
+      </p>
+    </div>
+    <div class="adm-hero-actions">
+      <button type="button" class="adm-btn adm-btn--on-dark" [class.is-busy]="loading" (click)="load()" [disabled]="loading">Actualiser</button>
     </div>
   </header>
 
-  <div *ngIf="loading" class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div>
-  <div *ngIf="error" class="ads-state-err">{{ error }}</div>
+  <div *ngIf="loading" class="adm-state"><span class="adm-spinner"></span> Chargement des applications…</div>
+  <div *ngIf="error" class="adm-alert adm-alert--danger"><span class="adm-alert-body">{{ error }}</span></div>
 
   <ng-container *ngIf="!loading && !error">
-    <div class="ads-toolbar">
-      <input type="search" [(ngModel)]="search" placeholder="Rechercher une application, un service, un propriétaire…" />
-      <select [(ngModel)]="ownerFilter">
+    <div class="adm-toolbar">
+      <input
+        type="search"
+        class="adm-input adm-toolbar-search"
+        [(ngModel)]="search"
+        (ngModelChange)="page = 0"
+        placeholder="Rechercher une application, un service, un propriétaire…"
+        aria-label="Rechercher une application"
+      />
+      <select class="adm-select" [(ngModel)]="ownerFilter" (ngModelChange)="page = 0" aria-label="Filtrer par propriétaire">
         <option value="">Tous les propriétaires</option>
         <option *ngFor="let o of owners" [value]="o">{{ o }}</option>
       </select>
-      <select [(ngModel)]="onlyWithActiveEnv" [ngModelOptions]="{standalone: true}">
+      <select class="adm-select" [(ngModel)]="onlyWithActiveEnv" (ngModelChange)="page = 0" aria-label="Filtrer par activité">
         <option [ngValue]="false">Toutes les applications</option>
         <option [ngValue]="true">Avec un environnement actif</option>
       </select>
+      <span class="adm-toolbar-end adm-count"><strong>{{ filteredRows.length }}</strong> sur {{ allRows.length }}</span>
     </div>
 
-    <div *ngFor="let r of filteredRows" class="ads-app-row" (click)="open(r)">
-      <div class="ads-app-icon">{{ initials(r.name) }}</div>
-      <div class="ads-app-row-main">
-        <div class="ads-app-row-name">
-          {{ r.name }}
-          <span class="ads-app-tag" *ngIf="r.standalone">projet autonome</span>
-        </div>
-        <div class="ads-app-row-sub">
-          {{ r.ownerUsername }} · {{ compositionLabel(r) }}
-          <ng-container *ngIf="r.standalone"> · {{ r.gitRepositoryUrl }}</ng-container>
-        </div>
+    <div class="adm-card adm-card--flush" *ngIf="filteredRows.length; else noRows">
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Propriétaire</th>
+              <th>Composition</th>
+              <th class="num">Env. actifs</th>
+              <th class="num">Pipelines réussis</th>
+              <th>Créée le</th>
+              <th class="shrink"><span class="adm-sr-only">Ouvrir</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of pagedRows" class="is-clickable" (click)="open(r)">
+              <td>
+                <div class="ap-name">
+                  <span class="adm-avatar adm-avatar--sm">{{ initials(r.name) }}</span>
+                  <div class="adm-grow">
+                    <span class="adm-cell-title">{{ r.name }}</span>
+                    <span class="adm-cell-sub" *ngIf="r.standalone">Projet autonome</span>
+                    <span class="adm-cell-sub" *ngIf="!r.standalone && r.description">{{ r.description }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>{{ r.ownerUsername }}</td>
+              <td>{{ compositionLabel(r) }}</td>
+              <td class="num">
+                <span class="adm-badge adm-badge--plain" [ngClass]="r.activeEnvironmentsCount > 0 ? 'adm-badge--success' : 'adm-badge--neutral'">{{ r.activeEnvironmentsCount }}</span>
+              </td>
+              <td class="num">
+                <span class="ap-rate">{{ pipelineSuccess(r) }}/{{ pipelineTotal(r) }}</span>
+                <span class="adm-meter ap-meter"><span class="adm-meter-fill adm-meter-fill--ok" [style.width.%]="successRate(r)"></span></span>
+              </td>
+              <td class="adm-nowrap">{{ formatDate(r.createdAt) }}</td>
+              <td class="shrink"><span class="adm-row-chevron" aria-hidden="true">›</span></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="ads-app-row-stats">
-        <div class="ads-app-stat">
-          <div class="ads-app-stat-n">{{ r.activeEnvironmentsCount }}</div>
-          <div class="ads-app-stat-l">env. actif{{ r.activeEnvironmentsCount > 1 ? 's' : '' }}</div>
-        </div>
-        <div class="ads-app-stat">
-          <div class="ads-app-stat-n">{{ (r.pipelineCounts?.success || 0) }}/{{ pipelineTotal(r) }}</div>
-          <div class="ads-app-stat-l">pipelines ok</div>
-        </div>
-      </div>
-      <div class="ads-app-row-chev" aria-hidden="true">›</div>
+
+      <nav class="adm-pager" *ngIf="pageCount > 1" aria-label="Pagination">
+        <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page === 0" (click)="page = page - 1">‹ Précédent</button>
+        <span>Page {{ page + 1 }} / {{ pageCount }}</span>
+        <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page >= pageCount - 1" (click)="page = page + 1">Suivant ›</button>
+      </nav>
     </div>
 
-    <p class="ads-empty" *ngIf="!filteredRows.length">
-      <span class="ads-empty-icon" aria-hidden="true">📭</span>
-      <span class="ads-empty-sub">Aucune application ne correspond à ces filtres.</span>
-    </p>
+    <ng-template #noRows>
+      <div class="adm-card adm-empty">
+        <p class="adm-empty-title">Aucun résultat</p>
+        <p class="adm-empty-text">Aucune application ne correspond à ces filtres.</p>
+      </div>
+    </ng-template>
   </ng-container>
 </div>

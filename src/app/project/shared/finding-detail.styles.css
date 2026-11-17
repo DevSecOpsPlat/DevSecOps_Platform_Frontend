@@ -1167,3 +1167,54 @@
     animation: none;
   }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .vuln-alert-error { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 56%, 70%); }
+:host-context([data-theme="dark"]) .severity-critical { background: hsla(0, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-high { background: hsla(39, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-medium { background: hsla(58, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-low { background: hsla(139, 73%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-info { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-detail-header { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-detail-info h3 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-meta-item { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-section-title h4 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-description { color: #e2e8f0; background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-file-path { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-version-info { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-section { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-ai-model-badge--high { color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .vuln-raw-pill { background: #0b1220; color: #e2e8f0; border: 1px solid #334155; }
+:host-context([data-theme="dark"]) .vuln-ai-panel-body { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-verify-hints { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-raw-output { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-ai-label { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-code-input { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-chat-header h4 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-chat-messages { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-chat-bubble--assistant { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-chat-text--rich,
+:host-context([data-theme="dark"]) .vuln-markdown { color: hsl(217, 33%, 70%); }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich strong,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich b,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown strong,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown b { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich h1,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich h2,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich h3,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich h4,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown h1,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown h2,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown h3,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown h4 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich :not(pre) > code,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown :not(pre) > code { background: #0b1220; color: hsl(222, 47%, 70%); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich blockquote,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown blockquote { background: #0b1220; }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich a,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown a { color: hsl(17, 85%, 70%); }
+:host-context([data-theme="dark"]) ::ng-deep .vuln-chat-text--rich th,
+:host-context([data-theme="dark"]) ::ng-deep .vuln-markdown th { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-chat-input textarea { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-spinner { border: 3px solid #1f2937; }
+/* === Fin du mode nuit généré === */

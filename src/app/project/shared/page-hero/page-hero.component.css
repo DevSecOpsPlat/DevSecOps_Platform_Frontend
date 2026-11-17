@@ -251,3 +251,16 @@
   .ph-hero { animation: none; }
   .ph-hero-glow { animation: none; }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .ph-hero::before { background-image: linear-gradient(rgba(17, 24, 39, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 24, 39, 0.04) 1px, transparent 1px); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions .ph-icon-btn { border: 1px solid hsla(201, 75%, 50%, 0.38); background: rgba(17, 24, 39, 0.08); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions .ph-icon-btn:hover { background: rgba(17, 24, 39, 0.14); border-color: hsla(201, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions .ph-btn--ghost { background: rgba(17, 24, 39, 0.1); border: 1px solid hsla(201, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions .ph-btn--ghost:hover:not(:disabled) { background: rgba(17, 24, 39, 0.18); border-color: hsla(201, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions select.ph-select { border: 1px solid hsla(201, 75%, 50%, 0.38); background: rgba(17, 24, 39, 0.1); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-actions select.ph-select option { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-meta .ph-badge { background: rgba(17, 24, 39, 0.1); border: 1px solid hsla(201, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) ::ng-deep .ph-meta .ph-badge--fail { border-color: hsla(0, 75%, 50%, 0.38); }
+/* === Fin du mode nuit généré === */

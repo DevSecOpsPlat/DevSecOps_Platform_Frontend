@@ -152,7 +152,7 @@
 
     <!-- 4. Metrics Overview -->
     <div class="dd-section-head" *ngIf="metricCards.length">
-      <h2>Metrics Overview</h2>
+      <h2>Vue d'ensemble des métriques</h2>
       <p>Cartes DefectDojo agrégées — clique pour ouvrir la liste centralisée</p>
     </div>
     <div class="dd-overview-grid" *ngIf="metricCards.length">
@@ -419,7 +419,7 @@
             </p>
             <div class="dd-row-actions-groups">
               <div class="dd-action-group">
-                <span class="dd-action-group-label">Status</span>
+                <span class="dd-action-group-label">Statut</span>
                 <div class="dd-action-group-btns">
                   <button type="button" class="dd-action-btn dd-action-btn--sm"
                           *ngFor="let a of statusGroupActions"
@@ -490,7 +490,7 @@
                 <div class="dd-row-menu" *ngIf="rowMenuOpenId === f.id" (click)="$event.stopPropagation()">
                   <button type="button" class="dd-row-menu-item" (click)="openRowEdit(f)">Edit</button>
                   <button type="button" class="dd-row-menu-item dd-row-menu-item--danger"
-                          (click)="deleteSingleFinding(f)">Delete</button>
+                          (click)="deleteSingleFinding(f)">Supprimer</button>
                 </div>
               </div>
             </td>

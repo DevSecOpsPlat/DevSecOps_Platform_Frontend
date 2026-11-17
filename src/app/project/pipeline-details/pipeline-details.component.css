@@ -31,6 +31,34 @@
   color: #fff;
 }
 
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #1c1c2e;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 10px;
+  transition: border-color 0.15s, transform 0.12s, background 0.15s;
+}
+.btn-back:hover {
+  border-color: #f97316;
+  color: #c2410c;
+}
+.btn-back:active {
+  transform: translateX(-2px);
+}
+:host-context([data-theme="dark"]) .btn-back {
+  background: transparent;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    pipeline-detail.component.css
    Light theme — aligned with overview & pipelines-list
@@ -1351,3 +1379,101 @@
   .pipeline-main-title h1 { font-size: 1.3rem; }
   .meta-chip { font-size: 0.67rem; }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .btn-vuln { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .btn-stop { background: #111827; }
+:host-context([data-theme="dark"]) .btn-back { background: #111827; color: #f1f5f9; border: 1px solid #334155; }
+:host-context([data-theme="dark"]) .btn-back:hover { color: hsl(17, 85%, 70%); }
+:host-context([data-theme="dark"]) .user-main { background: #0b1220; }
+:host-context([data-theme="dark"]) .pipeline-page { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .pipeline-header { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pipeline-kind-badge { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pipeline-main-title h1 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .pipeline-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pipeline-meta strong { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .meta-chip { background: #0b1220; border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .meta-chip strong { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .status-success { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-failed,
+:host-context([data-theme="dark"]) .status-canceled { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-running,
+:host-context([data-theme="dark"]) .status-pending { background: #0b1220; }
+:host-context([data-theme="dark"]) .btn-gitlab { background: #0b1220; border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .btn-gitlab:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .sonar-btn { border: 1px solid #1f2937; background: hsla(48, 75%, 50%, 0.14); color: hsl(23, 83%, 70%); }
+:host-context([data-theme="dark"]) .spinner { border: 2px solid #1f2937; }
+:host-context([data-theme="dark"]) .warning-banner { background: #0b1220; color: hsl(23, 83%, 70%); }
+:host-context([data-theme="dark"]) .warning-banner-body strong { color: hsl(22, 78%, 70%); }
+:host-context([data-theme="dark"]) .deploy-result-banner { background: #0b1220; color: hsl(144, 61%, 70%); }
+:host-context([data-theme="dark"]) .deploy-result-banner--pending { background: #0b1220; border-color: #1f2937; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .deploy-result-body p { color: hsl(143, 64%, 70%); }
+:host-context([data-theme="dark"]) .deploy-result-smoke--warn { color: hsl(26, 85%, 70%) !important; }
+:host-context([data-theme="dark"]) .pipeline-progress-bar { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pipeline-progress-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .deploy-step-done { color: hsl(143, 64%, 70%); }
+:host-context([data-theme="dark"]) .info-banner { background: #0b1220; color: hsl(226, 71%, 70%); }
+:host-context([data-theme="dark"]) .info-banner-body strong { color: hsl(224, 64%, 70%); }
+:host-context([data-theme="dark"]) .logs-unavailable { background: #0b1220; border: 1px dashed #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .error-banner { background: #0b1220; }
+:host-context([data-theme="dark"]) .jobs-card,
+:host-context([data-theme="dark"]) .details-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .card-header-bar { border-bottom: 1px solid #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .card-header-bar h2 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stage-group { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .stage-title { background: #0b1220; border-bottom: 1px solid #1f2937; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stage-retry { border: 1px solid #1f2937; background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stage-stop { background: #111827; }
+:host-context([data-theme="dark"]) .jobs-list li { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .jobs-list li:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .jobs-list li.selected { background: #0b1220; }
+:host-context([data-theme="dark"]) .jobs-list li.selected { background: #0b1220; }
+:host-context([data-theme="dark"]) .job-name { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .job-duration { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .job-retry { border: 1px solid #1f2937; background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .job-ask-ai { border: 1px solid color-mix(in srgb, #f97316 35%, #1f2937); background: color-mix(in srgb, #f97316 10%, #111827); }
+:host-context([data-theme="dark"]) .job-ask-ai:hover { background: color-mix(in srgb, #f97316 20%, #111827); }
+:host-context([data-theme="dark"]) .placeholder { background: #0b1220; border: 1px dashed #1f2937; }
+:host-context([data-theme="dark"]) .job-detail-header { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .job-detail-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .badge-muted { background: #0b1220; color: #a5b4c8; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .loading-state { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .logs-section-header h4 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .logs-section pre { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .logs-console { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) ::ng-deep .logs-console .log-time { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vulnerabilities-summary { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-count { color: hsl(0, 63%, 70%); }
+:host-context([data-theme="dark"]) .json-details { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .json-details summary { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .json-details summary:hover { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .json-details pre { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .ai-analysis-block { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .log-ai-block { background: color-mix(in srgb, #f97316 8%, #111827); border: 1px solid color-mix(in srgb, #f97316 28%, #1f2937); }
+:host-context([data-theme="dark"]) .log-ai-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .log-ai-context { color: #a5b4c8; background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .log-ai-clear-btn { border: 1px solid #1f2937; background: #111827; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-chat-msg { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .ai-chat-msg--user { background: color-mix(in srgb, #f97316 10%, #111827); border-color: color-mix(in srgb, #f97316 25%, #1f2937); }
+:host-context([data-theme="dark"]) .ai-chat-text { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .log-ai-input { border: 1px solid #1f2937; background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .log-ai-list h5 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .log-ai-list ol,
+:host-context([data-theme="dark"]) .log-ai-list ul { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-hint { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-error { background: #0b1220; }
+:host-context([data-theme="dark"]) .ai-result { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .ai-summary-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .ai-summary { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-vuln-list h5 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .ai-vuln-item { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .ai-vuln-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .ai-sev-info { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-vuln-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .ai-vuln-desc,
+:host-context([data-theme="dark"]) .ai-vuln-fix { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .ai-vuln-fix { background: #0b1220; }
+:host-context([data-theme="dark"]) .ai-no-vuln { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .loading-page { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .empty-state { color: #a5b4c8; background: #0b1220; border: 1px dashed #1f2937; }
+/* === Fin du mode nuit généré === */

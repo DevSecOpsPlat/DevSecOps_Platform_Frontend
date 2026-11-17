@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { ChangeDetectorRef, Component, ElementRef, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -113,8 +114,28 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     private aiAnalysisService: AiAnalysisService,
     private sanitizer: DomSanitizer,
     private appMgmt: ApplicationManagementService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private location: Location
   ) {}
+
+  /**
+   * Retour à la page d'origine (tableau de bord, liste des pipelines…). Sans historique interne
+   * (lien ouvert directement), retour au tableau de bord du service ou de l'application.
+   */
+  goBack(): void {
+    const navigationId = (window.history.state as { navigationId?: number } | null)?.navigationId;
+    if (typeof navigationId === 'number' && navigationId > 1) {
+      this.location.back();
+      return;
+    }
+    if (this.contextAppId) {
+      this.router.navigate(this.managedAppContext
+        ? ['/projects', this.contextAppId, 'dashboard']
+        : ['/project', this.contextAppId, 'overview']);
+      return;
+    }
+    this.router.navigate(['/pipelines']);
+  }
 
   ngOnInit(): void {
     combineLatest([
@@ -123,7 +144,9 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     ]).pipe(
       map(([pm, qm]) => ({
         pipelineId: pm.get('pipelineId') || '',
-        envId: pm.get('envId') || '',
+        // envId : paramètre de route (ancienne page /pipeline/:envId) ou query param
+        // (/project/:appId/pipeline-detail?envId=… : même barre latérale que le service).
+        envId: pm.get('envId') || qm.get('envId') || '',
         kind: (qm.get('kind') || '').toUpperCase()
       })),
       distinctUntilChanged((a, b) =>
@@ -156,7 +179,9 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.inAppShell = this.isInAppShell();
 
     const pipelineIdParam = this.route.snapshot.paramMap.get('pipelineId');
-    this.envId = this.route.snapshot.paramMap.get('envId') || '';
+    this.envId = this.route.snapshot.paramMap.get('envId')
+      || this.route.snapshot.queryParamMap.get('envId')
+      || '';
     this.pipelineIdOnly = null;
 
     if (pipelineIdParam) {

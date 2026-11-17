@@ -1,0 +1,110 @@
+<div class="asi">
+  <!-- Évolution par sévérité -->
+  <article class="asi-card asi-card--chart">
+    <header class="asi-head">
+      <div>
+        <h3 class="asi-title">Évolution par sévérité</h3>
+        <p class="asi-sub">{{ subtitle }} · tous services confondus</p>
+      </div>
+      <div class="asi-gran" role="group" aria-label="Granularité" *ngIf="hasChart && !loading">
+        <button type="button" [class.active]="granularity === 'day'" (click)="setGranularity('day')">Jour</button>
+        <button type="button" [class.active]="granularity === 'week'" (click)="setGranularity('week')">Semaine</button>
+        <button type="button" [class.active]="granularity === 'month'" (click)="setGranularity('month')">Mois</button>
+      </div>
+    </header>
+
+    <div class="asi-legend" *ngIf="hasChart && !loading">
+      <span class="asi-legend-item" *ngFor="let sev of severities">
+        <span class="asi-legend-dot" [style.background]="sevColor(sev)"></span>{{ severityLabel(sev) }}
+      </span>
+    </div>
+
+    <div class="asi-chart-body">
+      <div class="asi-loading" *ngIf="loading"><span class="asi-spinner"></span> Chargement du graphique…</div>
+      <p class="asi-error" *ngIf="!loading && error">{{ error }}</p>
+
+      <div class="asi-chart" *ngIf="!loading && hasChart">
+        <div class="asi-svg-row">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="asi-svg" role="img"
+               aria-label="Évolution des vulnérabilités ouvertes par sévérité">
+            <line *ngFor="let t of yTicks" x1="0" [attr.y1]="t.y" x2="100" [attr.y2]="t.y"
+                  [class.asi-axis]="t.value === 0" [class.asi-grid]="t.value !== 0"
+                  vector-effect="non-scaling-stroke"></line>
+            <path *ngFor="let s of series" [attr.d]="s.path" fill="none" [attr.stroke]="s.color"
+                  vector-effect="non-scaling-stroke" class="asi-line">
+              <title>{{ severityLabel(s.sev) }}</title>
+            </path>
+          </svg>
+          <div class="asi-yaxis">
+            <span *ngFor="let t of yTicks" [style.top.%]="t.y">{{ t.value }}</span>
+          </div>
+        </div>
+        <div class="asi-xlabels">
+          <span *ngFor="let l of labels">{{ l }}</span>
+        </div>
+      </div>
+
+      <div class="asi-empty" *ngIf="!loading && !error && !hasChart">
+        <span class="asi-empty-ico" aria-hidden="true">📊</span>
+        <p>Aucun scan importé pour le moment</p>
+        <small>Lancez un scan de l'application pour suivre l'évolution des vulnérabilités.</small>
+      </div>
+    </div>
+  </article>
+
+  <!-- Score et outils -->
+  <article class="asi-card asi-card--score">
+    <header class="asi-head">
+      <div>
+        <h3 class="asi-title">Score et outils</h3>
+        <p class="asi-sub">Posture du dernier scan · {{ activeScannerCount }}/{{ scannerRows.length }} outils avec des résultats</p>
+      </div>
+      <button type="button" class="asi-link" (click)="openQualityGate.emit()">Quality Gate →</button>
+    </header>
+
+    <div class="asi-score-row">
+      <div class="asi-ring" [style.--pct]="hasScore ? animatedScore : 0" [style.--ring]="scoreColor"
+           [class.asi-ring--empty]="!hasScore">
+        <span class="asi-ring-grade">{{ grade }}</span>
+        <span class="asi-ring-score">{{ hasScore ? animatedScore + '/100' : '—' }}</span>
+      </div>
+      <div class="asi-score-text">
+        <span class="asi-verdict" [ngClass]="'asi-verdict--' + tone">{{ verdictLabel }}</span>
+        <p class="asi-score-note" *ngIf="hasScore && weakestService">
+          Score du service le plus faible : <strong>{{ weakestService }}</strong>.
+        </p>
+        <p class="asi-score-note" *ngIf="!hasScore">
+          Le score apparaît après un scan complet de l'application.
+        </p>
+        <div class="asi-sev-pills">
+          <span class="asi-pill asi-pill--critical"><strong>{{ sevCount('critical') }}</strong> critiques</span>
+          <span class="asi-pill asi-pill--high"><strong>{{ sevCount('high') }}</strong> élevées</span>
+          <span class="asi-pill"><strong>{{ sevCount('medium') }}</strong> moyennes</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="asi-tools">
+      <li class="asi-tool" *ngFor="let t of scannerRows; let i = index" [class.asi-tool--off]="!t.active" [style.--i]="i">
+        <img class="asi-tool-icon" [src]="t.icon" alt="" width="22" height="22" loading="lazy" />
+        <div class="asi-tool-main">
+          <div class="asi-tool-top">
+            <span class="asi-tool-name">{{ t.name }}</span>
+            <span class="asi-tool-type">{{ t.type }}</span>
+          </div>
+          <span class="asi-tool-track" *ngIf="t.total > 0">
+            <span class="asi-tool-fill" [style.width.%]="t.pct">
+              <span class="asi-tool-seg" *ngFor="let seg of t.segments" [style.width.%]="seg.pct"
+                    [style.background]="seg.color" [title]="severityLabel(seg.sev) + ' : ' + seg.value"></span>
+            </span>
+          </span>
+        </div>
+        <span class="asi-tool-count" *ngIf="t.active">{{ t.total }}</span>
+        <span class="asi-tool-status" *ngIf="!t.active">Aucun résultat</span>
+      </li>
+    </ul>
+    <button type="button" class="asi-link asi-link--block" (click)="openVulnerabilities.emit()">
+      Voir toutes les vulnérabilités →
+    </button>
+  </article>
+</div>

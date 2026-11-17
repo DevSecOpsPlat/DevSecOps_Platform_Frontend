@@ -593,3 +593,34 @@
     width: fit-content;
   }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .activity-page-container { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .activity-page-header { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .back-btn { background: #111827; border: 1px solid #1f2937; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .back-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .header-title h1 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .subtitle { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .refresh-btn { background: #111827; border: 1px solid #1f2937; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .refresh-btn:hover:not(:disabled) { background: #0b1220; }
+:host-context([data-theme="dark"]) .filter-btn { background: #111827; border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .activity-timeline::before { background: #0b1220; }
+:host-context([data-theme="dark"]) .timeline-content { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .timeline-title h3 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .timeline-description { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .timeline-time { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .timeline-time[data-tooltip]:hover:after { background: #0b1220; color: hsl(222, 47%, 70%); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .meta-item { color: #a5b4c8; background: #0b1220; }
+:host-context([data-theme="dark"]) .timeline-footer { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .status-canceled { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .activity-loading { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .loading-spinner { border: 2px solid #1f2937; }
+:host-context([data-theme="dark"]) .empty-state { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .empty-state h3 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .skeleton-title { background: linear-gradient(90deg, #111827 25%, #0b1220 50%, #111827 75%); }
+:host-context([data-theme="dark"]) .skeleton-marker { background: #0b1220; }
+:host-context([data-theme="dark"]) .skeleton-content { background: #111827; }
+:host-context([data-theme="dark"]) .skeleton-line { background: linear-gradient(90deg, #111827 25%, #0b1220 50%, #111827 75%); }
+:host-context([data-theme="dark"]) .load-more-btn { background: #111827; border: 1px solid #1f2937; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .load-more-btn:hover { background: #0b1220; }
+/* === Fin du mode nuit généré === */

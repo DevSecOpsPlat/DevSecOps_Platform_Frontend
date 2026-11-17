@@ -1,333 +1,339 @@
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-
-<div class="siem-dashboard">
-  <header class="siem-head">
-    <div>
-      <p class="siem-kicker"><i class="fas fa-shield-alt"></i> SOC · Attijari Bank · EnviroTest</p>
-      <h1 class="siem-title"><i class="fas fa-radar"></i> Centre de sécurité</h1>
-      <p class="siem-lead">Surveillance sécurité — alertes, menaces et blocages IP (historique complet).</p>
+<div class="adm-page">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <p class="adm-eyebrow">Sécurité · SOC</p>
+      <h1 class="adm-hero-title">Centre de sécurité</h1>
+      <p class="adm-hero-lead">
+        Menaces détectées sur la plateforme — connexions échouées, force brute, scans, injections, pics de requêtes —
+        et adresses IP bloquées. Les événements d'exécution des applications restent dans leur monitoring.
+      </p>
     </div>
-    <button type="button" class="siem-refresh" (click)="loadAll()">
-      <i class="fas fa-sync-alt"></i> Actualiser
-    </button>
+    <div class="adm-hero-actions">
+      <button type="button" class="adm-btn adm-btn--on-dark" [class.is-busy]="loading" (click)="loadAll()">Actualiser</button>
+    </div>
   </header>
 
-  <div *ngIf="loading && !dashboard" class="siem-state">
-    <i class="fas fa-spinner fa-pulse"></i> Chargement du tableau de bord…
-  </div>
-  <div *ngIf="error" class="siem-state siem-state--err"><i class="fas fa-times-circle"></i> {{ error }}</div>
+  <div *ngIf="loading && !dashboard" class="adm-state"><span class="adm-spinner"></span> Chargement du tableau de bord…</div>
+  <div *ngIf="error" class="adm-alert adm-alert--danger"><span class="adm-alert-body">{{ error }}</span></div>
 
   <ng-container *ngIf="dashboard">
-    <!-- KPIs -->
-    <section class="kpi-grid">
-      <article
-        class="kpi-card kpi-card--clickable"
-        [class.kpi-card--open]="expandedKpiKey === 'alerts'"
-        (click)="toggleKpiPanel('alerts')"
-      >
-        <div class="kpi-icon kpi-icon--blue"><i class="fas fa-bell"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">Total alertes</span>
-          <span class="kpi-value">{{ dashboard.kpis.alertsTotal }}</span>
-          <span class="kpi-hint">{{ kpiPanel('alerts')?.countHint }}</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('alerts') }}</div>
-      </article>
-
-      <article
-        class="kpi-card kpi-card--clickable"
-        [class.kpi-card--open]="expandedKpiKey === 'blocked'"
-        (click)="toggleKpiPanel('blocked')"
-      >
-        <div class="kpi-icon kpi-icon--slate"><i class="fas fa-ban"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">IP bloquées</span>
-          <span class="kpi-value">{{ dashboard.kpis.blockedIpsActive }}</span>
-          <span class="kpi-hint">{{ kpiPanel('blocked')?.countHint }}</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('blocked') }}</div>
-      </article>
-
-      <article
-        class="kpi-card kpi-card--clickable"
-        [class.kpi-card--open]="expandedKpiKey === 'brute'"
-        (click)="toggleKpiPanel('brute')"
-      >
-        <div class="kpi-icon kpi-icon--orange"><i class="fas fa-hammer"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">Force brute</span>
-          <span class="kpi-value">{{ dashboard.kpis.bruteForceTotal }}</span>
-          <span class="kpi-hint">{{ kpiPanel('brute')?.countHint }}</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('brute') }}</div>
-      </article>
-
-      <article
-        class="kpi-card kpi-card--clickable kpi-card--danger"
-        [class.kpi-card--open]="expandedKpiKey === 'honeypot'"
-        (click)="toggleKpiPanel('honeypot')"
-      >
-        <div class="kpi-icon kpi-icon--red"><i class="fas fa-spider"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">Honeypot</span>
-          <span class="kpi-value">{{ dashboard.kpis.honeypotTotal }}</span>
-          <span class="kpi-hint">{{ kpiPanel('honeypot')?.countHint }}</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('honeypot') }}</div>
-      </article>
-
-      <article
-        class="kpi-card kpi-card--clickable"
-        [class.kpi-card--open]="expandedKpiKey === 'ratelimit'"
-        (click)="toggleKpiPanel('ratelimit')"
-      >
-        <div class="kpi-icon kpi-icon--amber"><i class="fas fa-tachometer-alt"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">Rate limit / DDoS</span>
-          <span class="kpi-value">{{ dashboard.kpis.rateLimitTotal }}</span>
-          <span class="kpi-hint">DDoS applicatif = trop de requêtes/IP</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('ratelimit') }}</div>
-      </article>
-
-      <article
-        class="kpi-card kpi-card--clickable"
-        [class.kpi-card--open]="expandedKpiKey === 'xsssql'"
-        (click)="toggleKpiPanel('xsssql')"
-      >
-        <div class="kpi-icon kpi-icon--indigo"><i class="fas fa-bug"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">XSS / SQLi</span>
-          <span class="kpi-value">{{ dashboard.kpis.xssSqlTotal }}</span>
-          <span class="kpi-hint">{{ kpiPanel('xsssql')?.countHint }}</span>
-        </div>
-        <div class="kpi-tooltip" role="tooltip">{{ kpiHover('xsssql') }}</div>
-      </article>
+    <!-- Indicateurs : un clic ouvre le détail juste en dessous -->
+    <section class="adm-kpis" aria-label="Indicateurs de sécurité">
+      <button type="button" class="adm-kpi adm-has-tip" [class.is-active]="expandedKpiKey === 'alerts'" (click)="toggleKpiPanel('alerts')">
+        <span class="adm-kpi-icon adm-kpi-icon--danger"><app-admin-icon name="shield-alert"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Alertes de sécurité</span>
+          <span class="adm-kpi-value">{{ dashboard.kpis.alertsTotal }}</span>
+          <span class="adm-kpi-meta">{{ kpiPanel('alerts')?.countHint }}</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('alerts') }}</span>
+      </button>
+      <button type="button" class="adm-kpi adm-has-tip" [class.is-active]="expandedKpiKey === 'blocked'" (click)="toggleKpiPanel('blocked')">
+        <span class="adm-kpi-icon adm-kpi-icon--warning"><app-admin-icon name="ban"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">IP bloquées</span>
+          <span class="adm-kpi-value" [class.adm-kpi-value--accent]="dashboard.kpis.blockedIpsActive > 0">{{ dashboard.kpis.blockedIpsActive }}</span>
+          <span class="adm-kpi-meta">{{ kpiPanel('blocked')?.countHint }}</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('blocked') }}</span>
+      </button>
+      <button type="button" class="adm-kpi adm-has-tip" [class.adm-kpi--danger]="dashboard.kpis.bruteForceTotal > 0" [class.is-active]="expandedKpiKey === 'brute'" (click)="toggleKpiPanel('brute')">
+        <span class="adm-kpi-icon adm-kpi-icon--danger"><app-admin-icon name="key"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Force brute</span>
+          <span class="adm-kpi-value">{{ dashboard.kpis.bruteForceTotal }}</span>
+          <span class="adm-kpi-meta">{{ kpiPanel('brute')?.countHint }}</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('brute') }}</span>
+      </button>
+      <button type="button" class="adm-kpi adm-has-tip" [class.adm-kpi--danger]="dashboard.kpis.honeypotTotal > 0" [class.is-active]="expandedKpiKey === 'honeypot'" (click)="toggleKpiPanel('honeypot')">
+        <span class="adm-kpi-icon adm-kpi-icon--info"><app-admin-icon name="crosshair"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Honeypot et scans</span>
+          <span class="adm-kpi-value">{{ dashboard.kpis.honeypotTotal }}</span>
+          <span class="adm-kpi-meta">{{ kpiPanel('honeypot')?.countHint }}</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('honeypot') }}</span>
+      </button>
+      <button type="button" class="adm-kpi adm-has-tip" [class.is-active]="expandedKpiKey === 'ratelimit'" (click)="toggleKpiPanel('ratelimit')">
+        <span class="adm-kpi-icon adm-kpi-icon--warning"><app-admin-icon name="gauge"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">Rate limit / DDoS</span>
+          <span class="adm-kpi-value">{{ dashboard.kpis.rateLimitTotal }}</span>
+          <span class="adm-kpi-meta">Trop de requêtes par IP</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('ratelimit') }}</span>
+      </button>
+      <button type="button" class="adm-kpi adm-has-tip" [class.adm-kpi--danger]="dashboard.kpis.xssSqlTotal > 0" [class.is-active]="expandedKpiKey === 'xsssql'" (click)="toggleKpiPanel('xsssql')">
+        <span class="adm-kpi-icon adm-kpi-icon--danger"><app-admin-icon name="code"></app-admin-icon></span>
+        <span class="adm-kpi-body">
+          <span class="adm-kpi-label">XSS / injection SQL</span>
+          <span class="adm-kpi-value">{{ dashboard.kpis.xssSqlTotal }}</span>
+          <span class="adm-kpi-meta">{{ kpiPanel('xsssql')?.countHint }}</span>
+        </span>
+        <span class="adm-tip" role="tooltip">{{ kpiHover('xsssql') }}</span>
+      </button>
     </section>
 
-    <!-- Graphiques -->
-    <section class="charts-grid">
-      <article class="chart-panel chart-panel--wide">
-        <h2><i class="fas fa-chart-line"></i> Alertes de sécurité par jour</h2>
-        <p class="chart-caption">Nombre total d'alertes enregistrées chaque jour (tous types : honeypot, XSS, force brute, rate limit…).</p>
-        <div class="chart-box"><canvas #lineCanvas></canvas></div>
-      </article>
-      <article class="chart-panel">
-        <h2><i class="fas fa-chart-pie"></i> Répartition par type</h2>
-        <div class="chart-box chart-box--donut"><canvas #doughnutCanvas></canvas></div>
-      </article>
-      <article class="chart-panel">
-        <h2><i class="fas fa-chart-bar"></i> Top 5 IPs malveillantes</h2>
-        <div class="chart-box"><canvas #barCanvas></canvas></div>
-      </article>
-    </section>
-  </ng-container>
-
-  <!-- Protection des données -->
-  <section class="table-section" *ngIf="dataProtection">
-    <button type="button" class="table-head" style="width:100%;background:none;border:0;cursor:pointer;text-align:left;" (click)="toggleDataProtection()">
-      <h2><i class="fas fa-lock"></i> Protection des données</h2>
-      <span class="table-count">{{ dataProtectionOpen ? 'Masquer' : 'Afficher' }} <i class="fas" [class.fa-chevron-down]="!dataProtectionOpen" [class.fa-chevron-up]="dataProtectionOpen"></i></span>
-    </button>
-    <div *ngIf="dataProtectionOpen" style="padding:1rem 1.25rem;">
-      <h3>En transit</h3>
-      <p>{{ dataProtection.inTransit.protocol }} — {{ dataProtection.inTransit.description }}</p>
-      <p class="muted">HSTS : {{ dataProtection.inTransit.hstsEnabled ? 'actif' : 'inactif' }} · HTTPS imposé : {{ dataProtection.inTransit.requireHttpsEnforced ? 'oui' : 'non' }}</p>
-      <ul>
-        <li *ngFor="let h of dataProtection.inTransit.headers">{{ h }}</li>
-      </ul>
-      <h3>Au repos</h3>
-      <p>{{ dataProtection.atRest.algorithm }} — clé : {{ dataProtection.atRest.keySource }}</p>
-      <p class="muted" *ngIf="!dataProtection.atRest.productionKeyConfigured">⚠ Clé de production non configurée (valeur par défaut, développement uniquement)</p>
-      <ul>
-        <li *ngFor="let f of dataProtection.atRest.encryptedFields">{{ f.label }} ({{ f.table }}.{{ f.column }})</li>
-      </ul>
-      <p class="muted">{{ dataProtection.atRest.databaseNote }}</p>
-      <h3>Jamais persisté</h3>
-      <p class="muted">Codes OTP e-mail : {{ dataProtection.ephemeralSecrets.otpEmailCodes }}</p>
-      <p class="muted">Jeton JWT : {{ dataProtection.ephemeralSecrets.jwtAccessToken }}</p>
-      <p><strong>{{ dataProtection.complianceNote }}</strong></p>
-    </div>
-  </section>
-
-  <!-- Panneau détail KPI (clic sur une carte) -->
-  <section class="kpi-detail-panel" *ngIf="activeKpiPanel">
-    <header class="kpi-detail-head">
-      <div>
-        <h2><i class="fas fa-info-circle"></i> {{ activeKpiPanel.title }}</h2>
-        <p class="kpi-detail-desc">{{ activeKpiPanel.hoverDescription }}</p>
-        <p class="kpi-detail-count">{{ activeKpiPanel.countHint }}</p>
-      </div>
-      <div class="kpi-detail-actions">
-        <button
-          type="button"
-          class="btn-link-filter"
-          *ngIf="expandedKpiKey && expandedKpiKey !== 'alerts' && expandedKpiKey !== 'blocked'"
-          (click)="filterTableByKpi(expandedKpiKey!)"
-        >
-          <i class="fas fa-filter"></i> Filtrer le tableau
-        </button>
-        <button type="button" class="kpi-detail-close" (click)="closeKpiPanel()" aria-label="Fermer">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    </header>
-
-    <ul class="kpi-detail-list" *ngIf="expandedKpiKey === 'blocked' && dashboard?.blockedIps?.length">
-      <li *ngFor="let b of dashboard!.blockedIps" class="kpi-detail-item">
-        <div class="kpi-detail-item-main">
-          <strong><code>{{ formatIp(b.ip) }}</code></strong>
-          <span>{{ b.reason }}</span>
-          <span class="muted">
-            {{ b.currentlyActive ? 'Actif' : 'Expiré' }} · source {{ b.source }}
-            · bloqué le {{ formatPanelDate(b.createdAt) }}
-            · jusqu'au {{ formatPanelDate(b.blockedUntil) }}
-          </span>
+    <!-- Détail de l'indicateur sélectionné -->
+    <section class="adm-card adm-card--flush al-detail" *ngIf="activeKpiPanel">
+      <div class="adm-card-head">
+        <div class="adm-grow">
+          <h2 class="adm-card-title">{{ activeKpiPanel.title }}</h2>
+          <p class="adm-card-sub">{{ activeKpiPanel.hoverDescription }}</p>
+          <p class="al-detail-count">{{ activeKpiPanel.countHint }}</p>
         </div>
-        <button type="button" class="btn-unblock" *ngIf="b.currentlyActive" (click)="unblockFromPanel(b, $event)">
-          <i class="fas fa-unlock"></i> Débloquer
-        </button>
-      </li>
-    </ul>
-    <p class="kpi-detail-empty" *ngIf="expandedKpiKey === 'blocked' && !dashboard?.blockedIps?.length">
-      Aucune entrée dans blocked_ips. Les IP expirées restent visibles ici si elles figurent parmi les 50 derniers enregistrements.
-    </p>
+        <div class="adm-toolbar">
+          <button
+            type="button"
+            class="adm-btn adm-btn--secondary adm-btn--sm"
+            *ngIf="expandedKpiKey && expandedKpiKey !== 'alerts' && expandedKpiKey !== 'blocked'"
+            (click)="filterTableByKpi(expandedKpiKey!)"
+          >
+            Filtrer le journal
+          </button>
+          <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm" (click)="closeKpiPanel()">Fermer</button>
+        </div>
+      </div>
 
-    <ng-container *ngIf="expandedKpiKey !== 'blocked'">
-      <ul class="kpi-detail-list" *ngIf="activeKpiPanel?.items?.length">
-        <li *ngFor="let item of activeKpiPanel!.items" class="kpi-detail-item">
-          <div class="kpi-detail-item-main">
-            <strong>{{ item.line1 }}</strong>
-            <span>{{ item.line2 }}</span>
-            <span class="muted">{{ item.line3 }}</span>
-            <span class="muted" *ngIf="item.occurredAt">· {{ formatPanelDate(item.occurredAt) }}</span>
+      <ul class="al-detail-list" *ngIf="expandedKpiKey === 'blocked' && blockedIpDetails.length">
+        <li *ngFor="let b of blockedIpDetails" class="al-detail-item">
+          <div class="adm-grow">
+            <p class="al-detail-line">
+              <span class="adm-mono">{{ formatIp(b.ip) }}</span>
+              <span class="adm-badge" [ngClass]="b.currentlyActive ? 'adm-badge--danger' : 'adm-badge--neutral'">{{ b.currentlyActive ? 'Bloquée' : 'Expirée' }}</span>
+            </p>
+            <p class="al-detail-text">{{ b.reason }}</p>
+            <p class="al-detail-meta">
+              {{ b.source === 'MANUAL' ? 'Blocage manuel' : 'Blocage automatique' }} · le {{ formatPanelDate(b.createdAt) }} · jusqu'au {{ formatPanelDate(b.blockedUntil) }}
+            </p>
           </div>
+          <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" *ngIf="b.currentlyActive" (click)="unblockFromPanel(b, $event)">Débloquer</button>
         </li>
       </ul>
-      <p class="kpi-detail-empty" *ngIf="!activeKpiPanel?.items?.length">
-        Aucune alerte de ce type en base. Vérifiez la table <code>alerts</code> dans PostgreSQL.
-      </p>
-    </ng-container>
-  </section>
-  <section class="table-section">
-    <div class="table-head">
-      <h2><i class="fas fa-list"></i> Journal des alertes</h2>
-      <span class="table-count">{{ totalElements }} entrée(s)</span>
+      <p class="al-detail-empty" *ngIf="expandedKpiKey === 'blocked' && !blockedIpDetails.length">Aucune IP bloquée enregistrée.</p>
+
+      <ng-container *ngIf="expandedKpiKey !== 'blocked'">
+        <ul class="al-detail-list" *ngIf="panelItems.length">
+          <li *ngFor="let item of panelItems" class="al-detail-item">
+            <div class="adm-grow">
+              <p class="al-detail-line"><strong>{{ item.line1 }}</strong></p>
+              <p class="al-detail-text">{{ item.line2 }}</p>
+              <p class="al-detail-meta">{{ item.line3 }}<ng-container *ngIf="item.occurredAt"> · {{ formatPanelDate(item.occurredAt) }}</ng-container></p>
+            </div>
+          </li>
+        </ul>
+        <p class="al-detail-empty" *ngIf="!panelItems.length">Aucune alerte de ce type enregistrée.</p>
+      </ng-container>
+    </section>
+
+    <!-- Tendance -->
+    <section class="adm-card">
+      <div class="adm-card-head">
+        <div>
+          <h2 class="adm-card-title">Alertes de sécurité</h2>
+          <p class="adm-card-sub">{{ trendSubtitle }}</p>
+        </div>
+        <div class="adm-tabs" role="group" aria-label="Période affichée">
+          <button
+            type="button"
+            class="adm-tab"
+            *ngFor="let r of trendRanges"
+            [class.is-active]="trendRange === r.key"
+            [attr.aria-pressed]="trendRange === r.key"
+            (click)="setTrendRange(r.key)"
+          >{{ r.label }}</button>
+        </div>
+      </div>
+      <div class="adm-chart"><canvas #lineCanvas></canvas></div>
+    </section>
+
+    <div class="adm-grid adm-grid--3">
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Répartition par type</h2></div>
+        <div class="adm-chart adm-chart--lg"><canvas #doughnutCanvas></canvas></div>
+      </section>
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Top 5 des IP malveillantes</h2></div>
+        <div class="adm-chart adm-chart--lg"><canvas #barCanvas></canvas></div>
+      </section>
+      <section class="adm-card adm-card--flush">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">IP bloquées</h2>
+            <p class="adm-card-sub">{{ dashboard.kpis.blockedIpsActive }} active(s) · {{ blockedIpDetails.length }} au total</p>
+          </div>
+        </div>
+        <ul class="al-blocked" *ngIf="blockedIpDetails.length; else noBlocked">
+          <li *ngFor="let b of blockedIpDetails.slice(0, 7)">
+            <div class="adm-grow">
+              <span class="adm-mono al-blocked-ip">{{ formatIp(b.ip) }}</span>
+              <span class="adm-cell-sub">{{ b.reason }}</span>
+            </div>
+            <span class="adm-badge" [ngClass]="b.currentlyActive ? 'adm-badge--danger' : 'adm-badge--neutral'">{{ b.currentlyActive ? 'Bloquée' : 'Expirée' }}</span>
+          </li>
+        </ul>
+        <ng-template #noBlocked><div class="adm-empty"><p class="adm-empty-text">Aucune IP bloquée.</p></div></ng-template>
+      </section>
+    </div>
+  </ng-container>
+
+  <!-- Journal des alertes -->
+  <section class="adm-card adm-card--flush">
+    <div class="adm-card-head">
+      <div>
+        <h2 class="adm-card-title">Journal des alertes</h2>
+        <p class="adm-card-sub">Les lignes en gras ne sont pas encore lues.</p>
+      </div>
+      <span class="adm-count"><strong>{{ totalElements }}</strong> entrée(s)</span>
     </div>
 
-    <div class="filters">
-      <label>
-        <span>Type</span>
-        <select [(ngModel)]="filterType" (change)="onFilterChange()">
+    <div class="al-filters">
+      <label class="adm-field">
+        <span class="adm-label">Type</span>
+        <select class="adm-select" [(ngModel)]="filterType" (change)="onFilterChange()">
           <option value="">Tous</option>
-          <option *ngFor="let t of typeOptions" [value]="t" [hidden]="!t">{{ typeLabel(t) }}</option>
+          <ng-container *ngFor="let t of typeOptions">
+            <option *ngIf="t" [value]="t">{{ typeLabel(t) }}</option>
+          </ng-container>
         </select>
       </label>
-      <label>
-        <span>IP</span>
-        <input type="text" [(ngModel)]="filterIp" placeholder="192.168…" (keyup.enter)="onFilterChange()" />
+      <label class="adm-field">
+        <span class="adm-label">Adresse IP</span>
+        <input class="adm-input" type="text" [(ngModel)]="filterIp" placeholder="203.0.113…" (keyup.enter)="onFilterChange()" />
       </label>
-      <label>
-        <span>Du</span>
-        <input type="date" [(ngModel)]="filterFrom" (change)="onFilterChange()" />
+      <label class="adm-field">
+        <span class="adm-label">Du</span>
+        <input class="adm-input" type="date" [(ngModel)]="filterFrom" (change)="onFilterChange()" />
       </label>
-      <label>
-        <span>Au</span>
-        <input type="date" [(ngModel)]="filterTo" (change)="onFilterChange()" />
+      <label class="adm-field">
+        <span class="adm-label">Au</span>
+        <input class="adm-input" type="date" [(ngModel)]="filterTo" (change)="onFilterChange()" />
       </label>
-      <button type="button" class="btn-filter" (click)="onFilterChange()"><i class="fas fa-filter"></i> Filtrer</button>
-      <button type="button" class="btn-reset" (click)="resetFilters()"><i class="fas fa-undo"></i> Réinitialiser</button>
+      <div class="al-filter-actions">
+        <button type="button" class="adm-btn adm-btn--primary" (click)="onFilterChange()">Filtrer</button>
+        <button type="button" class="adm-btn adm-btn--ghost" (click)="resetFilters()">Réinitialiser</button>
+      </div>
     </div>
 
-    <div class="table-wrap" *ngIf="!loading || alerts.length">
-      <table>
+    <div class="adm-table-wrap" *ngIf="!loading || alerts.length">
+      <table class="adm-table al-table">
         <thead>
           <tr>
             <th>Date</th>
             <th>Type</th>
             <th>Description</th>
-            <th>IP</th>
-            <th>Statut</th>
-            <th>Actions</th>
+            <th>Adresse IP</th>
+            <th class="shrink"><span class="adm-sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           <tr
             *ngFor="let alert of alerts"
-            [class.row-unread]="alert.status === 'NON_LUE'"
-            [class.row-critical]="typeSeverity(alert.type) === 'critical'"
+            [class.al-unread]="alert.status === 'NON_LUE'"
+            [class.is-clickable]="!!alert.relatedUserId"
             (click)="openUser(alert)"
-            [class.clickable]="!!alert.relatedUserId"
           >
-            <td class="nowrap">{{ formatDate(alert.createdAt) }}</td>
-            <td>
-              <span class="badge" [class]="'badge--' + typeSeverity(alert.type)">{{ typeLabel(alert.type) }}</span>
+            <td class="adm-nowrap">{{ formatDate(alert.createdAt) }}</td>
+            <td class="adm-nowrap">
+              <span class="al-type" [ngClass]="'al-type--' + typeSeverity(alert.type)">{{ typeLabel(alert.type) }}</span>
             </td>
-            <td class="desc">{{ formatDescription(alert) }}</td>
-            <td class="ip-col">
-              <code>{{ formatIp(alert.ipAddress) }}</code>
-              <button
-                type="button"
-                class="btn-block-ip"
-                *ngIf="alert.ipAddress && !isIpBlocked(alert.ipAddress)"
-                [disabled]="blockingIp === alert.ipAddress"
-                (click)="blockIpFromRow(alert, $event)"
-                title="Bloquer cette IP (60 min)"
-              >
-                <i class="fas fa-lock"></i>
-              </button>
-              <button
-                type="button"
-                class="btn-block-ip btn-block-ip--unblock"
-                *ngIf="alert.ipAddress && isIpBlocked(alert.ipAddress)"
-                [disabled]="blockingIp === alert.ipAddress"
-                (click)="unblockIpFromRow(alert, $event)"
-                title="Débloquer cette IP"
-              >
-                <i class="fas fa-unlock"></i>
-              </button>
+            <td class="al-desc">{{ formatDescription(alert) }}</td>
+            <td class="adm-nowrap">
+              <span class="adm-mono">{{ formatIp(alert.ipAddress) }}</span>
+              <span class="al-ip-state" *ngIf="alert.ipAddress && isIpBlocked(alert.ipAddress)">bloquée</span>
             </td>
-            <td>
-              <span class="status" [class.status--unread]="alert.status === 'NON_LUE'">
-                {{ alert.status === 'NON_LUE' ? 'Non lue' : 'Lue' }}
-              </span>
-            </td>
-            <td class="actions">
-              <button type="button" class="btn-icon" (click)="openDetails(alert, $event)" title="Détails">
-                <i class="fas fa-eye"></i>
-              </button>
-              <button type="button" class="btn-icon" (click)="markRead(alert, $event)" [disabled]="alert.status === 'LUE'" title="Marquer lue">
-                <i class="fas fa-check"></i>
-              </button>
-              <button type="button" class="btn-icon btn-icon--danger" (click)="remove(alert, $event)" title="Supprimer">
-                <i class="fas fa-trash-alt"></i>
-              </button>
+            <td class="shrink">
+              <div class="adm-cell-actions al-actions">
+                <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm" (click)="openDetails(alert, $event)">Détails</button>
+                <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm" *ngIf="alert.status === 'NON_LUE'" (click)="markRead(alert, $event)">Marquer lue</button>
+                <button
+                  type="button"
+                  class="adm-btn adm-btn--ghost adm-btn--sm"
+                  *ngIf="alert.ipAddress && !isIpBlocked(alert.ipAddress)"
+                  [disabled]="blockingIp === alert.ipAddress"
+                  (click)="blockIpFromRow(alert, $event)"
+                >Bloquer l'IP</button>
+                <button
+                  type="button"
+                  class="adm-btn adm-btn--ghost adm-btn--sm"
+                  *ngIf="alert.ipAddress && isIpBlocked(alert.ipAddress)"
+                  [disabled]="blockingIp === alert.ipAddress"
+                  (click)="unblockIpFromRow(alert, $event)"
+                >Débloquer</button>
+                <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm al-delete" (click)="remove(alert, $event)">Supprimer</button>
+              </div>
             </td>
           </tr>
           <tr *ngIf="!alerts.length">
-            <td colspan="6" class="empty">Aucune alerte pour ces filtres.</td>
+            <td colspan="5" class="adm-table-empty">Aucune alerte pour ces filtres.</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <nav class="pagination" *ngIf="totalPages > 1">
-      <button type="button" [disabled]="page <= 0" (click)="goPage(page - 1)"><i class="fas fa-chevron-left"></i></button>
+    <nav class="adm-pager" *ngIf="totalPages > 1" aria-label="Pagination">
+      <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page <= 0" (click)="goPage(page - 1)">‹ Précédent</button>
       <span>Page {{ page + 1 }} / {{ totalPages }}</span>
-      <button type="button" [disabled]="page >= totalPages - 1" (click)="goPage(page + 1)"><i class="fas fa-chevron-right"></i></button>
+      <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page >= totalPages - 1" (click)="goPage(page + 1)">Suivant ›</button>
     </nav>
   </section>
-</div>
 
-<!-- Modal détails -->
-<div class="modal-backdrop" *ngIf="detailModalOpen" (click)="closeDetails()"></div>
-<div class="modal" *ngIf="detailModalOpen" role="dialog" aria-modal="true">
-  <header class="modal-head">
-    <h3><i class="fas fa-file-code"></i> Détails de l'alerte</h3>
-    <button type="button" class="modal-close" (click)="closeDetails()"><i class="fas fa-times"></i></button>
-  </header>
-  <div class="modal-body" *ngIf="detailAlert">
-    <p class="modal-summary">{{ formatDescription(detailAlert) }}</p>
-    <pre class="json-block">{{ detailJsonPretty }}</pre>
+  <!-- Protection des données -->
+  <section class="adm-card" *ngIf="dataProtection">
+    <button type="button" class="adm-disclosure" [class.is-open]="dataProtectionOpen" (click)="toggleDataProtection()" [attr.aria-expanded]="dataProtectionOpen">
+      <span>
+        <span class="adm-card-title">Protection des données</span>
+        <span class="adm-card-sub">Chiffrement en transit et au repos, secrets jamais persistés.</span>
+      </span>
+      <span class="adm-disclosure-chevron" aria-hidden="true"></span>
+    </button>
+
+    <div class="al-protection" *ngIf="dataProtectionOpen">
+      <div class="al-protection-block">
+        <h3 class="al-protection-title">En transit</h3>
+        <p>{{ dataProtection.inTransit.protocol }} — {{ dataProtection.inTransit.description }}</p>
+        <div class="al-protection-tags">
+          <span class="adm-badge" [ngClass]="dataProtection.inTransit.hstsEnabled ? 'adm-badge--success' : 'adm-badge--warning'">HSTS {{ dataProtection.inTransit.hstsEnabled ? 'actif' : 'inactif' }}</span>
+          <span class="adm-badge" [ngClass]="dataProtection.inTransit.requireHttpsEnforced ? 'adm-badge--success' : 'adm-badge--warning'">HTTPS {{ dataProtection.inTransit.requireHttpsEnforced ? 'imposé' : 'non imposé' }}</span>
+        </div>
+        <ul class="al-protection-list">
+          <li *ngFor="let h of dataProtection.inTransit.headers"><code class="adm-code">{{ h }}</code></li>
+        </ul>
+      </div>
+      <div class="al-protection-block">
+        <h3 class="al-protection-title">Au repos</h3>
+        <p>{{ dataProtection.atRest.algorithm }} — clé : {{ dataProtection.atRest.keySource }}</p>
+        <div class="adm-alert adm-alert--warning" *ngIf="!dataProtection.atRest.productionKeyConfigured">
+          <span class="adm-alert-body">Clé de production non configurée (valeur par défaut, développement uniquement).</span>
+        </div>
+        <ul class="al-protection-list">
+          <li *ngFor="let f of dataProtection.atRest.encryptedFields">{{ f.label }} <span class="adm-muted adm-mono">({{ f.table }}.{{ f.column }})</span></li>
+        </ul>
+        <p class="adm-muted">{{ dataProtection.atRest.databaseNote }}</p>
+      </div>
+      <div class="al-protection-block">
+        <h3 class="al-protection-title">Jamais persisté</h3>
+        <p class="adm-muted">Codes OTP e-mail : {{ dataProtection.ephemeralSecrets.otpEmailCodes }}</p>
+        <p class="adm-muted">Jeton JWT : {{ dataProtection.ephemeralSecrets.jwtAccessToken }}</p>
+        <p class="al-protection-note">{{ dataProtection.complianceNote }}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modale détails -->
+  <div class="adm-modal-backdrop" *ngIf="detailModalOpen" (click)="closeDetails()" role="presentation"></div>
+  <div class="adm-modal adm-modal--wide" *ngIf="detailModalOpen" role="dialog" aria-modal="true" aria-labelledby="alert-detail-title">
+    <header class="adm-modal-head">
+      <div>
+        <p class="adm-modal-kicker">Alerte de sécurité</p>
+        <h2 id="alert-detail-title" class="adm-modal-title">Détails de l'alerte</h2>
+      </div>
+      <button type="button" class="adm-btn adm-btn--ghost adm-btn--icon" (click)="closeDetails()" aria-label="Fermer">×</button>
+    </header>
+    <div class="adm-modal-body" *ngIf="detailAlert">
+      <p class="al-modal-summary">{{ formatDescription(detailAlert) }}</p>
+      <pre class="adm-pre">{{ detailJsonPretty }}</pre>
+    </div>
   </div>
 </div>

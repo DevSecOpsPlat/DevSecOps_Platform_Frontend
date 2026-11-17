@@ -1,0 +1,247 @@
+<div class="aqg">
+
+  <!-- Chargement -->
+  <div class="qg-loading" *ngIf="loading && !posture">
+    <div class="qg-skeleton qg-skeleton--hero"></div>
+    <div class="qg-skeleton-row"><div class="qg-skeleton qg-skeleton--kpi" *ngFor="let _ of [1,2,3,4,5]"></div></div>
+    <div class="qg-skeleton qg-skeleton--section"></div>
+    <p class="qg-loading-label"><span class="qg-spinner"></span> Chargement du Quality Gate de l'application…</p>
+  </div>
+
+  <div class="qg-banner qg-banner--warn" *ngIf="error && !loading">
+    <span class="qg-banner-ico">⚠</span>
+    <span>{{ error }}</span>
+    <button type="button" class="qg-banner-link" (click)="retry.emit()">Réessayer</button>
+  </div>
+
+  <!-- Lot en cours : un seul message, jamais un ancien verdict à côté -->
+  <section class="aqg-running" *ngIf="!loading && posture && running">
+    <span class="aqg-running-pulse" aria-hidden="true"></span>
+    <div>
+      <h3>Scan de l'application en cours</h3>
+      <p>
+        {{ posture.finishedServiceCount || 0 }}/{{ posture.expectedServiceCount || services.length || 0 }} service(s) terminé(s)
+        <span *ngIf="posture.gitlabPipelineId"> · pipeline #{{ posture.gitlabPipelineId }}</span>.
+        Le verdict s'affichera automatiquement à la fin du lot.
+      </p>
+    </div>
+  </section>
+
+  <!-- Aucun lot -->
+  <section class="aqg-empty" *ngIf="!loading && !error && posture && !hasBatch && !running">
+    <span class="aqg-empty-ico" aria-hidden="true">🛡️</span>
+    <h3>Aucun scan de l'application</h3>
+    <p>Lancez un scan de tous les services pour obtenir un verdict de déploiement et un score.</p>
+    <button type="button" class="aqg-btn aqg-btn--primary" (click)="scan.emit()" [disabled]="scanRunning">
+      🔎 Scanner l'application
+    </button>
+  </section>
+
+  <!-- Lot en échec technique -->
+  <div class="qg-banner qg-banner--warn" *ngIf="!loading && posture && isFailedBatch && !running">
+    <span class="qg-banner-ico">⚠</span>
+    <span>{{ posture.message || 'Le dernier lot de scan a échoué techniquement — relancez un scan.' }}</span>
+    <button type="button" class="qg-banner-link" (click)="scan.emit()" [disabled]="scanRunning">Relancer un scan</button>
+  </div>
+
+  <ng-container *ngIf="!loading && showResult && posture as p">
+
+    <!-- ════ 1. RÉSULTAT ════ -->
+    <section class="qg-verdict-hero" [ngClass]="verdictClass(p.verdict)">
+      <div class="qg-vh-left">
+        <div class="qg-vh-badge">
+          <span class="qg-vh-emoji aqg-pop">{{ verdictEmoji(p.verdict) }}</span>
+          <div>
+            <span class="qg-vh-kicker">Résultat de l'application</span>
+            <h2 class="qg-vh-title">{{ verdictLabel(p.verdict) }}</h2>
+          </div>
+        </div>
+        <p class="qg-vh-summary">{{ heroSummary }}</p>
+        <div class="qg-vh-meta">
+          <span *ngIf="p.gitlabPipelineId">Pipeline #{{ p.gitlabPipelineId }}</span>
+          <span *ngIf="p.batchFinishedAt">· {{ p.batchFinishedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+          <span>· {{ servicesProgress }} services analysés</span>
+          <span class="aqg-tag aqg-tag--warn" *ngIf="isPartialBatch">Lot partiel</span>
+          <span class="aqg-tag aqg-tag--muted" *ngIf="p.obsolete">Code modifié depuis</span>
+        </div>
+        <div class="aqg-hero-actions">
+          <button type="button" class="aqg-btn aqg-btn--primary" *ngIf="canDeploy" (click)="deploy.emit()">🚀 Déployer l'application</button>
+          <button type="button" class="aqg-btn aqg-btn--ghost" (click)="scan.emit()" [disabled]="scanRunning">🔎 Relancer un scan</button>
+        </div>
+      </div>
+
+      <div class="qg-vh-right" *ngIf="hasScore; else noScore">
+        <div class="qg-gauge">
+          <svg viewBox="0 0 120 120" class="qg-gauge-svg" aria-label="Score de posture de l'application">
+            <circle cx="60" cy="60" r="54" class="qg-gauge-track" />
+            <circle cx="60" cy="60" r="54" class="qg-gauge-fill"
+              [attr.stroke]="scoreArcColor" stroke-dasharray="339.292" [attr.stroke-dashoffset]="scoreArcOffset" />
+          </svg>
+          <div class="qg-gauge-center">
+            <span class="qg-gauge-score">{{ animatedScore }}</span>
+            <span class="qg-gauge-grade" [ngClass]="ratingClass(scoreGrade)">{{ scoreGrade }}</span>
+          </div>
+        </div>
+        <span class="qg-gauge-cap">Score de l'application (service le plus faible)</span>
+      </div>
+      <ng-template #noScore>
+        <div class="qg-vh-right qg-vh-right--noscore">
+          <span class="qg-noscore-ico">{{ verdictEmoji(p.verdict) }}</span>
+          <p class="qg-noscore-txt">{{ noScoreMessage }}</p>
+        </div>
+      </ng-template>
+    </section>
+
+    <!-- Barème A→E -->
+    <section class="qg-scale-card" *ngIf="hasScore">
+      <div class="qg-scale-head">
+        <h3 class="qg-scale-title">Votre niveau de posture</h3>
+        <span class="qg-scale-current" [ngClass]="ratingClass(scoreGrade)">{{ animatedScore }}/100 · {{ scoreGrade }}</span>
+      </div>
+      <div class="qg-scale-bar">
+        <div class="qg-scale-seg qg-scale-seg--e">E</div>
+        <div class="qg-scale-seg qg-scale-seg--d">D</div>
+        <div class="qg-scale-seg qg-scale-seg--c">C</div>
+        <div class="qg-scale-seg qg-scale-seg--b">B</div>
+        <div class="qg-scale-seg qg-scale-seg--a">A</div>
+        <div class="qg-scale-marker" [style.left.%]="scaleMarkerLeft" [attr.title]="animatedScore + '/100'">
+          <span class="qg-scale-marker-dot"></span>
+        </div>
+      </div>
+      <div class="qg-scale-legend">
+        <span *ngFor="let g of gradeScale" [class.qg-scale-legend--on]="isCurrentGrade(g.grade)">
+          {{ g.grade }} · {{ g.label }} (≥{{ g.min }})
+        </span>
+      </div>
+    </section>
+
+    <!-- ════ 2. CONDITIONS ════ -->
+    <section class="qg-conditions" *ngIf="conditions.length">
+      <div class="qg-cond-head">
+        <h3 class="qg-cond-title">Conditions de déploiement</h3>
+        <span class="qg-cond-tag">Tolérance zéro — une seule suffit à bloquer</span>
+        <span class="qg-cond-count">{{ conditionsSummary }}</span>
+      </div>
+      <ul class="qg-cond-list">
+        <li *ngFor="let c of conditions; let i = index; trackBy: trackCondition"
+            class="qg-cond-item aqg-stagger" [style.--i]="i" [ngClass]="'qg-cond--' + c.status">
+          <span class="qg-cond-ico">{{ conditionIcon(c.status) }}</span>
+          <div class="qg-cond-body">
+            <span class="qg-cond-label">{{ c.label }}</span>
+            <code class="qg-cond-rule" *ngIf="c.scope">{{ c.scope }}</code>
+            <span class="qg-cond-detail" *ngIf="c.detail">{{ c.detail }}</span>
+          </div>
+          <span class="qg-cond-state">{{ conditionState(c.status) }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Chiffres clés -->
+    <section class="qg-kpis">
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ openTotal }}</span>
+        <span class="qg-kpi-lbl">Ouvertes (tous services)</span>
+      </article>
+      <article class="qg-kpi qg-kpi--crit">
+        <span class="qg-kpi-val">{{ severity('critical') }}</span>
+        <span class="qg-kpi-lbl">Critiques</span>
+      </article>
+      <article class="qg-kpi qg-kpi--high">
+        <span class="qg-kpi-val">{{ severity('high') }}</span>
+        <span class="qg-kpi-lbl">Élevées</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ severity('medium') }}</span>
+        <span class="qg-kpi-lbl">Moyennes</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val">{{ servicesProgress }}</span>
+        <span class="qg-kpi-lbl">Services analysés</span>
+      </article>
+      <article class="qg-kpi">
+        <span class="qg-kpi-val qg-kpi--warn-val">{{ violatedCount }}</span>
+        <span class="qg-kpi-lbl">Conditions violées</span>
+      </article>
+    </section>
+
+    <!-- ════ 3. POURQUOI ════ -->
+    <section class="qg-card qg-why" *ngIf="whyLines.length">
+      <h3 class="qg-card-title"><span class="qg-card-ico">①</span> Pourquoi ce verdict ?</h3>
+      <ul class="qg-why-list">
+        <li *ngFor="let line of whyLines" class="qg-why-item">
+          <span class="qg-why-bullet">›</span><span>{{ line }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ════ 4. PAR SERVICE ════ -->
+    <section class="qg-card" *ngIf="services.length">
+      <div class="qg-card-head">
+        <h3 class="qg-card-title"><span class="qg-card-ico">②</span> Résultat par service</h3>
+        <span class="aqg-hint">Chaque carte ouvre le Quality Gate détaillé du service.</span>
+      </div>
+      <div class="aqg-svc-grid">
+        <article class="aqg-svc aqg-stagger" *ngFor="let s of services; let i = index" [style.--i]="i"
+                 [ngClass]="'aqg-svc--' + toneOf(s.verdict)">
+          <div class="aqg-svc-ring" [style.--pct]="servicePct(s)" [style.--ring]="scoreColor(s.securityScore)"
+               [class.aqg-svc-ring--empty]="s.securityScore == null">
+            <span class="aqg-svc-ring-val">{{ s.securityScore != null ? s.securityScore : '—' }}</span>
+            <span class="aqg-svc-ring-grade" [ngClass]="ratingClass(s.grade || gradeFor(s.securityScore))">
+              {{ s.securityScore != null ? (s.grade || gradeFor(s.securityScore)) : '' }}
+            </span>
+          </div>
+          <div class="aqg-svc-body">
+            <div class="aqg-svc-top">
+              <strong class="aqg-svc-name">{{ s.serviceName || 'Service' }}</strong>
+              <span class="aqg-svc-role" *ngIf="s.serviceRole">{{ s.serviceRole }}</span>
+            </div>
+            <span class="aqg-pill" [ngClass]="pillClass(s.verdict)">{{ verdictLabel(s.verdict) }}</span>
+            <div class="aqg-svc-sev">
+              <span class="aqg-sev aqg-sev--critical" title="Critiques">C {{ severity('critical', s.bySeverity) }}</span>
+              <span class="aqg-sev aqg-sev--high" title="Élevées">É {{ severity('high', s.bySeverity) }}</span>
+              <span class="aqg-sev aqg-sev--medium" title="Moyennes">M {{ severity('medium', s.bySeverity) }}</span>
+              <span class="aqg-sev aqg-sev--low" title="Faibles">F {{ severity('low', s.bySeverity) }}</span>
+            </div>
+            <p class="aqg-svc-reason" *ngIf="serviceReasons(s) as r">{{ r }}</p>
+            <div class="aqg-svc-actions">
+              <button type="button" class="aqg-btn aqg-btn--primary aqg-btn--sm" (click)="openServiceQualityGate.emit(s.serviceId)">
+                Quality Gate du service →
+              </button>
+              <button type="button" class="aqg-btn aqg-btn--ghost aqg-btn--sm" (click)="openServiceDojo.emit(s.serviceId)">
+                Vulnérabilités →
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ════ 5. FINDINGS BLOQUANTS ════ -->
+    <section class="qg-card" *ngIf="blockingFindings.length">
+      <div class="qg-card-head">
+        <h3 class="qg-card-title"><span class="qg-card-ico">③</span> Vulnérabilités bloquantes</h3>
+        <span class="aqg-hint">{{ blockingFindings.length }} à traiter — cliquez pour ouvrir la correction.</span>
+      </div>
+      <div class="aqg-findings" role="list">
+        <button type="button" class="aqg-finding" role="listitem" *ngFor="let f of blockingFindings" (click)="openFinding.emit(f)">
+          <span class="aqg-sev" [ngClass]="severityClass(f.severity)">{{ severityLabel(f.severity) }}</span>
+          <span class="aqg-finding-title">{{ f.title || ('Finding #' + f.findingId) }}</span>
+          <code class="aqg-finding-svc">{{ f.serviceName || 'service' }}</code>
+        </button>
+      </div>
+    </section>
+
+    <!-- ════ 6. CONSEILS ════ -->
+    <section class="qg-card qg-advice">
+      <div class="qg-card-head">
+        <h3 class="qg-card-title"><span class="qg-card-ico">④</span> Conseils pratiques</h3>
+      </div>
+      <ol class="qg-advice-list">
+        <li *ngFor="let rec of adviceList; let i = index" class="qg-advice-item">
+          <span class="qg-advice-num">{{ i + 1 }}</span>
+          <span class="qg-advice-txt">{{ rec }}</span>
+        </li>
+      </ol>
+    </section>
+  </ng-container>
+</div>

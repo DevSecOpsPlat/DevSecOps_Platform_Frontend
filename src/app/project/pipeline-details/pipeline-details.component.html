@@ -1,7 +1,7 @@
 <!-- pipeline-detail.component.html -->
-<div [class.user-shell]="!inAppShell" [class.pd-embed]="inAppShell">
-  <app-user-sidebar *ngIf="!inAppShell"></app-user-sidebar>
-  <div [class.user-main]="!inAppShell" [class.pd-embed-main]="inAppShell">
+<!-- Hors projet (/pipeline/…) : page pleine largeur, sans barre latérale de compte. -->
+<div class="pd-embed">
+  <div class="pd-embed-main">
 
     <!-- Loading full page -->
     <div *ngIf="loading && !data" class="loading-page">
@@ -29,6 +29,9 @@
           </span>
         </ng-container>
         <ng-container hero-actions>
+          <button type="button" class="btn-back" (click)="goBack()" title="Revenir à la page précédente">
+            ← Retour
+          </button>
           <span class="status-badge-lg" [ngClass]="statusClass(data.status)">
             <span class="badge-dot"></span>
             {{ data.status | uppercase }}

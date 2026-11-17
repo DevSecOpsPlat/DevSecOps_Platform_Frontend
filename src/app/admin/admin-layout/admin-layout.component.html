@@ -1,8 +1,6 @@
-<div class="user-shell" *ngIf="isLoggedIn">
+<div class="adm" *ngIf="isLoggedIn">
   <app-admin-sidebar></app-admin-sidebar>
-  <main class="user-main">
-    <div class="project-main">
-      <router-outlet></router-outlet>
-    </div>
+  <main class="adm-main">
+    <router-outlet></router-outlet>
   </main>
 </div>

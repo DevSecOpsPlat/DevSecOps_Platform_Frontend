@@ -9,7 +9,7 @@
         </div>
        <span class="brand-text">
         EnviroTest
-        <span class="brand-tagline">On‑Demand Environments. Instant Testing.</span>
+        <span class="brand-tagline">Environnements à la demande. Tests immédiats.</span>
       </span>
       </a>
       <span class="separator" *ngIf="authService.isLoggedIn$ | async"></span>
@@ -23,7 +23,7 @@
     </button>
 
     <nav class="nav-menu" [class.nav-menu-open]="menuOpen">
-      <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" class="nav-link">Home</a>
+      <a *ngIf="!(authService.isLoggedIn$ | async) || !isAdmin" routerLink="/home" routerLinkActive="active" class="nav-link">Accueil</a>
       <a
         *ngIf="(authService.isLoggedIn$ | async) && isAdmin"
         routerLink="/admin/home"
@@ -31,12 +31,24 @@
         [class.active]="adminNavActive"
       >Admin</a>
 
+      <!-- Thème de la console admin : pictogramme dans la barre (le portail testeur a le sien plus bas). -->
+      <button
+        *ngIf="(authService.isLoggedIn$ | async) && isAdmin && !isTester"
+        type="button"
+        class="theme-switch"
+        (click)="themeService.toggle()"
+        [attr.aria-label]="themeService.current === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre'"
+        [attr.title]="themeService.current === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre'"
+      >
+        <app-admin-icon [name]="themeService.current === 'dark' ? 'sun' : 'moon'" [size]="19"></app-admin-icon>
+      </button>
+
       <ng-container *ngIf="(authService.isLoggedIn$ | async) && isTester">
         <a routerLink="/projects" routerLinkActive="active" class="nav-link">
           <span class="btn-icon"></span> Projets
         </a>
 
-        <button type="button" class="icon-btn" aria-label="Notifications">
+        <button type="button" class="icon-btn" aria-label="Notifications" title="Notifications">
           <span class="bell-icon">🔔</span>
         </button>
         <button type="button" class="icon-btn theme-toggle" (click)="themeService.toggle()" [attr.aria-label]="themeService.current === 'dark' ? 'Mode clair' : 'Mode sombre'">
@@ -46,7 +58,7 @@
       </ng-container>
 
       <ng-container *ngIf="!(authService.isLoggedIn$ | async)">
-        <a routerLink="/sign-in" class="nav-link">Sign In</a>
+        <a routerLink="/sign-in" class="nav-link nav-link--cta">Se connecter</a>
       </ng-container>
 
       <div class="user-menu-wrap" *ngIf="authService.isLoggedIn$ | async">
@@ -65,7 +77,6 @@
           <a *ngIf="isAdmin" routerLink="/admin/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Réclamations (admin)</a>
           <a routerLink="/reclamations" class="user-dropdown-item" (click)="userMenuOpen = false">Mes réclamations</a>
           <a *ngIf="isTester" routerLink="/projects" class="user-dropdown-item" (click)="userMenuOpen = false">Projets</a>
-          <a *ngIf="isTester" routerLink="/pipelines" class="user-dropdown-item" (click)="userMenuOpen = false">Pipelines</a>
           <button type="button" class="user-dropdown-item user-dropdown-item-logout" (click)="logout()">Déconnexion</button>
         </div>
       </div>

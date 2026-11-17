@@ -342,6 +342,36 @@
   position: relative;
 }
 
+/* Bouton de thème de la console admin : même gabarit que le bouton du compte. */
+.theme-switch {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #f5c46b;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+}
+
+.theme-switch:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffd98a;
+}
+
+.theme-switch:active {
+  transform: scale(0.94);
+}
+
+.theme-switch:focus-visible {
+  outline: 2px solid #f36c21;
+  outline-offset: 2px;
+}
+
 .user-menu-trigger {
   display: flex;
   align-items: center;

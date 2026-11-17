@@ -1,60 +1,82 @@
-<div class="ads-page">
-  <header class="ads-hero">
-    <p class="ads-hero-eyebrow">Ressources</p>
-    <div class="ads-hero-row">
-      <div>
-        <h1 class="ads-hero-title">Environnements</h1>
-        <p class="ads-hero-lead">
-          Les environnements actifs en tête. Chaque ligne montre son application, sa composition et sa durée de vie — pas juste un badge.
-        </p>
-      </div>
-      <button type="button" class="ads-btn-ghost-dark" (click)="load()" [disabled]="loading">↻ Actualiser</button>
+<div class="adm-page">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <p class="adm-eyebrow">Ressources</p>
+      <h1 class="adm-hero-title">
+        Environnements
+        <span class="adm-count-pill" *ngIf="!loading && !error">{{ allRows.length }}</span>
+      </h1>
+      <p class="adm-hero-lead">
+        Les environnements actifs en tête. Chaque carte montre son application, sa composition et sa durée de vie.
+      </p>
+    </div>
+    <div class="adm-hero-actions">
+      <button type="button" class="adm-btn adm-btn--on-dark" [class.is-busy]="loading" (click)="load()" [disabled]="loading">Actualiser</button>
     </div>
   </header>
 
-  <div *ngIf="loading" class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div>
-  <div *ngIf="error" class="ads-state-err">{{ error }}</div>
+  <div *ngIf="loading" class="adm-state"><span class="adm-spinner"></span> Chargement des environnements…</div>
+  <div *ngIf="error" class="adm-alert adm-alert--danger"><span class="adm-alert-body">{{ error }}</span></div>
 
   <ng-container *ngIf="!loading && !error">
-    <div class="ads-toolbar">
-      <input type="search" [(ngModel)]="search" placeholder="Rechercher un environnement, une application, un propriétaire…" />
-      <select [(ngModel)]="statusFilter">
+    <div class="adm-toolbar">
+      <input
+        type="search"
+        class="adm-input adm-toolbar-search"
+        [(ngModel)]="search"
+        (ngModelChange)="page = 0"
+        placeholder="Rechercher un environnement, une application, un propriétaire…"
+        aria-label="Rechercher un environnement"
+      />
+      <select class="adm-select" [(ngModel)]="statusFilter" (ngModelChange)="page = 0" aria-label="Filtrer par statut">
         <option value="">Tous les statuts</option>
-        <option *ngFor="let s of statuses" [value]="s">{{ s }}</option>
+        <option *ngFor="let s of statuses" [value]="s">{{ statusLabel(s) }}</option>
       </select>
-      <select [(ngModel)]="ownerFilter">
+      <select class="adm-select" [(ngModel)]="ownerFilter" (ngModelChange)="page = 0" aria-label="Filtrer par propriétaire">
         <option value="">Tous les propriétaires</option>
         <option *ngFor="let o of owners" [value]="o">{{ o }}</option>
       </select>
+      <span class="adm-toolbar-end adm-count"><strong>{{ filteredRows.length }}</strong> sur {{ allRows.length }}</span>
     </div>
 
-    <div class="ads-cards">
-      <div class="ads-ecard" *ngFor="let r of filteredRows" (click)="open(r)">
-        <div class="ads-ecard-top">
-          <div>
-            <div class="ads-ecard-name mono">{{ r.environmentName }}</div>
-            <div class="ads-ecard-owner">
-              <button type="button" class="ads-section-link" style="font-size:.76rem;" (click)="openApplication(r, $event)">{{ r.applicationName }}</button>
+    <div class="adm-cards" *ngIf="filteredRows.length; else noRows">
+      <div class="adm-entity" *ngFor="let r of pagedRows" (click)="open(r)">
+        <div class="adm-entity-head">
+          <div class="adm-grow">
+            <div class="adm-entity-name adm-mono">{{ r.environmentName }}</div>
+            <div class="adm-entity-sub">
+              <button type="button" class="adm-link" (click)="openApplication(r, $event)">{{ r.applicationName }}</button>
               · {{ r.ownerUsername }}
             </div>
           </div>
-          <span class="ads-status" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
+          <span class="adm-badge" [ngClass]="'adm-badge--' + statusClass(r.status)">{{ statusLabel(r.status) }}</span>
         </div>
-        <div class="ads-ecard-meta">
-          <span class="ads-meta-chip mono">{{ r.gitBranch }}</span>
-          <span class="ads-meta-chip">{{ r.servicesCount }} service{{ r.servicesCount > 1 ? 's' : '' }}</span>
-          <span class="ads-meta-chip" *ngIf="statusClass(r.status) === 'running'">actif depuis {{ age(r.createdAt) }}</span>
+        <div class="adm-entity-meta">
+          <span class="adm-chip adm-chip--mono">{{ r.gitBranch }}</span>
+          <span class="adm-chip">{{ r.servicesCount }} service{{ r.servicesCount > 1 ? 's' : '' }}</span>
+          <span class="adm-chip">Durée de vie {{ r.ttlHours }} h</span>
         </div>
-        <div class="ads-ecard-foot">
-          <span>créé {{ age(r.createdAt) }}</span>
-          <span class="ads-ecard-cta">Détail →</span>
+        <div class="adm-entity-foot">
+          <span>{{ statusClass(r.status) === 'running' ? 'Actif depuis ' + age(r.createdAt) : 'Créé il y a ' + age(r.createdAt) }}</span>
+          <span class="adm-entity-cta">Détail →</span>
         </div>
       </div>
     </div>
 
-    <p class="ads-empty" *ngIf="!filteredRows.length">
-      <span class="ads-empty-icon" aria-hidden="true">📭</span>
-      <span class="ads-empty-sub">Aucun environnement ne correspond à ces filtres.</span>
-    </p>
+    <nav class="adm-card adm-pager adm-pager--standalone" *ngIf="pageCount > 1" aria-label="Pagination">
+      <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page === 0" (click)="goPage(page - 1)">‹ Précédent</button>
+      <span>
+        {{ page * pageSize + 1 }}–{{ Math.min((page + 1) * pageSize, filteredRows.length) }} sur {{ filteredRows.length }}
+        · page {{ page + 1 }} / {{ pageCount }}
+      </span>
+      <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" [disabled]="page >= pageCount - 1" (click)="goPage(page + 1)">Suivant ›</button>
+    </nav>
+
+    <ng-template #noRows>
+      <div class="adm-card adm-empty">
+        <p class="adm-empty-title">Aucun résultat</p>
+        <p class="adm-empty-text">Aucun environnement ne correspond à ces filtres.</p>
+      </div>
+    </ng-template>
   </ng-container>
 </div>

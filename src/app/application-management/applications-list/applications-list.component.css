@@ -348,3 +348,28 @@
   color: var(--am-muted);
   margin-bottom: .75rem;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .pj-hero-stats { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pj-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pj-stack[data-stack="React"] { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .pj-card-name { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .pj-slug { color: #a5b4c8; background: #0b1220; }
+:host-context([data-theme="dark"]) .pj-card-desc { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-chip { color: #f1f5f9; background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pj-composition { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-card-foot { border-top: 1px dashed #1f2937; }
+:host-context([data-theme="dark"]) .pj-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-empty { background: #111827; border: 1.5px dashed #1f2937; }
+:host-context([data-theme="dark"]) .pj-empty h2 { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .pj-empty p { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-orphans-head h3 { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .pj-orphans-head p { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-open-cta { background: hsla(25, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .pj-chip--status[data-status='running'] { background: #0b1220; color: hsl(161, 85%, 70%); }
+:host-context([data-theme="dark"]) .pj-chip--status[data-status='failed'] { background: #0b1220; }
+:host-context([data-theme="dark"]) .pj-chip--status[data-status='deploying'],
+:host-context([data-theme="dark"]) .pj-chip--status[data-status='pending'] { background: #0b1220; color: hsl(17, 85%, 70%); }
+:host-context([data-theme="dark"]) .pj-chip--muted { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pj-empty-icon { color: #a5b4c8; }
+/* === Fin du mode nuit généré === */

@@ -2230,3 +2230,85 @@
    presque tous les blocs restaient blancs, soit un rendu casse plutot
    qu un theme sombre reel. Le dashboard reste volontairement clair quel
    que soit le theme du systeme. */
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .vuln-modal-backdrop { background: rgba(255, 255, 255, 0.12); }
+:host-context([data-theme="dark"]) .vuln-table-scope-chip { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .vuln-fixed-count { color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .vuln-alert-body code { background: rgba(255, 255, 255, 0.09); }
+:host-context([data-theme="dark"]) .vuln-alert-error { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 56%, 70%); }
+:host-context([data-theme="dark"]) .vuln-alert-warning { background: hsla(39, 75%, 50%, 0.14); color: hsl(14, 61%, 70%); }
+:host-context([data-theme="dark"]) .vuln-alert-info { background: hsla(211, 75%, 50%, 0.14); color: hsl(214, 52%, 70%); }
+:host-context([data-theme="dark"]) .vuln-alert-success { background: hsla(139, 73%, 50%, 0.14); color: hsl(152, 42%, 70%); }
+:host-context([data-theme="dark"]) .vuln-stat-icon.critical { background: hsla(0, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .vuln-stat-icon.tools { background: hsla(268, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .vuln-stat-icon.types { background: hsla(39, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .vuln-stat-icon.trend { background: hsla(139, 73%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .vuln-stat-info h3 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-severity-count { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-severity-bar { background: #0b1220; }
+:host-context([data-theme="dark"]) .progress-medium { background: hsla(46, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .vuln-tool-item { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-tool-name { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-type-row { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-type-name { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-trend-item { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-table-title h2 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-page-btn { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .vuln-page-btn:hover:not(:disabled) { background: #0b1220; border-color: #334155; }
+:host-context([data-theme="dark"]) .vuln-page-current { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-table-wrapper { background: #111827; }
+:host-context([data-theme="dark"]) .vuln-table thead th { background: #0b1220; color: #a5b4c8; border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-table tbody td { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-table tbody tr:hover td { background: #0b1220; }
+:host-context([data-theme="dark"]) .severity-critical { background: hsla(0, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-high { background: hsla(39, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-medium { background: hsla(58, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-low { background: hsla(139, 73%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .severity-info { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-tool-badge,
+:host-context([data-theme="dark"]) .vuln-type-badge { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-title-text { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-cve,
+:host-context([data-theme="dark"]) .vuln-cwe { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-location { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-line { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-version { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-detail-btn { border: 1px solid #1f2937; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-detail-btn:hover { background: #0b1220; border-color: #334155; }
+:host-context([data-theme="dark"]) .vuln-modal { background: rgba(255, 255, 255, 0.12); }
+:host-context([data-theme="dark"]) .vuln-modal-content { background: #111827; }
+:host-context([data-theme="dark"]) .vuln-modal-header { border-bottom: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .vuln-modal-title h2 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-modal-close { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-modal-close:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-detail-header { border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-detail-info h3 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-meta-item { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-section-title h4 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-description { color: #e2e8f0; background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-location-detail { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-file-path { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-version-info { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-ai-panel-body { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-verify-hints { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-raw-output { background: #0b1220; }
+:host-context([data-theme="dark"]) .ai-section { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-ai-label { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-code-input { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-ai-card { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-ai-card-header { background: #0b1220; border-bottom: 1px solid #1f2937; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-ai-card-content { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-chat-header h4 { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .vuln-chat-messages { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-chat-avatar { background: #0b1220; }
+:host-context([data-theme="dark"]) .vuln-chat-bubble { background: #111827; }
+:host-context([data-theme="dark"]) .vuln-chat-bubble.typing { background: #111827; }
+:host-context([data-theme="dark"]) .vuln-chat-input textarea { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .vuln-spinner { border: 3px solid #1f2937; }
+@media (max-width: 768px) {
+  :host-context([data-theme="dark"]) .vuln-table tbody tr { border: 1px solid #1f2937; }
+  :host-context([data-theme="dark"]) .vuln-table tbody td { border-bottom: 1px solid #1f2937; }
+  :host-context([data-theme="dark"]) .vuln-table tbody td::before { color: #a5b4c8; }
+}
+/* === Fin du mode nuit généré === */
