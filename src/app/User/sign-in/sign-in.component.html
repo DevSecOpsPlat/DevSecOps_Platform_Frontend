@@ -1,109 +1,183 @@
-<div class="sign-in-page">
-  <div class="sign-in-container">
-    <div class="sign-in-form-panel">
-      <h1>{{ twoFactorStep ? 'Vérification 2FA' : 'Connexion' }}</h1>
-      <p class="form-subtitle" *ngIf="!twoFactorStep">
-        Accédez à votre espace EnviroTest en toute sécurité.
+<div class="auth">
+  <!-- ═════ Panneau visuel ═════ -->
+  <aside class="auth-visual" aria-hidden="true">
+    <div class="auth-visual-bg">
+      <span class="auth-orb auth-orb--a"></span>
+      <span class="auth-orb auth-orb--b"></span>
+      <span class="auth-grid"></span>
+    </div>
+    <div class="auth-visual-inner">
+      <img class="auth-logo" src="/assets/images/Logormbg.png" alt="" />
+      <h2 class="auth-visual-title">
+        {{ twoFactorStep ? 'Double authentification' : 'Votre espace de test sécurisé' }}
+      </h2>
+      <p class="auth-visual-text" *ngIf="!twoFactorStep">
+        Analysez, validez et déployez vos applications dans des environnements isolés, sous le contrôle de la plateforme.
       </p>
-      <p class="form-subtitle" *ngIf="twoFactorStep && twoFactorMethod === 'TOTP'">
-        Saisissez le code à 6 chiffres de votre application d'authentification pour <strong>{{ twoFactorUsername }}</strong>.
+      <p class="auth-visual-text" *ngIf="twoFactorStep && twoFactorMethod === 'EMAIL'">
+        Deuxième facteur : un code temporaire est envoyé à l'e-mail enregistré sur votre compte.
       </p>
-      <p class="form-subtitle" *ngIf="twoFactorStep && twoFactorMethod === 'EMAIL'">
-        Un code a été envoyé à l'e-mail de votre compte. Saisissez-le ci-dessous pour <strong>{{ twoFactorUsername }}</strong>.
+      <p class="auth-visual-text" *ngIf="twoFactorStep && twoFactorMethod === 'TOTP'">
+        Deuxième facteur : le code à 6 chiffres de votre application d'authentification.
       </p>
-      <p class="form-subtitle info" *ngIf="twoFactorStep && twoFactorInfoMessage">{{ twoFactorInfoMessage }}</p>
 
-      <div *ngIf="errorMessage && (isLockedForCurrentUser || !lockedIdentifier || twoFactorStep)" class="error-message" [class.error-message--lock]="isLockedForCurrentUser">
-        <svg *ngIf="isLockedForCurrentUser" class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <rect x="3" y="11" width="18" height="11" rx="2"/>
-          <path d="M7 11V7a5 5 0 0110 0v4"/>
-        </svg>
-        <div>
-          <strong *ngIf="isLockedForCurrentUser">Compte verrouillé</strong>
-          <p>{{ errorMessage }}</p>
-          <p *ngIf="isLockedForCurrentUser && minutesRemaining" class="lock-hint">
-            Temps restant estimé : environ {{ minutesRemaining }} minute(s).
+      <div class="auth-shield">
+        <span class="auth-ring auth-ring--1"></span>
+        <span class="auth-ring auth-ring--2"></span>
+        <span class="auth-ring auth-ring--3"></span>
+        <span class="auth-shield-core">
+          <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </span>
+      </div>
+
+      <ul class="auth-facts">
+        <li style="--i: 0"><span>✓</span> Verrouillage après 3 tentatives</li>
+        <li style="--i: 1"><span>✓</span> Double authentification disponible</li>
+        <li style="--i: 2"><span>✓</span> Sessions chiffrées de bout en bout</li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- ═════ Formulaire ═════ -->
+  <main class="auth-main">
+    <div class="auth-card" [class.auth-card--shake]="shake">
+      <div class="auth-tabs" role="tablist" *ngIf="!twoFactorStep">
+        <button type="button" role="tab" class="auth-tab" [class.active]="activeTab === 'login'"
+                [attr.aria-selected]="activeTab === 'login'" (click)="activeTab = 'login'">Connexion</button>
+        <button type="button" role="tab" class="auth-tab" [class.active]="activeTab === 'access'"
+                [attr.aria-selected]="activeTab === 'access'" (click)="activeTab = 'access'">Première connexion ?</button>
+        <span class="auth-tab-ink" [class.auth-tab-ink--right]="activeTab === 'access'"></span>
+      </div>
+
+      <!-- Connexion -->
+      <section class="auth-pane" *ngIf="!twoFactorStep && activeTab === 'login'">
+        <h1 class="auth-title">Bon retour 👋</h1>
+        <p class="auth-sub">Connectez-vous pour retrouver vos projets et vos environnements.</p>
+
+        <div *ngIf="errorMessage && (isLockedForCurrentUser || !lockedIdentifier)" class="auth-error"
+             [class.auth-error--lock]="isLockedForCurrentUser" role="alert">
+          <svg *ngIf="isLockedForCurrentUser" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          <div>
+            <strong *ngIf="isLockedForCurrentUser">Compte verrouillé</strong>
+            <p>{{ errorMessage }}</p>
+            <p *ngIf="isLockedForCurrentUser && minutesRemaining" class="auth-error-hint">
+              Temps restant estimé : environ {{ minutesRemaining }} minute(s).
+            </p>
+          </div>
+        </div>
+
+        <form [formGroup]="formSignin" class="auth-form" (ngSubmit)="signin()" novalidate>
+          <div class="auth-field" [class.auth-field--error]="formSignin.get('username')?.invalid && formSignin.get('username')?.touched">
+            <span class="auth-field-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            </span>
+            <input id="signin-username" type="text" placeholder=" " autocomplete="username"
+                   formControlName="username" />
+            <label for="signin-username">Identifiant ou e-mail</label>
+          </div>
+          <p class="auth-field-msg" *ngIf="formSignin.get('username')?.invalid && formSignin.get('username')?.touched">
+            Ce champ est obligatoire.
           </p>
-        </div>
-      </div>
 
-      <form [formGroup]="formSignin" class="auth-form" (ngSubmit)="signin()" *ngIf="!twoFactorStep">
-        <div class="form-group">
-          <label for="signin-username">Identifiant ou e-mail</label>
-          <input
-            id="signin-username"
-            type="text"
-            placeholder="nom.utilisateur ou email@domaine.com"
-            formControlName="username"
-            [class.error]="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" />
-          <div *ngIf="formSignin.get('username')?.invalid && formSignin.get('username')?.touched" class="field-error">
-            Ce champ est obligatoire
+          <div class="auth-field" [class.auth-field--error]="formSignin.get('password')?.invalid && formSignin.get('password')?.touched">
+            <span class="auth-field-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+            </span>
+            <input id="signin-password" [type]="showPassword ? 'text' : 'password'" placeholder=" "
+                   autocomplete="current-password" formControlName="password"
+                   (keyup)="onPasswordKey($event)" (keydown)="onPasswordKey($event)" (blur)="capsLockOn = false" />
+            <label for="signin-password">Mot de passe</label>
+            <button type="button" class="auth-eye" (click)="showPassword = !showPassword"
+                    [attr.aria-label]="showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+              <svg *ngIf="!showPassword" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg *ngIf="showPassword" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.8 10.8 0 0112 5c6 0 10 7 10 7a17.6 17.6 0 01-3.2 4M6.2 6.2C3.6 8 2 12 2 12s4 7 10 7a10 10 0 005.8-1.8"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/></svg>
+            </button>
           </div>
-        </div>
-        <div class="form-group">
-          <label for="signin-password">Mot de passe</label>
-          <input
-            id="signin-password"
-            type="password"
-            placeholder="Mot de passe"
-            formControlName="password"
-            [class.error]="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" />
-          <div *ngIf="formSignin.get('password')?.invalid && formSignin.get('password')?.touched" class="field-error">
-            Ce champ est obligatoire
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block" [disabled]="submitDisabled">
-          <span *ngIf="!isLoading">{{ isLockedForCurrentUser ? 'Compte verrouillé' : 'Se connecter' }}</span>
-          <span *ngIf="isLoading">Connexion…</span>
-        </button>
-      </form>
+          <p class="auth-field-msg" *ngIf="formSignin.get('password')?.invalid && formSignin.get('password')?.touched">
+            Ce champ est obligatoire.
+          </p>
+          <p class="auth-caps" *ngIf="capsLockOn">⇪ Majuscules activées</p>
 
-      <form [formGroup]="totpForm" class="auth-form" (ngSubmit)="verifyTotp()" *ngIf="twoFactorStep">
-        <div class="form-group">
-          <label for="signin-totp">{{ twoFactorMethod === 'EMAIL' ? 'Code reçu par e-mail' : 'Code d\'authentification' }} (6 chiffres)</label>
-          <input
-            id="signin-totp"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            maxlength="6"
-            placeholder="123456"
-            formControlName="code"
-            [class.error]="totpForm.get('code')?.invalid && totpForm.get('code')?.touched" />
-          <div *ngIf="totpForm.get('code')?.invalid && totpForm.get('code')?.touched" class="field-error">
-            Code à 6 chiffres requis
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block" [disabled]="totpSubmitDisabled">
-          <span *ngIf="!isLoading">Valider</span>
-          <span *ngIf="isLoading">Vérification…</span>
-        </button>
-        <button type="button" class="btn btn-link btn-block" (click)="resendEmailCode()" [disabled]="isLoading || resendLoading" *ngIf="twoFactorMethod === 'EMAIL'">
-          {{ resendLoading ? 'Envoi…' : 'Renvoyer le code par e-mail' }}
-        </button>
-        <button type="button" class="btn btn-link btn-block" (click)="backToPasswordStep()" [disabled]="isLoading">
-          ← Retour au mot de passe
-        </button>
-      </form>
+          <button type="submit" class="auth-submit" [disabled]="submitDisabled" [class.auth-submit--loading]="isLoading">
+            <span class="auth-spinner" *ngIf="isLoading" aria-hidden="true"></span>
+            <span>{{ isLoading ? 'Connexion…' : (isLockedForCurrentUser ? 'Compte verrouillé' : 'Se connecter') }}</span>
+          </button>
+        </form>
 
-      <p class="form-footer" *ngIf="!twoFactorStep">
-        Les comptes sont créés par un administrateur. Contactez votre responsable si vous n'avez pas encore d'accès.
-      </p>
+        <p class="auth-foot">
+          Pas encore de compte ?
+          <button type="button" class="auth-link" (click)="activeTab = 'access'">Voir comment l'obtenir</button>
+        </p>
+      </section>
+
+      <!-- Première connexion / obtenir un accès -->
+      <section class="auth-pane" *ngIf="!twoFactorStep && activeTab === 'access'">
+        <h1 class="auth-title">Obtenir un accès</h1>
+        <p class="auth-sub">
+          Pour protéger les données de la banque, les comptes ne sont pas créés en libre-service :
+          ils sont ouverts par un administrateur de la plateforme.
+        </p>
+        <ol class="auth-steps">
+          <li style="--i: 0">
+            <span class="auth-step-num">1</span>
+            <div><strong>Demande de votre responsable</strong><p>Il transmet votre nom, votre e-mail professionnel et votre équipe à l'équipe plateforme.</p></div>
+          </li>
+          <li style="--i: 1">
+            <span class="auth-step-num">2</span>
+            <div><strong>Création du compte</strong><p>Un administrateur ouvre votre accès et vous communique vos identifiants.</p></div>
+          </li>
+          <li style="--i: 2">
+            <span class="auth-step-num">3</span>
+            <div><strong>Première connexion</strong><p>Changez votre mot de passe et activez la double authentification depuis votre profil.</p></div>
+          </li>
+        </ol>
+        <button type="button" class="auth-submit auth-submit--ghost" (click)="activeTab = 'login'">
+          J'ai mes identifiants · Se connecter
+        </button>
+      </section>
+
+      <!-- Étape 2FA -->
+      <section class="auth-pane" *ngIf="twoFactorStep">
+        <h1 class="auth-title">Vérification en deux étapes</h1>
+        <p class="auth-sub" *ngIf="twoFactorMethod === 'TOTP'">
+          Saisissez le code à 6 chiffres de votre application d'authentification pour <strong>{{ twoFactorUsername }}</strong>.
+        </p>
+        <p class="auth-sub" *ngIf="twoFactorMethod === 'EMAIL'">
+          Un code a été envoyé à l'e-mail de votre compte. Saisissez-le pour <strong>{{ twoFactorUsername }}</strong>.
+        </p>
+        <p class="auth-info" *ngIf="twoFactorInfoMessage">{{ twoFactorInfoMessage }}</p>
+        <div *ngIf="errorMessage" class="auth-error" role="alert"><div><p>{{ errorMessage }}</p></div></div>
+
+        <form [formGroup]="totpForm" class="auth-form" (ngSubmit)="verifyTotp()" novalidate>
+          <label class="auth-otp-label" for="signin-totp">
+            {{ twoFactorMethod === 'EMAIL' ? 'Code reçu par e-mail' : 'Code d\'authentification' }}
+          </label>
+          <input id="signin-totp" class="auth-otp" type="text" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="6" placeholder="••••••" formControlName="code"
+                 [class.auth-otp--error]="totpForm.get('code')?.invalid && totpForm.get('code')?.touched" />
+          <p class="auth-field-msg" *ngIf="totpForm.get('code')?.invalid && totpForm.get('code')?.touched">
+            Code à 6 chiffres requis.
+          </p>
+          <button type="submit" class="auth-submit" [disabled]="totpSubmitDisabled" [class.auth-submit--loading]="isLoading">
+            <span class="auth-spinner" *ngIf="isLoading" aria-hidden="true"></span>
+            <span>{{ isLoading ? 'Vérification…' : 'Valider' }}</span>
+          </button>
+          <button type="button" class="auth-link auth-link--block" (click)="resendEmailCode()"
+                  [disabled]="isLoading || resendLoading" *ngIf="twoFactorMethod === 'EMAIL'">
+            {{ resendLoading ? 'Envoi…' : 'Renvoyer le code par e-mail' }}
+          </button>
+          <button type="button" class="auth-link auth-link--block" (click)="backToPasswordStep()" [disabled]="isLoading">
+            ← Retour au mot de passe
+          </button>
+        </form>
+      </section>
     </div>
-    <div class="sign-in-visual">
-      <div class="visual-content">
-        <span class="visual-icon"><img src="/assets/images/Logormbg.png" alt="Logo" /></span>
-        <h2>{{ twoFactorStep ? 'Double authentification' : 'Accès sécurisé' }}</h2>
-        <p *ngIf="!twoFactorStep">
-          Mot de passe + verrouillage après 3 échecs. Activez la 2FA dans votre profil pour une protection renforcée.
-        </p>
-        <p *ngIf="twoFactorStep && twoFactorMethod === 'EMAIL'">
-          Deuxième facteur : code temporaire envoyé à l'e-mail enregistré sur votre compte.
-        </p>
-        <p *ngIf="twoFactorStep && twoFactorMethod === 'TOTP'">
-          Deuxième facteur : application d'authentification (Authenticator+, Google Authenticator…).
-        </p>
-      </div>
-    </div>
-  </div>
+    <p class="auth-legal">EnviroTest · Plateforme interne DevSecOps · Accès réservé aux collaborateurs autorisés.</p>
+  </main>
 </div>

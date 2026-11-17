@@ -1,57 +1,17 @@
 import { Component, Input } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminActivityEvent } from '../../../services/admin/admin.service';
+import { adminEventLabel } from '../admin-event-labels';
 
-/** Libellés lisibles par type d'événement — cf. docs/audit-dashboard-admin.md et le plan de refonte
- * du dashboard admin (Phase 1). Étend ALERT_TYPE_LABELS (admin-alerts.component.ts, sécurité
- * uniquement) avec les types DEPLOYMENT_* et les événements de compte/pipeline, absents là-bas. */
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  // Pipeline (PipelineStatus)
-  PENDING: 'Pipeline en attente',
-  RUNNING: 'Pipeline en cours',
-  SUCCESS: 'Pipeline réussi',
-  FAILED: 'Pipeline en échec',
-  CANCELED: 'Pipeline annulé',
-  SKIPPED: 'Pipeline ignoré',
-  // Alertes sécurité
-  LOGIN_FAILED: 'Connexion échouée',
-  FAILED_LOGIN_REPEATED: 'Échecs répétés',
-  ACCOUNT_LOCKED: 'Compte verrouillé',
-  BRUTE_FORCE_DETECTED: 'Force brute IP',
-  RATE_LIMIT_EXCEEDED: 'Rate limit dépassé',
-  HONEYPOT_TRIGGERED: 'Honeypot déclenché',
-  SUSPICIOUS_REQUEST: 'Requête suspecte',
-  MALICIOUS_PAYLOAD: 'Payload malveillant',
-  SUSPICIOUS_USER_AGENT: 'User-Agent suspect',
-  IP_BLOCKED: 'IP bloquée',
-  UNAUTHORIZED_ACCESS: 'Accès refusé',
-  // Alertes déploiement
-  DEPLOYMENT_CRASH_LOOP: 'Boucle de redémarrage',
-  DEPLOYMENT_OOM: 'Mémoire insuffisante',
-  DEPLOYMENT_POD_FAILED: 'Pod en échec',
-  DEPLOYMENT_HEALTH_FAILED: 'Sonde de santé en échec',
-  DEPLOYMENT_K8S_WARNING: 'Avertissement cluster',
-  DEPLOYMENT_SYNC_RUNTIME: 'Modification à chaud',
-  // Activité de compte
-  ACCOUNT_CREATED: 'Compte créé',
-  EMAIL_CHANGED: 'E-mail modifié',
-  PASSWORD_CHANGED: 'Mot de passe modifié',
-  ADMIN_EMAIL_CHANGED: 'E-mail modifié par l\'admin',
-  ADMIN_PASSWORD_RESET: 'Mot de passe réinitialisé par l\'admin',
-  ACCOUNT_DISABLED: 'Compte désactivé',
-  ACCOUNT_ENABLED: 'Compte réactivé'
-};
-
-const KIND_ICON: Record<string, string> = {
-  PIPELINE: '⚙️',
-  ALERT: '⚠️',
-  ACCOUNT: '👤'
+const SEVERITY_TONE: Record<string, string> = {
+  CRITICAL: 'danger',
+  WARNING: 'warning',
+  INFO: 'info'
 };
 
 @Component({
   selector: 'app-admin-activity-timeline',
-  templateUrl: './admin-activity-timeline.component.html',
-  styleUrls: ['./admin-activity-timeline.component.css']
+  templateUrl: './admin-activity-timeline.component.html'
 })
 export class AdminActivityTimelineComponent {
   @Input() events: AdminActivityEvent[] = [];
@@ -60,15 +20,14 @@ export class AdminActivityTimelineComponent {
   constructor(private router: Router) {}
 
   label(e: AdminActivityEvent): string {
-    return EVENT_TYPE_LABELS[e.eventType] ?? e.eventType;
+    return adminEventLabel(e.eventType);
   }
 
-  icon(e: AdminActivityEvent): string {
-    return KIND_ICON[e.kind] ?? '•';
-  }
-
-  severityClass(e: AdminActivityEvent): string {
-    return 'sev-' + (e.severity || 'info').toLowerCase();
+  /** Couleur du repère : sévérité de l'événement, orange pour les pipelines sans sévérité. */
+  tone(e: AdminActivityEvent): string {
+    const sev = SEVERITY_TONE[(e.severity || '').toUpperCase()];
+    if (sev) return sev;
+    return e.kind === 'PIPELINE' ? 'accent' : 'info';
   }
 
   isClickable(e: AdminActivityEvent): boolean {

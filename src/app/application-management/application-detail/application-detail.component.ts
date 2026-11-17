@@ -38,6 +38,8 @@ import { AppScanModalComponent, AppScanParams } from '../app-scan-modal/app-scan
 import { ManagedAppStateService } from '../managed-app-state.service';
 import { ManagedSecurityDashboardComponent } from '../managed-security-dashboard/managed-security-dashboard.component';
 import { ManagedAppHistoryComponent } from '../managed-app-history/managed-app-history.component';
+import { AppQualityGateComponent } from '../app-quality-gate/app-quality-gate.component';
+import { AppSecurityInsightsComponent } from '../app-security-insights/app-security-insights.component';
 import { isHardBlocked, verdictLabelFr, verdictTone } from '../shared/verdict.util';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
@@ -76,7 +78,9 @@ interface AlertNameAgg {
     ProjectDeployModalComponent,
     AppScanModalComponent,
     ManagedSecurityDashboardComponent,
-    ManagedAppHistoryComponent
+    ManagedAppHistoryComponent,
+    AppQualityGateComponent,
+    AppSecurityInsightsComponent
   ],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
@@ -445,6 +449,29 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   onBatchChange(batchId: string): void {
     this.selectedBatchId = batchId || null;
     this.loadSecurityPosture(this.selectedBatchId || undefined);
+  }
+
+  /** Sévérité DefectDojo en français (liste des findings bloquants). */
+  severityLabelFr(severity: string | null | undefined): string {
+    const s = (severity || '').toLowerCase();
+    if (s.startsWith('crit')) return 'Critique';
+    if (s.startsWith('high')) return 'Élevée';
+    if (s.startsWith('med')) return 'Moyenne';
+    if (s.startsWith('low')) return 'Faible';
+    if (s.startsWith('info')) return 'Info';
+    return severity || 'Gate';
+  }
+
+  /** Statut d'un lot de scan en français (sélecteur du Quality Gate). */
+  batchStatusLabel(status: string | null | undefined): string {
+    switch ((status || '').toUpperCase()) {
+      case 'COMPLETE': return 'Terminé';
+      case 'PARTIAL': return 'Partiel';
+      case 'FAILED': return 'Échec';
+      case 'RUNNING': return 'En cours';
+      case 'PENDING': return 'En attente';
+      default: return status || '—';
+    }
   }
 
   /** Le lot actuellement AFFICHÉ (sélectionné dans le Quality Gate application) est-il en cours ? */

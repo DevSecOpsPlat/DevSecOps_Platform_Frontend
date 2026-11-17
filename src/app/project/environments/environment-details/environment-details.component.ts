@@ -29,10 +29,15 @@ export class EnvironmentDetailsComponent implements OnInit {
     public format: FormatService
   ) {}
 
+  /** Page ouverte dans la mise en page d'un service (/project/:appId/environment/:envId). */
+  inProject = false;
+
   ngOnInit(): void {
     this.envId = this.route.snapshot.paramMap.get('envId') || '';
-    this.appId = this.route.snapshot.queryParamMap.get('appId');
-    
+    const parentAppId = this.route.parent?.snapshot.paramMap.get('appId') || null;
+    this.inProject = !!parentAppId;
+    this.appId = parentAppId || this.route.snapshot.queryParamMap.get('appId');
+
     if (this.envId) {
       this.loadEnvironment();
     } else {
@@ -85,14 +90,11 @@ export class EnvironmentDetailsComponent implements OnInit {
             );
           }
 
-          const queryParams: any = {};
           if (this.appId) {
-            queryParams.appId = this.appId;
+            this.router.navigate(['/project', this.appId, 'environment', latest.id]);
+          } else {
+            this.router.navigate(['/environment', latest.id]);
           }
-
-          this.router.navigate(['/environment', latest.id], {
-            queryParams
-          });
         } else {
           this.redirectToEnvironmentsList();
         }
@@ -193,9 +195,12 @@ export class EnvironmentDetailsComponent implements OnInit {
 
   viewPipeline(): void {
     if (this.environment?.latestPipelineId) {
-      this.router.navigate(['/pipeline', this.envId], {
-        queryParams: { appId: this.appId }
-      });
+      if (this.appId) {
+        // Détail du pipeline dans la mise en page du service (même barre latérale).
+        this.router.navigate(['/project', this.appId, 'pipeline-detail'], { queryParams: { envId: this.envId } });
+        return;
+      }
+      this.router.navigate(['/pipeline', this.envId]);
     }
   }
 

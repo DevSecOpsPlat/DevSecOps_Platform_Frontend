@@ -188,15 +188,20 @@ export class ProjectDeploymentsComponent implements OnInit {
 
   // Navigation
   viewEnvironment(envId: string): void {
-    this.router.navigate(['/environment', envId], {
-      queryParams: { appId: this.appId }
-    });
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'environment', envId]);
+      return;
+    }
+    this.router.navigate(['/environment', envId]);
   }
 
   viewPipeline(envId: string): void {
-    this.router.navigate(['/pipeline', envId], {
-      queryParams: { appId: this.appId }
-    });
+    if (this.appId) {
+      // Reste dans la mise en page du service (même barre latérale).
+      this.router.navigate(['/project', this.appId, 'pipeline-detail'], { queryParams: { envId } });
+      return;
+    }
+    this.router.navigate(['/pipeline', envId]);
   }
 
   goBackToProject(): void {

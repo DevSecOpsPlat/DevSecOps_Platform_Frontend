@@ -1,1 +1,134 @@
-/* Toute la mise en forme vient de admin-design-system.css (classes ads-*) — refonte Phase 1. */
+/* Vue d'ensemble — seuls les blocs propres à la page ; le reste vient de admin-theme.css. */
+
+/* « Attention requise » : une ligne par alerte, filet coloré selon la sévérité. */
+.ov-attention {
+  list-style: none;
+  padding: 0;
+}
+
+.ov-attention-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--adm-border);
+  box-shadow: inset 3px 0 0 var(--adm-warning);
+  transition: background-color 0.15s;
+}
+
+.ov-attention-item:last-child {
+  border-bottom: 0;
+}
+
+.ov-attention-item:hover {
+  background: var(--adm-raised);
+}
+
+.ov-attention-item.is-critical {
+  box-shadow: inset 3px 0 0 var(--adm-danger);
+}
+
+.ov-attention-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--adm-warning-soft);
+  color: var(--adm-warning);
+}
+
+.is-critical .ov-attention-icon {
+  background: var(--adm-danger-soft);
+  color: var(--adm-danger);
+}
+
+.ov-attention-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ov-attention-title {
+  font-weight: 600;
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+}
+
+.ov-attention-meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--adm-muted);
+}
+
+.ov-attention-type {
+  font-weight: 600;
+  color: var(--adm-text-2);
+}
+
+.ov-attention-meta strong {
+  color: var(--adm-text-2);
+  font-weight: 600;
+}
+
+/* Accès rapides : tuiles compactes, flèche qui glisse au survol. */
+.ov-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.ov-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  box-shadow: var(--adm-shadow-sm);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s var(--adm-ease);
+}
+
+.ov-shortcut:hover {
+  border-color: var(--adm-accent-line);
+  box-shadow: var(--adm-shadow);
+  transform: translateY(-2px);
+}
+
+.ov-shortcut-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ov-shortcut-label {
+  font-weight: 600;
+  color: var(--adm-text);
+}
+
+.ov-shortcut-desc {
+  font-size: 12.5px;
+  color: var(--adm-muted);
+}
+
+.ov-shortcut-arrow {
+  color: var(--adm-faint);
+  transition: transform 0.2s var(--adm-ease), color 0.2s;
+}
+
+.ov-shortcut:hover .adm-kpi-icon {
+  transform: scale(1.06);
+}
+
+.ov-shortcut:hover .ov-shortcut-arrow {
+  transform: translateX(3px);
+  color: var(--adm-accent-text);
+}
+
+@media (max-width: 760px) {
+  .ov-attention-item {
+    flex-wrap: wrap;
+  }
+}

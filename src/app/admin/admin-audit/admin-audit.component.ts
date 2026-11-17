@@ -8,13 +8,18 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import Chart from 'chart.js/auto';
+import { Subscription } from 'rxjs';
+import { skip } from 'rxjs/operators';
 import {
   AdminAuditDashboard,
   AdminAuditPage,
   AdminAuditStats,
   AdminKpiPanel,
+  AdminKpiPanelItem,
   AdminService
 } from '../../services/admin/admin.service';
+import { ThemeService } from '../../services/ui/theme.service';
+import { adminChartPalette } from '../shared/admin-chart-palette';
 
 const ACTION_LABELS: Record<string, string> = {
   LOGIN_SUCCESS: 'Connexion réussie',
@@ -58,6 +63,16 @@ const ACTION_GROUPS: { label: string; actions: string[] }[] = [
   }
 ];
 
+const FAILURE_ACTIONS = new Set([
+  'LOGIN_FAILED',
+  'ACCOUNT_LOCKED',
+  'ACCOUNT_DELETED',
+  'ACCOUNT_DISABLED',
+  'SUSPICIOUS_ACTIVITY',
+  'IP_BLOCKED',
+  'TWO_FACTOR_FAILED'
+]);
+
 @Component({
   selector: 'app-admin-audit',
   templateUrl: './admin-audit.component.html',
@@ -82,8 +97,9 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
   filterDateTo = '';
   filterPerformedBy = '';
   filterLoginOutcome = '';
-  tableOpen = true;
   blockingIp: string | null = null;
+  /** IP bloquées depuis cette page, pour remplacer le bouton par « bloquée ». */
+  private readonly blockedIps = new Set<string>();
   exploreContext: string | null = null;
   expandedKpiKey: string | null = null;
 
@@ -94,13 +110,24 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
   private adminVsChart?: Chart;
   private chartsReady = false;
   private pendingChartBuild = false;
+  private themeSub?: Subscription;
 
-  constructor(private adminService: AdminService, private router: Router) {}
+  constructor(
+    private adminService: AdminService,
+    private router: Router,
+    private themeService: ThemeService
+  ) {}
 
   ngOnInit(): void {
     this.loadStats();
     this.loadDashboard();
     this.load();
+    // Les couleurs des graphiques suivent le thème : on les redessine quand il change.
+    this.themeSub = this.themeService.theme$.pipe(skip(1)).subscribe(() => {
+      if (this.topUsersChart || this.loginChart || this.adminVsChart) {
+        this.buildCharts();
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -111,6 +138,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.themeSub?.unsubscribe();
     this.topUsersChart?.destroy();
     this.loginChart?.destroy();
     this.adminVsChart?.destroy();
@@ -181,34 +209,15 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     return `${this.actionLabel(action)} (${this.actionCount(action)})`;
   }
 
-  actionBadgeClass(action: string): string {
-    switch (action) {
-      case 'LOGIN_SUCCESS':
-      case 'ACCOUNT_ACTIVATED':
-      case 'ACCOUNT_ENABLED':
-        return 'badge-success';
-      case 'ADMIN_PASSWORD_RESET':
-      case 'ADMIN_EMAIL_CHANGED':
-      case 'LOGIN_FAILED':
-      case 'ACCOUNT_DISABLED':
-        return 'badge-warning';
-      case 'ACCOUNT_DELETED':
-        return 'badge-danger';
-      default:
-        return 'badge-neutral';
-    }
+  /** Seules les actions d'échec ou de sécurité sont mises en évidence (texte rouge) ; le reste reste neutre. */
+  isFailure(action: string): boolean {
+    return FAILURE_ACTIONS.has(action);
   }
 
-  statusIcon(action: string): string {
-    if (action === 'LOGIN_SUCCESS') return '🟢';
-    if (action === 'LOGIN_FAILED' || action === 'ACCOUNT_DELETED') return '🔴';
-    return '🟡';
-  }
-
-  isRecent24h(value: string | number[] | null | undefined): boolean {
-    const d = this.parseDate(value);
-    if (!d) return false;
-    return Date.now() - d.getTime() < 24 * 60 * 60 * 1000;
+  /** Pourcentage arrondi à une décimale (l'API renvoie la valeur brute, ex. 5.647058823529412). */
+  percent(value: number | null | undefined): string {
+    if (value == null || isNaN(value)) return '…';
+    return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
   }
 
   formatIp(ip: string | null | undefined): string {
@@ -220,8 +229,14 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     return d ? d.toLocaleString('fr-FR') : '—';
   }
 
-  formatPanelDate(value: string | number[] | null | undefined): string {
-    return this.formatDate(value);
+  formatDay(value: string | number[] | null | undefined): string {
+    const d = this.parseDate(value);
+    return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  }
+
+  formatTime(value: string | number[] | null | undefined): string {
+    const d = this.parseDate(value);
+    return d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
   }
 
   get activeKpiPanel(): AdminKpiPanel | null {
@@ -229,6 +244,11 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
     return this.dashboard.kpiPanels.find(p => p.key === this.expandedKpiKey) ?? null;
+  }
+
+  /** Lignes du panneau de détail, vides plutôt que nulles si l'API omet le champ. */
+  get panelItems(): AdminKpiPanelItem[] {
+    return this.activeKpiPanel?.items ?? [];
   }
 
   kpiPanel(key: string): AdminKpiPanel | undefined {
@@ -266,21 +286,19 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     this.load(0);
   }
 
-  filterByKpiIp(ip: string | null | undefined, event: Event): void {
-    event.stopPropagation();
-    if (ip?.trim()) {
-      this.filterByIp(ip, event);
-    }
-  }
-
-  blockIpFromPanel(ip: string | null | undefined, event: Event): void {
-    this.blockIpFromRow(ip, event);
-  }
-
-  extractIpFromDetails(details?: string | null): string | null {
+  /**
+   * Découpe les détails autour de la première adresse IP pour la rendre cliquable.
+   * IPv6 : au moins deux « : », sinon de simples mots hexadécimaux (« de », « a »…) seraient pris pour une IP.
+   */
+  detailParts(details?: string | null): { before: string; ip: string; after: string } | null {
     if (!details) return null;
-    const m = details.match(/\b(?:\d{1,3}\.){3}\d{1,3}(?:\s*\([^)]+\))?|\b[0-9a-fA-F:]+\b/);
-    return m?.[0] ?? null;
+    const m = details.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b|(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}/);
+    if (!m || m.index == null) return null;
+    return {
+      before: details.slice(0, m.index),
+      ip: m[0],
+      after: details.slice(m.index + m[0].length)
+    };
   }
 
   filterByAction(action: string, event?: Event): void {
@@ -303,22 +321,15 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     this.load(0);
   }
 
-  exploreTopUsers(): void {
+  /** Affiche les connexions des dernières 24 h (réussies et échouées), comme le graphique. */
+  exploreLoginComparison(): void {
+    this.filterAction = '';
+    this.filterLoginOutcome = '';
     this.filterPerformedBy = '';
     this.filterSearch = '';
-    this.exploreContext = 'Top utilisateurs actifs (audit)';
-    this.load(0);
-  }
-
-  exploreLoginComparison(): void {
-    this.filterLoginOutcome = '';
-    this.filterAction = '';
-    this.exploreContext = 'Connexions — comparaison 24 h';
-    this.load(0);
-  }
-
-  exploreAdminVsUsers(): void {
-    this.exploreContext = 'Actions administrateur vs utilisateurs';
+    this.filterDateFrom = this.isoDateDaysAgo(1);
+    this.filterDateTo = '';
+    this.exploreContext = 'Connexions des dernières 24 h';
     this.load(0);
   }
 
@@ -327,10 +338,6 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     if (user) {
       this.filterByPerformedBy(user.username);
     }
-  }
-
-  onSearchSubmit(): void {
-    this.load(0);
   }
 
   onFilterChange(): void {
@@ -361,13 +368,25 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  blockIpFromRow(ip: string | null | undefined, event: Event): void {
+  /** L'IP journalisée peut porter un suffixe « (pays) » : on ne garde que l'adresse. */
+  cleanIp(ip: string | null | undefined): string {
+    return ip?.replace(/\s*\([^)]+\)/, '').trim() ?? '';
+  }
+
+  isBlocked(ip: string | null | undefined): boolean {
+    return this.blockedIps.has(this.cleanIp(ip));
+  }
+
+  blockIp(ip: string | null | undefined, event: Event): void {
     event.stopPropagation();
-    const clean = ip?.replace(/\s*\([^)]+\)/, '').trim();
+    const clean = this.cleanIp(ip);
     if (!clean) return;
     this.blockingIp = clean;
     this.adminService.blockIp(clean, 'Blocage manuel depuis journal d\'audit', 60).subscribe({
-      next: () => (this.blockingIp = null),
+      next: () => {
+        this.blockedIps.add(clean);
+        this.blockingIp = null;
+      },
       error: () => (this.blockingIp = null)
     });
   }
@@ -380,10 +399,6 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.page && this.currentPage < this.page.totalPages - 1) {
       this.load(this.currentPage + 1);
     }
-  }
-
-  toggleTable(): void {
-    this.tableOpen = !this.tableOpen;
   }
 
   private scheduleChartBuild(): void {
@@ -409,6 +424,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     const labels = users.map(u => u.username);
     const data = users.map(u => u.count);
     const tooltips = users.map(u => u.tooltip);
+    const pal = adminChartPalette(this.themeService.current);
 
     this.topUsersChart = new Chart(canvas, {
       type: 'bar',
@@ -417,7 +433,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Actions audit',
           data,
-          backgroundColor: 'rgba(234, 88, 12, 0.85)',
+          backgroundColor: pal.accentBar,
           borderRadius: 6
         }]
       },
@@ -431,7 +447,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 12,
             callbacks: {
               afterBody: items => {
@@ -442,8 +458,8 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         },
         scales: {
-          x: { beginAtZero: true, ticks: { stepSize: 1 } },
-          y: { ticks: { color: '#334155' } }
+          x: { beginAtZero: true, ticks: { stepSize: 1, color: pal.tick }, grid: { color: pal.grid } },
+          y: { ticks: { color: pal.label }, grid: { color: pal.grid } }
         }
       }
     });
@@ -459,6 +475,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
       return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     });
     const tooltips = points.map(p => p.tooltip);
+    const pal = adminChartPalette(this.themeService.current);
 
     this.loginChart = new Chart(canvas, {
       type: 'bar',
@@ -468,13 +485,13 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
           {
             label: 'Succès',
             data: points.map(p => p.success),
-            backgroundColor: '#15803d',
+            backgroundColor: pal.success,
             borderRadius: 4
           },
           {
             label: 'Échecs',
             data: points.map(p => p.failed),
-            backgroundColor: '#dc2626',
+            backgroundColor: pal.danger,
             borderRadius: 4
           }
         ]
@@ -483,8 +500,9 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
+          legend: { labels: { color: pal.label } },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 12,
             callbacks: {
               afterBody: items => {
@@ -495,8 +513,8 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         },
         scales: {
-          x: { stacked: false, ticks: { maxTicksLimit: 12 } },
-          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          x: { stacked: false, ticks: { maxTicksLimit: 12, color: pal.tick }, grid: { color: pal.grid } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: pal.tick }, grid: { color: pal.grid } }
         }
       }
     });
@@ -508,6 +526,7 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
     this.adminVsChart?.destroy();
     const av = this.dashboard.adminVsUsers;
     if (!av) return;
+    const pal = adminChartPalette(this.themeService.current);
 
     this.adminVsChart = new Chart(canvas, {
       type: 'doughnut',
@@ -515,9 +534,9 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         labels: ['Admin', 'Utilisateurs'],
         datasets: [{
           data: [av.adminActions, av.userActions],
-          backgroundColor: ['#0f172a', '#ea580c'],
+          backgroundColor: [pal.ink, pal.accent],
           borderWidth: 2,
-          borderColor: '#fff',
+          borderColor: pal.surface,
           hoverOffset: 10
         }]
       },
@@ -527,9 +546,9 @@ export class AdminAuditComponent implements OnInit, AfterViewInit, OnDestroy {
         cutout: '62%',
         animation: { animateRotate: true, duration: 800 },
         plugins: {
-          legend: { position: 'bottom' },
+          legend: { position: 'bottom', labels: { color: pal.label } },
           tooltip: {
-            backgroundColor: '#0f172a',
+            backgroundColor: pal.tooltipBg,
             padding: 12,
             callbacks: {
               label: ctx => ` ${ctx.label} : ${ctx.parsed}`,

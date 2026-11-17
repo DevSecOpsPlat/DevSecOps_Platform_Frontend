@@ -1,105 +1,119 @@
-<div class="recl-page">
-  <header class="recl-head">
-    <p class="recl-kicker">Support</p>
-    <h1 class="recl-title">Réclamations</h1>
-    <p class="recl-lead">
-      Décrivez un problème ou une demande : l’administration peut répondre et vous pouvez poursuivre la discussion tant que la
-      réclamation reste ouverte. Une fois clôturée, le fil reste visible en lecture seule.
-    </p>
-    <div class="recl-app-ctx" *ngIf="appName || managedAppId">
-      <span>Liée à l'application <strong>{{ appName || managedAppId }}</strong></span>
-      <button type="button" class="recl-btn recl-btn-ghost" *ngIf="managedAppId" (click)="backToApp()">
-        ← Retour à l'app
-      </button>
-    </div>
-  </header>
-
-  <div *ngIf="error" class="recl-alert">{{ error }}</div>
-
-  <section class="recl-card" aria-labelledby="new-recl">
-    <h2 id="new-recl" class="recl-card-title">Nouvelle réclamation</h2>
-    <label class="recl-label" for="subj">Sujet</label>
-    <input id="subj" class="recl-input" type="text" [(ngModel)]="subject" maxlength="200" placeholder="Objet court" />
-
-    <label class="recl-label" for="msg">Message</label>
-    <textarea
-      id="msg"
-      class="recl-textarea"
-      rows="5"
-      [(ngModel)]="message"
-      placeholder="Détaillez votre demande…"
-    ></textarea>
-
-    <div class="recl-actions">
-      <button type="button" class="recl-btn recl-btn-primary" (click)="submit()" [disabled]="submitting">
-        {{ submitting ? 'Envoi…' : 'Envoyer' }}
-      </button>
+<div class="rc">
+  <!-- En-tête : prolonge la barre de navigation, sans cadre -->
+  <section class="rc-hero">
+    <div class="rc-hero-inner">
+      <span class="rc-kicker">Support</span>
+      <h1 class="rc-title">Mes réclamations</h1>
+      <p class="rc-lead">
+        Signalez un problème ou posez une question à l'équipe de la plateforme. La réponse s'affiche ici,
+        et vous pouvez poursuivre l'échange tant que la demande reste ouverte.
+      </p>
+      <div class="rc-stats">
+        <span class="rc-stat"><strong>{{ openCount }}</strong> en cours</span>
+        <span class="rc-stat"><strong>{{ closedCount }}</strong> clôturée{{ closedCount > 1 ? 's' : '' }}</span>
+      </div>
+      <div class="rc-app-ctx" *ngIf="appName || managedAppId">
+        <span>Demande liée à l'application <strong>{{ appName || managedAppId }}</strong></span>
+        <button type="button" class="rc-btn rc-btn--light" *ngIf="managedAppId" (click)="backToApp()">
+          ← Retour à l'application
+        </button>
+      </div>
     </div>
   </section>
 
-  <section class="recl-card" aria-labelledby="hist-recl">
-    <h2 id="hist-recl" class="recl-card-title">Mes demandes</h2>
-    <div *ngIf="loading" class="recl-muted">Chargement…</div>
-    <p *ngIf="!loading && !list.length" class="recl-muted">Aucune réclamation pour le moment.</p>
-    <ul class="recl-list" *ngIf="!loading && list.length">
-      <li *ngFor="let c of list" class="recl-item">
-        <div class="recl-item-head">
-          <span class="recl-item-subject">{{ c.subject }}</span>
-          <span
-            class="recl-badge"
-            [class.recl-badge--closed]="c.status === 'CLOSED'"
-            [class.recl-badge--open]="c.status === 'OPEN'"
-            >{{ statusLabel(c.status) }}</span
-          >
-        </div>
-        <p class="recl-item-meta">{{ c.createdAt | date: 'short' }}</p>
+  <div class="rc-body">
+    <div *ngIf="error" class="rc-alert" role="alert">{{ error }}</div>
 
-        <div class="recl-thread" *ngIf="c.messages?.length">
-          <div
-            *ngFor="let m of c.messages"
-            class="recl-bubble"
-            [class.recl-bubble--user]="!m.fromAdmin"
-            [class.recl-bubble--admin]="m.fromAdmin"
-          >
-            <p class="recl-bubble-meta">
-              <strong>{{ m.authorUsername }}</strong>
-              <span *ngIf="m.fromAdmin" class="recl-bubble-tag">Admin</span>
-              <span class="recl-bubble-date">{{ m.createdAt | date: 'short' }}</span>
-            </p>
-            <p class="recl-bubble-body">{{ m.body }}</p>
-          </div>
-        </div>
-        <p *ngIf="!c.messages?.length" class="recl-item-msg recl-muted">Aucun message.</p>
+    <div class="rc-grid">
+      <!-- Nouvelle demande -->
+      <section class="rc-card rc-new" aria-labelledby="rc-new-title">
+        <h2 id="rc-new-title" class="rc-card-title">Nouvelle réclamation</h2>
+        <p class="rc-hint">Précisez l'application, l'environnement et le message d'erreur éventuel : la réponse sera plus rapide.</p>
 
-        <div *ngIf="c.status === 'OPEN'" class="recl-followup">
-          <label class="recl-label" [attr.for]="'reply-' + c.id">Votre message</label>
-          <textarea
-            [id]="'reply-' + c.id"
-            class="recl-textarea recl-textarea--compact"
-            rows="3"
-            [(ngModel)]="replyDrafts[c.id]"
-            placeholder="Écrire une réponse…"
-          ></textarea>
-          <div class="recl-followup-actions">
-            <button
-              type="button"
-              class="recl-btn recl-btn-secondary"
-              (click)="closeThread(c)"
-              [disabled]="closingId === c.id || sendingReplyId === c.id"
-            >
-              {{ closingId === c.id ? 'Clôture…' : 'Clôturer' }}
+        <label class="rc-label" for="rc-subject">Sujet</label>
+        <input id="rc-subject" class="rc-input" type="text" [(ngModel)]="subject" maxlength="200"
+               placeholder="Ex. : déploiement bloqué sur l'environnement de test" />
+
+        <label class="rc-label" for="rc-message">Message</label>
+        <textarea id="rc-message" class="rc-textarea" rows="6" [(ngModel)]="message"
+                  placeholder="Décrivez votre demande…"></textarea>
+
+        <div class="rc-new-actions">
+          <span class="rc-counter">{{ subject.length }}/200</span>
+          <button type="button" class="rc-btn rc-btn--primary" (click)="submit()" [disabled]="submitting">
+            <span class="rc-spinner" *ngIf="submitting" aria-hidden="true"></span>
+            {{ submitting ? 'Envoi…' : 'Envoyer la réclamation' }}
+          </button>
+        </div>
+      </section>
+
+      <!-- Demandes existantes -->
+      <section class="rc-card rc-threads" aria-labelledby="rc-list-title">
+        <header class="rc-threads-head">
+          <h2 id="rc-list-title" class="rc-card-title">Mes demandes</h2>
+          <div class="rc-tabs" role="tablist">
+            <button type="button" role="tab" class="rc-tab" [class.active]="filter === 'ALL'" (click)="filter = 'ALL'">
+              Toutes <span>{{ list.length }}</span>
             </button>
-            <button
-              type="button"
-              class="recl-btn recl-btn-primary"
-              (click)="sendReply(c)"
-              [disabled]="sendingReplyId === c.id || closingId === c.id"
-            >
-              {{ sendingReplyId === c.id ? 'Envoi…' : 'Envoyer' }}
+            <button type="button" role="tab" class="rc-tab" [class.active]="filter === 'OPEN'" (click)="filter = 'OPEN'">
+              En cours <span>{{ openCount }}</span>
+            </button>
+            <button type="button" role="tab" class="rc-tab" [class.active]="filter === 'CLOSED'" (click)="filter = 'CLOSED'">
+              Clôturées <span>{{ closedCount }}</span>
             </button>
           </div>
+        </header>
+
+        <div class="rc-skeletons" *ngIf="loading">
+          <div class="rc-skeleton" *ngFor="let _ of [1, 2, 3]"></div>
         </div>
-      </li>
-    </ul>
-  </section>
+
+        <div class="rc-empty" *ngIf="!loading && !filteredList.length">
+          <span class="rc-empty-ico" aria-hidden="true">💬</span>
+          <p>{{ list.length ? 'Aucune demande dans cette catégorie.' : 'Aucune réclamation pour le moment.' }}</p>
+        </div>
+
+        <article class="rc-thread" *ngFor="let c of filteredList; let i = index; trackBy: trackById"
+                 [style.--i]="i" [class.rc-thread--closed]="c.status === 'CLOSED'">
+          <header class="rc-thread-head">
+            <div class="rc-thread-id">
+              <h3 class="rc-thread-subject">{{ c.subject }}</h3>
+              <span class="rc-thread-date">Ouverte le {{ c.createdAt | date: 'dd/MM/yyyy à HH:mm' }}</span>
+            </div>
+            <span class="rc-badge" [class.rc-badge--open]="c.status === 'OPEN'" [class.rc-badge--closed]="c.status === 'CLOSED'">
+              {{ statusLabel(c.status) }}
+            </span>
+          </header>
+
+          <div class="rc-conv" *ngIf="c.messages?.length">
+            <div class="rc-msg" *ngFor="let m of c.messages" [class.rc-msg--admin]="m.fromAdmin" [class.rc-msg--me]="!m.fromAdmin">
+              <div class="rc-msg-meta">
+                <strong>{{ m.fromAdmin ? 'Équipe plateforme' : 'Vous' }}</strong>
+                <span>{{ m.createdAt | date: 'dd/MM HH:mm' }}</span>
+              </div>
+              <p class="rc-msg-body">{{ m.body }}</p>
+            </div>
+          </div>
+          <p class="rc-muted" *ngIf="!c.messages?.length">Aucun message.</p>
+
+          <div class="rc-reply" *ngIf="c.status === 'OPEN'">
+            <label class="rc-sr-only" [attr.for]="'rc-reply-' + c.id">Votre réponse</label>
+            <textarea [id]="'rc-reply-' + c.id" class="rc-textarea rc-textarea--compact" rows="2"
+                      [(ngModel)]="replyDrafts[c.id]" placeholder="Écrire une réponse…"></textarea>
+            <div class="rc-reply-actions">
+              <button type="button" class="rc-btn rc-btn--ghost" (click)="closeThread(c)"
+                      [disabled]="closingId === c.id || sendingReplyId === c.id">
+                {{ closingId === c.id ? 'Clôture…' : 'Clôturer la demande' }}
+              </button>
+              <button type="button" class="rc-btn rc-btn--primary" (click)="sendReply(c)"
+                      [disabled]="sendingReplyId === c.id || closingId === c.id">
+                {{ sendingReplyId === c.id ? 'Envoi…' : 'Répondre' }}
+              </button>
+            </div>
+          </div>
+          <p class="rc-closed-note" *ngIf="c.status === 'CLOSED'">Demande clôturée — la conversation reste consultable.</p>
+        </article>
+      </section>
+    </div>
+  </div>
 </div>

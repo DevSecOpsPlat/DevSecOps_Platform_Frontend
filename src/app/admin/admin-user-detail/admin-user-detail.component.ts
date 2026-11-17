@@ -9,11 +9,20 @@ import {
   AdminUserMetrics
 } from '../../services/admin/admin.service';
 import { isPasswordStrong } from '../../shared/password/password-rules';
+import { environmentStatusLabel, pipelineStatusLabel as pipelineLabel, statusTone as toneOf } from '../shared/admin-status';
+
+/** Couleur du repère du journal selon la nature de l'action (cf. activityKind). */
+const ACTIVITY_TONE: Record<string, string> = {
+  ok: 'success',
+  bad: 'danger',
+  admin: 'accent',
+  user: 'info'
+};
 
 @Component({
   selector: 'app-admin-user-detail',
   templateUrl: './admin-user-detail.component.html',
-  styleUrls: ['../admin-route-page.css', './admin-user-detail.component.css']
+  styleUrls: ['./admin-user-detail.component.css']
 })
 export class AdminUserDetailComponent implements OnInit {
   loading = false;
@@ -442,6 +451,10 @@ export class AdminUserDetailComponent implements OnInit {
     }
   }
 
+  activityTone(entry: AdminUserActivityEntry): string {
+    return ACTIVITY_TONE[this.activityKind(entry)] ?? 'info';
+  }
+
   formatDt(value: string | number[] | null | undefined): string {
     if (value == null) {
       return '—';
@@ -479,29 +492,14 @@ export class AdminUserDetailComponent implements OnInit {
   }
 
   envStatusLabel(env: AdminUserEnvironmentDetail): string {
-    const map: Record<string, string> = {
-      PENDING: 'En attente',
-      BUILDING: 'Construction',
-      RUNNING: 'Actif',
-      FAILED: 'Échec',
-      DESTROYED: 'Détruit',
-      EXPIRED: 'Expiré'
-    };
-    return map[env.status] || env.status;
+    return environmentStatusLabel(env.status);
   }
 
   pipelineStatusLabel(status: string | null | undefined): string {
-    if (!status) {
-      return '—';
-    }
-    const map: Record<string, string> = {
-      SUCCESS: 'Réussi',
-      FAILED: 'Échec',
-      RUNNING: 'En cours',
-      PENDING: 'En attente',
-      CANCELED: 'Annulé',
-      SKIPPED: 'Ignoré'
-    };
-    return map[status] || status;
+    return pipelineLabel(status);
+  }
+
+  statusTone(status: string | null | undefined): string {
+    return toneOf(status);
   }
 }

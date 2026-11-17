@@ -25,6 +25,30 @@ export class UserReclamationsComponent implements OnInit {
   sendingReplyId: string | null = null;
   closingId: string | null = null;
 
+  /** Filtre de la liste « Mes demandes ». */
+  filter: 'ALL' | 'OPEN' | 'CLOSED' = 'ALL';
+
+  get openCount(): number {
+    return this.list.filter(c => c.status === 'OPEN').length;
+  }
+
+  get closedCount(): number {
+    return this.list.filter(c => c.status === 'CLOSED').length;
+  }
+
+  /** Demandes ouvertes d'abord, puis les plus récentes. */
+  get filteredList(): ComplaintDto[] {
+    const rows = this.filter === 'ALL' ? this.list : this.list.filter(c => c.status === this.filter);
+    return [...rows].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'OPEN' ? -1 : 1;
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    });
+  }
+
+  trackById(_: number, c: ComplaintDto): string {
+    return c.id;
+  }
+
   constructor(
     private complaintService: ComplaintService,
     private route: ActivatedRoute,

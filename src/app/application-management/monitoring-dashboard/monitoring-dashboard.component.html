@@ -75,7 +75,7 @@
     <div class="md-kpis">
       <article class="md-kpi md-kpi--pods">
         <span class="md-kpi-accent" aria-hidden="true"></span>
-        <span class="md-kpi-label">Pods Ready</span>
+        <span class="md-kpi-label">Pods prêts</span>
         <span class="md-kpi-value">{{ summary?.readyPods || 0 }}/{{ summary?.totalPods || 0 }}</span>
         <div class="md-meter"><div class="md-meter-fill" [style.width.%]="readyPct"></div></div>
       </article>
@@ -179,7 +179,7 @@
         <h3 class="md-section-title" style="margin:0;">Métriques namespace</h3>
       </div>
       <p class="md-section-hint">
-        <ng-container *ngIf="rangeMode === 'live'">Refresh 15s · pause si onglet caché · CPU/MEM (metrics-server) · Network/Disk (kubelet)</ng-container>
+        <ng-container *ngIf="rangeMode === 'live'">Actualisation toutes les 15 s · en pause si l'onglet est masqué · CPU/mémoire (metrics-server) · réseau/disque (kubelet)</ng-container>
         <ng-container *ngIf="rangeMode !== 'live'">
           Historique DB (échantillon ~5 min) · débit réseau dérivé des compteurs
           <span *ngIf="historyLoading"> · chargement…</span>
@@ -228,11 +228,11 @@
 
     <div class="md-charts-2 md-charts-sm">
       <div class="md-chart-card">
-        <h4 class="md-chart-title">Pods Ready</h4>
+        <h4 class="md-chart-title">Pods prêts</h4>
         <div class="md-chart-wrap"><canvas #readyCanvas></canvas></div>
       </div>
       <div class="md-chart-card">
-        <h4 class="md-chart-title">Restarts</h4>
+        <h4 class="md-chart-title">Redémarrages</h4>
         <div class="md-chart-wrap"><canvas #restartCanvas></canvas></div>
       </div>
     </div>
@@ -246,7 +246,7 @@
             <tr>
               <th>Kind</th>
               <th>Nom</th>
-              <th>Ready</th>
+              <th>Prêt</th>
               <th>État</th>
               <th></th>
             </tr>
@@ -329,7 +329,7 @@
                 <span *ngIf="p.reason"> · {{ p.reason }}</span>
               </div>
             </div>
-            <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openLogs(p)">Logs</button>
+            <button type="button" class="am-btn am-btn-secondary am-btn-sm" (click)="openLogs(p)">Journaux</button>
           </header>
           <div class="md-res-grid am-mono">
             <div>

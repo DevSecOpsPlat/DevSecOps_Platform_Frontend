@@ -936,3 +936,67 @@
   font-weight: 400;
 }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .deployments-container { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .header-title h1 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .back-link { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .app-name { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .subtitle { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .header-stats { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .stat-value { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stat-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .filters-bar { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .filter-label { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .filter-input { border: 1px solid #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .filter-input:focus { background: #111827; }
+:host-context([data-theme="dark"]) .status-filter-btn { border: 1px solid #1f2937; background: #111827; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .status-filter-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .clear-all-btn { border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .clear-all-btn:hover { background: #0b1220; border-color: #334155; }
+:host-context([data-theme="dark"]) .skeleton-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .skeleton-line { background: #0b1220; }
+:host-context([data-theme="dark"]) .error-state { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .error-state p { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .empty-state { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .empty-state h3 { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .empty-state p { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .environment-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .status-indicator.status-canceled { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .status-indicator.status-pending { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .env-title h3 { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .env-time { color: #a5b4c8; background: #0b1220; }
+:host-context([data-theme="dark"]) .card-body { background: #0b1220; }
+:host-context([data-theme="dark"]) .info-icon { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .info-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .info-value { color: hsl(215, 28%, 70%); }
+:host-context([data-theme="dark"]) .info-value.branch { color: #f1f5f9; }
+:host-context([data-theme="dark"]) .info-value.commit-msg { color: #e2e8f0; }
+:host-context([data-theme="dark"]) .commit-hash { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .status-badge.status-success { background: hsla(141, 75%, 50%, 0.14); color: hsl(143, 64%, 70%); }
+:host-context([data-theme="dark"]) .status-badge.status-failed { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .status-badge.status-canceled { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .status-badge.status-running { background: hsla(48, 75%, 50%, 0.14); color: hsl(23, 83%, 70%); }
+:host-context([data-theme="dark"]) .status-badge.status-pending { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .deploy-preview-block { border: 1px solid #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .preview-block-title { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .preview-iframe-wrap { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .preview-state-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .preview-state-text { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .preview-state-pending .preview-state-text { color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .preview-state-warning .preview-state-text { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .preview-state code { background: #0b1220; }
+:host-context([data-theme="dark"]) .btn-secondary { background: #111827; color: hsl(215, 28%, 70%); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .btn-secondary:hover { background: #0b1220; border-color: #334155; }
+:host-context([data-theme="dark"]) .btn-link { color: #e2e8f0; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .btn-link:hover { background: #0b1220; color: #f1f5f9; border-color: #334155; }
+:host-context([data-theme="dark"]) .match-badge { background: #0b1220; color: #e2e8f0; }
+@media (max-width: 480px) {
+  :host-context([data-theme="dark"]) .time-remaining { color: #a5b4c8; }
+  :host-context([data-theme="dark"]) .expired-badge { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+  :host-context([data-theme="dark"]) .env-time { color: #a5b4c8; background: #0b1220; }
+  :host-context([data-theme="dark"]) .status-filter-btn.degraded-btn.active { background: #0b1220; color: hsl(17, 85%, 70%); }
+  :host-context([data-theme="dark"]) .stat-item .stat-value.ended { color: #a5b4c8; }
+  :host-context([data-theme="dark"]) .status-reason { color: #a5b4c8; }
+}
+/* === Fin du mode nuit généré === */

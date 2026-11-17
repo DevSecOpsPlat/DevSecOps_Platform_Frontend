@@ -154,7 +154,8 @@
           <span class="ad-hero-eyebrow">Analyse · application</span>
           <h1 class="ad-hero-title">Quality Gate — {{ app.name }}</h1>
           <p class="ad-id-desc ad-id-desc--muted">
-            Verdict et hard gates du dernier lot de scan. Le détail Sonar / outils par service reste dans le hub service.
+            Verdict de déploiement de toute l'application : le verdict le plus sévère des services l'emporte,
+            le score est celui du service le plus faible.
           </p>
         </div>
         <div class="ad-hero-actions">
@@ -162,7 +163,7 @@
                   [value]="selectedBatchId" (change)="onBatchChange($any($event.target).value)"
                   title="Lot de scan à afficher">
             <option *ngFor="let b of scanBatches" [value]="b.batchId">
-              {{ b.gitlabPipelineId ? '#' + b.gitlabPipelineId : ('Lot ' + b.batchId.slice(0, 8)) }} · {{ b.status }}
+              {{ b.gitlabPipelineId ? 'Pipeline #' + b.gitlabPipelineId : ('Lot ' + b.batchId.slice(0, 8)) }} · {{ batchStatusLabel(b.status) }}
             </option>
           </select>
           <button type="button" class="ad-hero-icon-btn"
@@ -462,11 +463,6 @@
               </span>
             </div>
             <p class="ad-posture-msg" *ngIf="posture!.message">{{ posture!.message }}</p>
-            <div class="am-alert am-alert-warn ad-verdict-indicative-notice"
-                 *ngIf="verdictTone(posture!.verdict) === 'bad' || verdictTone(posture!.verdict) === 'warn'">
-              <strong>Ce verdict est indicatif :</strong> rien n'empêche techniquement de déployer malgré un verdict
-              « {{ verdictLabel(posture!.verdict) }} ». Consultez le rapport de sécurité avant de continuer.
-            </div>
 
             <article class="ad-deploy-rec" *ngIf="appDeployRecommendation as rec" [attr.data-tone]="rec.tone">
               <div class="ad-deploy-rec-head">
@@ -496,17 +492,37 @@
             </article>
 
             <div class="ad-blockers" *ngIf="posture!.topBlockingFindings?.length">
-              <p class="ad-blockers-label">Findings bloquants</p>
-              <button type="button" class="ad-blocker-row" *ngFor="let f of posture!.topBlockingFindings"
-                      (click)="openBlockingFinding(f)">
-                <span class="ad-blocker-sev" [attr.data-sev]="(f.severity || '').toLowerCase()">{{ f.severity || 'GATE' }}</span>
-                <span class="ad-blocker-main">
-                  <span class="ad-blocker-title">{{ f.title || ('Finding #' + f.findingId) }}</span>
-                </span>
-                <code class="am-mono ad-blocker-svc">{{ f.serviceName || f.serviceId }}</code>
-              </button>
+              <p class="ad-blockers-label">
+                Vulnérabilités bloquantes
+                <span class="ad-blockers-count">{{ posture!.topBlockingFindings!.length }}</span>
+              </p>
+              <div class="ad-blockers-scroll" role="list">
+                <button type="button" class="ad-blocker-row" role="listitem" *ngFor="let f of posture!.topBlockingFindings"
+                        (click)="openBlockingFinding(f)">
+                  <span class="ad-blocker-sev" [attr.data-sev]="(f.severity || '').toLowerCase()">{{ severityLabelFr(f.severity) }}</span>
+                  <span class="ad-blocker-main">
+                    <span class="ad-blocker-title">{{ f.title || ('Finding #' + f.findingId) }}</span>
+                  </span>
+                  <code class="am-mono ad-blocker-svc">{{ f.serviceName || f.serviceId }}</code>
+                </button>
+              </div>
             </div>
           </ng-container>
+        </section>
+
+        <!-- Évolution par sévérité + Score et outils (comme sur la vue d'ensemble d'un service) -->
+        <section class="ad-block ad-reveal ad-block--insights" *ngIf="app.services.length">
+          <div class="ad-block-head">
+            <h2>Analyse de sécurité</h2>
+            <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="goSection('defectdojo')">Toutes les vulnérabilités →</button>
+          </div>
+          <app-security-insights
+            [services]="app.services"
+            [posture]="posture"
+            [refreshTick]="dojoRefreshTick"
+            (openQualityGate)="goSection('quality-gate')"
+            (openVulnerabilities)="goSection('defectdojo')">
+          </app-security-insights>
         </section>
 
         <div class="ad-danger-zone">
@@ -1340,118 +1356,26 @@
 
     <!-- ========== Quality Gate (app) ========== -->
     <div class="ad-qg-page" *ngIf="activeTab === 'quality-gate'">
-      <div class="am-alert am-alert-error" *ngIf="postureError">{{ postureError }}</div>
-      <div class="am-loading" *ngIf="postureLoading && !posture">Chargement du Quality Gate…</div>
-
-          <div *ngIf="!postureLoading && posture && showEmptyScan" class="ad-qg-empty">
-        <p>Aucun scan applicatif — lance un scan pour évaluer le Quality Gate.</p>
-        <button type="button" class="am-btn am-btn-primary" (click)="openAppScanModal()">Scanner l'application</button>
-      </div>
+      <app-app-quality-gate
+        [posture]="posture"
+        [loading]="postureLoading"
+        [error]="postureError"
+        [running]="isSelectedBatchRunning"
+        [scanRunning]="appScanRunning"
+        [appName]="app.name"
+        (scan)="openAppScanModal()"
+        (retry)="loadSecurityPosture(selectedBatchId || undefined)"
+        (deploy)="openDeployModal()"
+        (openServiceQualityGate)="openServiceQualityGate($event)"
+        (openServiceDojo)="openServiceDojo({ serviceId: $event })"
+        (openFinding)="openBlockingFinding($event)">
+      </app-app-quality-gate>
 
       <div class="ad-qg-empty" *ngIf="!postureLoading && !posture && !postureError">
         <p>Impossible d'afficher le Quality Gate pour le moment.</p>
         <button type="button" class="am-btn am-btn-secondary" (click)="loadSecurityPosture()">Réessayer</button>
       </div>
 
-      <ng-container *ngIf="!postureLoading && posture && (posture.hasCompleteBatch || posture.batchId || qualityGates.length)">
-        <!-- Lot sélectionné en cours (par défaut le plus récent) : un SEUL message "Scan en cours"
-             pour toute la page -- la carte "Impact déploiement" ci-dessous -- rien d'autre (verdict,
-             checklist, grille par service) n'est affiché tant que ce lot n'est pas terminé, pour ne
-             jamais montrer un ancien verdict à côté de "Scan en cours". Choisir un autre lot COMPLETE
-             dans le sélecteur ci-dessus affiche immédiatement son vrai résultat. -->
-        <article class="ad-deploy-rec" *ngIf="appDeployRecommendationFor(isSelectedBatchRunning) as rec" [attr.data-tone]="rec.tone">
-          <div class="ad-deploy-rec-head">
-            <span class="ad-deploy-rec-eyebrow">Impact déploiement</span>
-            <strong class="ad-deploy-rec-title">{{ rec.title }}</strong>
-          </div>
-          <p class="ad-deploy-rec-detail">{{ rec.detail }}</p>
-        </article>
-
-        <ng-container *ngIf="!isSelectedBatchRunning">
-          <div class="ad-dojo-verdict">
-            <span class="ad-verdict-pill" [ngClass]="'ad-verdict-' + verdictTone(posture.verdict)">
-              {{ verdictLabel(posture.verdict) }}
-            </span>
-            <span class="ad-verdict-score" *ngIf="posture.securityScore != null">
-              {{ posture.securityScore }}<span *ngIf="posture.grade"> · {{ posture.grade }}</span>
-            </span>
-            <span class="ad-batch-status" *ngIf="posture.batchStatus && !posture.hasCompleteBatch"
-                  [attr.data-status]="(posture.batchStatus || '').toLowerCase()">
-              {{ posture.batchStatus }}
-            </span>
-            <span class="ad-obsolete-badge" *ngIf="posture.obsolete">Obsolète</span>
-          </div>
-          <p class="ad-posture-msg" *ngIf="posture.message">{{ posture.message }}</p>
-
-          <article class="ad-dim-card" *ngIf="posture.dimensioningService as dim">
-            <span class="ad-dim-eyebrow">Service dimensionnant</span>
-            <strong>{{ dim.serviceName || dim.serviceId }}</strong>
-            <p>C'est ce service qui détermine le score de l'application
-              <span *ngIf="dim.securityScore != null">({{ dim.securityScore }}<span *ngIf="dim.grade"> · {{ dim.grade }}</span>)</span>.
-            </p>
-          </article>
-
-          <section class="ad-qg ad-qg--page">
-            <div class="ad-qg-head">
-              <h3>Checklist hard gates</h3>
-              <p>
-                « Bloqué » = Critical DefectDojo (tolérance zéro). Sonar indisponible = Inconnu, pas un FAIL seul.
-              </p>
-            </div>
-            <ul class="ad-qg-list" *ngIf="qualityGates.length; else noQg">
-              <li class="ad-qg-item" *ngFor="let g of qualityGates" [attr.data-status]="(g.status || '').toLowerCase()">
-                <span class="ad-qg-status">{{ qualityGateStatusLabel(g.status) }}</span>
-                <div class="ad-qg-body">
-                  <strong>{{ g.label }}</strong>
-                  <p>{{ g.message }}</p>
-                  <span class="ad-qg-scope" *ngIf="g.scope">{{ g.scope }}</span>
-                </div>
-              </li>
-            </ul>
-            <ng-template #noQg>
-              <p class="ad-qg-empty-inline">Aucune checklist encore — attends la fin du lot ou relance un scan.</p>
-            </ng-template>
-          </section>
-
-          <section class="ad-block" *ngIf="posture.services?.length">
-            <div class="ad-block-head">
-              <h2>Par service</h2>
-              <p class="ad-block-hint">Ouvre le Quality Gate détaillé (Sonar, outils) dans le hub du service.</p>
-            </div>
-            <div class="ad-dojo-svc-grid">
-              <article class="ad-dojo-svc" *ngFor="let s of posture.services"
-                       [class.ad-dojo-svc--blocked]="isBlocked(s.verdict)">
-                <div class="ad-dojo-svc-top">
-                  <div>
-                    <strong>{{ s.serviceName || s.serviceId }}</strong>
-                    <span class="ad-role" *ngIf="s.serviceRole">{{ s.serviceRole }}</span>
-                  </div>
-                  <span class="ad-verdict-pill ad-verdict-pill--sm" [ngClass]="'ad-verdict-' + verdictTone(s.verdict)">
-                    {{ verdictLabel(s.verdict) }}
-                  </span>
-                </div>
-                <p class="ad-dojo-svc-reason" *ngIf="isBlocked(s.verdict) || s.hardGateViolated">
-                  {{ serviceBarLabel(s) }}
-                  <ng-container *ngIf="serviceHardGateLabels(s) as gates">
-                    <span *ngIf="gates"> · {{ gates }}</span>
-                  </ng-container>
-                </p>
-                <div class="ad-dojo-svc-actions">
-                  <button type="button" class="am-btn am-btn-primary am-btn-sm"
-                          (click)="openServiceQualityGate(s.serviceId)">
-                    Quality Gate service →
-                  </button>
-                  <button type="button" class="am-btn am-btn-ghost am-btn-sm"
-                          *ngIf="s.serviceId"
-                          (click)="openServiceDojo(s)">
-                    DefectDojo →
-                  </button>
-                </div>
-              </article>
-            </div>
-          </section>
-        </ng-container>
-      </ng-container>
     </div>
 
     <!-- ========== Post-déploiement (app) — DAST/ZAP, smoke test, scan container par service ========== -->

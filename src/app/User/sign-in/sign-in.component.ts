@@ -37,6 +37,14 @@ export class SignInComponent implements OnInit, OnDestroy {
   twoFactorInfoMessage = '';
   resendLoading = false;
 
+  /** Onglet affiché : connexion ou explication de l'obtention d'un compte. */
+  activeTab: 'login' | 'access' = 'login';
+  showPassword = false;
+  capsLockOn = false;
+  /** Secousse brève de la carte après un échec de connexion. */
+  shake = false;
+  private shakeTimer?: ReturnType<typeof setTimeout>;
+
   private usernameSub?: Subscription;
 
   constructor(
@@ -63,6 +71,22 @@ export class SignInComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.usernameSub?.unsubscribe();
+    if (this.shakeTimer) clearTimeout(this.shakeTimer);
+  }
+
+  onPasswordKey(event: KeyboardEvent): void {
+    if (typeof event.getModifierState === 'function') {
+      this.capsLockOn = event.getModifierState('CapsLock');
+    }
+  }
+
+  private triggerShake(): void {
+    this.shake = false;
+    if (this.shakeTimer) clearTimeout(this.shakeTimer);
+    setTimeout(() => {
+      this.shake = true;
+      this.shakeTimer = setTimeout(() => (this.shake = false), 600);
+    });
   }
 
   get currentIdentifier(): string {
@@ -107,6 +131,7 @@ export class SignInComponent implements OnInit, OnDestroy {
           this.lockedIdentifier = null;
           this.errorMessage = body.message || 'Identifiants invalides.';
         }
+        this.triggerShake();
         return of(null);
       })
     ).subscribe(response => {
@@ -143,6 +168,7 @@ export class SignInComponent implements OnInit, OnDestroy {
       catchError(err => {
         this.isLoading = false;
         this.errorMessage = err?.error?.message || 'Code incorrect.';
+        this.triggerShake();
         return of(null);
       })
     ).subscribe(response => {

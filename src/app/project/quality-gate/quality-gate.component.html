@@ -285,36 +285,8 @@
       </div>
     </section>
 
-    <section class="qg-card" *ngIf="showToolsAndMetricsDetail && showSoftwareQualitySection && result.softwareQuality?.length">
-      <div class="qg-card-head">
-        <h3 class="qg-card-title">Software Quality (SonarQube 10+)</h3>
-        <span class="qg-branch-chip" *ngIf="sonarBranchLabel">{{ sonarBranchLabel }}</span>
-      </div>
-      <div class="qg-sq-cards">
-        <article class="qg-sq-card" *ngFor="let dim of result.softwareQuality">
-          <h4>{{ sqLabel(dim.dimension) }}</h4>
-          <div class="qg-sq-rating" [ngClass]="ratingClass(dim.rating)">{{ dim.rating || '—' }}</div>
-          <p class="qg-sq-issues">{{ dim.issues }} issue(s)</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="qg-card" *ngIf="showToolsAndMetricsDetail && sonarResultsAvailable && sonarMetrics">
-      <div class="qg-card-head">
-        <h3 class="qg-card-title">SonarQube — métriques classiques</h3>
-        <a *ngIf="result.sonarAvailability?.dashboardUrl" [href]="result.sonarAvailability?.dashboardUrl"
-          target="_blank" rel="noopener" class="qg-sonar-link">Dashboard →</a>
-      </div>
-      <div class="qg-sonar-grid">
-        <div><strong>Bugs</strong><span>{{ sonarMetrics.bugs ?? 0 }}</span></div>
-        <div><strong>Vulnérabilités</strong><span>{{ sonarMetrics.vulnerabilities ?? 0 }}</span></div>
-        <div><strong>Code smells</strong><span>{{ sonarMetrics.codeSmells ?? 0 }}</span></div>
-        <div><strong>Hotspots</strong><span>{{ sonarMetrics.hotspots ?? 0 }}</span></div>
-        <div><strong>Couverture</strong><span>{{ sonarMetrics.coverage ?? 0 }}%</span></div>
-        <div><strong>LoC</strong><span>{{ displayNcloc | number }}</span></div>
-        <div><strong>Quality Gate</strong><span>{{ sonarQgLabel }}</span></div>
-      </div>
-    </section>
+    <!-- Les métriques SonarQube détaillées vivent sur la page SonarQube (données à jour) :
+         elles ne sont plus dupliquées ici, où le snapshot pouvait afficher des zéros. -->
 
     <section class="qg-card" id="qg-stages" *ngIf="showTimeline">
       <h3 class="qg-card-title">Timeline des stages pipeline</h3>

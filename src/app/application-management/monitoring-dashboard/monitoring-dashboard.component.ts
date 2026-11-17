@@ -13,8 +13,11 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription, interval } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, timeout } from 'rxjs/operators';
 import Chart from 'chart.js/auto';
+
+/** Au-delà, on affiche une erreur au lieu de « Chargement… » sans fin. */
+const MONITORING_REQUEST_TIMEOUT_MS = 45_000;
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import {
   AppDeployment,
@@ -592,18 +595,27 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
 
   refresh(): void {
     if (!this.appId || !this.deployment?.id) return;
+    if (this.isInactive) {
+      // Environnement arrêté : rien à mesurer, le bandeau « Environnement inactif » suffit.
+      this.loading = false;
+      return;
+    }
     this.loading = !this.data;
     this.error = null;
-    this.api.getDeploymentMonitoring(this.appId, this.deployment.id).subscribe({
-      next: (res) => {
-        this.apply(res);
-        this.loading = false;
-      },
-      error: (e) => {
-        this.error = e?.error?.message || 'Impossible de charger le dashboard monitoring.';
-        this.loading = false;
-      }
-    });
+    this.api.getDeploymentMonitoring(this.appId, this.deployment.id)
+      .pipe(timeout(MONITORING_REQUEST_TIMEOUT_MS))
+      .subscribe({
+        next: (res) => {
+          this.apply(res);
+          this.loading = false;
+        },
+        error: (e) => {
+          this.error = e?.name === 'TimeoutError'
+            ? 'Le monitoring ne répond pas (plus de 45 s). Réessayez avec « Actualiser ».'
+            : (e?.error?.message || 'Impossible de charger le dashboard monitoring.');
+          this.loading = false;
+        }
+      });
   }
 
   openLogs(pod: DeploymentPodInfo): void {

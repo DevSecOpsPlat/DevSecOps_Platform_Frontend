@@ -56,6 +56,22 @@ export interface QualityGateEnvironmentOption {
   hasSnapshot?: boolean;
 }
 
+/** Branche affichée par défaut (page Quality Gate et indice de maturité de la vue d'ensemble). */
+export const DEFAULT_QG_BRANCH = 'main';
+
+/**
+ * Règle commune aux deux écrans : dernier pipeline de scan de {@link DEFAULT_QG_BRANCH},
+ * sinon dernier pipeline de scan toutes branches confondues (liste triée du plus récent au plus ancien).
+ */
+export function pickDefaultScanPipeline(
+  pipelines: QualityGateEnvironmentOption[] | null | undefined
+): QualityGateEnvironmentOption | null {
+  const list = pipelines ?? [];
+  return list.find(p => p.branch === DEFAULT_QG_BRANCH && !!p.pipelineId)
+    ?? list.find(p => !!p.pipelineId)
+    ?? null;
+}
+
 export interface ScoreBreakdownItem {
   id: string;
   category: string;

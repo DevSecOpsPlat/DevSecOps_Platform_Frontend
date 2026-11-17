@@ -1,59 +1,154 @@
-<div class="home-page" *ngIf="!(authService.isLoggedIn$ | async) || !authService.hasRole('ROLE_ADMIN')">
-  <!-- Hero -->
-  <section class="hero">
-    <div class="hero-content">
-      <h1>On‑demand environments for <span class="highlight">Attijari developers</span></h1>
-      <p class="hero-subtitle">
-        EnviroTest automatically spins up ephemeral test environments from your Git repositories,
-        enabling safe, compliant testing through a full DevSecOps pipeline.
-      </p>
-      <div class="hero-actions">
-        <a routerLink="/environment-create" class="btn btn-primary">Deploy your application now</a>
-        <a *ngIf="!(authService.isLoggedIn$ | async)" routerLink="/sign-in" class="btn btn-outline">Sign in</a>
+<div class="hp" *ngIf="!(authService.isLoggedIn$ | async) || !authService.hasRole('ROLE_ADMIN')">
+
+  <!-- ═════════════════ HERO ═════════════════ -->
+  <section class="hp-hero">
+    <div class="hp-hero-bg" aria-hidden="true">
+      <span class="hp-orb hp-orb--a"></span>
+      <span class="hp-orb hp-orb--b"></span>
+      <span class="hp-grid"></span>
+    </div>
+
+    <div class="hp-hero-inner">
+      <div class="hp-hero-copy">
+        <span class="hp-kicker hp-in" style="--d: 0ms">
+          <span class="hp-kicker-dot"></span> Plateforme DevSecOps · Attijariwafa bank
+        </span>
+        <h1 class="hp-title hp-in" style="--d: 90ms">
+          Chaque version testée<br>
+          dans un environnement <span class="hp-title-accent">isolé et sécurisé</span>.
+        </h1>
+        <p class="hp-lead hp-in" style="--d: 180ms">
+          Déployez une version en un clic dans un environnement de test dédié, et analysez sa sécurité
+          quand vous le souhaitez : les deux se lancent indépendamment, depuis le même espace.
+        </p>
+        <div class="hp-cta hp-in" style="--d: 270ms">
+          <a *ngIf="authService.isLoggedIn$ | async" routerLink="/projects" class="hp-btn hp-btn--primary">
+            Accéder à mes projets <span aria-hidden="true">→</span>
+          </a>
+          <a *ngIf="!(authService.isLoggedIn$ | async)" routerLink="/sign-in" class="hp-btn hp-btn--primary">
+            Se connecter <span aria-hidden="true">→</span>
+          </a>
+          <button type="button" class="hp-btn hp-btn--ghost" (click)="scrollTo('hp-caps')">Découvrir la plateforme</button>
+        </div>
+      </div>
+
+      <!-- Console animée : deux pistes indépendantes qui avancent en même temps -->
+      <div class="hp-console hp-in" style="--d: 200ms" aria-label="Illustration : déploiement et analyse de sécurité, lancés séparément">
+        <div class="hp-console-bar">
+          <span class="hp-dot hp-dot--r"></span><span class="hp-dot hp-dot--y"></span><span class="hp-dot hp-dot--g"></span>
+          <span class="hp-console-title">application « banque-en-ligne »</span>
+        </div>
+        <div class="hp-console-body">
+          <div class="hp-lane">
+            <div class="hp-lane-head">
+              <span class="hp-lane-ico">🚀</span>
+              <span class="hp-lane-title">Déploiement</span>
+              <span class="hp-lane-tag">à la demande</span>
+            </div>
+            <div class="hp-flow">
+              <div class="hp-flow-step" style="--s: 0">
+                <span class="hp-flow-ico">⟨/⟩</span><span>Version <code>main</code> sélectionnée</span><span class="hp-flow-ok">✓</span>
+              </div>
+              <div class="hp-flow-step" style="--s: 1">
+                <span class="hp-flow-ico">⚙</span><span>Construction</span><span class="hp-flow-ok">✓</span>
+              </div>
+              <div class="hp-flow-step" style="--s: 2">
+                <span class="hp-flow-ico">⇪</span><span>Application en ligne</span>
+                <span class="hp-url"><span class="hp-live-dot"></span>URL de test prête</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hp-lane-sep" aria-hidden="true"><span>indépendants</span></div>
+
+          <div class="hp-lane">
+            <div class="hp-lane-head">
+              <span class="hp-lane-ico">🛡</span>
+              <span class="hp-lane-title">Analyse de sécurité</span>
+              <span class="hp-lane-tag">quand vous le voulez</span>
+            </div>
+            <div class="hp-chips">
+              <span class="hp-chip" *ngFor="let s of scanners; let i = index" [style.--c]="i">{{ s.name }}</span>
+            </div>
+            <div class="hp-flow-step hp-flow-step--gate" style="--s: 2">
+              <span class="hp-flow-ico">◎</span><span>Verdict</span>
+              <span class="hp-gate">
+                <span class="hp-gate-ring"><span class="hp-gate-val">82</span></span>
+                <span class="hp-gate-grade">Déployable</span>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="hero-visual">
-      <div class="hero-card">
-        <img src="/assets/images/Logo.png" alt="EnviroTest environment illustration" class="hero-card-img">
+
+    <button type="button" class="hp-scroll" (click)="scrollTo('hp-caps')" aria-label="Faire défiler">
+      <span></span>
+    </button>
+  </section>
+
+  <!-- ═════════════════ CE QUE VOUS POUVEZ FAIRE ═════════════════ -->
+  <section class="hp-section" id="hp-caps">
+    <header class="hp-section-head" data-reveal>
+      <span class="hp-eyebrow">La plateforme</span>
+      <h2>Tester, analyser, corriger, suivre</h2>
+      <p>Chaque action se lance séparément, au moment où vous en avez besoin.</p>
+    </header>
+    <div class="hp-caps">
+      <article class="hp-cap" *ngFor="let c of capabilities; let i = index" data-reveal [style.--d]="i * 100 + 'ms'">
+        <span class="hp-cap-ico" aria-hidden="true">{{ c.icon }}</span>
+        <h3>{{ c.title }}</h3>
+        <p>{{ c.text }}</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ═════════════════ OUTILS ═════════════════ -->
+  <section class="hp-band" data-reveal>
+    <div class="hp-band-inner">
+      <div class="hp-band-copy">
+        <span class="hp-eyebrow hp-eyebrow--light">Analyse de sécurité</span>
+        <h2>Des analyses complémentaires, un verdict clair</h2>
+        <p>Le code, les dépendances, les secrets, la configuration et l'application en fonctionnement sont examinés ;
+          les résultats sont regroupés et dédoublonnés avant le verdict.</p>
+      </div>
+      <div class="hp-marquee" aria-label="Outils d'analyse">
+        <div class="hp-marquee-track">
+          <span class="hp-marquee-item" *ngFor="let s of scanners.concat(scanners)">
+            <strong>{{ s.name }}</strong><small>{{ s.kind }}</small>
+          </span>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Features -->
-  <section class="features">
-    <h2>Why EnviroTest <span class="question-mark"> ! </span></h2>
-    <p class="section-subtitle">Designed for Attijari Bank developers and testers.</p>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">
-           <img src="/assets/images/security.png" alt="Secure icon" class="feature-img">
-        </div>
-        <h3>Secure by design</h3>
-        <p>Isolated, ephemeral test environments with strict access controls and full audit trail.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-           <img src="/assets/images/git.png" alt="Git icon" class="feature-img">
-        </div>
-        <h3>Git‑driven automation</h3>
-        <p>Connect your Attijari repositories and let EnviroTest handle builds, deployments and teardown.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <img src="/assets/images/devsecops.png" alt="Pipeline icon" class="feature-img">
-        </div>
-        <h3>End‑to‑end DevSecOps</h3>
-        <p>From commit to test environment with integrated security scans and policy checks.</p>
-      </div>
+  <!-- ═════════════════ EXIGENCES ═════════════════ -->
+  <section class="hp-section">
+    <header class="hp-section-head" data-reveal>
+      <span class="hp-eyebrow">Confiance</span>
+      <h2>Conçue pour les exigences d'une banque</h2>
+    </header>
+    <div class="hp-pillars">
+      <article class="hp-pillar" *ngFor="let p of pillars; let i = index" data-reveal [style.--d]="i * 100 + 'ms'">
+        <span class="hp-pillar-ico" aria-hidden="true">{{ p.icon }}</span>
+        <h3>{{ p.title }}</h3>
+        <p>{{ p.text }}</p>
+      </article>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="cta">
-    <div class="cta-inner">
-      <h2>On‑Demand Environments. Instant Testing.</h2>
-      <p>Start a secure test session from your Git repository in a few clicks.</p>
-      <a routerLink="/sign-in" class="btn btn-primary btn-lg">Sign in to EnviroTest</a>
+  <!-- ═════════════════ APPEL À L'ACTION ═════════════════ -->
+  <section class="hp-final" data-reveal>
+    <div class="hp-final-inner">
+      <h2>Prête pour votre prochaine version.</h2>
+      <p>Déployez-la pour la tester, analysez-la quand vous le souhaitez.</p>
+      <a *ngIf="authService.isLoggedIn$ | async" routerLink="/projects" class="hp-btn hp-btn--primary hp-btn--lg">Ouvrir mes projets →</a>
+      <a *ngIf="!(authService.isLoggedIn$ | async)" routerLink="/sign-in" class="hp-btn hp-btn--primary hp-btn--lg">Se connecter à EnviroTest →</a>
     </div>
   </section>
+
+  <footer class="hp-footer">
+    <span>EnviroTest · Environnements à la demande. Tests immédiats.</span>
+    <span>© 2026 Attijariwafa bank</span>
+  </footer>
 </div>

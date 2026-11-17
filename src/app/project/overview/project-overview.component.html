@@ -9,12 +9,21 @@
         <span class="d2-crumb d2-crumb--current">{{ appName || 'Application' }}</span>
       </nav>
       <div class="d2-context-actions">
-        <button type="button" class="d2-btn-icon" (click)="refreshAll(); $event.stopPropagation()" [disabled]="overviewLoading || loading" title="Actualiser">
-          <span class="d2-btn-icon-inner">↻</span>
+        <button type="button" class="d2-btn-icon" (click)="refreshAll(); $event.stopPropagation()" [disabled]="overviewLoading || loading"
+          title="Actualiser" aria-label="Actualiser">
+          <et-icon name="refresh" [size]="17"></et-icon>
+        </button>
+        <button type="button" class="d2-btn-secondary" (click)="launchScanPipeline(); $event.stopPropagation()"
+          [disabled]="scanLaunching" title="Lancer un scan de sécurité sur la branche sélectionnée">
+          <span class="d2-btn-spinner" *ngIf="scanLaunching" aria-hidden="true"></span>
+          <et-icon name="search" *ngIf="!scanLaunching"></et-icon>
+          <span>{{ scanLaunching ? 'Lancement…' : 'Scanner' }}</span>
+          <span class="d2-btn-branch" *ngIf="!isGlobalView && !scanLaunching">{{ selectedBranch }}</span>
         </button>
         <button type="button" class="d2-btn-primary" (click)="deployOnSelectedBranch(); $event.stopPropagation()">
-          <span>🚀 Déployer</span>
-          <span class="d2-btn-branch" *ngIf="!isGlobalView">· {{ selectedBranch }}</span>
+          <et-icon name="rocket"></et-icon>
+          <span>Déployer</span>
+          <span class="d2-btn-branch" *ngIf="!isGlobalView">{{ selectedBranch }}</span>
         </button>
       </div>
     </div>
@@ -22,9 +31,9 @@
     <nav class="d2-context-path" *ngIf="!overviewLoading" aria-label="Parcours applicatif" (click)="$event.stopPropagation()">
       <div class="d2-path-seg-wrap">
         <button type="button" class="d2-path-seg" [class.d2-path-seg--open]="openPicker === 'app'" (click)="toggleAppPicker($event)">
-          <span class="d2-path-icon">📱</span>
+          <span class="d2-path-icon"><et-icon name="grid" [size]="15"></et-icon></span>
           <span class="d2-path-text"><strong>Application</strong><span>{{ appName || '—' }}</span></span>
-          <span class="d2-path-chevron">▾</span>
+          <et-icon class="d2-path-chevron" name="chevron-down" [size]="14"></et-icon>
         </button>
         <div class="d2-path-dropdown" *ngIf="openPicker === 'app'">
           <p class="d2-path-dropdown-title">Changer d'application</p>
@@ -32,26 +41,29 @@
           <button *ngFor="let app of myApplications" type="button" class="d2-path-dropdown-item"
             [class.d2-path-dropdown-item--active]="app.id === appId" (click)="switchApplication(app)">
             <span>{{ app.name }}</span><small>{{ getRepoDisplayName(app.gitRepositoryUrl) }}</small>
+            <et-icon class="d2-dd-check" name="check" [size]="14" *ngIf="app.id === appId"></et-icon>
           </button>
         </div>
       </div>
       <span class="d2-path-arrow">›</span>
       <div class="d2-path-seg-wrap">
         <button type="button" class="d2-path-seg" [class.d2-path-seg--open]="openPicker === 'branch'" (click)="toggleBranchPicker($event)">
-          <span class="d2-path-icon">🌿</span>
+          <span class="d2-path-icon"><et-icon name="branch" [size]="15"></et-icon></span>
           <span class="d2-path-text"><strong>Branche</strong><span>{{ branchPathLabel }}</span></span>
-          <span class="d2-path-chevron">▾</span>
+          <et-icon class="d2-path-chevron" name="chevron-down" [size]="14"></et-icon>
         </button>
         <div class="d2-path-dropdown" *ngIf="openPicker === 'branch'">
           <p class="d2-path-dropdown-title">Filtrer par branche</p>
           <button type="button" class="d2-path-dropdown-item" [class.d2-path-dropdown-item--active]="isGlobalView"
             [disabled]="loading" (click)="selectBranchFromPicker(globalBranch)">
-            <span>🌐 Toutes les branches</span><small>Vue globale</small>
+            <span>Toutes les branches</span><small>Vue globale</small>
+            <et-icon class="d2-dd-check" name="check" [size]="14" *ngIf="isGlobalView"></et-icon>
           </button>
           <button *ngFor="let b of branches" type="button" class="d2-path-dropdown-item"
             [class.d2-path-dropdown-item--active]="selectedBranch === b" [disabled]="loading"
             (click)="selectBranchFromPicker(b)">
-            <span>🌿 {{ b }}</span>
+            <span class="d2-dd-mono">{{ b }}</span>
+            <et-icon class="d2-dd-check" name="check" [size]="14" *ngIf="selectedBranch === b"></et-icon>
           </button>
         </div>
       </div>
@@ -61,24 +73,26 @@
           [class.d2-path-seg--open]="openPicker === 'env'"
           [class.d2-path-seg--active]="!!selectedEnvironmentId || activeEnvCount > 0"
           (click)="toggleEnvPicker($event)">
-          <span class="d2-path-icon">🌍</span>
+          <span class="d2-path-icon"><et-icon name="server" [size]="15"></et-icon></span>
           <span class="d2-path-text"><strong>Environnement</strong><span>{{ envPathLabel }}</span></span>
-          <span class="d2-path-chevron">▾</span>
+          <et-icon class="d2-path-chevron" name="chevron-down" [size]="14"></et-icon>
         </button>
         <div class="d2-path-dropdown" *ngIf="openPicker === 'env'">
           <p class="d2-path-dropdown-title">Filtrer par environnement</p>
           <button type="button" class="d2-path-dropdown-item"
             [class.d2-path-dropdown-item--active]="!selectedEnvironmentId"
             (click)="selectAllEnvironmentsFilter()">
-            <span>🌐 Tous les environnements actifs</span>
+            <span>Tous les environnements actifs</span>
             <small *ngIf="isGlobalView">Toutes branches</small>
             <small *ngIf="!isGlobalView">Branche {{ selectedBranch }}</small>
+            <et-icon class="d2-dd-check" name="check" [size]="14" *ngIf="!selectedEnvironmentId"></et-icon>
           </button>
           <button *ngFor="let env of allActiveEnvironmentCards" type="button" class="d2-path-dropdown-item"
             [class.d2-path-dropdown-item--active]="selectedEnvironmentId === env.id"
             (click)="selectEnvFromPath(env)">
-            <span>{{ env.name }}</span>
-            <small>🌿 {{ env.branch }} · ⏳ {{ env.timeRemaining }}</small>
+            <span class="d2-dd-mono">{{ env.name }}</span>
+            <small>{{ env.branch }} · {{ env.timeRemaining }}</small>
+            <et-icon class="d2-dd-check" name="check" [size]="14" *ngIf="selectedEnvironmentId === env.id"></et-icon>
           </button>
           <button *ngIf="allActiveEnvironmentCards.length === 0" type="button"
             class="d2-path-dropdown-item d2-path-dropdown-item--cta"
@@ -93,7 +107,7 @@
       </div>
       <span class="d2-path-arrow" *ngIf="showSecuritySection">›</span>
       <button type="button" class="d2-path-seg" *ngIf="showSecuritySection" (click)="goToSecuritySection(); $event.stopPropagation()">
-        <span class="d2-path-icon">🛡️</span>
+        <span class="d2-path-icon"><et-icon name="shield" [size]="15"></et-icon></span>
         <span class="d2-path-text"><strong>Sécurité</strong><span>Analyse complète</span></span>
       </button>
     </nav>
@@ -105,9 +119,10 @@
     <section class="d2-overview-hero d2-animate" [style.--i]="0" *ngIf="overviewLoading">
       <div class="d2-skeleton d2-skeleton--hero-light"></div>
     </section>
-<br>
+
     <section class="d2-app-details d2-animate" [style.--i]="1" *ngIf="!overviewLoading && !overviewError">
       <div class="d2-overview-hero-content">
+        <p class="d2-overview-eyebrow">Tableau de bord du service</p>
         <h1 class="d2-overview-title">
           {{ appName || 'Application' }}
           <span class="d2-overview-status" *ngIf="displayLatestDeployment?.pipelineStatus as st" [ngClass]="statusClass(st)">
@@ -115,20 +130,20 @@
             {{ st }}
           </span>
         </h1>
-        <p class="d2-overview-subtitle">Tableau de bord du projet</p>
       </div>
-      <h2 class="d2-app-details-title"><span class="d2-app-details-icon">📋</span> Détails de l'application</h2>
+      <h2 class="d2-app-details-title">Détails</h2>
       <div class="d2-app-details-grid">
         <div class="d2-detail-item">
           <span class="d2-detail-label">Nom</span>
           <span class="d2-detail-value">{{ appName || '—' }}</span>
         </div>
         <div class="d2-detail-item">
-          
-          <span class="d2-detail-label">Repository</span>
-          
+          <span class="d2-detail-label">Dépôt</span>
           <a *ngIf="appDetails?.gitRepositoryUrl" [href]="appDetails?.gitRepositoryUrl" target="_blank" rel="noopener"
-            class="d2-detail-value d2-detail-value--link">  <span class="d2-meta-icon">📦</span> {{ getRepoDisplayName(appDetails?.gitRepositoryUrl) }}</a>
+            class="d2-detail-value d2-detail-value--link">
+            {{ getRepoDisplayName(appDetails?.gitRepositoryUrl) }}
+            <et-icon name="external" [size]="13"></et-icon>
+          </a>
           <span class="d2-detail-value" *ngIf="!appDetails?.gitRepositoryUrl">—</span>
         </div>
         <div class="d2-detail-item">
@@ -137,7 +152,7 @@
         </div>
         <div class="d2-detail-item">
           <span class="d2-detail-label">Créé le</span>
-          <span class="d2-detail-value"><span class="d2-meta-icon">📅</span> {{ getAppCreatedAt() }}</span>
+          <span class="d2-detail-value">{{ getAppCreatedAt() }}</span>
         </div>
         <div class="d2-detail-item">
           <span class="d2-detail-label">Créé par</span>
@@ -154,15 +169,11 @@
       <article class="d2-stat-card"
         *ngFor="let stat of overviewStats"
         [class.d2-stat-card--clickable]="!!stat.filter"
+        [style.--stat-color]="stat.color"
         (click)="stat.filter ? viewDeploymentsWithStatusFilter(stat.filter) : null">
-        <span class="d2-stat-icon-wrap" [style.background]="stat.iconBg">
-          <span [style.color]="stat.color">{{ stat.icon }}</span>
-        </span>
-        <div class="d2-stat-body">
-          <span class="d2-stat-value">{{ stat.value }}</span>
-          <span class="d2-stat-label">{{ stat.label }}</span>
-          <span class="d2-stat-trend" *ngIf="stat.trend">{{ stat.trend }}</span>
-        </div>
+        <span class="d2-stat-label"><span class="d2-stat-dot" aria-hidden="true"></span>{{ stat.label }}</span>
+        <span class="d2-stat-value">{{ stat.value }}</span>
+        <span class="d2-stat-trend" *ngIf="stat.trend">{{ stat.trend }}</span>
       </article>
     </section>
 
@@ -175,7 +186,7 @@
         <header class="d2-section-head">
           <span class="d2-section-num">01</span>
           <div class="d2-section-heading">
-            <h2 class="d2-section-name"><span class="d2-section-emoji">🚀</span> Déploiement</h2>
+            <h2 class="d2-section-name">Déploiement</h2>
             <p class="d2-section-desc" *ngIf="!isScanOnlyProfile">Vue d'ensemble des livraisons et de la dernière mise en ligne</p>
             <p class="d2-section-desc" *ngIf="isScanOnlyProfile">Ce service est configuré pour le scan — pas de déploiement actif</p>
           </div>
@@ -184,12 +195,12 @@
         <!-- Scan-only : pas de déploiement en cours -->
         <article class="d2-card d2-card--scan-only-deploy" *ngIf="isScanOnlyProfile && !displayLatestDeployment">
           <div class="d2-empty-block">
-            <span class="d2-empty-icon">🚀</span>
+            <span class="d2-empty-ico" aria-hidden="true"><et-icon name="rocket" [size]="22"></et-icon></span>
             <h3>Aucun déploiement actuel</h3>
-            <p *ngIf="deployRecommendation?.deployRecommended">
-              Le dernier scan recommande un déploiement — la posture sécurité est suffisante pour livrer.
+            <p *ngIf="maturityAnalysis.verdict === 'allow' || maturityAnalysis.verdict === 'caution'">
+              Quality Gate : {{ maturityAnalysis.verdictTitle }} — la posture sécurité permet de livrer.
             </p>
-            <p *ngIf="!deployRecommendation?.deployRecommended">
+            <p *ngIf="maturityAnalysis.verdict !== 'allow' && maturityAnalysis.verdict !== 'caution'">
               Lancez un déploiement lorsque le quality gate le permet.
             </p>
             <div class="d2-scan-only-actions">
@@ -204,7 +215,11 @@
           <article class="d2-card d2-card--latest-deploy" *ngIf="displayLatestDeployment as latestDeployment">
             <header class="d2-card-head">
               <h2 class="d2-card-title">Dernier déploiement</h2>
-              <p class="d2-card-sub">Aperçu et session éphémère en cours</p>
+              <p class="d2-card-sub" *ngIf="!latestDeployment.applicationDeployment">Aperçu et session éphémère en cours</p>
+              <p class="d2-card-sub" *ngIf="latestDeployment.applicationDeployment">
+                <span class="d2-app-deploy-badge">Déploiement de l'application</span>
+                Session partagée par tous les services{{ latestDeployment.serviceName ? ' (rattachée à « ' + latestDeployment.serviceName + ' »)' : '' }}
+              </p>
             </header>
 
             <div class="d2-latest-grid">
@@ -213,13 +228,16 @@
                 <div class="d2-preview-toolbar">
                   <span class="d2-preview-badge">Aperçu</span>
                   <button type="button" class="d2-preview-copy" (click)="copyPreviewUrl()"
-                    [disabled]="!canOpenDeploymentPreview">{{ copied ? '✓ Copié' : '📋 Copier le lien' }}</button>
+                    [disabled]="!canOpenDeploymentPreview">
+                    <et-icon [name]="copied ? 'check' : 'copy'" [size]="14"></et-icon>
+                    {{ copied ? 'Copié' : 'Copier le lien' }}
+                  </button>
                 </div>
                 <div class="d2-preview-stage">
                   <div class="vercel-preview-ready" *ngIf="canOpenDeploymentPreview">
                     <div class="vercel-preview-ready-visual" aria-hidden="true">
                       <span class="vercel-preview-ready-ring"></span>
-                      <span class="vercel-preview-ready-icon">🌐</span>
+                      <span class="vercel-preview-ready-icon"><et-icon name="globe" [size]="26" [stroke]="1.6"></et-icon></span>
                     </div>
                     <p class="vercel-preview-ready-title">Application en ligne</p>
                     <p class="vercel-preview-ready-sub">Votre déploiement est accessible. Ouvrez-le dans un nouvel onglet pour l'explorer.</p>
@@ -230,12 +248,14 @@
 
                   <div class="vercel-preview-unavailable" *ngIf="!canOpenDeploymentPreview">
                     <div class="vercel-preview-unavailable-visual" aria-hidden="true">
-                      <span class="vercel-preview-unavailable-icon">{{ isLatestEnvExpired ? '⏱️' : '🔗' }}</span>
+                      <span class="vercel-preview-unavailable-icon">
+                        <et-icon [name]="isLatestEnvExpired ? 'clock' : 'link-off'" [size]="24" [stroke]="1.6"></et-icon>
+                      </span>
                     </div>
                     <p class="vercel-preview-unavailable-title">{{ latestPreviewUnavailableTitle }}</p>
                     <p class="vercel-preview-unavailable-sub">{{ latestPreviewUnavailableMessage }}</p>
                     <button type="button" class="vercel-preview-relaunch-btn" (click)="deployOnSelectedBranch()">
-                      🚀 Relancer un déploiement
+                      Relancer un déploiement
                     </button>
                   </div>
                 </div>
@@ -258,7 +278,7 @@
 
                 <div class="d2-ttl-box">
                   <div class="d2-ttl-head">
-                    <span class="d2-ttl-label">⏳ Session éphémère</span>
+                    <span class="d2-ttl-label">Session éphémère</span>
                     <span class="d2-ttl-value">{{ formatRemaining() }}</span>
                   </div>
                   <div class="d2-ttl-track">
@@ -344,10 +364,10 @@
             <ol class="d2-stepper d2-stepper--pipeline">
               <li *ngFor="let stage of pipelineStagesWithStatus" class="d2-step" [ngClass]="stage.status">
                 <div class="d2-step-icon">
-                  <span *ngIf="stage.status === 'done'">✓</span>
-                  <span *ngIf="stage.status === 'active'">⏳</span>
-                  <span *ngIf="stage.status === 'pending'">○</span>
-                  <span *ngIf="stage.status === 'failed'">✗</span>
+                  <et-icon *ngIf="stage.status === 'done'" name="check" [size]="13" [stroke]="2.4"></et-icon>
+                  <span *ngIf="stage.status === 'active'" class="d2-step-spin" aria-label="En cours"></span>
+                  <span *ngIf="stage.status === 'pending'" class="d2-step-dot" aria-label="En attente"></span>
+                  <et-icon *ngIf="stage.status === 'failed'" name="x" [size]="13" [stroke]="2.4"></et-icon>
                 </div>
                 <span class="d2-step-label">{{ stage.name }}</span>
               </li>
@@ -366,13 +386,14 @@
         <header class="d2-section-head">
           <span class="d2-section-num">02</span>
           <div class="d2-section-heading">
-            <h2 class="d2-section-name"><span class="d2-section-emoji">🛡️</span> Sécurité</h2>
-            <p class="d2-section-desc">Posture de sécurité, scanners CI et analyse DefectDojo</p>
+            <h2 class="d2-section-name">Sécurité</h2>
+            <p class="d2-section-desc">Posture de sécurité, outils d'analyse et vulnérabilités ouvertes</p>
           </div>
           <button type="button" class="d2-section-link" (click)="viewQualityGate()">Quality Gate →</button>
           <button type="button" class="d2-section-link" (click)="viewSecurityDashboard()">Analyse complète →</button>
           <button type="button" class="d2-btn-orange d2-btn-orange--sm" (click)="launchScanPipeline()" [disabled]="scanLaunching">
-            {{ scanLaunching ? 'Lancement…' : '🔎 Lancer un scan' }}
+            <et-icon name="search" [size]="15" *ngIf="!scanLaunching"></et-icon>
+            {{ scanLaunching ? 'Lancement…' : 'Lancer un scan' }}
           </button>
         </header>
 
@@ -385,10 +406,9 @@
         <div class="d2-sec-kpi-strip">
           <article class="d2-sec-kpi" *ngFor="let kpi of securityKpis"
             [style.--kpi-color]="kpi.color">
-            <span class="d2-sec-kpi-icon" [class.d2-sec-kpi-icon--dot]="kpi.icon === '●'">{{ kpi.icon }}</span>
             <div class="d2-sec-kpi-body">
+              <span class="d2-sec-kpi-label"><span class="d2-stat-dot" aria-hidden="true"></span>{{ kpi.label }}</span>
               <span class="d2-sec-kpi-value">{{ kpi.value }}</span>
-              <span class="d2-sec-kpi-label">{{ kpi.label }}</span>
               <span class="d2-sec-kpi-sub" *ngIf="kpi.sub">{{ kpi.sub }}</span>
             </div>
           </article>
@@ -441,9 +461,9 @@
                 <canvas #daySeverityCanvas></canvas>
               </div>
               <div class="d2-sec-chart-empty" *ngIf="!loading && !hasOpenSeverityChart">
-                <span class="d2-sec-chart-empty-icon">📊</span>
-                <p>Aucun scan DefectDojo</p>
-                <small>Lancez un pipeline pour alimenter l'engagement et visualiser l'évolution.</small>
+                <span class="d2-empty-ico" aria-hidden="true"><et-icon name="chart" [size]="22"></et-icon></span>
+                <p>Aucune donnée pour le moment</p>
+                <small>Lancez un scan pour suivre l'évolution des vulnérabilités dans le temps.</small>
               </div>
             </div>
           </article>
@@ -502,8 +522,7 @@
                       ⓘ
                     </button>
                   </h3>
-                  <p class="d2-sec-card-sub" *ngIf="isGlobalView">Toutes les branches</p>
-                  <p class="d2-sec-card-sub" *ngIf="!isGlobalView">Branche {{ selectedBranch }}</p>
+                  <p class="d2-sec-card-sub">{{ maturityScopeSub }}</p>
                 </div>
               </header>
 
@@ -527,15 +546,15 @@
                 {{ maturityAnalysis.verdictTitle }}
               </p>
 
-              <div class="d2-sec-score-pills">
+              <div class="d2-sec-score-pills" *ngIf="qgResult">
                 <span class="d2-sec-score-pill">
-                  <strong>{{ totalSecurityOpen }}</strong> ouvertes
-                </span>
-                <span class="d2-sec-score-pill">
-                  <strong>{{ dashboard?.totalClosed ?? 0 }}</strong> résolues
+                  <strong>{{ maturityCounts.total }}</strong> vulnérabilités
                 </span>
                 <span class="d2-sec-score-pill d2-sec-score-pill--danger">
-                  <strong>{{ openSeverityCount('Critical') }}</strong> critiques
+                  <strong>{{ maturityCounts.critical }}</strong> critiques
+                </span>
+                <span class="d2-sec-score-pill">
+                  <strong>{{ maturityCounts.high }}</strong> élevées
                 </span>
               </div>
 
@@ -551,14 +570,14 @@
                 </div>
 
                 <section class="d2-sec-maturity-tooltip-block" *ngIf="maturityAnalysis.findings.length">
-                  <h4 class="d2-sec-maturity-tooltip-heading">État actuel</h4>
+                  <h4 class="d2-sec-maturity-tooltip-heading">Pourquoi ce verdict ?</h4>
                   <ul>
                     <li *ngFor="let finding of maturityAnalysis.findings">{{ finding }}</li>
                   </ul>
                 </section>
 
                 <section class="d2-sec-maturity-tooltip-block">
-                  <h4 class="d2-sec-maturity-tooltip-heading">Analyse par scanner</h4>
+                  <h4 class="d2-sec-maturity-tooltip-heading">Analyse par outil</h4>
                   <div class="d2-sec-maturity-scans">
                     <article class="d2-sec-maturity-scan"
                       *ngFor="let scan of maturityAnalysis.scanAnalyses"
@@ -569,7 +588,7 @@
                       </header>
                       <p class="d2-sec-maturity-scan-count">
                         <ng-container *ngIf="scan.active">
-                          {{ scan.findingCount }} finding{{ scan.findingCount > 1 ? 's' : '' }} ouvert{{ scan.findingCount > 1 ? 's' : '' }}
+                          {{ scan.findingCount }} problème{{ scan.findingCount > 1 ? 's' : '' }} détecté{{ scan.findingCount > 1 ? 's' : '' }}
                         </ng-container>
                         <span class="d2-sec-maturity-scan-badge" *ngIf="scan.status === 'ok'">OK</span>
                         <span class="d2-sec-maturity-scan-badge d2-sec-maturity-scan-badge--warn" *ngIf="scan.status === 'warning'">Attention</span>
@@ -584,11 +603,16 @@
 
                 <section class="d2-sec-maturity-tooltip-block d2-sec-maturity-tooltip-block--last"
                   *ngIf="maturityAnalysis.actions.length">
-                  <h4 class="d2-sec-maturity-tooltip-heading">Actions recommandées</h4>
+                  <h4 class="d2-sec-maturity-tooltip-heading">Conseils pratiques</h4>
                   <ul>
                     <li *ngFor="let action of maturityAnalysis.actions">{{ action }}</li>
                   </ul>
                 </section>
+
+                <button type="button" class="d2-ghost-sm" *ngIf="qgResult"
+                  (click)="viewQualityGate(); $event.stopPropagation()">
+                  Voir le détail dans Quality Gate →
+                </button>
               </aside>
             </article>
           </div>
@@ -616,10 +640,10 @@
             <ol class="d2-stepper d2-stepper--pipeline">
               <li *ngFor="let stage of scanPipelineStagesWithStatus" class="d2-step" [ngClass]="stage.status">
                 <div class="d2-step-icon">
-                  <span *ngIf="stage.status === 'done'">✓</span>
-                  <span *ngIf="stage.status === 'active'">⏳</span>
-                  <span *ngIf="stage.status === 'pending'">○</span>
-                  <span *ngIf="stage.status === 'failed'">✗</span>
+                  <et-icon *ngIf="stage.status === 'done'" name="check" [size]="13" [stroke]="2.4"></et-icon>
+                  <span *ngIf="stage.status === 'active'" class="d2-step-spin" aria-label="En cours"></span>
+                  <span *ngIf="stage.status === 'pending'" class="d2-step-dot" aria-label="En attente"></span>
+                  <et-icon *ngIf="stage.status === 'failed'" name="x" [size]="13" [stroke]="2.4"></et-icon>
                 </div>
                 <span class="d2-step-label">{{ stage.name }}</span>
               </li>
@@ -634,9 +658,10 @@
 
         <article class="d2-card d2-card--pipeline-empty" *ngIf="!latestScanPipeline">
           <div class="d2-empty-block d2-empty-block--compact">
-            <p>Aucun pipeline scan sur ce périmètre.</p>
+            <p>Aucun pipeline de scan sur ce périmètre.</p>
             <button type="button" class="d2-btn-orange" (click)="launchScanPipeline()" [disabled]="scanLaunching">
-              {{ scanLaunching ? 'Lancement…' : '🔎 Lancer un scan' }}
+              <et-icon name="search" [size]="15" *ngIf="!scanLaunching"></et-icon>
+              {{ scanLaunching ? 'Lancement…' : 'Lancer un scan' }}
             </button>
           </div>
         </article>
@@ -647,7 +672,7 @@
         <header class="d2-section-head">
           <span class="d2-section-num">03</span>
           <div class="d2-section-heading">
-            <h2 class="d2-section-name"><span class="d2-section-emoji">🌍</span> Environnements actifs</h2>
+            <h2 class="d2-section-name">Environnements actifs</h2>
             <p class="d2-section-desc">Sessions éphémères en cours</p>
           </div>
           <button type="button" class="d2-section-link" (click)="viewAllEnvironments()">Historique →</button>
@@ -659,8 +684,9 @@
             type="button"
             class="d2-env-filter-chip"
             [title]="opt.title"
+            [style.--chip-color]="envFilterColor(opt.id)"
             (click)="viewDeploymentsWithStatusFilter(opt.id)">
-            <span *ngIf="opt.icon">{{ opt.icon }}</span>
+            <span class="d2-chip-dot" *ngIf="opt.id" aria-hidden="true"></span>
             {{ opt.label }}
           </button>
         </div>
@@ -680,7 +706,7 @@
           </div>
           <ng-template #noEnv>
             <div class="d2-empty-block">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span class="d2-empty-ico" aria-hidden="true"><et-icon name="server" [size]="22"></et-icon></span>
               <p>Aucun environnement actif</p>
               <button type="button" class="d2-btn-orange" (click)="deployOnSelectedBranch()">Lancer un déploiement →</button>
             </div>
@@ -693,7 +719,7 @@
         <header class="d2-section-head">
           <span class="d2-section-num">04</span>
           <div class="d2-section-heading">
-            <h2 class="d2-section-name"><span class="d2-section-emoji">📜</span> Activité &amp; historique</h2>
+            <h2 class="d2-section-name">Activité &amp; historique</h2>
             <p class="d2-section-desc">Derniers évènements, pipelines et vulnérabilités</p>
           </div>
         </header>
@@ -710,7 +736,9 @@
             </header>
             <div class="d2-activity-panel" *ngIf="recentActivities.length; else noAct">
               <div class="d2-activity-item" *ngFor="let act of recentActivities" (click)="navigateActivity(act)">
-                <span class="d2-act-icon" [ngClass]="activityIconClass(act.type)">{{ act.icon }}</span>
+                <span class="d2-act-icon" [ngClass]="activityIconClass(act.type)">
+                  <et-icon [name]="activityIconName(act)" [size]="15"></et-icon>
+                </span>
                 <div class="d2-act-body">
                   <strong>{{ act.title }}</strong>
                   <span>{{ act.description }}</span>
@@ -734,7 +762,7 @@
               <button type="button" class="d2-history-link" (click)="viewAllPipelines()">Voir tout →</button>
             </header>
             <div class="d2-pipe-panel" *ngIf="displayRecentPipelines.length; else noPipe">
-              <div class="d2-pipe-row" *ngFor="let p of displayRecentPipelines" (click)="viewPipeline(p.environmentId)">
+              <div class="d2-pipe-row" *ngFor="let p of displayRecentPipelines" (click)="openRecentPipeline(p)">
                 <div class="d2-pipe-row-start">
                   <code class="d2-pipe-id">#{{ p.id }}</code>
                   <span class="d2-pipe-branch"><span class="d2-pipe-branch-label">branche :</span> {{ p.branch }}</span>
@@ -775,7 +803,7 @@
             </div>
             <ng-template #noVuln>
               <div class="d2-history-empty-block" *ngIf="!recentFindingsLoading">
-                <span class="d2-empty-shield">🛡️</span>
+                <span class="d2-empty-ico d2-empty-ico--ok" aria-hidden="true"><et-icon name="shield-check" [size]="22"></et-icon></span>
                 <p>Aucune vulnérabilité détectée</p>
                 <small>Les résultats apparaîtront après le premier scan.</small>
               </div>
@@ -793,7 +821,7 @@
   <aside class="d2-drawer" [class.d2-drawer--open]="pipelineDrawerOpen">
     <header class="d2-drawer-head">
       <h3>Pipeline #{{ displayLatestDeployment?.pipelineId }}</h3>
-      <button type="button" class="d2-drawer-close" (click)="closePipelineDrawer()">✕</button>
+      <button type="button" class="d2-drawer-close" (click)="closePipelineDrawer()" aria-label="Fermer"><et-icon name="x" [size]="16"></et-icon></button>
     </header>
     <div class="d2-drawer-body">
       <div class="d2-drawer-job" *ngFor="let job of displayLatestDeployment?.jobs || []">
@@ -803,7 +831,7 @@
         </div>
         <span class="d2-drawer-job-meta">{{ job.stage }} · {{ formatDuration(job.durationSeconds ?? job.duration) }}</span>
       </div>
-      <button type="button" class="d2-btn-orange" (click)="viewPipeline(displayLatestDeployment!.environmentId); closePipelineDrawer()">
+      <button type="button" class="d2-btn-orange" (click)="viewDeployPipelineDetails(); closePipelineDrawer()">
         Ouvrir la page pipeline →
       </button>
     </div>
@@ -814,7 +842,7 @@
   <aside class="d2-drawer" [class.d2-drawer--open]="findingDrawerOpen">
     <header class="d2-drawer-head">
       <h3>Remédiation</h3>
-      <button type="button" class="d2-drawer-close" (click)="closeFindingDrawer()">✕</button>
+      <button type="button" class="d2-drawer-close" (click)="closeFindingDrawer()" aria-label="Fermer"><et-icon name="x" [size]="16"></et-icon></button>
     </header>
     <div class="d2-drawer-body" *ngIf="selectedFinding">
       <span class="d2-vuln-sev" [ngClass]="findingSeverityClass(selectedFinding.severity)">{{ selectedFinding.severity }}</span>
@@ -827,3 +855,21 @@
     </div>
   </aside>
 </div>
+
+<!-- Modal : déploiement de l'application du service (même modal que la page de l'application) -->
+<app-project-deploy-modal
+  *ngIf="showDeployModal && deployManagedApp"
+  [services]="deployManagedApp.services || []"
+  [databases]="deployManagedApp.databases || []"
+  [defaultBranch]="deployDefaultBranch"
+  [defaultTtlHours]="4"
+  [defaultCustomHostname]="deployManagedApp.customHostname || ''"
+  [preview]="deployPreview"
+  [previewLoading]="deployPreviewLoading"
+  [running]="deploying"
+  [error]="deployError"
+  [verdict]="qgResult?.verdict || null"
+  (cancel)="closeDeployModal()"
+  (confirm)="confirmDeploy($event)"
+  (selectionChange)="onDeploySelectionChange($event)">
+</app-project-deploy-modal>

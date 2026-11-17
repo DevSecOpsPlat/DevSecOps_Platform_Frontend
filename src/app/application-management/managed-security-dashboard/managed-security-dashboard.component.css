@@ -485,3 +485,44 @@
     align-items: flex-start;
   }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .msd-services { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .msd-services-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .msd-services-sub { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-services-count { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .msd-svc-card { background: linear-gradient(180deg, #111827 0%, #0b1220 100%); border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .msd-svc-card::before { background: #1f2937; }
+:host-context([data-theme="dark"]) .msd-svc-name { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .msd-svc-branch { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-svc-pill { background: hsla(141, 75%, 50%, 0.14); color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .msd-svc-pill--bad { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .msd-svc-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-svc-meta--warn { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .msd-sev { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .msd-sev--c { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-sev--h { background: #0b1220; }
+:host-context([data-theme="dark"]) .msd-sev--m { background: #0b1220; color: hsl(45, 30%, 70%); }
+:host-context([data-theme="dark"]) .msd-sev--l { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-toolbar { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .msd-toolbar-summary { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .msd-field select { border: 1px solid #1f2937; background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .msd-refresh { border: 1px solid #1f2937; background: #111827; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .msd-metrics-row { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .msd-svc-chip { background: #0b1220; border: 1px solid hsla(213, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge { background: #0b1220 !important; color: #a5b4c8 !important; }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge[data-sev='critical'] { background: #0b1220 !important; color: hsl(0, 74%, 70%) !important; }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge[data-sev='high'] { background: #0b1220 !important; color: hsl(17, 85%, 70%) !important; }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge[data-sev='medium'] { background: #0b1220 !important; color: hsl(35, 85%, 70%) !important; }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge[data-sev='low'] { background: #0b1220 !important; color: hsl(142, 72%, 70%) !important; }
+:host-context([data-theme="dark"]) .msd-root .msd-sev-badge[data-sev='info'] { background: #0b1220 !important; color: #a5b4c8 !important; }
+:host-context([data-theme="dark"]) .msd-root .vuln-table tbody tr,
+:host-context([data-theme="dark"]) .msd-root .vuln-table tbody td { background: #111827 !important; color: #e2e8f0 !important; }
+:host-context([data-theme="dark"]) .msd-root .vuln-table tbody tr:hover td { background: #0b1220 !important; }
+:host-context([data-theme="dark"]) .msd-root .vuln-location-path,
+:host-context([data-theme="dark"]) .msd-root .vuln-cell-location { color: #a5b4c8 !important; }
+:host-context([data-theme="dark"]) .msd-root .vuln-title-text { color: hsl(217, 33%, 70%) !important; }
+:host-context([data-theme="dark"]) .msd-root .dd-overview-card:hover,
+:host-context([data-theme="dark"]) .msd-root .dd-overview-card.active { border-color: #334155; }
+:host-context([data-theme="dark"]) .msd-refresh:hover:not(:disabled) { border-color: #334155; color: #e2e8f0; }
+/* === Fin du mode nuit généré === */

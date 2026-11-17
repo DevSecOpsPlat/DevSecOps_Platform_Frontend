@@ -125,17 +125,17 @@ export class SecurityDashboardComponent implements OnInit, OnDestroy {
   bulkActionMessage: string | null = null;
 
   readonly statusGroupActions: FindingRowAction[] = [
-    { action: 'REACTIVATE', label: 'Active', confirm: 'Remettre ce finding en actif ?' },
-    { action: 'VERIFY', label: 'Verified' },
-    { action: 'FALSE_POSITIVE', label: 'False Positive', confirm: 'Marquer comme faux positif ?' },
-    { action: 'OUT_OF_SCOPE', label: 'Out of scope', confirm: 'Marquer hors périmètre ?' },
-    { action: 'CLOSE', label: 'Mitigated', confirm: 'Marquer comme corrigé / mitigé ?' },
-    { action: 'UNDER_REVIEW', label: 'Under Review' }
+    { action: 'REACTIVATE', label: 'Actif', confirm: 'Remettre ce finding en actif ?' },
+    { action: 'VERIFY', label: 'Vérifié' },
+    { action: 'FALSE_POSITIVE', label: 'Faux positif', confirm: 'Marquer comme faux positif ?' },
+    { action: 'OUT_OF_SCOPE', label: 'Hors périmètre', confirm: 'Marquer hors périmètre ?' },
+    { action: 'CLOSE', label: 'Corrigé', confirm: 'Marquer comme corrigé / mitigé ?' },
+    { action: 'UNDER_REVIEW', label: 'En revue' }
   ];
 
   readonly riskGroupActions: FindingRowAction[] = [
-    { action: 'ACCEPT_RISK', label: 'Accept', confirm: 'Accepter le risque pour ce finding ?' },
-    { action: 'UNACCEPT_RISK', label: 'Unaccept', confirm: 'Retirer l\'acceptation de risque ?' }
+    { action: 'ACCEPT_RISK', label: 'Accepter le risque', confirm: 'Accepter le risque pour ce finding ?' },
+    { action: 'UNACCEPT_RISK', label: 'Retirer l\x27acceptation', confirm: 'Retirer l\'acceptation de risque ?' }
   ];
   hasOpenSeverityChart = false;
   openSeverityGranularity: OpenSeverityGranularity = 'day';

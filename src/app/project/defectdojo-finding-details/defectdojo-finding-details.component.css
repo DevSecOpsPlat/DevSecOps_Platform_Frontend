@@ -20,9 +20,32 @@
   font-size: 0.82rem;
 }
 
-.vuln-beforeafter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-@media (max-width: 900px) { .vuln-beforeafter-grid { grid-template-columns: 1fr; } }
-.vuln-beforeafter-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.35rem; }
+/* Les panneaux de la grille IA peuvent rétrécir : sans min-width: 0, un bloc de code
+   impose la largeur de sa plus longue ligne et sort du conteneur. */
+.vuln-ai-results-grid > .vuln-ai-panel { min-width: 0; }
+
+/* « Avant / Après » sur toute la largeur, comme le correctif suggéré. */
+.vuln-ai-panel--beforeafter { grid-column: 1 / -1; border-left: 3px solid #0ea5e9; }
+
+.vuln-beforeafter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+@media (max-width: 900px) { .vuln-beforeafter-grid { grid-template-columns: minmax(0, 1fr); } }
+.vuln-beforeafter-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.vuln-beforeafter-col .vuln-code-patch {
+  max-width: 100%;
+  max-height: min(40vh, 22rem);
+  overflow: auto;
+}
+.vuln-beforeafter-col .vuln-copy-chip { align-self: flex-end; }
+.vuln-beforeafter-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 0; }
 .vuln-beforeafter-label--bad { color: #ef4444; }
 .vuln-beforeafter-label--good { color: #22c55e; }
 .vuln-beforeafter-col--before .vuln-code-patch { border-left: 3px solid #ef4444; }
@@ -148,3 +171,52 @@
   font-size: 0.8rem;
   color: var(--vuln-text-muted, #64748b);
 }
+
+
+/* Métadonnées techniques extraites de la description brute du scanner */
+.vuln-scanner-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+.vuln-scanner-field {
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--color-surface-muted, #f8fafc);
+}
+.vuln-scanner-field dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #64748b);
+  margin-bottom: 0.2rem;
+}
+.vuln-scanner-field dd {
+  margin: 0;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.vuln-scanner-field code {
+  background: transparent;
+  padding: 0;
+  color: var(--color-text, #1e293b);
+}
+.vuln-description.vuln-markdown p { margin: 0 0 0.5rem; }
+.vuln-description.vuln-markdown p:last-child { margin-bottom: 0; }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .vuln-ref-type[data-type="OWASP"] { color: hsl(192, 85%, 70%); }
+:host-context([data-theme="dark"]) .vuln-ref-type[data-type="DOC"] { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .vuln-confidence-badge[data-level="HIGH"] { background: hsla(141, 75%, 50%, 0.14); color: hsl(143, 64%, 70%); }
+:host-context([data-theme="dark"]) .vuln-confidence-badge[data-level="MEDIUM"] { background: hsla(55, 75%, 50%, 0.14); color: hsl(32, 81%, 70%); }
+:host-context([data-theme="dark"]) .vuln-confidence-badge[data-level="LOW"] { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 70%, 70%); }
+:host-context([data-theme="dark"]) .dd-finding-actions { background: linear-gradient(180deg, #0b1220 0%, #111827 100%); }
+:host-context([data-theme="dark"]) .dd-action-btn { background: #111827; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .dd-action-btn:hover:not(:disabled) { background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-action-btn--danger { border-color: hsla(0, 75%, 50%, 0.38); color: hsl(0, 74%, 70%); background: #0b1220; }
+:host-context([data-theme="dark"]) .dd-action-btn--danger:hover:not(:disabled) { background: hsla(0, 75%, 50%, 0.14); }
+/* === Fin du mode nuit généré === */

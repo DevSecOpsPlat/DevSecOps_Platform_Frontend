@@ -8,6 +8,8 @@ import {
   AdminUserMetrics
 } from '../../services/admin/admin.service';
 import { AuthService } from '../../services/auth/auth.service';
+import { adminEventLabel } from '../shared/admin-event-labels';
+import { accountStatusLabel } from '../shared/admin-status';
 
 export interface OverviewAppCard extends AdminUserApplicationDetail {
   ownerUsername: string;
@@ -34,7 +36,9 @@ export interface OverviewUserCard {
  * retour utilisateur du 6 septembre 2026 : la page Accueil a été supprimée mais ses raccourcis de
  * navigation restaient pertinents). */
 export interface QuickLink {
+  /** Nom d'un pictogramme de AdminIconComponent et teinte de sa pastille. */
   icon: string;
+  tone: '' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
   label: string;
   description: string;
   link: string;
@@ -49,7 +53,7 @@ export interface QuickLink {
 @Component({
   selector: 'app-admin-overview',
   templateUrl: './admin-overview.component.html',
-  styleUrls: ['../admin-design-system.css', './admin-overview.component.css']
+  styleUrls: ['./admin-overview.component.css']
 })
 export class AdminOverviewComponent implements OnInit {
   loading = true;
@@ -75,11 +79,11 @@ export class AdminOverviewComponent implements OnInit {
 
   /** Repris de l'ancienne page Accueil (supprimée) : raccourcis + cadre d'usage. */
   readonly quickLinks: QuickLink[] = [
-    { icon: '👥', label: 'Utilisateurs & activité', description: 'Créer des comptes et consulter l\'activité.', link: '/admin/users' },
-    { icon: '▤', label: 'Applications & environnements', description: 'Composition, services, environnements liés.', link: '/admin/applications' },
-    { icon: '⚠', label: 'Alertes', description: 'Menaces, IP bloquées, tableau de bord sécurité.', link: '/admin/alerts' },
-    { icon: '🧾', label: 'Journal d\'audit', description: 'Traçabilité des actions sensibles.', link: '/admin/audit' },
-    { icon: '✉', label: 'Réclamations', description: 'Messages utilisateurs et réponses.', link: '/admin/reclamations' }
+    { icon: 'users', tone: 'info', label: 'Utilisateurs & activité', description: 'Créer des comptes et consulter l\'activité.', link: '/admin/users' },
+    { icon: 'layers', tone: 'success', label: 'Applications & environnements', description: 'Composition, services, environnements liés.', link: '/admin/applications' },
+    { icon: 'shield-alert', tone: 'danger', label: 'Centre de sécurité', description: 'Menaces, IP bloquées, tableau de bord sécurité.', link: '/admin/alerts' },
+    { icon: 'file-text', tone: 'neutral', label: 'Journal d\'audit', description: 'Traçabilité des actions sensibles.', link: '/admin/audit' },
+    { icon: 'message-square', tone: 'warning', label: 'Réclamations', description: 'Messages utilisateurs et réponses.', link: '/admin/reclamations' }
   ];
 
   constructor(
@@ -127,9 +131,10 @@ export class AdminOverviewComponent implements OnInit {
         appCards.push({ ...a, ownerUsername: u.username, activeEnvironmentsCount: 0 });
       }
       for (const e of u.environments || []) {
+        // Anomalie = problème actuel (échec ou dégradé) ; un environnement détruit dont le
+        // pipeline avait échoué appartient à l'historique, pas aux anomalies.
         const status = (e.status || '').toUpperCase();
-        const ps = (e.pipelineStatus || '').toUpperCase();
-        if (status === 'FAILED' || ps === 'FAILED' || ps === 'CANCELED') {
+        if (status === 'FAILED' || status === 'DEGRADED') {
           anomalies++;
         }
         if (status === 'RUNNING') {
@@ -180,11 +185,12 @@ export class AdminOverviewComponent implements OnInit {
         this.executions24h = pipelineToday.length;
         this.executions24hFailed = pipelineToday.filter(e => e.severity === 'CRITICAL').length;
 
+        // Les 2 plus récentes seulement ; le compteur, lui, porte sur toutes les alertes des 48 h.
         const twoDaysAgo = Date.now() - 48 * 3600 * 1000;
-        this.attentionEvents = events
-          .filter(e => e.kind === 'ALERT' && e.severity !== 'INFO' && this.toTime(e.occurredAt) >= twoDaysAgo)
-          .slice(0, 6);
-        this.attentionCount = this.attentionEvents.length;
+        const recentAlerts = events
+          .filter(e => e.kind === 'ALERT' && e.severity !== 'INFO' && this.toTime(e.occurredAt) >= twoDaysAgo);
+        this.attentionCount = recentAlerts.length;
+        this.attentionEvents = recentAlerts.slice(0, 2);
 
         this.activityLoading = false;
       },
@@ -222,8 +228,32 @@ export class AdminOverviewComponent implements OnInit {
     return 'il y a ' + Math.floor(seconds / 86400) + ' j';
   }
 
-  attentionSeverityClass(e: AdminActivityEvent): string {
-    return 'sev-' + (e.severity || 'warning').toLowerCase();
+  eventLabel(e: AdminActivityEvent): string {
+    return adminEventLabel(e.eventType);
+  }
+
+  /** Pictogramme de la ligne « Attention requise », selon la nature de l'alerte. */
+  attentionIcon(e: AdminActivityEvent): string {
+    const type = (e.eventType || '').toUpperCase();
+    if (type.startsWith('DEPLOYMENT_')) return 'server';
+    const icons: Record<string, string> = {
+      LOGIN_FAILED: 'key',
+      FAILED_LOGIN_REPEATED: 'key',
+      ACCOUNT_LOCKED: 'lock',
+      UNAUTHORIZED_ACCESS: 'lock',
+      BRUTE_FORCE_DETECTED: 'shield-alert',
+      IP_BLOCKED: 'ban',
+      HONEYPOT_TRIGGERED: 'crosshair',
+      SUSPICIOUS_REQUEST: 'crosshair',
+      SUSPICIOUS_USER_AGENT: 'crosshair',
+      MALICIOUS_PAYLOAD: 'code',
+      RATE_LIMIT_EXCEEDED: 'gauge'
+    };
+    return icons[type] ?? 'alert-triangle';
+  }
+
+  accountStatusLabel(status: string | null | undefined): string {
+    return accountStatusLabel(status);
   }
 
   openEnvironment(id: string): void {

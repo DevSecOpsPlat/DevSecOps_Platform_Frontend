@@ -89,6 +89,8 @@ export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   codeContextSource?: string;
   codeContextHint?: string;
   applicationId?: string;
+  /** Métadonnées techniques du scanner (libellé français → valeur brute). */
+  scannerFields?: Record<string, string> | null;
 }
 
 export interface DefectDojoFindingsPage {

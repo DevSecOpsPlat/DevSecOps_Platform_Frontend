@@ -1,59 +1,106 @@
-<div class="ads-page" *ngIf="!loading && !error && env">
-  <header class="ads-hero">
-    <p class="ads-breadcrumb"><a (click)="openApplication()" style="cursor:pointer;">← {{ env.applicationName }}</a></p>
-    <div class="ads-hero-row">
-      <div>
-        <h1 class="ads-hero-title mono">{{ env.environmentName }}</h1>
-        <p class="ads-hero-lead">{{ ownerUsername }} ({{ ownerEmail }}) · branche <code class="mono">{{ env.gitBranch }}</code></p>
-      </div>
-      <span class="ads-status" [ngClass]="statusClass(env.status)" style="font-size:.72rem;padding:.3rem .7rem;">{{ env.status }}</span>
+<div class="adm-page" *ngIf="!loading && !error && env">
+  <header class="adm-hero">
+    <div class="adm-hero-main">
+      <button type="button" class="adm-breadcrumb" (click)="openApplication()">← {{ env.applicationName }}</button>
+      <h1 class="adm-hero-title">
+        <span class="adm-mono">{{ env.environmentName }}</span>
+        <span class="adm-badge" [ngClass]="'adm-badge--' + statusClass(env.status)">{{ statusLabel(env.status) }}</span>
+      </h1>
+      <p class="adm-hero-lead">
+        Application <strong>{{ env.applicationName }}</strong> · {{ ownerUsername }} ({{ ownerEmail }}) · branche <code>{{ env.gitBranch }}</code>
+      </p>
     </div>
-    <div class="ads-hero-meta">
-      <div><strong>{{ age(env.createdAt) }}</strong>durée d'activité</div>
-      <div *ngIf="env.expiresAt"><strong>{{ age(env.expiresAt) }}</strong>avant expiration</div>
-      <div><strong>{{ env.ttlHours }}h</strong>durée de vie</div>
+    <div class="adm-hero-stats">
+      <div class="adm-hero-stat"><strong>{{ age(env.createdAt) }}</strong><span>depuis la création</span></div>
+      <div class="adm-hero-stat" *ngIf="isLive && env.expiresAt"><strong>{{ timeUntil(env.expiresAt) }}</strong><span>avant expiration</span></div>
+      <div class="adm-hero-stat"><strong>{{ env.ttlHours }} h</strong><span>durée de vie prévue</span></div>
+      <div class="adm-hero-stat"><strong>{{ services.length }}</strong><span>service{{ services.length > 1 ? 's' : '' }}</span></div>
     </div>
   </header>
 
-  <div class="ads-detail-grid">
-    <div>
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">🧩 Services</h3>
-        <div *ngIf="monitoringLoading" class="ads-state-load"><span class="ads-spinner"></span> Chargement des ressources…</div>
-        <ng-container *ngIf="!monitoringLoading">
-          <div class="ads-svc-line" *ngFor="let s of services">
-            <span class="ads-svc-name">{{ s.name }}</span>
-            <span class="ads-svc-role" *ngIf="s.role">{{ s.role }}</span>
-            <span class="ads-status" [ngClass]="statusClass(serviceStatusLabel(s))">{{ serviceStatusLabel(s) }}</span>
-            <span class="ads-svc-res" *ngIf="s.pod?.memoryUsage">{{ s.pod?.memoryUsage }} · {{ s.pod?.cpuUsage }}</span>
-          </div>
-          <p class="ads-empty" *ngIf="!services.length">
-            <span class="ads-empty-sub">Aucune donnée de service disponible pour cet environnement.</span>
-          </p>
-        </ng-container>
+  <div class="adm-alert" *ngIf="!isLive">
+    <span class="adm-alert-body">
+      Environnement <strong>{{ statusLabel(env.status) | lowercase }}</strong> : ses ressources Kubernetes ont été libérées,
+      les données ci-dessous sont l'historique conservé par la plateforme.
+    </span>
+  </div>
 
-        <div class="ads-res-bar-wrap" *ngIf="monitoring?.summary as sum">
-          <div class="ads-res-bar-label"><span>Mémoire du namespace</span><span>{{ sum.totalMemoryMi }} Mi</span></div>
-          <div class="ads-res-bar"><div class="ads-res-bar-fill" [style.width.%]="sum.metricsAvailable ? 40 : 0"></div></div>
+  <div class="adm-grid adm-grid--aside">
+    <div class="adm-stack">
+      <section class="adm-card adm-card--flush">
+        <div class="adm-card-head">
+          <div>
+            <h2 class="adm-card-title">Services</h2>
+            <p class="adm-card-sub">{{ isLive ? 'État réel des workloads dans le namespace.' : 'Composition au moment du déploiement.' }}</p>
+          </div>
+        </div>
+        <div *ngIf="monitoringLoading" class="adm-card-body"><div class="adm-state"><span class="adm-spinner"></span> Chargement des ressources…</div></div>
+        <div class="adm-table-wrap" *ngIf="!monitoringLoading">
+          <table class="adm-table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>État</th>
+                <th>Réplicas</th>
+                <th>Consommation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let s of services">
+                <td>
+                  <span class="adm-cell-title">{{ s.name }}</span>
+                  <span class="adm-cell-sub">{{ roleLabel(s.role) }}</span>
+                </td>
+                <td><span class="adm-badge" [ngClass]="'adm-badge--' + statusClass(serviceStatus(s))">{{ statusLabel(serviceStatus(s)) }}</span></td>
+                <td class="adm-mono">{{ s.live ? s.live.ready + ' / ' + s.live.desired : '—' }}</td>
+                <td class="adm-mono">{{ s.pod?.memoryUsage ? s.pod?.memoryUsage + ' · ' + s.pod?.cpuUsage : '—' }}</td>
+              </tr>
+              <tr *ngIf="!services.length">
+                <td colspan="4" class="adm-table-empty">Aucun service rattaché à cet environnement.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="ed-memory" *ngIf="isLive && monitoring?.summary as sum">
+          <div class="adm-meter-label">
+            <span>Mémoire du namespace</span>
+            <span>
+              <strong>{{ sum.totalMemoryMi ?? '—' }} Mi</strong>
+              <ng-container *ngIf="memoryQuotaPct !== null"> / {{ memoryQuotaLabel }} ({{ memoryQuotaPct }} %)</ng-container>
+            </span>
+          </div>
+          <div class="adm-meter" *ngIf="memoryQuotaPct !== null">
+            <div class="adm-meter-fill" [ngClass]="'adm-meter-fill--' + meterTone(memoryQuotaPct)" [style.width.%]="memoryQuotaPct"></div>
+          </div>
         </div>
       </section>
 
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">⚠️ Événements récents</h3>
-        <ul style="list-style:none;padding:0;margin:0;" *ngIf="monitoring?.alerts?.length">
-          <li *ngFor="let a of monitoring!.alerts" style="padding:.5rem 0;border-bottom:1px solid var(--admin-border-soft);font-size:.84rem;">
-            <strong>{{ a.reason || a.message }}</strong>
-            <span class="ads-t-chip" *ngIf="a.workload" style="margin-left:.4rem;">{{ a.workload }}</span>
-          </li>
-        </ul>
-        <p class="ads-empty" *ngIf="!monitoring?.alerts?.length">
-          <span class="ads-empty-sub">Aucun événement K8s récent sur ce namespace.</span>
-        </p>
+      <section class="adm-card">
+        <div class="adm-card-head">
+          <h2 class="adm-card-title">Événements Kubernetes</h2>
+        </div>
+        <ng-container *ngIf="isLive && monitoring?.alerts?.length; else noEvents">
+          <div class="adm-line" *ngFor="let a of monitoring!.alerts">
+            <span class="adm-badge" [ngClass]="a.severity === 'error' ? 'adm-badge--danger' : 'adm-badge--warning'">
+              {{ a.severity === 'error' ? 'Erreur' : 'Avertissement' }}
+            </span>
+            <span class="adm-line-title">{{ a.reason || a.message }}</span>
+            <span class="adm-line-end" *ngIf="a.workload"><span class="adm-chip adm-chip--mono">{{ a.workload }}</span></span>
+          </div>
+        </ng-container>
+        <ng-template #noEvents>
+          <div class="adm-empty">
+            <p class="adm-empty-text">
+              {{ isLive ? 'Aucun événement récent sur ce namespace.' : 'Aucun événement : le namespace n’existe plus.' }}
+            </p>
+          </div>
+        </ng-template>
       </section>
 
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">🕒 Activité récente</h3>
-        <div *ngIf="activityLoading" class="ads-state-load"><span class="ads-spinner"></span></div>
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Activité récente</h2></div>
+        <div *ngIf="activityLoading" class="adm-state"><span class="adm-spinner"></span> Chargement…</div>
         <app-admin-activity-timeline
           *ngIf="!activityLoading"
           [events]="activity"
@@ -62,34 +109,53 @@
       </section>
     </div>
 
-    <div>
-      <section class="ads-panel" *ngIf="env.url || monitoring?.appUrl">
-        <h3 class="ads-panel-title">🔗 Accès</h3>
-        <div class="ads-url-chip">
-          🌐 {{ monitoring?.appUrl || env.url }}
-          <button type="button" class="ads-btn-mini" (click)="copyUrl()" style="margin-left:auto;">Copier</button>
-        </div>
-        <div class="ads-preview-frame">
-          <iframe *ngIf="previewUrl" [src]="previewUrl" title="Aperçu de l'application"></iframe>
-          <ng-container *ngIf="!previewUrl">
-            <span style="font-size:1.5rem;">🖥️</span>
-            Aperçu indisponible
+    <div class="adm-stack">
+      <section class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title">Résumé</h2></div>
+        <dl class="adm-kv">
+          <dt>Application</dt><dd>{{ env.applicationName }}</dd>
+          <dt>Propriétaire</dt><dd>{{ ownerUsername }}</dd>
+          <dt>Branche</dt><dd class="adm-mono">{{ env.gitBranch }}</dd>
+          <dt>Namespace</dt><dd class="adm-mono">{{ env.namespace || '—' }}</dd>
+          <dt>Créé le</dt><dd>{{ formatDate(env.createdAt) }}</dd>
+          <ng-container *ngIf="env.expiresAt">
+            <dt>{{ isLive ? 'Expire le' : 'Fin prévue le' }}</dt><dd>{{ formatDate(env.expiresAt) }}</dd>
           </ng-container>
-        </div>
+          <dt>Durée de vie</dt><dd>{{ env.ttlHours }} heures</dd>
+          <ng-container *ngIf="env.gitlabPipelineId">
+            <dt>Dernier pipeline</dt>
+            <dd>
+              <span class="ed-pipeline" [ngClass]="'ed-pipeline--' + statusClass(env.pipelineStatus)">{{ pipelineLabel(env.pipelineStatus) }}</span>
+              <span class="adm-mono adm-muted"> · #{{ env.gitlabPipelineId }}</span>
+            </dd>
+          </ng-container>
+        </dl>
       </section>
 
-      <section class="ads-panel">
-        <h3 class="ads-panel-title">ℹ️ Résumé</h3>
-        <div class="ads-kv-row"><span class="ads-kv-label">Application</span><span class="ads-kv-value">{{ env.applicationName }}</span></div>
-        <div class="ads-kv-row"><span class="ads-kv-label">Branche</span><span class="ads-kv-value mono">{{ env.gitBranch }}</span></div>
-        <div class="ads-kv-row"><span class="ads-kv-label">Créé le</span><span class="ads-kv-value">{{ formatDate(env.createdAt) }}</span></div>
-        <div class="ads-kv-row" *ngIf="env.expiresAt"><span class="ads-kv-label">Expire le</span><span class="ads-kv-value">{{ formatDate(env.expiresAt) }}</span></div>
-        <div class="ads-kv-row"><span class="ads-kv-label">Durée de vie</span><span class="ads-kv-value">{{ env.ttlHours }} heures</span></div>
-        <div class="ads-kv-row" *ngIf="env.gitlabPipelineId"><span class="ads-kv-label">Dernier pipeline</span><span class="ads-kv-value">#{{ env.gitlabPipelineId }} · {{ env.pipelineStatus || '—' }}</span></div>
+      <section class="adm-card" *ngIf="env.url || monitoring?.appUrl">
+        <div class="adm-card-head">
+          <h2 class="adm-card-title">Accès</h2>
+          <div class="adm-toolbar" *ngIf="isLive">
+            <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm" (click)="copyUrl()">{{ copied ? 'Copié' : 'Copier' }}</button>
+            <a class="adm-btn adm-btn--secondary adm-btn--sm" [href]="monitoring?.appUrl || env.url" target="_blank" rel="noopener noreferrer">Ouvrir →</a>
+          </div>
+        </div>
+        <p class="adm-url"><span>{{ monitoring?.appUrl || env.url }}</span></p>
+        <div class="adm-preview">
+          <iframe *ngIf="isLive && previewUrl" [src]="previewUrl" title="Aperçu de l'application"></iframe>
+          <ng-container *ngIf="!(isLive && previewUrl)">
+            {{ isLive ? 'Aperçu indisponible' : 'Aperçu indisponible : l’environnement n’est plus en ligne.' }}
+          </ng-container>
+        </div>
       </section>
     </div>
   </div>
 </div>
 
-<div *ngIf="loading" class="ads-page"><div class="ads-state-load"><span class="ads-spinner"></span> Chargement…</div></div>
-<div *ngIf="error" class="ads-page"><div class="ads-state-err">{{ error }}</div></div>
+<div class="adm-page" *ngIf="loading">
+  <div class="adm-state"><span class="adm-spinner"></span> Chargement de l'environnement…</div>
+</div>
+<div class="adm-page" *ngIf="error">
+  <a class="adm-link" routerLink="/admin/environments">← Environnements</a>
+  <div class="adm-alert adm-alert--danger"><span class="adm-alert-body">{{ error }}</span></div>
+</div>

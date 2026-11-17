@@ -125,3 +125,7 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .modal-backdrop { background: rgba(255, 255, 255, 0.12); }
+/* === Fin du mode nuit généré === */

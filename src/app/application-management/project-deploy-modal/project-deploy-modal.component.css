@@ -211,3 +211,25 @@
   color: #b45309;
   font-weight: 600;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .pdm-svc { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .pdm-svc:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .pdm-svc .role-frontend { background: #0b1220; }
+:host-context([data-theme="dark"]) .pdm-svc .role-backend { background: hsla(48, 75%, 50%, 0.14); color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .pdm-svc .role-worker { background: hsla(269, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .pdm-hint { color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .pdm-db { border: 1px dashed #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .pdm-db-meta { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pdm-confirm { background: #0b1220; color: hsl(15, 79%, 70%); }
+:host-context([data-theme="dark"]) .pdm-disabled-reason { background: #0b1220; color: hsl(15, 79%, 70%); }
+:host-context([data-theme="dark"]) .pdm-confirm--danger { background: #0b1220; border-color: hsla(0, 75%, 50%, 0.38); color: hsl(0, 70%, 70%); }
+:host-context([data-theme="dark"]) .pdm-quota { border: 1px solid #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .pdm-quota--over { background: #0b1220; border-color: hsla(0, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .pdm-quota-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pdm-quota-meter { background: #0b1220; }
+:host-context([data-theme="dark"]) .pdm-quota-val { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pdm-quota-warn-text { color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .pdm-quota-hint { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pdm-quota-hint--danger { color: hsl(26, 85%, 70%); }
+/* === Fin du mode nuit généré === */

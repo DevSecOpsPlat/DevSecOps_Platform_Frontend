@@ -2,13 +2,12 @@ import { Component } from '@angular/core';
 import { UserService } from '../../services/user/user.service';
 
 /**
- * Coque admin : même structure visuelle que le layout projet (sidebar + zone principale),
- * sans réutiliser les routes / écrans métier (projet, pipeline détail, etc.).
+ * Coque admin : barre latérale + zone principale. La racine `.adm` porte les variables du thème
+ * de la console (src/app/admin/admin-theme.css), héritées par toutes les pages admin.
  */
 @Component({
   selector: 'app-admin-layout',
-  templateUrl: './admin-layout.component.html',
-  styleUrls: ['./admin-layout.component.css']
+  templateUrl: './admin-layout.component.html'
 })
 export class AdminLayoutComponent {
   constructor(public userService: UserService) {}

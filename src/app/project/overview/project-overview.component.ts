@@ -4,8 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import Chart from 'chart.js/auto';
-import { Subject, combineLatest, forkJoin, of } from 'rxjs';
-import { catchError, debounceTime, delay, distinctUntilChanged, map, switchMap, takeUntil, timeout } from 'rxjs/operators';
+import { Observable, Subject, combineLatest, forkJoin, of } from 'rxjs';
+import { catchError, debounceTime, delay, distinctUntilChanged, map, shareReplay, switchMap, takeUntil, tap, timeout } from 'rxjs/operators';
 import { ApplicationService } from '../../services/application/application.service';
 import { EnvironmentService } from '../../services/environment/environment.service';
 import { PipelineService } from '../../services/pipeline/pipeline.service';
@@ -20,6 +20,19 @@ import {
 } from '../../models/environment/status-types';
 import { PipelineJobInfo } from '../../models/pipeline/pipeline-scan-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
+import { CI_STAGE_ORDER } from '../../shared/ci-stage-order';
+import { ProjectDeployModalComponent, ProjectDeployParams } from '../../application-management/project-deploy-modal/project-deploy-modal.component';
+import { ApplicationManagementService } from '../../services/application-management/application-management.service';
+import { DeployPreview, ManagedApp } from '../../models/application-management/application-management.models';
+import { ToastService } from '../../services/ui/toast.service';
+import { EtIconComponent, EtIconName } from '../../shared/et-icon/et-icon.component';
+import {
+  QualityGateEnvironmentOption,
+  QualityGateResult,
+  QualityGateService,
+  QualityGateToolMetric,
+  pickDefaultScanPipeline
+} from '../../services/quality-gate/quality-gate.service';
 import {
   ActivityItem,
   DashboardPipelineItem
@@ -224,10 +237,20 @@ const TOOL_HINTS: [string, string][] = CI_SCANNER_DEFS.flatMap(def => [
 
 const DEFAULT_SCANNER_ICON = 'assets/scanners/default.svg';
 
+/** SonarQube figure dans les outils du Quality Gate (pas dans DefectDojo) : carte dédiée dans l'indice de maturité. */
+const SONAR_SCANNER_DEF: CiScannerDef = {
+  id: 'sonarqube',
+  name: 'SonarQube',
+  matchers: ['sonarqube', 'sonar'],
+  icon: DEFAULT_SCANNER_ICON,
+  type: 'SAST',
+  tooltip: 'Analyse de la qualité et de la sécurité du code (SonarQube).'
+};
+
 @Component({
   selector: 'app-project-overview',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProjectDeployModalComponent, EtIconComponent],
   templateUrl: './project-overview.component.html',
   styleUrls: [
     './project-overview.component.css',
@@ -237,13 +260,29 @@ const DEFAULT_SCANNER_ICON = 'assets/scanners/default.svg';
 export class ProjectOverviewComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private readonly securityReload$ = new Subject<{ appId: string; branch: string; pipelineId?: string | null }>();
+
+  // Déploiement depuis la vue d'ensemble d'un service : même modal que la page de l'application.
+  showDeployModal = false;
+  deployManagedApp: ManagedApp | null = null;
+  deployPreview: DeployPreview | null = null;
+  deployPreviewLoading = false;
+  deploying = false;
+  deployError: string | null = null;
+  private readonly deployPreviewTrigger$ = new Subject<{ branch: string; sessionDurationHours: number; serviceIds: string[] }>();
+
+  /** Résultat Quality Gate (dernier pipeline de scan de la branche) : source unique de l'indice de maturité. */
+  qgResult: QualityGateResult | null = null;
+  qgLoading = false;
+  private qgScopeKey = '';
+  private readonly maturityQg$ = new Subject<{ appId: string; branch: string | null; pipelineId: string | null }>();
+  /** Pipelines dont le résultat manquant a déjà été calculé une fois (comme la page Quality Gate). */
+  private readonly qgAutoCaptured = new Set<string>();
   private deployDonutChart?: Chart;
   private weekBarChart?: Chart;
   private daySeverityChart?: Chart;
   private chartRenderTimer?: ReturnType<typeof setTimeout>;
   private countdownTimer?: ReturnType<typeof setInterval>;
   private ttlCountdownInterval?: ReturnType<typeof setInterval>;
-  private kpiAnimFrame?: number;
 
   @ViewChild('deployDonutCanvas') deployDonutCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('weekBarCanvas') weekBarCanvas?: ElementRef<HTMLCanvasElement>;
@@ -258,6 +297,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   appsLoading = false;
   appId: string | null = null;
   selectedBranch = GLOBAL_BRANCH;
+  /** Branche pour laquelle déploiements / pipelines ont été chargés en dernier. */
+  private scopedDataBranch: string | null = null;
+  private readonly defaultBranchByApp = new Map<string, string>();
   selectedEnvironmentId: string | null = null;
   selectedPipelineId: string | null = null;
   branches: string[] = [];
@@ -305,7 +347,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   overviewError: string | null = null;
   loadingSlow = false;
 
-  animatedKpis: Record<string, number> = {};
   recentFindings: FindingItem[] = [];
   recentDojoFindings: DefectDojoFindingItem[] = [];
   recentFindingsLoading = false;
@@ -332,18 +373,78 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     private pipelineService: PipelineService,
     private findingsService: FindingsService,
     private ngZone: NgZone,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private appMgmt: ApplicationManagementService,
+    private toastService: ToastService,
+    private qualityGateService: QualityGateService
   ) {}
 
   ngOnInit(): void {
+    this.deployPreviewTrigger$
+      .pipe(debounceTime(250), takeUntil(this.destroy$))
+      .subscribe(sel => this.fetchDeployPreview(sel));
+
+    // Indice de maturité = résultat Quality Gate du pipeline de scan retenu (même règle que la page Quality Gate).
+    this.maturityQg$.pipe(
+      switchMap(({ appId, branch, pipelineId }) => {
+        this.qgLoading = true;
+        return this.qualityGateService.listScanPipelines(appId, branch).pipe(
+          catchError(() => of([] as QualityGateEnvironmentOption[])),
+          switchMap(pipes => {
+            const requested = pipelineId ? pipes.find(p => p.pipelineId === pipelineId) : undefined;
+            const pick = requested ?? (branch ? (pipes.find(p => !!p.pipelineId) ?? null) : pickDefaultScanPipeline(pipes));
+            if (!pick?.pipelineId) {
+              return of(null);
+            }
+            const pid = pick.pipelineId;
+            const qgBranch = pick.branch || branch;
+            return this.qualityGateService.getQualityGate(appId, qgBranch, null, false, pid).pipe(
+              timeout(SECURITY_REQUEST_TIMEOUT_MS),
+              switchMap(res => {
+                // Résultat pas encore enregistré pour un pipeline terminé : le calculer une fois
+                // (même comportement que la page Quality Gate), au lieu d'afficher « indisponible ».
+                const status = (res?.pipelineStatus || '').toUpperCase();
+                if (res?.verdictSource === 'SNAPSHOT_MISSING' && status !== 'RUNNING' && status !== 'PENDING'
+                    && !this.qgAutoCaptured.has(pid)) {
+                  this.qgAutoCaptured.add(pid);
+                  return this.qualityGateService.getQualityGate(appId, qgBranch, null, true, pid).pipe(
+                    timeout(SECURITY_REQUEST_TIMEOUT_MS),
+                    catchError(() => of(res))
+                  );
+                }
+                return of(res);
+              }),
+              catchError(() => of(null))
+            );
+          })
+        );
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe(res => {
+      this.qgResult = res;
+      this.qgLoading = false;
+    });
+
     const appId$ = this.route.parent!.paramMap.pipe(
       map(p => p.get('appId')),
       distinctUntilChanged()
     );
-    const branch$ = this.route.queryParamMap.pipe(
-      map(qp => qp.get('branch') ?? GLOBAL_BRANCH),
-      distinctUntilChanged()
+    // Sans ?branch= explicite : branche de travail du service (main en général). La vue
+    // « Toutes les branches » reste accessible via ?branch=__all__ (sélecteur).
+    const branch$ = combineLatest([appId$, this.route.queryParamMap]).pipe(
+      switchMap(([id, qp]) => {
+        const explicit = qp.get('branch');
+        if (explicit) return of(explicit);
+        return id ? this.serviceDefaultBranch$(id) : of(GLOBAL_BRANCH);
+      }),
+      distinctUntilChanged(),
+      shareReplay({ bufferSize: 1, refCount: true })
     );
+
+    // Libellés à jour tout de suite ; le rechargement des données suit (abonnement plus bas).
+    branch$.pipe(takeUntil(this.destroy$)).subscribe(b => {
+      this.selectedBranch = b;
+    });
 
     this.securityReload$.pipe(
       switchMap(({ appId, branch, pipelineId }) => {
@@ -361,7 +462,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           timeout(SECURITY_REQUEST_TIMEOUT_MS),
           catchError(err => {
             const msg = err?.name === 'TimeoutError'
-              ? 'Le chargement DefectDojo a dépassé 90 s — vérifiez la connexion ngrok.'
+              ? 'Le chargement des résultats de sécurité a dépassé 90 s — réessayez avec « Actualiser ».'
               : (err.error?.message || 'Impossible de charger le centre de sécurité');
             throw { message: msg };
           })
@@ -427,14 +528,24 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       )
       .subscribe(([id, branch, pipelineId]) => {
         if (!id) return;
-        const prev = this.selectedBranch;
         this.selectedBranch = branch;
         this.selectedPipelineId = pipelineId;
         this.requestSecurityReload(id, branch, pipelineId);
-        if (!this.overviewLoading && prev !== branch) {
+        if (!this.overviewLoading && this.scopedDataBranch !== branch) {
           this.reloadBranchScopedData();
         }
       });
+  }
+
+  /** Branche de travail du service (champ git_branch), mise en cache par service. */
+  private serviceDefaultBranch$(appId: string): Observable<string> {
+    const cached = this.defaultBranchByApp.get(appId);
+    if (cached) return of(cached);
+    return this.applicationService.getApplicationById(appId).pipe(
+      map(app => (app?.gitBranch || '').trim() || 'main'),
+      catchError(() => of('main')),
+      tap(b => this.defaultBranchByApp.set(appId, b))
+    );
   }
 
   ngOnDestroy(): void {
@@ -443,7 +554,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     if (this.countdownTimer) clearInterval(this.countdownTimer);
     if (this.ttlCountdownInterval) clearInterval(this.ttlCountdownInterval);
     if (this.pipelineLivePollTimer) clearInterval(this.pipelineLivePollTimer);
-    if (this.kpiAnimFrame) cancelAnimationFrame(this.kpiAnimFrame);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -556,16 +666,57 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     return `Échelle : ${MATURITY_GRADE_SCALE}`;
   }
 
+  /** Note et score repris tels quels du Quality Gate (aucun second calcul côté vue d'ensemble). */
   get resolvedSecurityScore(): SecurityScoreView | null {
-    const api = this.dashboard?.securityScore;
-    if (api?.grade) {
-      return {
-        grade: api.grade,
-        score: api.score ?? 0,
-        summary: api.summary?.trim() || this.buildSecurityScoreSummary(api.grade)
-      };
+    const qg = this.qgResult;
+    const s = qg?.securityScore;
+    if (!qg || !s?.grade) {
+      return null;
     }
-    return this.computeSecurityScoreClient();
+    return {
+      grade: s.grade,
+      score: s.score ?? 0,
+      summary: qg.summary?.trim() || this.buildSecurityScoreSummary(s.grade)
+    };
+  }
+
+  /** Sous-titre de la carte : quel scan est évalué. */
+  get maturityScopeSub(): string {
+    const qg = this.qgResult;
+    if (qg?.branch) {
+      return `Dernier scan · ${qg.branch}${qg.pipelineId ? ' · #' + qg.pipelineId : ''}`;
+    }
+    return this.isGlobalView ? 'Toutes les branches' : `Branche ${this.selectedBranch}`;
+  }
+
+  private get maturityScopeLabel(): string {
+    const qg = this.qgResult;
+    if (qg?.branch) {
+      return `dernier scan de la branche ${qg.branch}${qg.pipelineId ? ` (pipeline #${qg.pipelineId})` : ''}`;
+    }
+    return this.isGlobalView ? 'toutes les branches' : `la branche ${this.selectedBranch}`;
+  }
+
+  /** Compteurs du Quality Gate, mêmes règles que la page Quality Gate. */
+  get maturityCounts(): { total: number; critical: number; high: number; medium: number; low: number } {
+    const qg = this.qgResult;
+    if (!qg) {
+      return { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+    }
+    const sev = qg.metrics?.bySeverity ?? {};
+    const tools = qg.toolMetrics ?? [];
+    const fromTools = (k: 'critical' | 'high' | 'medium' | 'low') =>
+      tools.reduce((n, t) => n + (t[k] ?? 0), 0);
+    const pick = (k: 'critical' | 'high' | 'medium' | 'low') => sev[k] ?? fromTools(k);
+    const sevSum = (sev['critical'] ?? 0) + (sev['high'] ?? 0) + (sev['medium'] ?? 0) + (sev['low'] ?? 0);
+    const toolSum = fromTools('critical') + fromTools('high') + fromTools('medium') + fromTools('low');
+    return {
+      total: sevSum > 0 ? sevSum : (toolSum > 0 ? toolSum : (qg.metrics?.totalVulnerabilities ?? 0)),
+      critical: qg.metrics?.combinedCritical ?? pick('critical'),
+      high: pick('high'),
+      medium: pick('medium'),
+      low: sev['low'] ?? 0
+    };
   }
 
   get displaySecurityGrade(): string {
@@ -578,60 +729,107 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   get displaySecuritySummary(): string {
-    if (this.resolvedSecurityScore?.summary) {
-      return this.resolvedSecurityScore.summary;
+    const summary = this.qgResult?.summary?.trim();
+    if (summary) {
+      return summary;
     }
-    return `Aucune donnée de scan. Lancez un pipeline pour obtenir une note (${MATURITY_GRADE_SCALE}).`;
+    if (this.qgLoading) {
+      return 'Lecture du résultat Quality Gate…';
+    }
+    return `Aucun scan terminé sur ce périmètre. Lancez un pipeline de scan pour obtenir une note (${MATURITY_GRADE_SCALE}).`;
   }
 
   get securityScorePercent(): number {
     return this.resolvedSecurityScore?.score ?? 0;
   }
 
+  /**
+   * Même verdict, même note et mêmes explications que la page Quality Gate :
+   * « Pourquoi ce verdict ? » = verdictExplanation, « Conseils pratiques » = practicalAdvice.
+   */
   get maturityAnalysis(): MaturityAnalysis {
+    const qg = this.qgResult;
     const resolved = this.resolvedSecurityScore;
     const grade = resolved?.grade ?? '—';
     const score = resolved?.score ?? 0;
-    const scopeLabel = this.isGlobalView
-      ? 'toutes les branches'
-      : `la branche ${this.selectedBranch}`;
-    const critical = this.openSeverityCount('Critical');
-    const high = this.openSeverityCount('High');
-    const medium = this.openSeverityCount('Medium');
-    const low = this.openSeverityCount('Low');
-    const open = this.totalSecurityOpen;
-    const closed = this.dashboard?.totalClosed ?? 0;
-    const hasData = !!(resolved || this.dashboard?.bySeverity || this.totalSecurityOpen > 0);
+    const scopeLabel = this.maturityScopeLabel;
     const scanAnalyses = this.buildMaturityScanAnalyses();
-    const secretFindings = scanAnalyses.find(s => s.name === 'Gitleaks')?.findingCount ?? 0;
 
-    const verdict = this.computeMaturityVerdict(grade, critical, high, secretFindings, hasData, scanAnalyses);
+    if (!qg) {
+      return {
+        hasData: false,
+        grade,
+        score,
+        scopeLabel,
+        verdict: 'unknown',
+        verdictTitle: this.qgLoading ? 'Analyse en cours…' : 'Analyse indisponible',
+        verdictDetail: this.qgLoading
+          ? 'Lecture du dernier résultat Quality Gate de ce périmètre.'
+          : 'Aucun pipeline de scan terminé sur ce périmètre. Lancez un scan avant de déployer.',
+        findings: [],
+        actions: this.qgLoading ? [] : ['Lancer un pipeline de scan sur la branche à déployer.'],
+        scanAnalyses
+      };
+    }
 
-    const findings: string[] = [];
-    if (!hasData) {
-      findings.push('Aucun résultat DefectDojo pour ce périmètre.');
-    } else {
-      findings.push(`Note ${grade} · score ${score}/100 sur ${scopeLabel}.`);
-      findings.push(
-        `${open} vulnérabilité(s) ouverte(s) : ${critical} critique(s), ${high} élevée(s), ${medium} moyenne(s), ${low} faible(s).`
-      );
-      if (closed > 0) {
-        findings.push(`${closed} vulnérabilité(s) déjà résolue(s).`);
+    const c = this.maturityCounts;
+    const findings: string[] = [
+      resolved
+        ? `Note ${grade} · score ${score}/100 — ${scopeLabel}.`
+        : `Score de posture non calculé — ${scopeLabel}.`,
+      `${c.total} vulnérabilité(s) : ${c.critical} critique(s), ${c.high} élevée(s), ${c.medium} moyenne(s), ${c.low} faible(s).`
+    ];
+    for (const line of qg.verdictExplanation ?? []) {
+      const text = (line ?? '').trim();
+      if (text && !findings.includes(text)) {
+        findings.push(text);
+      }
+    }
+    if (!(qg.verdictExplanation?.length)) {
+      for (const v of qg.hardGateViolations ?? []) {
+        findings.push(`Condition bloquante : ${v.message || v.label}`);
       }
     }
 
-    const actions = this.buildMaturityActions(grade, critical, high, scanAnalyses, hasData);
+    const advice = qg.practicalAdvice?.length ? qg.practicalAdvice : (qg.detailedRecommendations ?? []);
+    const actions = advice
+      .map(a => (a ?? '').replace(/^\s*\d+\.\s*/, '').trim())
+      .filter(a => !!a)
+      .slice(0, 6);
 
+    const inProgress = qg.verdictSource === 'PIPELINE_IN_PROGRESS';
     return {
-      hasData,
+      hasData: true,
       grade,
       score,
       scopeLabel,
-      ...verdict,
-      findings,
+      verdict: inProgress ? 'unknown' : this.maturityVerdictFromQg(qg.verdict),
+      verdictTitle: inProgress ? 'Scan en cours' : this.qgVerdictLabel(qg.verdict),
+      verdictDetail: qg.summary?.trim() || '',
+      findings: findings.slice(0, 8),
       actions,
       scanAnalyses
     };
+  }
+
+  private maturityVerdictFromQg(verdict: string | null | undefined): MaturityDeployVerdict {
+    switch (verdict) {
+      case 'RECOMMENDED': return 'allow';
+      case 'WITH_WARNINGS': return 'caution';
+      case 'NOT_RECOMMENDED': return 'block';
+      default: return 'unknown';
+    }
+  }
+
+  /** Libellés identiques à la page Quality Gate. */
+  private qgVerdictLabel(verdict: string | null | undefined): string {
+    switch (verdict) {
+      case 'RECOMMENDED': return 'Déployable';
+      case 'WITH_WARNINGS': return 'Déployable avec surveillance';
+      case 'NOT_RECOMMENDED': return 'Déploiement non recommandé';
+      case 'INDETERMINE': return 'Vérification incomplète';
+      default: return 'Verdict indisponible';
+    }
   }
 
   maturityVerdictClass(verdict: MaturityDeployVerdict): string {
@@ -662,39 +860,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.maturityPanelPinned = false;
   }
 
-  private computeSecurityScoreClient(): SecurityScoreView | null {
-    const critical = this.openSeverityCount('Critical');
-    const high = this.openSeverityCount('High');
-    const medium = this.openSeverityCount('Medium');
-    const low = this.openSeverityCount('Low');
-    const info = this.openSeverityCount('Info');
-    const total = critical + high + medium + low + info;
-
-    if (!this.dashboard?.bySeverity && total === 0 && !(this.dashboard?.totalOpen && this.dashboard.totalOpen > 0)) {
-      return null;
-    }
-
-    let grade: string;
-    if (critical === 0 && high === 0) {
-      grade = 'A';
-    } else if (critical === 0 && high <= 3) {
-      grade = 'B';
-    } else if (critical <= 1 && high <= 10) {
-      grade = 'C';
-    } else if (critical <= 3) {
-      grade = 'D';
-    } else {
-      grade = 'E';
-    }
-
-    const score = Math.max(0, Math.min(100, 100 - critical * 15 - high * 5 - medium));
-    return {
-      grade,
-      score,
-      summary: this.buildSecurityScoreSummary(grade)
-    };
-  }
-
   private buildSecurityScoreSummary(grade: string): string {
     switch (grade) {
       case 'A':
@@ -712,16 +877,49 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Une carte par outil, avec les compteurs « outils » du Quality Gate (mêmes chiffres que sa page). */
   private buildMaturityScanAnalyses(): MaturityScanAnalysis[] {
-    return CI_SCANNER_DEFS.map(def => {
-      const active = this.scannerHasExecuted(def.matchers);
-      const findingCount = this.scannerFindingCount(def.matchers);
-      return this.buildSingleScannerAnalysis(def, active, findingCount);
+    const qg = this.qgResult;
+    const tools = qg?.toolMetrics ?? [];
+    const defs: CiScannerDef[] = [...CI_SCANNER_DEFS, SONAR_SCANNER_DEF];
+    return defs.map(def => {
+      const metric = tools.find(t => {
+        const hay = `${t.id} ${t.label}`.toLowerCase();
+        return t.id === def.id || def.matchers.some(m => hay.includes(m));
+      });
+      const inactiveReason = this.toolInactiveReason(def, metric);
+      if (inactiveReason) {
+        return this.buildSingleScannerAnalysis(def, false, 0, inactiveReason);
+      }
+      const count = def.id === 'sonarqube'
+        ? (metric!.critical ?? 0) + (metric!.high ?? 0)
+        : (metric!.total ?? 0);
+      return this.buildSingleScannerAnalysis(def, true, count);
     });
   }
 
+  /** null = outil exécuté et évaluable ; sinon la raison affichée. */
+  private toolInactiveReason(def: CiScannerDef, metric: QualityGateToolMetric | undefined): string | null {
+    if (!this.qgResult) {
+      return `${def.name} : aucun résultat Quality Gate sur ce périmètre.`;
+    }
+    if (!metric) {
+      return `${def.name} n'apparaît pas dans le dernier scan.`;
+    }
+    if (def.id === 'zap' && this.qgResult.metrics?.dastApplicable === false) {
+      return 'OWASP ZAP ne s\'exécute que sur un pipeline de déploiement (application en ligne).';
+    }
+    if (metric.evaluable === false) {
+      return `${def.name} : job en échec, aucun rapport exploitable.`;
+    }
+    if ((metric.stageStatus || '').toUpperCase() === 'SKIPPED') {
+      return `${def.name} n'a pas été exécuté dans ce pipeline.`;
+    }
+    return null;
+  }
+
   private buildSingleScannerAnalysis(
-    def: CiScannerDef, active: boolean, findingCount: number): MaturityScanAnalysis {
+    def: CiScannerDef, active: boolean, findingCount: number, inactiveReason?: string): MaturityScanAnalysis {
     if (!active) {
       return {
         name: def.name,
@@ -729,8 +927,10 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         active: false,
         findingCount: 0,
         status: 'inactive',
-        summary: `${def.name} n'a pas été exécuté sur ce périmètre.`,
-        recommendation: 'Lancez un pipeline CI incluant ce scanner avant un déploiement en production.'
+        summary: inactiveReason || `${def.name} n'a pas été exécuté sur ce périmètre.`,
+        recommendation: def.id === 'zap'
+          ? 'Déployez l\'application pour obtenir l\'analyse dynamique.'
+          : 'Relancez un pipeline de scan incluant cet outil avant un déploiement.'
       };
     }
 
@@ -761,7 +961,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   private scannerAnalysisStatus(def: CiScannerDef, count: number): MaturityScanAnalysis['status'] {
-    if (def.type === 'Secrets') return 'alert';
+    if (def.type === 'Secrets' || def.id === 'sonarqube') return 'alert';
     if (def.type === 'DAST' && count > 0) return count >= 3 ? 'alert' : 'warning';
     if (count >= 5) return 'alert';
     return 'warning';
@@ -806,6 +1006,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           summary: `OWASP ZAP : ${n} faille${plural} dynamique${plural} sur l'application déployée (XSS, headers, cookies…).`,
           recommendation: 'Corrigez les failles exploitables en runtime avant toute mise en production.'
         };
+      case 'sonarqube':
+        return {
+          summary: `SonarQube : ${n} problème${plural} bloquant${plural} ou critique${plural} dans le code.`,
+          recommendation: 'Corrigez les problèmes bloquants et critiques signalés par SonarQube avant le déploiement.'
+        };
       default:
         return {
           summary: `${def.name} : ${n} finding${plural} ouvert${plural}.`,
@@ -814,138 +1019,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private computeMaturityVerdict(
-    grade: string,
-    critical: number,
-    high: number,
-    secretFindings: number,
-    hasData: boolean,
-    scans: MaturityScanAnalysis[]
-  ): Pick<MaturityAnalysis, 'verdict' | 'verdictTitle' | 'verdictDetail'> {
-    if (!hasData) {
-      return {
-        verdict: 'unknown',
-        verdictTitle: 'Analyse indisponible',
-        verdictDetail: 'Aucun scan DefectDojo sur ce périmètre. Lancez un pipeline avant de déployer.'
-      };
-    }
-
-    if (secretFindings > 0) {
-      return {
-        verdict: 'block',
-        verdictTitle: 'Déploiement non recommandé',
-        verdictDetail: `${secretFindings} secret(s) détecté(s). Révoquez les clés et nettoyez le dépôt avant tout déploiement.`
-      };
-    }
-
-    const activeWithFindings = scans.filter(s => s.active && s.findingCount > 0);
-    const alertScans = activeWithFindings.filter(s => s.status === 'alert');
-
-    if (grade === 'E' || critical > 3) {
-      return {
-        verdict: 'block',
-        verdictTitle: 'Déploiement non recommandé',
-        verdictDetail: `${critical} vulnérabilité(s) critique(s) ouverte(s). Risque critique — corrigez avant de déployer cette version.`
-      };
-    }
-
-    if (grade === 'D' || critical >= 2 || alertScans.length >= 2) {
-      return {
-        verdict: 'block',
-        verdictTitle: 'Déploiement non recommandé',
-        verdictDetail: 'Plusieurs failles graves ou critiques ouvertes. Cette version ne doit pas être déployée en production.'
-      };
-    }
-
-    if (grade === 'C' || critical === 1 || high > 5) {
-      return {
-        verdict: 'caution',
-        verdictTitle: 'Déploiement déconseillé en production',
-        verdictDetail: critical > 0
-          ? `${critical} faille(s) critique(s) à corriger en priorité. Environnement éphémère uniquement.`
-          : `${high} vulnérabilité(s) élevée(s) ouverte(s). Corrigez avant un déploiement production.`
-      };
-    }
-
-    if (grade === 'B' || high > 0 || activeWithFindings.length > 0) {
-      const detail = high > 0
-        ? `${high} vulnérabilité(s) élevée(s) restante(s). Déploiement éphémère possible ; production après correction.`
-        : 'Quelques findings mineurs détectés. Vous pouvez déployer en éphémère, vérifiez avant la production.';
-      return {
-        verdict: 'caution',
-        verdictTitle: 'Déploiement possible avec réserves',
-        verdictDetail: detail
-      };
-    }
-
-    return {
-      verdict: 'allow',
-      verdictTitle: 'Vous pouvez déployer',
-      verdictDetail: 'Aucune vulnérabilité critique ou élevée ouverte. Cette version respecte les critères de sécurité minimaux.'
-    };
-  }
-
-  private buildMaturityActions(
-    grade: string,
-    critical: number,
-    high: number,
-    scans: MaturityScanAnalysis[],
-    hasData: boolean
-  ): string[] {
-    if (!hasData) {
-      return ['Lancer un pipeline CI avec les scanners de sécurité.', 'Attendre l\'import DefectDojo avant déploiement.'];
-    }
-
-    const actions: string[] = [];
-
-    if (critical > 0) {
-      actions.push(`Traiter en urgence ${critical} vulnérabilité(s) critique(s) ouverte(s).`);
-    }
-    if (high > 0) {
-      actions.push(`Planifier la correction de ${high} vulnérabilité(s) élevée(s).`);
-    }
-
-    for (const scan of scans) {
-      if (!scan.active || scan.findingCount === 0) continue;
-      if (scan.status === 'alert' || scan.type === 'Secrets') {
-        actions.push(`${scan.name} : ${scan.recommendation}`);
-      }
-    }
-
-    for (const scan of scans) {
-      if (!scan.active || scan.findingCount === 0 || scan.status === 'alert') continue;
-      actions.push(`${scan.name} : ${scan.recommendation}`);
-    }
-
-    for (const scan of scans) {
-      if (scan.active) continue;
-      actions.push(`Activer ${scan.name} dans le pipeline (${scan.type}).`);
-    }
-
-    if (!actions.length && (grade === 'A' || grade === 'B')) {
-      actions.push('Maintenir la posture actuelle et surveiller les prochains scans CI.');
-    }
-
-    return actions.slice(0, 6);
-  }
-
-  private scannerFindingCount(matchers: string[]): number {
-    const byTool = this.dashboard?.byTool;
-    if (!byTool) return 0;
-    let total = 0;
-    for (const [key, value] of Object.entries(byTool)) {
-      const hay = `${key} ${this.formatToolName(key)}`.toLowerCase();
-      if (matchers.some(m => hay.includes(m))) {
-        total += value ?? 0;
-      }
-    }
-    return total;
-  }
-
   get securityKpis(): Array<{
     label: string;
     value: string | number;
-    icon: string;
     color: string;
     sub?: string;
   }> {
@@ -958,37 +1034,31 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       {
         label: 'Ouvertes',
         value: this.loading ? '…' : this.totalSecurityOpen,
-        icon: '🛡️',
         color: '#F97316'
       },
       {
         label: 'Critiques',
         value: this.loading ? '…' : crit,
-        icon: '●',
         color: SEV_BAR['Critical']
       },
       {
         label: 'Élevées',
         value: this.loading ? '…' : high,
-        icon: '●',
         color: SEV_BAR['High']
       },
       {
         label: 'Medium',
         value: this.loading ? '…' : medium,
-        icon: '●',
         color: SEV_BAR['Medium']
       },
       {
         label: 'Low',
         value: this.loading ? '…' : low,
-        icon: '●',
         color: SEV_BAR['Low']
       },
       {
         label: 'Info',
         value: this.loading ? '…' : info,
-        icon: '●',
         color: SEV_BAR['Info']
       }
     ];
@@ -1195,9 +1265,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   get overviewStats(): Array<{
     label: string;
     value: number | string;
-    icon: string;
     color: string;
-    iconBg: string;
     trend?: string;
     filter?: string | null;
   }> {
@@ -1215,135 +1283,39 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       {
         label: `Total${scope}`,
         value: depPending ? '…' : env.total,
-        icon: '📦',
         color: '#3B82F6',
-        iconBg: 'rgba(59, 130, 246, 0.15)',
         filter: null
       },
       {
         label: `En ligne${scope}`,
         value: depPending ? '…' : env.online,
-        icon: '✅',
         color: '#22C55E',
-        iconBg: 'rgba(34, 197, 94, 0.15)',
         trend: depPending ? undefined : (env.total ? `${Math.round(env.online / env.total * 100)}%` : '0%'),
         filter: 'ACTIVE'
       },
       {
         label: `En cours${scope}`,
         value: depPending ? '…' : env.inProgress,
-        icon: '🔄',
         color: '#F97316',
-        iconBg: 'rgba(249, 115, 22, 0.15)',
         filter: 'IN_PROGRESS'
       },
       {
         label: `Échec${scope}`,
         value: depPending ? '…' : env.failed,
-        icon: '❌',
         color: '#EF4444',
-        iconBg: 'rgba(239, 68, 68, 0.15)',
         filter: 'NEVER_STARTED'
       },
       {
         label: `Terminés${scope}`,
         value: depPending ? '…' : env.ended,
-        icon: '⏰',
         color: '#6B7280',
-        iconBg: 'rgba(107, 114, 128, 0.15)',
         filter: 'ENDED'
       },
       {
         label: `Vulnérabilités${scope}`,
         value: vulnValue,
-        icon: '🛡️',
         color: '#8B5CF6',
-        iconBg: 'rgba(139, 92, 246, 0.15)',
         trend: vulnTrend
-      }
-    ];
-  }
-
-  get heroKpis(): Array<{
-    key: string;
-    label: string;
-    value: number;
-    icon: string;
-    color: string;
-    sub?: string;
-  }> {
-    return [
-      {
-        key: 'deployments',
-        label: 'Déploiements',
-        value: this.displayDeploymentCounts.total,
-        icon: '📦',
-        color: '#3B82F6'
-      },
-      {
-        key: 'envs',
-        label: 'Environnements actifs',
-        value: this.allActiveEnvironmentCards.length,
-        icon: '🌍',
-        color: '#22C55E'
-      },
-      {
-        key: 'vulns',
-        label: 'Vulnérabilités',
-        value: this.dashboard?.bySeverity ? this.totalSecurityOpen : (this.isGlobalView ? this.totalOpenVulnerabilities : this.totalFindings),
-        icon: '🛡️',
-        color: '#EF4444',
-        sub: this.displayedHighCriticalCount > 0
-          ? `Crit./Élevées : ${this.displayedHighCriticalCount}`
-          : undefined
-      },
-      {
-        key: 'success',
-        label: 'Taux de réussite',
-        value: this.successRate,
-        icon: '✅',
-        color: '#22C55E'
-      }
-    ];
-  }
-
-  get quickStats(): Array<{
-    label: string;
-    value: string | number;
-    icon: string;
-    color: string;
-    trend: number;
-  }> {
-    return [
-      {
-        label: 'Déploiements totaux',
-        value: this.loadingSlow ? '…' : this.totalDeployments,
-        icon: '📦',
-        color: '#3B82F6',
-        trend: this.weekDeployTrend
-      },
-      {
-        label: 'Taux de réussite',
-        value: this.loadingSlow ? '…' : `${this.successRate}%`,
-        icon: '✅',
-        color: '#22C55E',
-        trend: this.weekSuccessTrend
-      },
-      {
-        label: 'Vulnérabilités ouvertes',
-        value: this.dashboard?.bySeverity
-          ? (this.loading ? '…' : this.totalSecurityOpen)
-          : (this.isGlobalView ? this.totalOpenVulnerabilities : (this.loading ? '…' : this.totalFindings)),
-        icon: '🛡️',
-        color: '#F97316',
-        trend: this.weekVulnTrend
-      },
-      {
-        label: 'Environnements créés',
-        value: this.totalEnvironmentsCreated,
-        icon: '🌍',
-        color: '#8B5CF6',
-        trend: this.weekEnvTrend
       }
     ];
   }
@@ -1449,7 +1421,11 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       stageJobs.get(stage)?.push(job);
     });
 
-    const template = this.stageTemplateForKind(kind);
+    // Étapes réellement présentes dans CE pipeline, dans l'ordre du .gitlab-ci.yml. Un modèle figé
+    // affichait par exemple « Scan image » (grisé) sur un déploiement, alors que Grype ne tourne
+    // plus dans le flux deploy, et masquait build / scan d'image / validation sur un scan.
+    const present = CI_STAGE_ORDER.filter(stage => stageJobs.has(stage));
+    const template = present.length ? present : this.stageTemplateForKind(kind);
     return template.map(stageName => {
       const stageJobList = stageJobs.get(stageName) ?? [];
       return {
@@ -1498,10 +1474,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const elapsed = this.nowMs - start;
     const total = end - start;
     return Math.max(0, Math.min(100, 100 - (elapsed / total) * 100));
-  }
-
-  animatedKpiValue(key: string, target: number): number {
-    return this.animatedKpis[key] ?? 0;
   }
 
   openSeverityCount(sev: string): number {
@@ -1997,7 +1969,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   private onEnvironmentFilterChange(): void {
-    this.animateKpis();
     setTimeout(() => this.scheduleDeployChartsRender(), 0);
     this.refreshLatestDeploymentDetails();
   }
@@ -2230,12 +2201,97 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   deployOnSelectedBranch(): void {
-    const queryParams: Record<string, string> = {};
-    if (this.appId) queryParams['appId'] = this.appId;
-    if (!this.isGlobalView && this.selectedBranch) {
-      queryParams['branch'] = this.selectedBranch;
+    // Ouvre le modal de déploiement de l'application du service (l'ancienne route
+    // /environment-create redirigeait vers la liste des projets).
+    if (!this.appId) return;
+    this.deployError = null;
+    this.deployPreview = null;
+    this.appMgmt.getDeployContext(this.appId).pipe(
+      switchMap(ctx => {
+        if (!ctx?.managedApplicationId) {
+          throw new Error('Ce service ne fait pas encore partie d’une application gérée.');
+        }
+        return this.appMgmt.get(ctx.managedApplicationId);
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: app => {
+        if (!app?.services?.length) {
+          this.toastService.push('error', 'Déploiement impossible', 'Ajoutez au moins un service à l’application.');
+          return;
+        }
+        this.deployManagedApp = app;
+        this.showDeployModal = true;
+      },
+      error: e => this.toastService.push('error', 'Déploiement impossible',
+        e?.error?.message || e?.message || 'Application introuvable.')
+    });
+  }
+
+  get deployDefaultBranch(): string {
+    if (!this.isGlobalView && this.selectedBranch) return this.selectedBranch;
+    return this.deployManagedApp?.services?.[0]?.gitBranch || 'main';
+  }
+
+  closeDeployModal(): void {
+    if (this.deploying) return;
+    this.showDeployModal = false;
+    this.deployPreview = null;
+    this.deployError = null;
+  }
+
+  onDeploySelectionChange(sel: { branch: string; sessionDurationHours: number; serviceIds: string[] }): void {
+    this.deployPreviewTrigger$.next(sel);
+  }
+
+  private fetchDeployPreview(sel: { branch: string; sessionDurationHours: number; serviceIds: string[] }): void {
+    const app = this.deployManagedApp;
+    if (!this.showDeployModal || !app) return;
+    if (!sel.serviceIds.length) {
+      this.deployPreview = null;
+      this.deployPreviewLoading = false;
+      return;
     }
-    this.router.navigate(['/environment-create'], { queryParams });
+    this.deployPreviewLoading = true;
+    this.appMgmt.previewDeploy(app.id, sel).pipe(takeUntil(this.destroy$)).subscribe({
+      next: preview => {
+        this.deployPreview = preview;
+        this.deployPreviewLoading = false;
+      },
+      error: e => {
+        this.deployPreviewLoading = false;
+        this.deployError = e?.error?.message || 'Impossible d\'analyser la sélection.';
+      }
+    });
+  }
+
+  confirmDeploy(params: ProjectDeployParams): void {
+    const app = this.deployManagedApp;
+    if (!app) return;
+    this.deploying = true;
+    this.deployError = null;
+    this.appMgmt.deploy(app.id, {
+      branch: params.branch,
+      sessionDurationHours: params.sessionDurationHours,
+      serviceIds: params.serviceIds
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: dep => {
+        this.deploying = false;
+        this.showDeployModal = false;
+        this.deployPreview = null;
+        this.toastService.push('success', 'Déploiement lancé', 'Le pipeline de déploiement démarre.');
+        const pid = dep?.gitlabPipelineId;
+        if (pid) {
+          this.viewPipelineById(pid, params.branch, 'DEPLOY');
+        } else {
+          this.refreshAll();
+        }
+      },
+      error: e => {
+        this.deploying = false;
+        this.deployError = e?.error?.message || 'Déploiement impossible.';
+      }
+    });
   }
 
   goToApplications(): void {
@@ -2481,18 +2537,34 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   viewDeployPipelineDetails(): void {
+    // Toujours par l'identifiant GitLab : la page de détail reste dans la mise en page du service
+    // (même barre latérale). L'ancienne route /pipeline/:envId sortait du service et restait
+    // bloquée sur « Chargement du pipeline… » pour les déploiements d'applications gérées.
     const pipe = this.latestDeployPipeline;
-    if (pipe?.environmentId) {
-      this.viewPipeline(pipe.environmentId, 'DEPLOY');
+    if (pipe?.pipelineId) {
+      this.viewPipelineById(pipe.pipelineId, pipe.gitBranch, 'DEPLOY');
       return;
     }
     const dep = this.displayLatestDeployment;
-    if (dep?.environmentId) {
-      this.viewPipeline(dep.environmentId, 'DEPLOY');
+    if (dep?.pipelineId) {
+      this.viewPipelineById(dep.pipelineId, dep.gitBranch, 'DEPLOY');
       return;
     }
-    if (pipe?.pipelineId) {
-      this.viewPipelineById(pipe.pipelineId, pipe.gitBranch, 'DEPLOY');
+    if (pipe?.environmentId) {
+      this.viewPipeline(pipe.environmentId, 'DEPLOY');
+    }
+  }
+
+  /** Ligne « Pipelines récents » : détail dans la mise en page du service. */
+  openRecentPipeline(p: DashboardPipelineItem): void {
+    const kind = (p.kind || '').toUpperCase();
+    const k = kind === 'SCAN' || kind === 'DEPLOY' ? (kind as 'SCAN' | 'DEPLOY') : undefined;
+    if (p.id) {
+      this.viewPipelineById(p.id, p.branch, k);
+      return;
+    }
+    if (p.environmentId) {
+      this.viewPipeline(p.environmentId, k);
     }
   }
 
@@ -2647,6 +2719,30 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     if (s === 'FAILED' || s === 'CANCELED') return 'd2-connector--failed';
     if (s === 'RUNNING' || s === 'PENDING') return 'd2-connector--pending';
     return 'd2-connector--muted';
+  }
+
+  /** Icône au trait d'un évènement d'activité (type, puis statut pour les environnements). */
+  activityIconName(act: ActivityItem): EtIconName {
+    const status = String(act.status || '').toUpperCase();
+    switch (act.type) {
+      case 'pipeline': return 'commit';
+      case 'deployment': return 'rocket';
+      case 'environment':
+        return status === 'FAILED' || status === 'DEGRADED' ? 'alert' : 'server';
+      default: return 'activity';
+    }
+  }
+
+  /** Couleur de la pastille d'un filtre de statut d'environnement. */
+  envFilterColor(id: string | null): string {
+    switch (id) {
+      case 'ACTIVE': return '#22C55E';
+      case 'IN_PROGRESS': return '#F97316';
+      case 'DEGRADED': return '#EAB308';
+      case 'NEVER_STARTED': return '#EF4444';
+      case 'ENDED': return '#94A3B8';
+      default: return 'transparent';
+    }
   }
 
   activityIconClass(type: ActivityItem['type']): string {
@@ -3008,29 +3104,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     return Math.round(((curr - prev) / prev) * 100);
   }
 
-  private animateKpis(): void {
-    const targets: Record<string, number> = {};
-    this.heroKpis.forEach(k => { targets[k.key] = k.value; });
-    const start = performance.now();
-    const duration = 700;
-    const from = { ...this.animatedKpis };
-
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      Object.keys(targets).forEach(key => {
-        const a = from[key] ?? 0;
-        const b = targets[key];
-        this.animatedKpis[key] = Math.round(a + (b - a) * eased);
-      });
-      if (t < 1) {
-        this.kpiAnimFrame = requestAnimationFrame(tick);
-      }
-    };
-    if (this.kpiAnimFrame) cancelAnimationFrame(this.kpiAnimFrame);
-    this.kpiAnimFrame = requestAnimationFrame(tick);
-  }
-
   private loadRecentFindings(): void {
     if (!this.appId) return;
     this.recentFindingsLoading = true;
@@ -3093,11 +3166,18 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     this.router.navigate(['/project', this.appId, 'security-dashboard'], { queryParams });
   }
 
+  /** Ouvre la page Quality Gate sur exactement le scan évalué par l'indice de maturité. */
   viewQualityGate(): void {
     if (!this.appId) return;
-    const queryParams: Record<string, string> = this.isGlobalView ? {} : { branch: this.selectedBranch };
-    const pipelineId = this.selectedPipelineId
-      || (this.latestScanPipeline?.pipelineId != null ? String(this.latestScanPipeline.pipelineId) : null);
+    const queryParams: Record<string, string> = {};
+    const branch = this.qgResult?.branch || (this.isGlobalView ? null : this.selectedBranch);
+    const pipelineId = this.qgResult?.pipelineId
+      ? String(this.qgResult.pipelineId)
+      : (this.selectedPipelineId
+        || (this.latestScanPipeline?.pipelineId != null ? String(this.latestScanPipeline.pipelineId) : null));
+    if (branch) {
+      queryParams['branch'] = branch;
+    }
     if (pipelineId) {
       queryParams['pipelineId'] = pipelineId;
     }
@@ -3119,8 +3199,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   onBranchChange(): void {
+    // Vue globale explicite : sans paramètre, la page revient à la branche du service.
     const queryParams = this.isGlobalView
-      ? { branch: null }
+      ? { branch: GLOBAL_BRANCH }
       : { branch: this.selectedBranch };
     this.router.navigate([], {
       relativeTo: this.route,
@@ -3138,6 +3219,18 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
       return;
     }
     this.securityReload$.next({ appId, branch, pipelineId });
+    this.loadMaturityQualityGate(appId, branch, pipelineId ?? null);
+  }
+
+  /** Recharge le résultat Quality Gate ; l'ancien n'est effacé que si le périmètre (service/branche) change. */
+  private loadMaturityQualityGate(appId: string, branch: string, pipelineId: string | null): void {
+    const apiBranch = branch === GLOBAL_BRANCH ? null : branch;
+    const scopeKey = `${appId}|${apiBranch ?? '*'}`;
+    if (scopeKey !== this.qgScopeKey) {
+      this.qgScopeKey = scopeKey;
+      this.qgResult = null;
+    }
+    this.maturityQg$.next({ appId, branch: apiBranch, pipelineId });
   }
 
   private buildToolList(d: DefectDojoDashboard2Response): { key: string; value: number }[] {
@@ -3213,6 +3306,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     if (!this.appId) return;
 
     this.loadingSlow = true;
+    this.scopedDataBranch = this.selectedBranch;
     const branch = this.isGlobalView ? undefined : this.selectedBranch;
 
     forkJoin({
@@ -3254,6 +3348,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
           .slice(0, 5)
           .map((p): DashboardPipelineItem => ({
             id: p.pipelineId ?? null,
+            kind: (p.executionKind || '').toString().toUpperCase() || undefined,
             name: p.serviceName || p.environmentName || `Pipeline #${p.pipelineId ?? '—'}`,
             branch: p.gitBranch || p.ref || 'main',
             status: p.status || p.pipelineStatus || 'UNKNOWN',
@@ -3275,7 +3370,6 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         this.buildRecentActivities();
         this.computeWeekTrends();
         this.loadingSlow = false;
-        this.animateKpis();
         this.refreshLatestDeploymentDetails();
         setTimeout(() => this.scheduleDeployChartsRender(), 0);
       },
@@ -3329,7 +3423,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     if (kind === 'scan') {
       return ['setup', 'code-analysis', 'sca', 'sast', 'secrets-iac', 'reporting'];
     }
-    return ['setup', 'build', 'container-scan', 'push-image', 'deploy-k8s', 'zap-scan', 'reporting', 'security-validation'];
+    // Pas de « container-scan » : Grype a été retiré du flux deploy (scan d'image dans le flux scan).
+    return ['setup', 'build', 'push-image', 'deploy-k8s', 'zap-scan', 'reporting', 'security-validation'];
   }
 
   private statusFromStageJobs(jobs: PipelineJobInfo[]): PipelineStageStatus {
@@ -3390,9 +3485,9 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
     const queryParams: Record<string, string> = {};
     if (kind) queryParams['kind'] = kind;
     if (this.appId) {
-      // Conserve l’env-id legacy pour les pipelines liés à un environnement
-      this.router.navigate(['/pipeline', envId], {
-        queryParams: { ...queryParams, appId: this.appId }
+      // Pipeline lié à un environnement, affiché dans la mise en page du service (même barre latérale).
+      this.router.navigate(['/project', this.appId, 'pipeline-detail'], {
+        queryParams: { ...queryParams, envId }
       });
       return;
     }
@@ -3416,7 +3511,20 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   }
 
   viewEnvironment(envId: string): void {
-    this.router.navigate(['/environment', envId], { queryParams: { appId: this.appId } });
+    // Reste dans la mise en page du service (même barre latérale).
+    if (this.appId) {
+      this.router.navigate(['/project', this.appId, 'environment', envId]);
+      return;
+    }
+    this.router.navigate(['/environment', envId]);
+  }
+
+  /** Lien vers le détail d'un pipeline, dans la mise en page du service (même barre latérale). */
+  private pipelineDetailLink(pipelineId: number | string | null | undefined, kind?: string | null): string | undefined {
+    if (!pipelineId || !this.appId) return undefined;
+    const k = (kind || '').toUpperCase();
+    const query = k === 'SCAN' || k === 'DEPLOY' ? `?kind=${k}` : '';
+    return `/project/${this.appId}/pipeline-detail/${pipelineId}${query}`;
   }
 
   private buildRecentActivities(): void {
@@ -3431,7 +3539,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         timestamp: d.createdAt,
         status: d.pipelineStatus || 'UNKNOWN',
         icon: this.getStatusIcon(d.pipelineStatus),
-        link: `/pipeline/${d.environmentId}?appId=${this.appId}`
+        link: this.pipelineDetailLink(d.pipelineId, 'DEPLOY')
       });
     });
 
@@ -3444,7 +3552,7 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
         timestamp: p.createdAt || new Date().toISOString(),
         status: p.status,
         icon: '⚙️',
-        link: `/pipeline/${p.environmentId}?appId=${this.appId}`
+        link: this.pipelineDetailLink(p.id, p.kind)
       });
     });
 

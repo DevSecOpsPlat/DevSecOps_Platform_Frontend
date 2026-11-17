@@ -441,14 +441,19 @@ export class RecentActivityComponent implements OnInit, OnDestroy {
       switch (activity.type) {
         case 'deployment':
         case 'pipeline':
-          this.router.navigate(['/pipeline', activity.id], {
-            queryParams: { appId: this.appId }
-          });
+          if (this.appId) {
+            // Même barre latérale que le service.
+            this.router.navigate(['/project', this.appId, 'pipeline-detail'], { queryParams: { envId: activity.id } });
+          } else {
+            this.router.navigate(['/pipeline', activity.id]);
+          }
           break;
         case 'environment':
-          this.router.navigate(['/environment', activity.id], {
-            queryParams: { appId: this.appId }
-          });
+          if (this.appId) {
+            this.router.navigate(['/project', this.appId, 'environment', activity.id]);
+          } else {
+            this.router.navigate(['/environment', activity.id]);
+          }
           break;
       }
     }

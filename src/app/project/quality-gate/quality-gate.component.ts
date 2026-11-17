@@ -26,7 +26,9 @@ import {
 
   QualityGateEnvironmentOption,
 
-  SoftwareQualityDimension
+  SoftwareQualityDimension,
+
+  pickDefaultScanPipeline
 
 } from '../../services/quality-gate/quality-gate.service';
 import { PageHeroComponent } from '../shared/page-hero/page-hero.component';
@@ -151,7 +153,11 @@ export class QualityGateComponent implements OnInit, OnDestroy {
       if (!this.appId) return;
 
       this.loadBranches();
-      this.loadEnvironments(true);
+      const qp = this.route.snapshot.queryParamMap;
+      if (!qp.get('branch') && !qp.get('pipelineId')) {
+        // Sans paramètre : même périmètre que l'indice de maturité de la vue d'ensemble.
+        this.resolveDefaultScopeThenLoad();
+      }
 
       this.startPolling();
 
@@ -168,11 +174,35 @@ export class QualityGateComponent implements OnInit, OnDestroy {
       if (pipelineId) {
         this.selectedPipelineId = pipelineId;
       }
-      if (branch || pipelineId) {
+      if (branch) {
         this.loadEnvironments(true);
+      } else if (pipelineId) {
+        // Pipeline demandé sans branche : retrouver sa branche plutôt que de le remplacer par celui de main.
+        this.resolveDefaultScopeThenLoad();
       }
     });
 
+  }
+
+  /** Choisit la branche (pipeline demandé, sinon règle commune main → dernier scan) puis charge. */
+  private resolveDefaultScopeThenLoad(): void {
+    if (!this.appId) return;
+    this.qualityGateService.listScanPipelines(this.appId, null).pipe(
+      catchError(() => of([] as QualityGateEnvironmentOption[])),
+      takeUntil(this.destroy$)
+    ).subscribe(all => {
+      const requested = this.selectedPipelineId
+        ? all.find(p => p.pipelineId === this.selectedPipelineId)
+        : undefined;
+      const pick = requested ?? pickDefaultScanPipeline(all);
+      if (pick?.branch) {
+        this.selectedBranch = pick.branch;
+        if (!this.branches.includes(pick.branch)) {
+          this.branches = [pick.branch, ...this.branches];
+        }
+      }
+      this.loadEnvironments(true);
+    });
   }
 
 
@@ -220,9 +250,11 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
       this.branches = branches.length ? branches : ['main', 'master', 'test'];
 
-      if (!this.branches.includes(this.selectedBranch)) {
+      // Ne jamais changer de branche en silence (le résultat affiché resterait celui de l'ancienne) :
+      // une branche connue seulement par ses pipelines est simplement ajoutée à la liste.
+      if (this.selectedBranch && !this.branches.includes(this.selectedBranch)) {
 
-        this.selectedBranch = this.branches[0];
+        this.branches = [this.selectedBranch, ...this.branches];
 
       }
 

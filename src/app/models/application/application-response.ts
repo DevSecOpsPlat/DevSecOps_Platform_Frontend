@@ -4,6 +4,8 @@ export interface ApplicationResponse {
   description?: string;
   gitRepositoryUrl: string;
   dockerfilePath?: string;
+  /** Branche de travail du service (scan / déploiement par défaut). */
+  gitBranch?: string;
   createdAt: string;
   createdByUsername: string;
   hasGithubToken: boolean;

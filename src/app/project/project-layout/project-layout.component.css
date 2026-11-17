@@ -28,3 +28,8 @@
 .am-alert {
   margin: 1.25rem;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .mal-shell { background: #0b1220; }
+:host-context([data-theme="dark"]) .am-loading { color: #a5b4c8; }
+/* === Fin du mode nuit généré === */

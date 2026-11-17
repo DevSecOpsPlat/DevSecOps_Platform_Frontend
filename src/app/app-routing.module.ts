@@ -25,7 +25,6 @@ import { RecentActivityComponent } from './project/recent-activity/recent-activi
 import { SecurityDashboardComponent } from './project/security-dashboard/security-dashboard.component';
 import { DefectDojoFindingDetailsComponent } from './project/defectdojo-finding-details/defectdojo-finding-details.component';
 import { SonarqubeComponent } from './project/sonarqube/sonarqube.component';
-import { UserAccountLayoutComponent } from './project/user-account-layout/user-account-layout.component';
 import { UserReclamationsComponent } from './project/user-reclamations/user-reclamations.component';
 import { AdminReclamationsComponent } from './admin/admin-reclamations/admin-reclamations.component';
 import { AdminAlertsComponent } from './admin/admin-alerts/admin-alerts.component';
@@ -49,6 +48,8 @@ const routes: Routes = [
       { path: 'security-center', redirectTo: 'overview', pathMatch: 'full' },
       { path: 'security-center/finding/:findingId', redirectTo: 'overview/finding/:findingId' },
       { path: 'deployments', component: ProjectDeploymentsComponent },
+      // Détail d'un environnement dans la mise en page du service (même barre latérale).
+      { path: 'environment/:envId', component: EnvironmentDetailsComponent },
       // ProjectLogsComponent = placeholder ; logs réels dans deployment-status
       { path: 'logs', redirectTo: 'deployments', pathMatch: 'full' },
       // ProjectSecurityComponent legacy → DefectDojo service (dashboard2)
@@ -76,12 +77,8 @@ const routes: Routes = [
   { path: 'environments', redirectTo: 'projects', pathMatch: 'full' },
   { path: 'applications', redirectTo: 'projects', pathMatch: 'prefix' },
   { path: 'my-applications', redirectTo: 'projects', pathMatch: 'full' },
-  {
-    path: 'reclamations',
-    component: UserAccountLayoutComponent,
-    canActivate: [AuthGuard],
-    children: [{ path: '', component: UserReclamationsComponent }]
-  },
+  // Page de compte plein écran (pas de barre latérale : elle n'appartient à aucun projet).
+  { path: 'reclamations', component: UserReclamationsComponent, canActivate: [AuthGuard] },
   { path: 'pipelines', component: PipelinesListComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/:envId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },
   { path: 'pipeline/id/:pipelineId', component: PipelineDetailsComponent, canActivate: [AuthGuard] },

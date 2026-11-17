@@ -647,3 +647,70 @@
   color: var(--text);
   font-size: 0.9rem;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .pipelines-container { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .pipelines-header { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .page-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .page-subtitle { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .stats-badge { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .stat-value { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stat-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .loading-section { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .loading-spinner { border: 2px solid #1f2937; }
+:host-context([data-theme="dark"]) .loading-text { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .error-section { background: #0b1220; }
+:host-context([data-theme="dark"]) .empty-state { background: #111827; border: 2px dashed #1f2937; }
+:host-context([data-theme="dark"]) .empty-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .empty-description { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pipeline-card { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pipeline-card.status-canceled:hover { border-color: #334155; }
+:host-context([data-theme="dark"]) .card-header { border-bottom: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .status-success  .badge-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-failed   .badge-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-running  .badge-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-pending  .badge-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .status-canceled .badge-status { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pipeline-duration { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pipeline-avatar { border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .avatar-success { background: #0b1220; }
+:host-context([data-theme="dark"]) .avatar-failed { background: #0b1220; }
+:host-context([data-theme="dark"]) .avatar-running,
+:host-context([data-theme="dark"]) .avatar-pending { background: #0b1220; }
+:host-context([data-theme="dark"]) .avatar-canceled { background: #0b1220; }
+:host-context([data-theme="dark"]) .pipeline-name { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .info-value { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .info-value.mono { color: hsl(222, 47%, 70%); background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pipeline-stages { background: #0b1220; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .stages-title { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .stages-count { background: #111827; border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .stage-item { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .stage-success:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-failed:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-running:hover,
+:host-context([data-theme="dark"]) .stage-pending:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-name { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .stage-success  .stage-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-failed   .stage-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-running  .stage-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-pending  .stage-status { background: #0b1220; }
+:host-context([data-theme="dark"]) .stage-canceled .stage-status { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .card-footer { border-top: 1px solid #1f2937; background: #0b1220; }
+:host-context([data-theme="dark"]) .action-btn { background: #111827; border: 1px solid #1f2937; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .view-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .cancel-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .delete-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .gitlab-btn:hover { background: #0b1220; }
+:host-context([data-theme="dark"]) .modal-overlay { background: rgba(255, 255, 255, 0.12); }
+:host-context([data-theme="dark"]) .modal-content { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .modal-title { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .modal-message { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .modal-message strong { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .modal-warning { background: #0b1220; }
+:host-context([data-theme="dark"]) .modal-warning strong { color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .modal-btn.cancel { background: #0b1220; color: #a5b4c8; border-color: #1f2937; }
+:host-context([data-theme="dark"]) .modal-btn.cancel:hover { background: #0b1220; color: hsl(222, 47%, 70%); }
+:host-context([data-theme="dark"]) .pipelines-filters { background: #111827; border: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .filter-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .filter-select { border: 1px solid #1f2937; background: #111827; color: hsl(222, 47%, 70%); }
+/* === Fin du mode nuit généré === */

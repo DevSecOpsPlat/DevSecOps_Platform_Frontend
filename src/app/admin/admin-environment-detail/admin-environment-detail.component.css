@@ -1,1 +1,14 @@
-/* Toute la mise en forme vient de admin-design-system.css (classes ads-*). */
+/* Détail environnement — le reste vient de admin-theme.css. */
+.ed-memory {
+  padding: 16px 20px;
+  border-top: 1px solid var(--adm-border);
+}
+
+.ed-pipeline {
+  font-weight: 600;
+}
+
+.ed-pipeline--success { color: var(--adm-success); }
+.ed-pipeline--failed { color: var(--adm-danger); }
+.ed-pipeline--running,
+.ed-pipeline--pending { color: var(--adm-warning); }

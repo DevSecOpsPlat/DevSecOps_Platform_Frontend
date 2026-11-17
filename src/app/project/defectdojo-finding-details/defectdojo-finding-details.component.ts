@@ -388,6 +388,15 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
     navigator.clipboard.writeText(v).catch(() => {});
   }
 
+  /** Métadonnées techniques extraites de la description brute du scanner (PURL, méthode…). */
+  get scannerFieldList(): Array<{ label: string; value: string }> {
+    const fields = this.detail?.scannerFields;
+    if (!fields) return [];
+    return Object.keys(fields)
+      .map(label => ({ label, value: String(fields[label] ?? '').trim() }))
+      .filter(f => !!f.value);
+  }
+
   sourceLabel(src?: string | null): string {
     const s = (src || 'NONE').toUpperCase();
     if (s === 'GITHUB') return 'Dépôt GitHub';

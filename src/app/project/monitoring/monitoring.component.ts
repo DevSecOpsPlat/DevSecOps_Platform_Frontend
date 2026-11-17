@@ -2,7 +2,10 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, timeout } from 'rxjs/operators';
+
+/** Au-delà, message d'erreur + bouton « Réessayer » au lieu d'un chargement sans fin. */
+const CONTEXT_TIMEOUT_MS = 30_000;
 import { AppServiceModel, ManagedApp } from '../../models/application-management/application-management.models';
 import { ApplicationManagementService } from '../../services/application-management/application-management.service';
 import { MonitoringDashboardComponent } from '../../application-management/monitoring-dashboard/monitoring-dashboard.component';
@@ -59,7 +62,7 @@ export class MonitoringComponent implements OnInit, OnDestroy {
     this.error = null;
     this.managedApp = null;
     this.currentService = null;
-    this.appMgmt.getDeployContext(serviceId).pipe(takeUntil(this.destroy$)).subscribe({
+    this.appMgmt.getDeployContext(serviceId).pipe(timeout(CONTEXT_TIMEOUT_MS), takeUntil(this.destroy$)).subscribe({
       next: (ctx) => {
         const managedId = ctx?.managedApplicationId;
         if (!managedId) {
@@ -67,22 +70,35 @@ export class MonitoringComponent implements OnInit, OnDestroy {
           this.error = 'Ce service ne fait pas encore partie d’une application gérée.';
           return;
         }
-        this.appMgmt.get(managedId).pipe(takeUntil(this.destroy$)).subscribe({
+        this.appMgmt.get(managedId).pipe(timeout(CONTEXT_TIMEOUT_MS), takeUntil(this.destroy$)).subscribe({
           next: (app) => {
             this.managedApp = app;
             this.currentService = (app.services || []).find((s) => s.id === serviceId) || null;
             this.loading = false;
           },
-          error: () => {
+          error: (e) => {
             this.loading = false;
-            this.error = 'Application introuvable.';
+            this.error = this.errorMessage(e, 'Application introuvable.');
           }
         });
       },
-      error: () => {
+      error: (e) => {
         this.loading = false;
-        this.error = 'Contexte de service introuvable.';
+        this.error = this.errorMessage(e, 'Contexte de service introuvable.');
       }
     });
+  }
+
+  retry(): void {
+    if (this.serviceId) {
+      this.load(this.serviceId);
+    }
+  }
+
+  private errorMessage(e: unknown, fallback: string): string {
+    if ((e as { name?: string } | null)?.name === 'TimeoutError') {
+      return 'Le serveur met trop de temps à répondre (plus de 30 s).';
+    }
+    return fallback;
   }
 }

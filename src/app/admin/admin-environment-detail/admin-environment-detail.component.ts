@@ -9,6 +9,9 @@ import {
   AdminUserMetrics
 } from '../../services/admin/admin.service';
 import { DeploymentMonitoringResponse, DeploymentPodInfo, MonitoringWorkload } from '../../models/application-management/application-management.models';
+import { environmentStatusLabel, pipelineStatusLabel, statusTone } from '../shared/admin-status';
+
+const LIVE_STATUSES = ['RUNNING', 'BUILDING', 'PENDING'];
 
 interface ServiceRow extends AdminAppServiceSummary {
   live?: { healthy: boolean; ready: number; desired: number };
@@ -18,7 +21,7 @@ interface ServiceRow extends AdminAppServiceSummary {
 @Component({
   selector: 'app-admin-environment-detail',
   templateUrl: './admin-environment-detail.component.html',
-  styleUrls: ['../admin-design-system.css', './admin-environment-detail.component.css']
+  styleUrls: ['./admin-environment-detail.component.css']
 })
 export class AdminEnvironmentDetailComponent implements OnInit {
   loading = true;
@@ -35,6 +38,9 @@ export class AdminEnvironmentDetailComponent implements OnInit {
 
   activity: AdminActivityEvent[] = [];
   activityLoading = false;
+
+  /** Retour visuel bref après « Copier ». */
+  copied = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -70,7 +76,9 @@ export class AdminEnvironmentDetailComponent implements OnInit {
         this.services = (app?.services || []).map(s => ({ ...s }));
         this.loading = false;
 
-        if (this.env.namespace) {
+        // Un environnement détruit ou expiré n'a plus de namespace : l'interroger ne renverrait que
+        // des pods absents, affichés jusqu'ici comme « UNKNOWN ».
+        if (this.env.namespace && this.isLive) {
           this.loadMonitoring(this.env.namespace);
         }
         this.loadActivity(id);
@@ -159,21 +167,70 @@ export class AdminEnvironmentDetailComponent implements OnInit {
     });
   }
 
-  serviceStatusLabel(s: ServiceRow): string {
-    if (!s.live) return 'UNKNOWN';
+  /** Environnement encore présent dans le cluster (en cours de création ou actif). */
+  get isLive(): boolean {
+    return LIVE_STATUSES.includes((this.env?.status || '').toUpperCase());
+  }
+
+  /**
+   * Statut d'un service : celui de son workload quand l'environnement tourne ; sinon il suit
+   * l'environnement (arrêté après destruction ou expiration, en échec si le déploiement a échoué).
+   */
+  serviceStatus(s: ServiceRow): string {
+    if (!this.isLive) {
+      return (this.env?.status || '').toUpperCase() === 'FAILED' ? 'FAILED' : 'STOPPED';
+    }
+    if (!s.live) return 'PENDING';
     if (s.live.healthy) return 'RUNNING';
     if (s.live.ready > 0) return 'PENDING';
     return 'FAILED';
   }
 
+  roleLabel(role: string | null | undefined): string {
+    const labels: Record<string, string> = { FRONTEND: 'Frontend', BACKEND: 'Backend', WORKER: 'Worker' };
+    return role ? labels[role.toUpperCase()] ?? role : 'Service';
+  }
+
   statusClass(status: string | null | undefined): string {
-    return (status || '').toLowerCase();
+    return statusTone(status);
+  }
+
+  statusLabel(status: string | null | undefined): string {
+    return environmentStatusLabel(status);
+  }
+
+  pipelineLabel(status: string | null | undefined): string {
+    return pipelineStatusLabel(status);
+  }
+
+  /** Mémoire réelle du namespace rapportée à son quota ; null si l'une des deux est inconnue
+   * (la barre n'est alors pas affichée plutôt que remplie avec une valeur arbitraire). */
+  get memoryQuotaPct(): number | null {
+    const used = this.monitoring?.summary?.totalMemoryBytes;
+    const hard = this.monitoring?.quota?.hardMemoryBytes;
+    if (!used || !hard) return null;
+    return Math.min(100, Math.round((used / hard) * 100));
+  }
+
+  get memoryQuotaLabel(): string {
+    const hard = this.monitoring?.quota?.hardMemoryBytes || 0;
+    const gi = hard / 1024 ** 3;
+    return gi >= 1 ? `${Math.round(gi * 10) / 10} Gi` : `${Math.round(hard / 1024 ** 2)} Mi`;
+  }
+
+  meterTone(pct: number): 'ok' | 'warn' | 'crit' {
+    if (pct >= 90) return 'crit';
+    if (pct >= 70) return 'warn';
+    return 'ok';
   }
 
   copyUrl(): void {
     const url = this.monitoring?.appUrl || this.env?.url;
     if (url) {
-      navigator.clipboard?.writeText(url).catch(() => {});
+      navigator.clipboard?.writeText(url).then(() => {
+        this.copied = true;
+        setTimeout(() => (this.copied = false), 1800);
+      }).catch(() => {});
     }
   }
 
@@ -187,6 +244,17 @@ export class AdminEnvironmentDetailComponent implements OnInit {
     const t = this.toTime(value);
     if (!t) return '—';
     const seconds = Math.floor((Date.now() - t) / 1000);
+    if (seconds < 3600) return Math.max(1, Math.floor(seconds / 60)) + ' min';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + ' h';
+    return Math.floor(seconds / 86400) + ' j';
+  }
+
+  /** Temps restant avant une échéance future (age() ne compte que le temps écoulé). */
+  timeUntil(value: string | number[] | null | undefined): string {
+    const t = this.toTime(value);
+    if (!t) return '—';
+    const seconds = Math.floor((t - Date.now()) / 1000);
+    if (seconds <= 0) return 'expiré';
     if (seconds < 3600) return Math.max(1, Math.floor(seconds / 60)) + ' min';
     if (seconds < 86400) return Math.floor(seconds / 3600) + ' h';
     return Math.floor(seconds / 86400) + ' j';

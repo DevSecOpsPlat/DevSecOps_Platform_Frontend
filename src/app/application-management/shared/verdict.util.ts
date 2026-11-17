@@ -11,17 +11,17 @@ export function verdictTone(verdict: string | null | undefined): VerdictTone {
   return 'unknown';
 }
 
-/** Pastille en toutes lettres (FR). */
+/** Pastille en toutes lettres (FR) — mêmes libellés que la page Quality Gate d'un service. */
 export function verdictLabelFr(verdict: string | null | undefined): string {
   switch (verdictTone(verdict)) {
     case 'bad':
       return 'Déploiement non recommandé';
     case 'warn':
-      return 'Déployable avec réserves';
+      return 'Déployable avec surveillance';
     case 'ok':
-      return 'Déploiement recommandé';
+      return 'Déployable';
     default:
-      return 'Verdict incomplet';
+      return 'Vérification incomplète';
   }
 }
 

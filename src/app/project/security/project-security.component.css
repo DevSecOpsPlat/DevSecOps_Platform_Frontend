@@ -148,3 +148,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .badge-critical { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .badge-high { background: hsla(34, 75%, 50%, 0.14); color: hsl(17, 85%, 70%); }
+:host-context([data-theme="dark"]) .badge-medium { background: hsla(48, 75%, 50%, 0.14); color: hsl(26, 85%, 70%); }
+:host-context([data-theme="dark"]) .badge-low { background: hsla(214, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .badge-info { background: #0b1220; color: #e2e8f0; }
+/* === Fin du mode nuit généré === */

@@ -1,58 +1,69 @@
-<div class="modal-backdrop" *ngIf="open" (click)="cancel()" role="presentation"></div>
+<div class="adm-modal-backdrop" *ngIf="open" (click)="cancel()" role="presentation"></div>
 
-<div class="modal" *ngIf="open" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-  <header class="modal-head">
+<div class="adm-modal" *ngIf="open" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+  <header class="adm-modal-head">
     <div>
-      <p class="modal-kicker">Administration</p>
-      <h2 id="create-user-title" class="modal-title">Nouvel utilisateur</h2>
-      <p class="modal-lead">
-        Le compte est créé sans mot de passe définitif. L'utilisateur reçoit un e-mail avec un lien
-        pour définir son mot de passe (plus sécurisé qu'un mot de passe envoyé en clair).
+      <p class="adm-modal-kicker">Administration</p>
+      <h2 id="create-user-title" class="adm-modal-title">Nouvel utilisateur</h2>
+      <p class="adm-modal-lead">
+        Le compte est créé sans mot de passe : l'utilisateur reçoit un e-mail avec un lien pour le définir
+        lui-même, plus sûr qu'un mot de passe envoyé en clair.
       </p>
     </div>
-    <button type="button" class="modal-close" (click)="cancel()" aria-label="Fermer">×</button>
+    <button type="button" class="adm-btn adm-btn--ghost adm-btn--icon" (click)="cancel()" aria-label="Fermer">
+      ×
+    </button>
   </header>
 
-  <div *ngIf="error" class="modal-error">{{ error }}</div>
-  <div *ngIf="successMessage" class="modal-success" [class.modal-warn]="!emailSent">
-    {{ successMessage }}
-    <div *ngIf="activationLink && !emailSent" class="activation-link-box">
-      <label>Lien d'activation (à transmettre manuellement)</label>
-      <code>{{ activationLink }}</code>
-      <button type="button" class="btn secondary" (click)="copyLink()">Copier le lien</button>
+  <div class="adm-modal-body" *ngIf="error || successMessage">
+    <div *ngIf="error" class="adm-alert adm-alert--danger">
+      <span class="adm-alert-body">{{ error }}</span>
     </div>
-    <div *ngIf="emailSent && activationLink" class="activation-link-hint">
-      Si l'utilisateur ne reçoit rien, vérifiez les spams ou renvoyez depuis sa fiche utilisateur.
+    <div *ngIf="successMessage" class="adm-alert" [ngClass]="emailSent ? 'adm-alert--success' : 'adm-alert--warning'">
+      <div class="adm-alert-body">
+        {{ successMessage }}
+        <p class="cu-hint" *ngIf="emailSent && activationLink">
+          Si l'utilisateur ne reçoit rien, vérifiez les spams ou renvoyez depuis sa fiche utilisateur.
+        </p>
+      </div>
+    </div>
+    <div *ngIf="activationLink && !emailSent" class="adm-field">
+      <span class="adm-label">Lien d'activation (à transmettre manuellement)</span>
+      <code class="adm-pre cu-link">{{ activationLink }}</code>
+      <button type="button" class="adm-btn adm-btn--secondary adm-btn--sm cu-copy" (click)="copyLink()">
+        Copier le lien
+      </button>
     </div>
   </div>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" class="modal-form" *ngIf="!successMessage">
-    <div class="field">
-      <label for="create-username">Nom d'utilisateur</label>
-      <input id="create-username" type="text" formControlName="username" autocomplete="off" maxlength="30" />
-      <p class="field-hint">Lettres, chiffres, point, tiret ou underscore — au moins une lettre.</p>
-      <span class="field-error" *ngIf="form.get('username')?.invalid && form.get('username')?.touched">
-        <ng-container *ngIf="form.get('username')?.errors?.['required']">Nom d'utilisateur requis</ng-container>
-        <ng-container *ngIf="form.get('username')?.errors?.['usernameInvalid'] as err">
-          {{ err.message }}
-        </ng-container>
-      </span>
+  <form [formGroup]="form" (ngSubmit)="submit()" *ngIf="!successMessage">
+    <div class="adm-modal-body">
+      <div class="adm-field">
+        <label class="adm-label" for="create-username">Nom d'utilisateur</label>
+        <input id="create-username" class="adm-input" type="text" formControlName="username" autocomplete="off" maxlength="30" />
+        <p class="adm-field-hint">Lettres, chiffres, point, tiret ou underscore — au moins une lettre.</p>
+        <span class="adm-field-error" *ngIf="form.get('username')?.invalid && form.get('username')?.touched">
+          <ng-container *ngIf="form.get('username')?.errors?.['required']">Nom d'utilisateur requis.</ng-container>
+          <ng-container *ngIf="form.get('username')?.errors?.['usernameInvalid'] as err">{{ err.message }}</ng-container>
+        </span>
+      </div>
+
+      <div class="adm-field">
+        <label class="adm-label" for="create-email">E-mail</label>
+        <input id="create-email" class="adm-input" type="email" formControlName="email" autocomplete="off" placeholder="prenom.nom@banque.com" />
+        <span class="adm-field-error" *ngIf="form.get('email')?.invalid && form.get('email')?.touched">E-mail invalide.</span>
+      </div>
     </div>
 
-    <div class="field">
-      <label for="create-email">E-mail</label>
-      <input id="create-email" type="email" formControlName="email" autocomplete="off" />
-      <span class="field-error" *ngIf="form.get('email')?.invalid && form.get('email')?.touched">
-        E-mail invalide
-      </span>
-    </div>
-
-    <footer class="modal-actions">
-      <button type="button" class="btn secondary" (click)="cancel()" [disabled]="saving">Annuler</button>
-      <button type="submit" class="btn primary" [disabled]="saving || form.invalid">
-        <span *ngIf="!saving">Créer et envoyer l'activation</span>
-        <span *ngIf="saving">Création…</span>
+    <footer class="adm-modal-foot">
+      <button type="button" class="adm-btn adm-btn--secondary" (click)="cancel()" [disabled]="saving">Annuler</button>
+      <button type="submit" class="adm-btn adm-btn--primary" [disabled]="saving || form.invalid">
+        {{ saving ? 'Création…' : "Créer et envoyer l'activation" }}
       </button>
     </footer>
   </form>
+
+  <footer class="adm-modal-foot" *ngIf="successMessage">
+    <button type="button" class="adm-btn adm-btn--primary" (click)="cancel()">Fermer</button>
+  </footer>
 </div>

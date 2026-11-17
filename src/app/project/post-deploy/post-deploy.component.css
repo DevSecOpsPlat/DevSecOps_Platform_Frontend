@@ -413,3 +413,35 @@
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* === Mode nuit (généré automatiquement) === */
+:host-context([data-theme="dark"]) .pd-eyebrow { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-sub { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-label { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-select { border: 1px solid #334155; background: #111827; }
+:host-context([data-theme="dark"]) .pd-empty { border: 1px dashed #334155; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-card { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .pd-card-foot { border-top: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pd-muted { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-ok-text { color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .pd-error-text { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .pd-badge { background: #0b1220; color: #e2e8f0; }
+:host-context([data-theme="dark"]) .pd-badge--ok { background: hsla(141, 75%, 50%, 0.14); color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .pd-badge--bad { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .pd-status--never { background: #0b1220; color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-status--running { background: hsla(214, 75%, 50%, 0.14); }
+:host-context([data-theme="dark"]) .pd-status--running .pd-status-icon { border: 2px solid hsla(213, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .pd-status--ok { background: hsla(141, 75%, 50%, 0.14); color: hsl(142, 72%, 70%); }
+:host-context([data-theme="dark"]) .pd-status--ok .pd-status-icon::after { border-left: 2px solid #1f2937; border-bottom: 2px solid #1f2937; }
+:host-context([data-theme="dark"]) .pd-status--findings { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .pd-status--failed { background: #0b1220; color: hsl(0, 70%, 70%); }
+:host-context([data-theme="dark"]) .pd-stale-flag { background: #0b1220; color: hsl(23, 83%, 70%); border: 1px solid hsla(48, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .pd-stale-flag--refreshing { background: #0b1220; border-color: hsla(213, 75%, 50%, 0.38); }
+:host-context([data-theme="dark"]) .pd-smoke-list li { background: #0b1220; }
+:host-context([data-theme="dark"]) .pd-smoke--bad { background: #0b1220; color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .pd-smoke-url { color: #a5b4c8; }
+:host-context([data-theme="dark"]) .pd-smoke-msg { color: hsl(0, 74%, 70%); }
+:host-context([data-theme="dark"]) .pd-findings { border: 1px solid #1f2937; background: #111827; }
+:host-context([data-theme="dark"]) .pd-findings-table th { color: #a5b4c8; border-bottom: 1px solid #1f2937; }
+:host-context([data-theme="dark"]) .pd-findings-table td { border-bottom: 1px solid #1f2937; }
+/* === Fin du mode nuit généré === */
