@@ -103,6 +103,12 @@ export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   liveCheck?: DefectDojoLiveHttpCheck | null;
   /** Couches traversées par la réponse (Cloudflare, Ingress EnviroTest, conteneur). */
   exposureChain?: string[] | null;
+  /** Service qui a répondu à l'URL testée (routage de l'Ingress). */
+  respondingService?: string | null;
+  respondingServiceId?: string | null;
+  routingReason?: string | null;
+  /** Constats lus dans le dépôt de ce service (« vite.config.ts : aucune mention de … »). */
+  repositoryFacts?: string[] | null;
 }
 
 export interface DefectDojoLiveHttpCheck {

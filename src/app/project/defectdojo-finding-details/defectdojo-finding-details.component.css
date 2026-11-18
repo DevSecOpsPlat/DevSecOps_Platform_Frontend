@@ -471,3 +471,8 @@
   .rx-analysis-actions .rx-btn { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .rx-loading-bar { animation: none; } }
+
+/* Constats lus dans le dépôt du service qui a répondu */
+.rx-repo-facts { margin: 0.5rem 0 0 10.25rem; padding-left: 1rem; display: grid; gap: 0.15rem; font-size: 0.78rem; color: var(--rx-muted); }
+.rx-repo-facts li { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .rx-repo-facts { margin-left: 0; } }
