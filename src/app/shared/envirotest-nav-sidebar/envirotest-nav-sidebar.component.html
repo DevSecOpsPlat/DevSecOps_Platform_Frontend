@@ -41,6 +41,10 @@
         </svg>
       </button>
       <div class="et-svc-menu" *ngIf="serviceMenuOpen" role="listbox">
+        <button type="button" class="et-svc-opt et-svc-opt--app" (click)="serviceMenuOpen = false; goToApplication()">
+          <strong>Toute l'application</strong>
+          <span>{{ managedApp?.name || 'Application' }} · {{ siblings.length }} service{{ siblings.length > 1 ? 's' : '' }}</span>
+        </button>
         <button type="button" class="et-svc-opt" *ngFor="let s of siblings"
                 [class.et-svc-opt--active]="s.id === serviceId"
                 (click)="selectService(s)">

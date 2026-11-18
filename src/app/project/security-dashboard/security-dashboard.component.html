@@ -21,7 +21,6 @@
           <div class="vuln-env-card">
             <span class="vuln-env-label">Branche</span>
             <div class="vuln-env-value">
-              <span class="vuln-env-icon">🌿</span>
               <select class="vuln-env-select" [(ngModel)]="selectedBranch" (ngModelChange)="onBranchChange()" [disabled]="loading">
                 <option *ngFor="let b of branches" [ngValue]="b">{{ b }}</option>
               </select>

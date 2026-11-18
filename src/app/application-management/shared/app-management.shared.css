@@ -1336,6 +1336,20 @@
   pointer-events: none;
   overflow: hidden;
 }
+.ds-preview-blocked {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .45rem;
+  padding: 1.5rem; text-align: center; color: #64748b;
+}
+.ds-preview-blocked-title { margin: .2rem 0 0; font-size: .95rem; font-weight: 700; color: #0f172a; }
+.ds-preview-blocked-text { margin: 0; max-width: 34ch; font-size: .82rem; line-height: 1.5; }
+.ds-preview-blocked-btn {
+  margin-top: .5rem; padding: .45rem .9rem; border-radius: 8px;
+  background: #ea580c; color: #fff; font-size: .82rem; font-weight: 600; text-decoration: none;
+}
+.ds-preview-blocked-btn:hover { background: #c2410c; }
+:host-context([data-theme="dark"]) .ds-preview-blocked { color: #94a3b8; }
+:host-context([data-theme="dark"]) .ds-preview-blocked-title { color: #e2e8f0; }
 .ds-preview-hint {
   margin: 0;
   padding: 0.4rem 0.55rem;

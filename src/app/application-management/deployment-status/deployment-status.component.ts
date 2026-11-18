@@ -1,4 +1,6 @@
-import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { platformPreviewUrl } from '../../shared/preview-url.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -314,12 +316,14 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
    * utilisateur du 18 août 2026 : « je regarde une erreur, l'enregistrement s'est-il fait ? »).
    */
   get previewHint(): string | null {
+    if (this.previewBlockedReason) return null;
     const s = this.monitorSummary;
     if (s && (s.totalPods || 0) > 0 && (s.readyPods || 0) < (s.totalPods || 0)) {
       return `Aperçu peut-être vide : ${s.readyPods}/${s.totalPods} pods prêts sur ce déploiement — `
         + `le service n'a pas fini de démarrer (voir Alertes pour la cause). Le lien direct fonctionne dès que le pod est prêt.`;
     }
-    return `Si l'aperçu reste vide, le site refuse d'être intégré dans un cadre — utilise le lien direct.`;
+    // L'aperçu passe par l'adresse apercu-<hôte>, toujours affichable : plus besoin d'avertir d'un cadre vide.
+    return null;
   }
 
   /**
@@ -350,7 +354,38 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       return;
     }
     this.previewRawUrl = url;
-    this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+    // Règle simple : une application en envirotest.cloud s'affiche toujours, par son adresse
+    // d'aperçu apercu-<hôte> (publiée par la plateforme, affichable en cadre UNIQUEMENT par
+    // envirotest.cloud — l'adresse publique garde sa protection anti-clickjacking).
+    // Les autres adresses ne sont pas chargées : message + lien direct.
+    const previewUrl = platformPreviewUrl(url);
+    this.previewBlockedReason = previewUrl ? null : 'OUTSIDE_PLATFORM_DOMAIN';
+    this.previewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(previewUrl || url);
+    this.previewChecked = true;
+  }
+
+  private readonly router = inject(Router);
+
+  /** Détail du pipeline de ce déploiement, dans la plateforme (et non sur GitLab). */
+  openDeployPipelineDetail(): void {
+    const pid = this.dep?.gitlabPipelineId;
+    if (!this.appId || !pid) return;
+    this.router.navigate(['/projects', this.appId, 'pipeline-detail', String(pid)], {
+      queryParams: { kind: 'DEPLOY' }
+    });
+  }
+
+  /** Aperçu en cours de vérification (évite d'afficher un cadre cassé avant la réponse). */
+  previewChecked = false;
+  /** Raison du refus d'aperçu : FRAME_ANCESTORS, X_FRAME_OPTIONS, OUTSIDE_PLATFORM_DOMAIN… */
+  previewBlockedReason: string | null = null;
+
+  get previewBlockedTitle(): string {
+    return 'Aperçu réservé aux adresses envirotest.cloud';
+  }
+
+  get previewBlockedText(): string {
+    return 'Cette adresse n\'est pas publiée par la plateforme : ouvrez l\'application dans un nouvel onglet.';
   }
 
   private setupPreviewScale(stage: HTMLElement): void {

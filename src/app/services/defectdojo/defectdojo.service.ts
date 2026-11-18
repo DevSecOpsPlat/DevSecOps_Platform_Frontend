@@ -91,6 +91,28 @@ export interface DefectDojoFindingDetail extends DefectDojoFindingItem {
   applicationId?: string;
   /** Métadonnées techniques du scanner (libellé français → valeur brute). */
   scannerFields?: Record<string, string> | null;
+  /** Fichier du dépôt dont provient codeSnippet (ex. main.py déduit du Dockerfile pour ZAP). */
+  codeFilePath?: string | null;
+  /** Règle de l'outil (ZAP : pluginid). */
+  toolRuleId?: string | null;
+  /** Finding DAST : ZAP a testé l'application déployée, pas le code. */
+  dynamicFinding?: boolean;
+  /** URL testées par ZAP. */
+  analyzedUrls?: string[] | null;
+  /** Contrôle HTTP fait par la plateforme au moment de l'analyse. */
+  liveCheck?: DefectDojoLiveHttpCheck | null;
+  /** Couches traversées par la réponse (Cloudflare, Ingress EnviroTest, conteneur). */
+  exposureChain?: string[] | null;
+}
+
+export interface DefectDojoLiveHttpCheck {
+  url: string;
+  status?: number | null;
+  checkedAt?: string | null;
+  headers?: Record<string, string> | null;
+  missingHeaders?: string[] | null;
+  corsTestOrigin?: string | null;
+  error?: string | null;
 }
 
 export interface DefectDojoFindingsPage {

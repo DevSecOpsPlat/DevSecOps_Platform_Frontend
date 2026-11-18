@@ -40,6 +40,7 @@ import { ManagedSecurityDashboardComponent } from '../managed-security-dashboard
 import { ManagedAppHistoryComponent } from '../managed-app-history/managed-app-history.component';
 import { AppQualityGateComponent } from '../app-quality-gate/app-quality-gate.component';
 import { AppSecurityInsightsComponent } from '../app-security-insights/app-security-insights.component';
+import { PostDeployComponent } from '../../project/post-deploy/post-deploy.component';
 import { isHardBlocked, verdictLabelFr, verdictTone } from '../shared/verdict.util';
 import { PipelineJobInfo, PipelineScanResponse } from '../../models/pipeline/pipeline-scan-response';
 import { PipelineListItem } from '../../models/pipeline/pipeline-list-item';
@@ -80,7 +81,8 @@ interface AlertNameAgg {
     ManagedSecurityDashboardComponent,
     ManagedAppHistoryComponent,
     AppQualityGateComponent,
-    AppSecurityInsightsComponent
+    AppSecurityInsightsComponent,
+    PostDeployComponent
   ],
   templateUrl: './application-detail.component.html',
   styleUrls: ['../shared/app-management.shared.css', './application-detail.component.css']
@@ -1601,9 +1603,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     if (section === 'quality-gate') {
       this.loadQualityGateBatches();
     }
-    if (section === 'post-deploy') {
-      this.loadPostDeploySummaries();
-    }
     if (section === 'dashboard') {
       this.loadDashboardLatestEvent();
       this.loadHistory();
@@ -1694,70 +1693,6 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       }
     } catch { /* ignore */ }
     this.router.navigate(['/project', serviceId, 'quality-gate']);
-  }
-
-  openServicePostDeploy(serviceId: string | null | undefined): void {
-    if (!serviceId) return;
-    try {
-      localStorage.setItem('envirotest-last-managed-app-id', this.appId);
-      if (this.app?.name) {
-        localStorage.setItem('envirotest-last-managed-app-name', this.app.name);
-      }
-    } catch { /* ignore */ }
-    this.router.navigate(['/project', serviceId, 'post-deploy']);
-  }
-
-  /**
-   * Résumé DAST par service pour la page Post-déploiement "app totale" -- affiché inline sur
-   * chaque carte au lieu d'un simple lien (retour utilisateur : "pourquoi tu mets les résultats
-   * dans les services et pas dans l'app totale"). N+1 borné au nombre de services d'une app
-   * (typiquement 2-5) -- acceptable, pas de scheduler/cache nécessaire à ce stade.
-   */
-  postDeploySummaries: Record<string, {
-    loading: boolean;
-    dastApplicable?: boolean;
-    dastCritical?: number;
-    dastHigh?: number;
-    dastMedium?: number;
-    error?: boolean;
-  }> = {};
-
-  loadPostDeploySummaries(): void {
-    const services = this.app?.services || [];
-    for (const svc of services) {
-      if (!svc.id || this.postDeploySummaries[svc.id]) continue;
-      this.postDeploySummaries[svc.id] = { loading: true };
-      this.qualityGateService.listEnvironments(svc.id, undefined, false)
-        .pipe(
-          takeUntil(this.destroy$),
-          catchError(() => of([]))
-        )
-        .subscribe(envs => {
-          const envId = envs[0]?.environmentId;
-          if (!envId) {
-            this.postDeploySummaries[svc.id!] = { loading: false };
-            return;
-          }
-          this.qualityGateService.getQualityGate(svc.id!, undefined, envId, false, null)
-            .pipe(
-              takeUntil(this.destroy$),
-              catchError(() => of(null))
-            )
-            .subscribe(res => {
-              if (!res) {
-                this.postDeploySummaries[svc.id!] = { loading: false, error: true };
-                return;
-              }
-              this.postDeploySummaries[svc.id!] = {
-                loading: false,
-                dastApplicable: !!res.metrics?.dastApplicable,
-                dastCritical: res.metrics?.dastCritical,
-                dastHigh: res.metrics?.dastHigh,
-                dastMedium: res.metrics?.dastMedium
-              };
-            });
-        });
-    }
   }
 
   loadHistory(): void {

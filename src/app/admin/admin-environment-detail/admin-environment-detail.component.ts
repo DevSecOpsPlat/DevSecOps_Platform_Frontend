@@ -10,6 +10,7 @@ import {
 } from '../../services/admin/admin.service';
 import { DeploymentMonitoringResponse, DeploymentPodInfo, MonitoringWorkload } from '../../models/application-management/application-management.models';
 import { environmentStatusLabel, pipelineStatusLabel, statusTone } from '../shared/admin-status';
+import { platformPreviewUrl } from '../../shared/preview-url.util';
 
 const LIVE_STATUSES = ['RUNNING', 'BUILDING', 'PENDING'];
 
@@ -109,7 +110,7 @@ export class AdminEnvironmentDetailComponent implements OnInit {
         this.pairServicesWithLiveData(detail);
         const url = detail.appUrl || this.env?.url;
         if (url && this.canEmbedPreview(url)) {
-          this.previewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+          this.previewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(platformPreviewUrl(url) || url);
         }
       },
       error: () => {

@@ -1,447 +1,691 @@
+/* Post-déploiement — couleurs via les jetons globaux --et-* (basculent avec [data-theme="dark"]). */
+:host {
+  --pd-crit: #b91c1c;
+  --pd-high: #ea580c;
+  --pd-med: #d97706;
+  --pd-low: #2563eb;
+  --pd-info: #94a3b8;
+  --pd-ok: #16a34a;
+  --pd-ok-soft: rgba(22, 163, 74, .10);
+  --pd-bad: #dc2626;
+  --pd-bad-soft: rgba(220, 38, 38, .09);
+  --pd-warn: #d97706;
+  --pd-warn-soft: rgba(217, 119, 6, .11);
+  --pd-off-soft: rgba(100, 116, 139, .12);
+  display: block;
+}
+
+:host-context([data-theme="dark"]) {
+  --pd-crit: #f87171;
+  --pd-high: #fb923c;
+  --pd-med: #fbbf24;
+  --pd-low: #60a5fa;
+  --pd-info: #64748b;
+  --pd-ok: #4ade80;
+  --pd-ok-soft: rgba(74, 222, 128, .12);
+  --pd-bad: #f87171;
+  --pd-bad-soft: rgba(248, 113, 113, .12);
+  --pd-warn: #fbbf24;
+  --pd-warn-soft: rgba(251, 191, 36, .12);
+  --pd-off-soft: rgba(148, 163, 184, .14);
+}
+
 .pd-page {
   padding: 1.5rem;
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-}
-
-.pd-head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+  color: var(--et-text);
 }
 
-.pd-eyebrow {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6b7280;
-  margin: 0 0 0.25rem;
+.pd-page--embedded {
+  padding: 0;
+  max-width: none;
 }
 
-.pd-title {
-  font-size: 1.5rem;
-  margin: 0 0 0.35rem;
+/* ── Boutons ─────────────────────────────────────────────────────────────── */
+.pd-btn {
+  appearance: none;
+  border: 1px solid var(--et-border);
+  background: var(--et-surface);
+  color: var(--et-text);
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: .45rem .85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+  white-space: nowrap;
 }
 
-.pd-sub {
-  color: #6b7280;
-  margin: 0;
-  max-width: 42rem;
+.pd-btn:hover:not(:disabled) { border-color: var(--et-accent); }
+.pd-btn:disabled { opacity: .55; cursor: default; }
+
+.pd-btn--primary {
+  background: var(--et-accent);
+  border-color: var(--et-accent);
+  color: #fff;
 }
 
-.pd-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.pd-btn--primary:hover:not(:disabled) { background: #d85b16; border-color: #d85b16; }
+
+.pd-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--et-accent);
+  cursor: pointer;
 }
 
-.pd-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
+.pd-link:hover:not(:disabled) { text-decoration: underline; }
+.pd-link:disabled { opacity: .55; cursor: default; }
 
 .pd-select {
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  background: #fff;
-  font-size: 0.85rem;
+  padding: .42rem .7rem;
+  border: 1px solid var(--et-border);
+  border-radius: 999px;
+  background: var(--et-surface);
+  color: var(--et-text);
+  font: inherit;
+  font-size: .82rem;
+  max-width: 100%;
 }
 
-.pd-empty {
-  border: 1px dashed #d1d5db;
-  border-radius: 0.6rem;
-  padding: 2rem;
-  text-align: center;
-  color: #6b7280;
+/* ── Pastilles d'état ───────────────────────────────────────────────────── */
+.pd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .22rem .6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--pd-off-soft);
+  color: var(--et-muted);
 }
 
-.pd-cards {
+.pd-pill::before {
+  content: '';
+  width: .45rem;
+  height: .45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pd-pill--ok { background: var(--pd-ok-soft); color: var(--pd-ok); }
+.pd-pill--findings,
+.pd-pill--warn,
+.pd-pill--running { background: var(--pd-warn-soft); color: var(--pd-warn); }
+.pd-pill--failed,
+.pd-pill--bad { background: var(--pd-bad-soft); color: var(--pd-bad); }
+.pd-pill--running::before { animation: pd-pulse 1.2s ease-in-out infinite; }
+
+@keyframes pd-pulse { 50% { opacity: .3; } }
+
+/* ── Bandeau du déploiement ─────────────────────────────────────────────── */
+.pd-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--et-border);
+  border-radius: var(--et-radius, 14px);
+  background: var(--et-surface);
+  box-shadow: var(--et-shadow);
+}
+
+.pd-context-main {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  min-width: 0;
+}
+
+.pd-dot {
+  flex: none;
+  width: .7rem;
+  height: .7rem;
+  margin-top: .35rem;
+  border-radius: 50%;
+  background: var(--et-muted);
+}
+
+.pd-dot--ok { background: var(--pd-ok); box-shadow: 0 0 0 4px var(--pd-ok-soft); }
+.pd-dot--warn { background: var(--pd-warn); box-shadow: 0 0 0 4px var(--pd-warn-soft); }
+.pd-dot--bad { background: var(--pd-bad); box-shadow: 0 0 0 4px var(--pd-bad-soft); }
+
+.pd-context-text {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  min-width: 0;
+}
+
+.pd-context-label {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+}
+
+.pd-context-line {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  flex-wrap: wrap;
+}
+
+.pd-context-line strong { font-size: .95rem; overflow-wrap: anywhere; }
+
+.pd-context-date {
+  font-size: .8rem;
+  color: var(--et-muted);
+}
+
+.pd-context-url {
+  font-size: .82rem;
+  color: var(--et-accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.pd-context-url:hover { text-decoration: underline; }
+
+.pd-context-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Cartes ─────────────────────────────────────────────────────────────── */
+.pd-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 1rem;
 }
 
 .pd-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  padding: 1rem;
-  background: #fff;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: .9rem;
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--et-border);
+  border-radius: var(--et-radius, 14px);
+  background: var(--et-surface);
+  box-shadow: var(--et-shadow);
+  overflow: hidden;
 }
+
+.pd-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--et-border);
+}
+
+.pd-card--ok::before { background: var(--pd-ok); }
+.pd-card--findings::before,
+.pd-card--running::before { background: var(--pd-warn); }
+.pd-card--failed::before { background: var(--pd-bad); }
 
 .pd-card-head {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
+  gap: .75rem;
+}
+
+.pd-card-kicker {
+  display: block;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--et-muted);
 }
 
 .pd-card-head h3 {
+  margin: .1rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.pd-card-msg {
   margin: 0;
-  font-size: 1rem;
+  padding: .75rem .9rem;
+  border-radius: 10px;
+  background: var(--et-surface-2);
+  color: var(--et-muted);
+  font-size: .86rem;
+  line-height: 1.45;
 }
 
-.pd-card-body {
-  transition: opacity 0.2s ease;
+.pd-card-msg--bad {
+  background: var(--pd-bad-soft);
+  color: var(--pd-bad);
 }
 
-/* §Objectif 5, point 5 : un résultat obsolète reste affiché (pas remplacé) pendant qu'un nouveau
-   scan tourne -- juste atténué, avec la légende pd-stale-flag--refreshing au-dessus qui explique
-   pourquoi. Jamais un vide silencieux pendant un rafraîchissement. */
-.pd-card-body--refreshing {
-  opacity: 0.55;
+.pd-card-msg code {
+  font-size: .8rem;
+  padding: .05rem .3rem;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, .15);
+}
+
+.pd-stale {
+  margin: 0;
+  padding: .5rem .75rem;
+  border-left: 3px solid var(--pd-warn);
+  border-radius: 6px;
+  background: var(--pd-warn-soft);
+  color: var(--et-text);
+  font-size: .8rem;
 }
 
 .pd-card-foot {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: .4rem 1rem;
   flex-wrap: wrap;
   margin-top: auto;
-  padding-top: 0.4rem;
-  border-top: 1px solid #f3f4f6;
+  padding-top: .75rem;
+  border-top: 1px solid var(--et-border);
+  font-size: .76rem;
+  color: var(--et-muted);
 }
 
-.pd-foot-hint {
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
+.pd-card-foot .pd-link { margin-left: auto; }
 
 .pd-inline-error {
-  padding: 0.2rem 0.5rem !important;
-  font-size: 0.75rem !important;
+  color: var(--pd-bad);
+  font-size: .76rem;
 }
 
-.pd-muted {
-  color: #6b7280;
-  font-size: 0.9rem;
+.pd-note {
   margin: 0;
+  font-size: .76rem;
+  color: var(--et-muted);
 }
 
-.pd-ok-text {
-  color: #15803d;
-  font-size: 0.9rem;
-  margin: 0;
-  font-weight: 500;
-}
-
-.pd-error-text {
-  color: #b91c1c;
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.pd-sev-row {
+/* ── DAST : total, barre, légende ───────────────────────────────────────── */
+.pd-total {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  align-items: baseline;
+  gap: .6rem;
 }
 
-/* Forme (pastille) séparée de la couleur (héritée de security-list.styles.css .severity-*) --
-   même échelle de teintes que security-dashboard/managed-security-dashboard, pas de nouvelle
-   palette propre à cette page (§Objectif 4bis, point 1). */
-.pd-sev-pill {
-  padding: 0.2rem 0.55rem;
+.pd-total-value {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+
+.pd-total-label {
+  display: flex;
+  flex-direction: column;
+  font-size: .85rem;
+  color: var(--et-muted);
+}
+
+.pd-total-label small { font-size: .74rem; }
+
+.pd-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  overflow: hidden;
+  background: var(--et-surface-2);
 }
 
-.pd-badge {
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  background: #f3f4f6;
-  color: #374151;
+.pd-bar-seg {
+  flex-basis: 0;
+  min-width: 6px;
 }
 
-.pd-badge--ok { background: #dcfce7; color: #15803d; }
-.pd-badge--bad { background: #fee2e2; color: #b91c1c; }
+.pd-sev--critical { background: var(--pd-crit); }
+.pd-sev--high { background: var(--pd-high); }
+.pd-sev--medium { background: var(--pd-med); }
+.pd-sev--low { background: var(--pd-low); }
+.pd-sev--info { background: var(--pd-info); }
 
-/* ── Badges d'état (§Objectif 5) ──────────────────────────────────────────────────────────────
-   Emplacement fixe dans chaque carte, quel que soit l'état -- l'état "jamais scanné" n'est
-   jamais un badge vide (§point 2). Trois familles de forme distinctes (cercle / carré / triangle)
-   pour que la FORME soit le signal principal, la couleur secondaire (§point 3) -- lisible même en
-   simulation daltonienne. */
-.pd-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border: 1px solid transparent;
+.pd-sev-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .4rem;
 }
 
-.pd-status-icon {
-  width: 0.6rem;
-  height: 0.6rem;
-  flex: none;
+.pd-sev-list li {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  padding: .5rem .55rem;
+  border-radius: 10px;
+  background: var(--et-surface-2);
+}
+
+.pd-sev-item--zero { opacity: .5; }
+
+.pd-sev-dot {
   display: inline-block;
-}
-
-/* 1. Jamais scanné -- cercle creux, gris neutre. Même famille de forme que "en cours"/"ok"
-   (cercle), remplissage différent -- se lit comme un état au repos, pas une anomalie. */
-.pd-status--never {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-.pd-status--never .pd-status-icon {
+  width: .55rem;
+  height: .55rem;
   border-radius: 50%;
-  border: 2px solid #9ca3af;
-  background: transparent;
-}
-
-/* 2. En cours -- cercle qui tourne (mouvement = 3e signal, au-delà forme+couleur). */
-.pd-status--running {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-.pd-status--running .pd-status-icon {
-  border-radius: 50%;
-  border: 2px solid #bfdbfe;
-  border-top-color: #1d4ed8;
-  animation: pd-spin 0.7s linear infinite;
-}
-@keyframes pd-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* 3. 0 finding -- cercle plein + coche (même famille "cercle" que 1/2, rempli + coche = distinct). */
-.pd-status--ok {
-  background: #dcfce7;
-  color: #15803d;
-}
-.pd-status--ok .pd-status-icon {
-  border-radius: 50%;
-  background: #16a34a;
-  position: relative;
-}
-.pd-status--ok .pd-status-icon::after {
-  content: '';
-  position: absolute;
-  left: 0.13rem;
-  top: 0.02rem;
-  width: 0.22rem;
-  height: 0.12rem;
-  border-left: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  transform: rotate(-45deg);
-}
-
-/* 4. N findings -- carré arrondi (PAS un cercle) : silhouette différente de 1/2/3, couleur par
-   sévérité max (rouge/orange/jaune) appliquée en modificateur, jamais seule. */
-.pd-status--findings {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-.pd-status--findings .pd-status-icon {
-  border-radius: 3px;
-  background: #dc2626;
-}
-
-/* 5. Échec -- triangle (3e silhouette distincte), bordure pointillée en plus de la couleur
-   (§point 3 : jamais la couleur seule, ici DEUX signaux non-couleur -- forme ET bordure). */
-.pd-status--failed {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px dashed #b91c1c;
-}
-.pd-status--failed .pd-status-icon {
-  width: 0;
-  height: 0;
-  border-left: 0.35rem solid transparent;
-  border-right: 0.35rem solid transparent;
-  border-bottom: 0.55rem solid #991b1b;
-  background: transparent;
-}
-
-/* 6. Obsolète -- PAS un état exclusif (pas de .pd-status--stale) : un indicateur orthogonal,
-   affiché en plus de l'état primaire (§point 5). Horloge, ambre, toujours au-dessus de la carte. */
-.pd-stale-flag {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0.3rem 0.6rem;
-  background: #fffbeb;
-  color: #92400e;
-  border: 1px solid #fde68a;
-  border-radius: 0.4rem;
-  font-size: 0.78rem;
-}
-
-.pd-stale-flag--refreshing {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
-}
-
-.pd-stale-icon {
-  width: 0.65rem;
-  height: 0.65rem;
   flex: none;
-  border-radius: 50%;
-  border: 2px solid #92400e;
-  position: relative;
-}
-.pd-stale-icon::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1px;
-  height: 0.2rem;
-  background: #92400e;
-  transform: translate(-50%, -100%);
-}
-.pd-stale-icon::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0.15rem;
-  height: 1px;
-  background: #92400e;
-  transform: translate(0, -50%);
 }
 
-.pd-smoke-list {
+.pd-sev-name {
+  font-size: .72rem;
+  color: var(--et-muted);
+}
+
+.pd-sev-count {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* ── Smoke test : services ──────────────────────────────────────────────── */
+.pd-svc-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: .45rem;
 }
 
-.pd-smoke-list li {
+.pd-svc {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .6rem .75rem;
+  border: 1px solid var(--et-border);
+  border-radius: 10px;
+  background: var(--et-surface-2);
+}
+
+.pd-svc--bad {
+  border-color: var(--pd-bad);
+  background: var(--pd-bad-soft);
+}
+
+.pd-svc--link { cursor: pointer; }
+.pd-svc--link:hover { border-color: var(--et-accent); }
+
+.pd-svc-state {
+  flex: none;
+  width: .6rem;
+  height: .6rem;
+  border-radius: 50%;
+  background: var(--pd-bad);
+}
+
+.pd-svc-state--ok { background: var(--pd-ok); }
+
+.pd-svc-body {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 0.15rem;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.4rem;
-  background: #f9fafb;
+  gap: .15rem;
+  min-width: 0;
+  flex: 1;
 }
 
-.pd-smoke--bad {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.pd-smoke-row-top {
+.pd-svc-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: .45rem;
 }
 
-.pd-smoke-url {
-  color: #6b7280;
-  margin: 0;
-  word-break: break-all;
+.pd-svc-top strong { font-size: .88rem; }
+
+.pd-tag {
+  font-size: .68rem;
+  font-weight: 600;
+  padding: .08rem .45rem;
+  border-radius: 999px;
+  background: var(--et-accent-soft);
+  color: var(--et-accent);
 }
 
-.pd-smoke-msg {
-  color: #b91c1c;
-  margin: 0;
-  font-size: 0.8rem;
+.pd-svc-url {
+  font-size: .74rem;
+  color: var(--et-muted);
+  overflow-wrap: anywhere;
 }
 
-/* ---- Findings détaillés (ZAP) ---- */
+.pd-svc-msg {
+  font-size: .76rem;
+  color: var(--pd-bad);
+}
+
+.pd-code {
+  flex: none;
+  font-size: .74rem;
+  font-weight: 700;
+  padding: .18rem .5rem;
+  border-radius: 6px;
+  background: var(--pd-bad-soft);
+  color: var(--pd-bad);
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-code--ok {
+  background: var(--pd-ok-soft);
+  color: var(--pd-ok);
+}
+
+/* ── Alertes ZAP ────────────────────────────────────────────────────────── */
 .pd-findings {
-  margin-top: 1.25rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #fff;
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--et-border);
+  border-radius: var(--et-radius, 14px);
+  background: var(--et-surface);
+  box-shadow: var(--et-shadow);
 }
 
 .pd-findings-head {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
+  gap: .75rem;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
 }
 
-.pd-findings-title {
+.pd-findings-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.pd-findings-sub {
+  font-size: .8rem;
+  color: var(--et-muted);
+}
+
+.pd-chips {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.pd-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .65rem;
+  border: 1px solid var(--et-border);
+  border-radius: 999px;
+  background: var(--et-surface);
+  color: var(--et-text);
+  font: inherit;
+  font-size: .76rem;
   font-weight: 600;
-  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.pd-chip > span:last-child {
+  color: var(--et-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-chip:hover { border-color: var(--et-accent); }
+
+.pd-chip--on {
+  border-color: var(--et-accent);
+  background: var(--et-accent-soft);
 }
 
 .pd-table-wrap {
   overflow-x: auto;
+  border: 1px solid var(--et-border);
+  border-radius: 10px;
 }
 
-.pd-findings-table {
+.pd-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: .84rem;
 }
 
-.pd-findings-table th {
+.pd-table th {
   text-align: left;
-  color: #6b7280;
+  font-size: .7rem;
   font-weight: 600;
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+  background: var(--et-surface-2);
+  padding: .6rem .8rem;
+  border-bottom: 1px solid var(--et-border);
 }
 
-.pd-findings-table td {
-  padding: 0.5rem;
-  border-bottom: 1px solid #f3f4f6;
-  vertical-align: top;
+.pd-table td {
+  padding: .6rem .8rem;
+  border-bottom: 1px solid var(--et-border);
+  vertical-align: middle;
 }
 
-/* .pd-sev-badge : forme (padding/radius) uniquement -- la couleur vient de la classe partagée
-   security-*.* (security-list.styles.css), appliquée en plus via [ngClass] dans le template. */
+.pd-table tbody tr:last-child td { border-bottom: 0; }
+.pd-table tbody tr:hover td { background: var(--et-surface-2); }
+
+.pd-table-title { min-width: 14rem; }
+
+.pd-table-comp {
+  font-size: .76rem;
+  color: var(--et-muted);
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+
+.pd-table-act { text-align: right; white-space: nowrap; }
+
 .pd-sev-badge {
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
+  display: inline-block;
+  min-width: 4.6rem;
+  text-align: center;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .18rem .5rem;
+  border-radius: 6px;
+  color: #fff;
 }
 
-/* === Mode nuit (généré automatiquement) === */
-:host-context([data-theme="dark"]) .pd-eyebrow { color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-sub { color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-label { color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-select { border: 1px solid #334155; background: #111827; }
-:host-context([data-theme="dark"]) .pd-empty { border: 1px dashed #334155; color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-card { border: 1px solid #1f2937; background: #111827; }
-:host-context([data-theme="dark"]) .pd-card-foot { border-top: 1px solid #1f2937; }
-:host-context([data-theme="dark"]) .pd-muted { color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-ok-text { color: hsl(142, 72%, 70%); }
-:host-context([data-theme="dark"]) .pd-error-text { color: hsl(0, 74%, 70%); }
-:host-context([data-theme="dark"]) .pd-badge { background: #0b1220; color: #e2e8f0; }
-:host-context([data-theme="dark"]) .pd-badge--ok { background: hsla(141, 75%, 50%, 0.14); color: hsl(142, 72%, 70%); }
-:host-context([data-theme="dark"]) .pd-badge--bad { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
-:host-context([data-theme="dark"]) .pd-status--never { background: #0b1220; color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-status--running { background: hsla(214, 75%, 50%, 0.14); }
-:host-context([data-theme="dark"]) .pd-status--running .pd-status-icon { border: 2px solid hsla(213, 75%, 50%, 0.38); }
-:host-context([data-theme="dark"]) .pd-status--ok { background: hsla(141, 75%, 50%, 0.14); color: hsl(142, 72%, 70%); }
-:host-context([data-theme="dark"]) .pd-status--ok .pd-status-icon::after { border-left: 2px solid #1f2937; border-bottom: 2px solid #1f2937; }
-:host-context([data-theme="dark"]) .pd-status--findings { background: hsla(0, 75%, 50%, 0.14); color: hsl(0, 74%, 70%); }
-:host-context([data-theme="dark"]) .pd-status--failed { background: #0b1220; color: hsl(0, 70%, 70%); }
-:host-context([data-theme="dark"]) .pd-stale-flag { background: #0b1220; color: hsl(23, 83%, 70%); border: 1px solid hsla(48, 75%, 50%, 0.38); }
-:host-context([data-theme="dark"]) .pd-stale-flag--refreshing { background: #0b1220; border-color: hsla(213, 75%, 50%, 0.38); }
-:host-context([data-theme="dark"]) .pd-smoke-list li { background: #0b1220; }
-:host-context([data-theme="dark"]) .pd-smoke--bad { background: #0b1220; color: hsl(0, 74%, 70%); }
-:host-context([data-theme="dark"]) .pd-smoke-url { color: #a5b4c8; }
-:host-context([data-theme="dark"]) .pd-smoke-msg { color: hsl(0, 74%, 70%); }
-:host-context([data-theme="dark"]) .pd-findings { border: 1px solid #1f2937; background: #111827; }
-:host-context([data-theme="dark"]) .pd-findings-table th { color: #a5b4c8; border-bottom: 1px solid #1f2937; }
-:host-context([data-theme="dark"]) .pd-findings-table td { border-bottom: 1px solid #1f2937; }
-/* === Fin du mode nuit généré === */
+.pd-sev-badge--critical { background: var(--pd-crit); }
+.pd-sev-badge--high { background: var(--pd-high); }
+.pd-sev-badge--medium { background: var(--pd-med); color: #1f1300; }
+.pd-sev-badge--low { background: var(--pd-low); }
+.pd-sev-badge--info { background: var(--pd-off-soft); color: var(--et-muted); }
+
+:host-context([data-theme="dark"]) .pd-sev-badge--critical,
+:host-context([data-theme="dark"]) .pd-sev-badge--high,
+:host-context([data-theme="dark"]) .pd-sev-badge--low { color: #0f172a; }
+
+/* ── États vides / chargement ───────────────────────────────────────────── */
+.pd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--et-border);
+  border-radius: var(--et-radius, 14px);
+  background: var(--et-surface);
+  color: var(--et-muted);
+  text-align: center;
+}
+
+.pd-empty strong { color: var(--et-text); font-size: 1rem; }
+.pd-empty p { margin: 0 0 .4rem; font-size: .88rem; }
+
+.pd-empty-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--et-accent-soft);
+  box-shadow: inset 0 0 0 2px var(--et-accent);
+  margin-bottom: .3rem;
+}
+
+.pd-empty--soft { padding: 1.8rem 1.5rem; }
+
+.pd-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pd-skel-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 1rem;
+}
+
+.pd-skel {
+  height: 220px;
+  border-radius: var(--et-radius, 14px);
+  background: linear-gradient(90deg, var(--et-surface-2) 25%, var(--et-border) 50%, var(--et-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: pd-shimmer 1.3s linear infinite;
+}
+
+.pd-skel--strip { height: 78px; }
+.pd-skel--table { height: 160px; }
+
+@keyframes pd-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 640px) {
+  .pd-page { padding: 1rem; }
+  .pd-page--embedded { padding: 0; }
+  .pd-sev-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pd-context-actions { width: 100%; }
+  .pd-card-foot .pd-link { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-skel, .pd-pill--running::before { animation: none; }
+}

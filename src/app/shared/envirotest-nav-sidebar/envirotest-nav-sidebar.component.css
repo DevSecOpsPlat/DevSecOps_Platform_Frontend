@@ -199,6 +199,9 @@
 .et-svc-opt span { font-size: 0.7rem; color: rgba(255, 255, 255, 0.45); }
 .et-svc-opt:hover { background: rgba(255, 255, 255, 0.06); }
 .et-svc-opt--active { background: rgba(243, 108, 33, 0.16); }
+/* « Toute l'application » : séparée des services par un filet */
+.et-svc-opt--app { border-bottom: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 0.2rem; padding-bottom: 0.55rem; }
+.et-svc-opt--app strong { color: #fdba74; }
 
 .et-svc-list {
   margin-top: 0.75rem;

@@ -6,13 +6,10 @@
         <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
       </svg>
     </div>
-    <h2>Deployment Initiated Successfully!</h2>
+    <h2>Déploiement lancé</h2>
     <p class="modal-sub">Environnement {{ environmentName }} créé.</p>
     <div class="modal-actions">
-      <button type="button" class="btn-primary" (click)="trackProgress()">Track Progress</button>
-      <button type="button" class="btn-outline" (click)="openGitLab()">
-        <span class="gitlab-icon">GitLab</span> Open GitLab
-      </button>
+      <button type="button" class="btn-primary" (click)="trackProgress()">Suivre le déploiement</button>
     </div>
   </div>
 </div>

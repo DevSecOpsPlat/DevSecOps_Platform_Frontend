@@ -37,13 +37,6 @@ export class DeploySuccessModalComponent {
     this.close.emit();
   }
 
-  openGitLab(): void {
-    if (this.pipelineWebUrl) {
-      window.open(this.pipelineWebUrl, '_blank');
-    }
-    this.close.emit();
-  }
-
   onBackdropClick(): void {
     this.close.emit();
   }

@@ -22,6 +22,23 @@ interface ChatMessage {
   deep?: boolean;
 }
 
+/**
+ * Déploiement rapide : le job GitLab deploy:ship enchaîne clone, construction, envoi au registre
+ * et mise en ligne (un seul job = un seul démarrage de conteneur). Son log contient un repère par
+ * étape (« ════ ① Clone des services ════ », etc.) : le détail du pipeline l'affiche comme les
+ * 4 jobs du déploiement classique, chacun avec la partie du log qui le concerne.
+ */
+const SHIP_JOB_NAME = 'deploy:ship';
+const SHIP_STEPS: ReadonlyArray<{ name: string; stage: string; marker: string; label: string }> = [
+  { name: 'deploy:clone', stage: 'setup', marker: '════ ①', label: 'Clone des services' },
+  { name: 'deploy:build-docker', stage: 'build', marker: '════ ②', label: 'Construction des images' },
+  { name: 'deploy:push-image', stage: 'push-image', marker: '════ ③', label: 'Envoi des images au registre' },
+  { name: 'deploy:trigger-backend', stage: 'deploy-k8s', marker: '════ ④', label: 'Mise en ligne sur Kubernetes' }
+];
+
+/** Étape affichée de deploy:ship (1 à 4) ; même id que le job GitLab réel. */
+type ShipStepJob = PipelineJobInfo & { shipStep?: number };
+
 @Component({
   selector: 'app-pipeline-details',
   templateUrl: './pipeline-details.component.html',
@@ -42,6 +59,8 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   error: string | null = null;
   /** SCAN | DEPLOY — depuis query param ou déduit des jobs. */
   pipelineKind: 'SCAN' | 'DEPLOY' | null = null;
+  /** Vrai quand le pipeline affiché vient de la mémoire du navigateur (et non de l'URL ou de la source). */
+  private autoPickedFromMemory = false;
 
   /** Déploiement correspondant (namespace/URL/services) — bannière « Résultat du déploiement ». */
   deployResult: AppDeployment | null = null;
@@ -50,6 +69,13 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   private deployPhasePoll?: ReturnType<typeof setInterval>;
 
   selectedJob?: PipelineJobInfo;
+  /** Étape affichée quand le job sélectionné est deploy:ship (1 = clone … 4 = mise en ligne). */
+  selectedShipStep: number | null = null;
+  /** Dernière étape de deploy:ship vue dans son log, par id de job. */
+  private shipReachedStep = new Map<number, number>();
+  private shipFinalParsed = new Set<number>();
+  private shipLogFetchAt = new Map<number, number>();
+  private shipLogFetching = new Set<number>();
   selectedJobLogs?: string;
   selectedJobScanJson?: any;
   /** Message affiché quand les logs ne sont pas disponibles (ex. GitLab indisponible) */
@@ -164,15 +190,20 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.data = undefined;
     this.error = null;
     this.selectedJob = undefined;
+    this.selectedShipStep = null;
+    this.shipReachedStep.clear();
+    this.shipFinalParsed.clear();
+    this.shipLogFetchAt.clear();
+    this.shipLogFetching.clear();
     this.jobSelectionPinned = false;
     this.stageOverrides.clear();
     this.logsFollowing = true;
     this.chatHistoryByJob.clear(); // nouveau pipeline chargé = nouveau contexte, on repart de zéro
 
+    // Le type vient de l'URL ou, à défaut, sera déduit des jobs : jamais celui de la page précédente.
     const kindParam = (this.route.snapshot.queryParamMap.get('kind') || '').toUpperCase();
-    if (kindParam === 'SCAN' || kindParam === 'DEPLOY') {
-      this.pipelineKind = kindParam;
-    }
+    this.pipelineKind = kindParam === 'SCAN' || kindParam === 'DEPLOY' ? kindParam : null;
+    this.autoPickedFromMemory = false;
 
     this.contextAppId = this.resolveContextAppId();
     this.managedAppContext = this.isManagedAppRoute();
@@ -188,7 +219,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       const pid = Number(pipelineIdParam);
       if (!Number.isNaN(pid) && pid > 0) {
         this.pipelineIdOnly = pid;
-        this.rememberPipeline(pid);
         this.loadPipelineById();
         return;
       }
@@ -222,25 +252,26 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     return path.startsWith('/projects/') || path.startsWith('/project/');
   }
 
+  /** Clé du dernier pipeline consulté : une par application ET par type (scan / déploiement). */
+  private rememberedKey(kind: 'SCAN' | 'DEPLOY'): string | null {
+    return this.contextAppId ? `envirotest-last-pipeline-id:${this.contextAppId}:${kind}` : null;
+  }
+
+  /** Mémorise le pipeline sous le type réellement constaté dans ses jobs (sinon celui demandé). */
   private rememberPipeline(pipelineId: number): void {
+    const kind = this.inferPipelineKind(this.normalizeJobs(this.data?.jobs)) ?? this.pipelineKind;
+    const key = kind ? this.rememberedKey(kind) : null;
+    if (!key) return;
     try {
-      localStorage.setItem('envirotest-last-pipeline-id', String(pipelineId));
-      if (this.contextAppId) {
-        localStorage.setItem(`envirotest-last-pipeline-id:${this.contextAppId}`, String(pipelineId));
-      }
-      if (this.pipelineKind) {
-        localStorage.setItem('envirotest-last-pipeline-kind', this.pipelineKind);
-      }
+      localStorage.setItem(key, String(pipelineId));
     } catch { /* ignore */ }
   }
 
   /** Oublie le pipeline mémorisé (ex. après échec de chargement) — évite une redirection en boucle. */
   private forgetRememberedPipeline(): void {
+    const key = this.pipelineKind ? this.rememberedKey(this.pipelineKind) : null;
     try {
-      localStorage.removeItem('envirotest-last-pipeline-id');
-      if (this.contextAppId) {
-        localStorage.removeItem(`envirotest-last-pipeline-id:${this.contextAppId}`);
-      }
+      if (key) localStorage.removeItem(key);
     } catch { /* ignore */ }
   }
 
@@ -250,10 +281,18 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
     const remembered = this.readRememberedPipelineId();
     if (remembered) {
+      this.autoPickedFromMemory = true;
       this.pipelineIdOnly = remembered;
       this.loadPipelineById();
       return;
     }
+    this.loadLatestFromSource();
+  }
+
+  /** Dernier pipeline du type demandé, lu à la source (lots de scan, déploiements, liste filtrée). */
+  private loadLatestFromSource(): void {
+    this.loading = true;
+    this.error = null;
 
     if (this.managedAppContext && this.contextAppId) {
       this.loadLatestManagedAppPipeline();
@@ -266,7 +305,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
           const item = (list || [])[0];
           if (item?.pipelineId) {
             this.pipelineIdOnly = item.pipelineId;
-            this.rememberPipeline(item.pipelineId);
             this.loadPipelineById();
           } else if (item?.environmentId) {
             this.envId = item.environmentId;
@@ -319,7 +357,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
         const withPipe = (deps || []).find(d => !!d.gitlabPipelineId);
         if (withPipe?.gitlabPipelineId) {
           this.pipelineIdOnly = withPipe.gitlabPipelineId;
-          this.rememberPipeline(withPipe.gitlabPipelineId);
           this.loadPipelineById();
         } else {
           this.loading = false;
@@ -335,7 +372,6 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
       const withPipe = (batches || []).find(b => !!b.gitlabPipelineId);
       if (withPipe?.gitlabPipelineId) {
         this.pipelineIdOnly = withPipe.gitlabPipelineId!;
-        this.rememberPipeline(withPipe.gitlabPipelineId!);
         this.loadPipelineById();
       } else {
         this.loading = false;
@@ -344,16 +380,12 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Seulement pour un type connu et l'application courante : jamais un pipeline d'un autre type ou d'une autre application. */
   private readRememberedPipelineId(): number | null {
+    const key = this.pipelineKind ? this.rememberedKey(this.pipelineKind) : null;
+    if (!key) return null;
     try {
-      const storedKind = localStorage.getItem('envirotest-last-pipeline-kind');
-      if (this.pipelineKind && storedKind && storedKind !== this.pipelineKind) {
-        return null;
-      }
-      const keyed = this.contextAppId
-        ? localStorage.getItem(`envirotest-last-pipeline-id:${this.contextAppId}`)
-        : null;
-      const raw = keyed || localStorage.getItem('envirotest-last-pipeline-id');
+      const raw = localStorage.getItem(key);
       const n = raw ? Number(raw) : NaN;
       return !Number.isNaN(n) && n > 0 ? n : null;
     } catch {
@@ -411,6 +443,18 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     // (voir PipelineController#getByPipelineId) — plus besoin de l'omettre ici.
     this.pipelineService.getPipelineAndScanLiveById(this.pipelineIdOnly, appId).subscribe({
       next: res => {
+        // Pipeline repris de la mémoire du navigateur : s'il n'est pas du type demandé
+        // (ex. un déploiement ouvert depuis « Scan »), on l'écarte et on lit la source.
+        if (this.autoPickedFromMemory) {
+          this.autoPickedFromMemory = false;
+          const actual = this.inferPipelineKind(this.normalizeJobs(res?.jobs));
+          if (this.pipelineKind && actual && actual !== this.pipelineKind) {
+            this.forgetRememberedPipeline();
+            this.pipelineIdOnly = null;
+            this.loadLatestFromSource();
+            return;
+          }
+        }
         this.applyPipelineUpdate(res);
         this.loading = false;
         this.autoFollowRunningJob();
@@ -559,7 +603,147 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
   /** Liste jobs normalisée pour le template. */
   get jobsList(): PipelineJobInfo[] {
-    return this.normalizeJobs(this.data?.jobs);
+    return this.expandShipJobs(this.normalizeJobs(this.data?.jobs));
+  }
+
+  // ── deploy:ship affiché en 4 étapes ─────────────────────────────────────────────────────────
+
+  private isShipJob(job: PipelineJobInfo | undefined | null): boolean {
+    return (job?.name || '').trim().toLowerCase() === SHIP_JOB_NAME;
+  }
+
+  /** Étape en cours (ou finale) d'un job deploy:ship. */
+  private currentShipStep(job: PipelineJobInfo): number {
+    if (this.normStatus(job.status) === 'SUCCESS') return SHIP_STEPS.length;
+    return Math.max(1, this.shipReachedStep.get(job.id) ?? 1);
+  }
+
+  private shipStepStatus(job: PipelineJobInfo, step: number): string {
+    const reached = this.currentShipStep(job);
+    switch (this.normStatus(job.status)) {
+      case 'SUCCESS': return 'success';
+      case 'RUNNING': return step < reached ? 'success' : step === reached ? 'running' : 'created';
+      case 'FAILED': return step < reached ? 'success' : step === reached ? 'failed' : 'skipped';
+      case 'CANCELED':
+      case 'CANCELLED': return step < reached ? 'success' : step === reached ? 'canceled' : 'skipped';
+      case 'PENDING': return step === 1 ? 'pending' : 'created';
+      default: return (job.status || '').toLowerCase();
+    }
+  }
+
+  /** Remplace chaque deploy:ship par ses 4 étapes (clone → build → push → mise en ligne). */
+  private expandShipJobs(jobs: PipelineJobInfo[]): PipelineJobInfo[] {
+    if (!jobs.some(j => this.isShipJob(j))) return jobs;
+    const out: PipelineJobInfo[] = [];
+    for (const job of jobs) {
+      if (!this.isShipJob(job)) {
+        out.push(job);
+        continue;
+      }
+      SHIP_STEPS.forEach((step, i) => {
+        const shipStep = i + 1;
+        const synthetic: ShipStepJob = {
+          ...job,
+          name: step.name,
+          stage: step.stage,
+          status: this.shipStepStatus(job, shipStep),
+          // Durée connue pour le job entier seulement : affichée sur la dernière étape terminée.
+          duration: shipStep === SHIP_STEPS.length && this.normStatus(job.status) === 'SUCCESS' ? job.duration : undefined,
+          shipStep
+        };
+        out.push(synthetic);
+      });
+    }
+    return out;
+  }
+
+  /** Lit dans le log de deploy:ship la dernière étape commencée. */
+  private noteShipProgress(job: PipelineJobInfo | undefined, raw: string | null | undefined): void {
+    if (!job || !raw || !this.isShipJob(job)) return;
+    let reached = 0;
+    SHIP_STEPS.forEach((s, i) => {
+      if (raw.includes(s.marker)) reached = i + 1;
+    });
+    if (!reached) return;
+    this.shipReachedStep.set(job.id, Math.max(this.shipReachedStep.get(job.id) ?? 0, reached));
+    const st = this.normStatus(job.status);
+    if (st !== 'RUNNING' && st !== 'PENDING') {
+      this.shipFinalParsed.add(job.id);
+    }
+    if (!this.jobSelectionPinned && this.selectedJob?.id === job.id) {
+      this.selectedShipStep = this.currentShipStep(job);
+    }
+  }
+
+  /** Suit l'avancement de deploy:ship même quand il n'est pas sélectionné (log relu toutes les 5 s). */
+  private syncShipProgress(): void {
+    for (const job of this.normalizeJobs(this.data?.jobs)) {
+      if (!this.isShipJob(job)) continue;
+      const st = this.normStatus(job.status);
+      const finished = st === 'FAILED' || st === 'CANCELED' || st === 'CANCELLED';
+      if (st !== 'RUNNING' && !finished) continue;
+      if (finished && this.shipFinalParsed.has(job.id)) continue;
+      // Job sélectionné en cours : son log est déjà relu par le suivi des logs.
+      if (st === 'RUNNING' && this.selectedJob?.id === job.id) continue;
+      const last = this.shipLogFetchAt.get(job.id) ?? 0;
+      if (this.shipLogFetching.has(job.id) || (!finished && Date.now() - last < 5000)) continue;
+      this.shipLogFetching.add(job.id);
+      this.shipLogFetchAt.set(job.id, Date.now());
+      this.pipelineService.getJobLogs(job.id).pipe(catchError(() => of(null))).subscribe(logs => {
+        this.shipLogFetching.delete(job.id);
+        this.noteShipProgress(job, logs);
+      });
+    }
+  }
+
+  private get selectedShipStepInfo(): { name: string; stage: string; marker: string; label: string } | null {
+    if (!this.selectedJob || !this.isShipJob(this.selectedJob) || !this.selectedShipStep) return null;
+    return SHIP_STEPS[this.selectedShipStep - 1] ?? null;
+  }
+
+  isJobSelected(job: PipelineJobInfo): boolean {
+    if (!this.selectedJob || job.id !== this.selectedJob.id) return false;
+    const step = (job as ShipStepJob).shipStep;
+    return step == null || step === this.selectedShipStep;
+  }
+
+  get selectedJobTitle(): string {
+    return this.selectedShipStepInfo?.name ?? this.selectedJob?.name ?? '';
+  }
+
+  get selectedJobStageLabel(): string {
+    return this.selectedShipStepInfo?.stage ?? this.selectedJob?.stage ?? '';
+  }
+
+  get selectedJobStatus(): string {
+    const job = this.selectedJob;
+    if (!job) return '';
+    return this.selectedShipStepInfo && this.selectedShipStep
+      ? this.shipStepStatus(job, this.selectedShipStep)
+      : job.status;
+  }
+
+  get selectedShipStepHint(): string | null {
+    const info = this.selectedShipStepInfo;
+    if (!info || !this.selectedShipStep) return null;
+    return `Étape ${this.selectedShipStep}/${SHIP_STEPS.length} · ${info.label} — exécutée dans le job GitLab ${SHIP_JOB_NAME}, qui enchaîne les 4 étapes du déploiement.`;
+  }
+
+  /** Log affiché : pour une étape de deploy:ship, seulement la partie de cette étape. */
+  get displayedJobLogs(): string | undefined {
+    const logs = this.selectedJobLogs;
+    const step = this.selectedShipStep;
+    if (!logs || !this.selectedShipStepInfo || !step) return logs;
+    const start = step === 1 ? 0 : this.markerLineStart(logs, SHIP_STEPS[step - 1].marker);
+    if (start < 0) return 'Cette étape n\'a pas encore commencé.';
+    const next = SHIP_STEPS[step]?.marker;
+    const end = next ? this.markerLineStart(logs, next) : -1;
+    return logs.slice(start, end > start ? end : undefined).trim();
+  }
+
+  private markerLineStart(text: string, marker: string): number {
+    const i = text.indexOf(marker);
+    return i < 0 ? -1 : text.lastIndexOf('\n', i) + 1;
   }
 
   loadPipeline(): void {
@@ -810,6 +994,12 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     this.logsFollowing = true; // nouveau job = on suit son log depuis le début
 
     const latest = this.normalizeJobs(this.data?.jobs).find(j => j.id === job.id) ?? job;
+    // Étape de deploy:ship : cliquée, sinon celle en cours.
+    const shipStep = (job as ShipStepJob).shipStep ?? (this.isShipJob(latest) ? this.currentShipStep(latest) : null);
+    this.selectedShipStep = shipStep;
+    if (shipStep != null) {
+      this.stageOverrides.set(SHIP_STEPS[shipStep - 1].stage, true);
+    }
 
     if (this.selectedJob?.id === latest.id) {
       this.selectedJob = latest;
@@ -835,6 +1025,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
 
     this.pipelineService.getJobLogs(latest.id).subscribe({
       next: logs => {
+        this.noteShipProgress(latest, logs);
         this.selectedJobLogs = this.cleanJobLogs(logs);
         this.jobLogsError = null;
         this.loadingJob = false;
@@ -1008,7 +1199,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   }
 
   getStages(): Array<{ name: string; jobs: PipelineJobInfo[]; status: string }> {
-    const jobs = this.normalizeJobs(this.data?.jobs);
+    const jobs = this.jobsList;
     if (!jobs.length) return [];
 
     const stageMap = new Map<string, PipelineJobInfo[]>();
@@ -1124,6 +1315,7 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
   private autoFollowRunningJob(): void {
     const jobs = this.normalizeJobs(this.data?.jobs);
     if (!jobs.length) return;
+    this.syncShipProgress();
 
     const active = this.getActiveRunningJob();
 
@@ -1208,8 +1400,11 @@ export class PipelineDetailsComponent implements OnInit, OnDestroy {
     const st = this.normStatus(this.selectedJob.status);
     if (st !== 'PENDING' && st !== 'RUNNING') return;
 
-    this.pipelineService.getJobLogs(this.selectedJob.id).subscribe({
+    const job = this.selectedJob;
+    this.pipelineService.getJobLogs(job.id).subscribe({
       next: logs => {
+        this.noteShipProgress(job, logs);
+        if (this.selectedJob?.id !== job.id) return;
         this.selectedJobLogs = this.cleanJobLogs(logs);
         this.jobLogsError = null;
         this.loadingJob = false;
