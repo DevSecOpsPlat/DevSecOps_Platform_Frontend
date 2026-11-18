@@ -69,24 +69,62 @@ export class AiAnalysisService {
     onError: (message: string) => void
   ): void {
     const token = this.userService.getToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+    let received = false;
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      onDone();
+    };
+    const fail = (message: string) => {
+      if (finished) return;
+      finished = true;
+      onError(message);
+    };
+    // Flux coupé (proxy, réseau) : la même question via l'appel classique plutôt qu'un message d'erreur.
+    // Si une partie de la réponse est déjà affichée, on la garde telle quelle.
+    const recover = () => {
+      if (finished) return;
+      if (received) {
+        done();
+        return;
+      }
+      fetch(BASE + 'api/ai/explain-pipeline-logs', { method: 'POST', headers, body: JSON.stringify(request) })
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((r: ExplainPipelineLogsResponse) => {
+          const text = (r?.answer || r?.summary || '').trim();
+          if (!text) throw new Error('réponse vide');
+          onChunk(text);
+          done();
+        })
+        .catch(() => fail('L\'assistant n\'a pas pu répondre. Réessayez dans un instant.'));
+    };
     fetch(BASE + 'api/ai/explain-pipeline-logs/stream', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
+      headers,
       body: JSON.stringify(request)
     }).then(async (res) => {
       if (!res.ok || !res.body) {
-        onError('Connexion au flux IA impossible.');
+        recover();
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch {
+          recover();
+          return;
+        }
+        const { value, done: streamDone } = chunk;
+        if (streamDone) break;
         buffer += decoder.decode(value, { stream: true });
         const events = buffer.split('\n\n');
         buffer = events.pop() || '';
@@ -101,18 +139,24 @@ export class AiAnalysisService {
           if (eventName === 'mode') {
             try { onMode(!!(JSON.parse(data) as { deep: boolean }).deep); } catch { /* ignore */ }
           } else if (eventName === 'chunk') {
-            try { onChunk((JSON.parse(data) as { t: string }).t || ''); } catch { /* ignore */ }
+            try {
+              const t = (JSON.parse(data) as { t: string }).t || '';
+              if (t) received = true;
+              onChunk(t);
+            } catch { /* ignore */ }
           } else if (eventName === 'done') {
-            onDone();
+            done();
             return;
           } else if (eventName === 'error') {
-            try { onError((JSON.parse(data) as { message: string }).message || 'Erreur IA.'); }
-            catch { onError('Erreur IA.'); }
+            try { fail((JSON.parse(data) as { message: string }).message || 'Erreur IA.'); }
+            catch { fail('Erreur IA.'); }
             return;
           }
         }
       }
-      onDone();
-    }).catch(() => onError('Connexion au flux IA impossible.'));
+      // Fin de flux sans « done » : réponse partielle conservée, ou nouvel essai sans flux si rien n'est arrivé.
+      if (received) done();
+      else recover();
+    }).catch(() => recover());
   }
 }

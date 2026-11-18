@@ -250,7 +250,12 @@
             </p>
             <div class="field" *ngIf="switchingMethod">
               <label for="switch-password">Mot de passe actuel</label>
-              <input id="switch-password" type="password" formControlName="currentPassword" autocomplete="current-password" />
+              <div class="password-wrap">
+                <input id="switch-password" [type]="showSwitchPassword ? 'text' : 'password'" formControlName="currentPassword" autocomplete="current-password" />
+                <button type="button" class="toggle-pwd" (click)="showSwitchPassword = !showSwitchPassword">
+                  {{ showSwitchPassword ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
             </div>
 
             <div class="twofactor-method-grid">
@@ -270,7 +275,12 @@
           <div *ngIf="setupView === 'totp' && (!twoFactorEnabled || switchingMethod)" class="twofactor-setup" [formGroup]="twoFactorEnableForm">
             <div class="field" *ngIf="switchingMethod">
               <label for="totp-switch-pwd">Mot de passe actuel</label>
-              <input id="totp-switch-pwd" type="password" formControlName="currentPassword" autocomplete="current-password" />
+              <div class="password-wrap">
+                <input id="totp-switch-pwd" [type]="showSwitchPassword ? 'text' : 'password'" formControlName="currentPassword" autocomplete="current-password" />
+                <button type="button" class="toggle-pwd" (click)="showSwitchPassword = !showSwitchPassword">
+                  {{ showSwitchPassword ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
             </div>
             <div *ngIf="!twoFactorSetup">
               <button type="button" class="btn primary" (click)="beginTotpSetup()" [disabled]="twoFactorSaving">
@@ -308,7 +318,12 @@
             </p>
             <div class="field" *ngIf="switchingMethod">
               <label for="email-switch-pwd">Mot de passe actuel</label>
-              <input id="email-switch-pwd" type="password" formControlName="currentPassword" autocomplete="current-password" />
+              <div class="password-wrap">
+                <input id="email-switch-pwd" [type]="showSwitchPassword ? 'text' : 'password'" formControlName="currentPassword" autocomplete="current-password" />
+                <button type="button" class="toggle-pwd" (click)="showSwitchPassword = !showSwitchPassword">
+                  {{ showSwitchPassword ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
             </div>
             <button type="button" class="btn primary" (click)="beginEmailSetup()" [disabled]="twoFactorSaving || emailCodeSent">
               {{ twoFactorSaving ? 'Envoi…' : (emailCodeSent ? 'Code envoyé' : 'Envoyer le code') }}

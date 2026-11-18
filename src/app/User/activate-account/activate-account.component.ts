@@ -18,6 +18,9 @@ export class ActivateAccountComponent implements OnInit {
   });
 
   token = '';
+  /** Afficher / masquer les mots de passe saisis. */
+  showNewPassword = false;
+  showConfirmPassword = false;
   loading = false;
   success: string | null = null;
   error: string | null = null;

@@ -123,3 +123,16 @@ h1 {
 :host-context([data-theme="dark"]) .banner.success { background: #0b1220; color: hsl(163, 85%, 70%); border: 1px solid hsla(152, 75%, 50%, 0.38); }
 :host-context([data-theme="dark"]) .banner.error { background: #0b1220; color: hsl(0, 74%, 70%); border: 1px solid hsla(0, 75%, 50%, 0.38); }
 /* === Fin du mode nuit généré === */
+
+/* Afficher / masquer le mot de passe */
+.pwd-wrap { position: relative; }
+.pwd-wrap input { padding-right: 2.6rem; }
+.pwd-eye {
+  position: absolute; top: 50%; right: 0.45rem; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: #64748b; cursor: pointer;
+}
+.pwd-eye:hover { color: #f36c21; }
+.pwd-eye:focus-visible { outline: 2px solid #f36c21; outline-offset: 1px; }
+:host-context([data-theme="dark"]) .pwd-eye { color: #94a3b8; }
