@@ -10,8 +10,39 @@ import {
   DefectDojoFindingStatusAction,
   DefectDojoService
 } from '../../services/defectdojo/defectdojo.service';
-import { FindingAiRemediationResponse } from '../../models/finding/finding-ai-remediation.model';
+import {
+  DiagnosisItem,
+  FindingAiRemediationResponse,
+  FixLayer
+} from '../../models/finding/finding-ai-remediation.model';
 import { UserService } from '../../services/user/user.service';
+import { codeLanguageLabel, highlightCode } from '../../shared/code-highlight.util';
+
+/** Correctif affiché (un seul, même pour les anciennes analyses qui en donnaient plusieurs formes). */
+interface PatchView {
+  code: string;
+  html: string;
+  language: string;
+  target: string;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  SCANNER: 'Scanner',
+  PLATFORM_CHECK: 'Contrôle plateforme',
+  REPOSITORY: 'Dépôt',
+  HYPOTHESIS: 'Hypothèse'
+};
+
+const LAYER_LABELS: Record<string, string> = {
+  APPLICATION: 'Application (votre dépôt)',
+  REVERSE_PROXY: 'Reverse proxy (Ingress Traefik)',
+  CDN_TLS: 'CDN / TLS (Cloudflare)',
+  KUBERNETES: 'Kubernetes',
+  WEB_SERVER: 'Serveur web',
+  BUILD: 'Build / image',
+  DEPENDENCY: 'Dépendance',
+  OTHER: 'Autre'
+};
 
 const AI_REQUEST_TIMEOUT_MS = 90_000;
 const AI_POLL_INTERVAL_MS = 3_000;
@@ -50,19 +81,27 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
   codeSnippetInput = '';
   aiLoading = false;
   aiPolling = false;
-  aiResult: FindingAiRemediationResponse | null = null;
   aiError: string | null = null;
 
-  get rawIsJson(): boolean {
-    const raw = this.aiResult?.rawModelOutput;
-    if (!raw) return false;
-    try { JSON.parse(raw); return true; } catch { return false; }
-  }
+  /** Vues précalculées (coloration syntaxique) à chaque nouveau résultat IA. */
+  patchView: PatchView | null = null;
+  commandViews: Array<{ code: string; html: string }> = [];
+  fullFileHtml = '';
+  snippetHtml = '';
 
-  get rawPrettyJson(): string | null {
-    const raw = this.aiResult?.rawModelOutput;
-    if (!raw) return null;
-    try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return null; }
+  /** Zones repliables. */
+  refineOpen = false;
+  snippetOpen = false;
+  liveCheckOpen = false;
+  copiedKey: string | null = null;
+
+  private _aiResult: FindingAiRemediationResponse | null = null;
+  get aiResult(): FindingAiRemediationResponse | null {
+    return this._aiResult;
+  }
+  set aiResult(r: FindingAiRemediationResponse | null) {
+    this._aiResult = r;
+    this.buildAiViews();
   }
 
   chatMessages: { role: 'user' | 'assistant'; content: string }[] = [];
@@ -137,7 +176,12 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
       next: d => {
         this.detail = d;
         this.detailLoading = false;
-        this.codeSnippetInput = (d.codeSnippet ?? '').trim();
+        // L'extrait chargé automatiquement est déjà envoyé à l'IA : la zone « Affiner » sert à en coller un autre.
+        this.codeSnippetInput = '';
+        this.snippetHtml = highlightCode(d.codeSnippet ?? '', this.languageFromPath(d.codeFilePath || d.filePath));
+        this.refineOpen = false;
+        this.snippetOpen = false;
+        this.liveCheckOpen = false;
         this.runAiRemediation(false);
       },
       error: err => {
@@ -382,10 +426,184 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
     this.showFullFileRewrite = !this.showFullFileRewrite;
   }
 
-  copyText(_label: string, text: string): void {
+  copyText(key: string, text: string): void {
     const v = text?.trim();
     if (!v || !navigator.clipboard?.writeText) return;
-    navigator.clipboard.writeText(v).catch(() => {});
+    navigator.clipboard.writeText(v).then(() => {
+      this.copiedKey = key;
+      setTimeout(() => {
+        if (this.copiedKey === key) this.copiedKey = null;
+      }, 1500);
+    }).catch(() => {});
+  }
+
+  // ── Vues de l'analyse IA ────────────────────────────────────────────────────────────────────
+
+  private buildAiViews(): void {
+    const r = this._aiResult;
+    this.showFullFileRewrite = false;
+    if (!r) {
+      this.patchView = null;
+      this.commandViews = [];
+      this.fullFileHtml = '';
+      return;
+    }
+    // Un seul correctif : le patch ; à défaut (ancien format), le code « après ».
+    const code = (r.suggestedPatch?.trim() || r.secureCodeAfter?.trim() || '');
+    this.patchView = code
+      ? {
+          code,
+          html: highlightCode(code, r.patchLanguage),
+          language: codeLanguageLabel(r.patchLanguage, code),
+          target: (r.patchTarget || '').trim()
+        }
+      : null;
+    this.commandViews = (r.verificationCommands ?? [])
+      .filter(c => !!c?.trim())
+      .map(c => ({ code: c.trim(), html: highlightCode(c.trim(), 'bash') }));
+    this.fullFileHtml = r.fullFileRewrite?.trim() ? highlightCode(r.fullFileRewrite, r.patchLanguage) : '';
+  }
+
+  get isDast(): boolean {
+    return !!this.detail?.dynamicFinding;
+  }
+
+  get analyzedUrls(): string[] {
+    return this.detail?.analyzedUrls ?? [];
+  }
+
+  get hasSnippet(): boolean {
+    return !!this.detail?.codeSnippet?.trim();
+  }
+
+  /** Une ligne : « main.py · déduit du Dockerfile » ou « aucun fichier associé identifié ». */
+  get codeSourcePath(): string {
+    const d = this.detail;
+    if (!d) return '';
+    if (d.codeContextSource === 'DOCKERFILE') return 'Dockerfile';
+    return d.codeFilePath || d.filePath || d.componentName || '';
+  }
+
+  get noCodeText(): string {
+    if (this.isContainerImagePath()) return 'paquet de l\'image Docker scannée, pas un fichier du dépôt.';
+    return 'aucun fichier associé identifié.';
+  }
+
+  get diagnosisItems(): DiagnosisItem[] {
+    return (this._aiResult?.diagnosis ?? []).filter(d => !!d?.statement?.trim());
+  }
+
+  get fixLayers(): FixLayer[] {
+    return (this._aiResult?.fixLayers ?? []).filter(l => !!l?.description?.trim());
+  }
+
+  get remediationSteps(): string[] {
+    return (this._aiResult?.remediationSteps ?? []).filter(s => !!s?.trim());
+  }
+
+  get bestPractices(): string[] {
+    return (this._aiResult?.bestPractices ?? []).filter(s => !!s?.trim());
+  }
+
+  get verificationHints(): string[] {
+    return (this._aiResult?.verificationHints ?? []).filter(s => !!s?.trim());
+  }
+
+  /** Impact + risque métier des anciennes analyses, en un seul bloc. */
+  get impactText(): string {
+    const r = this._aiResult;
+    if (!r) return '';
+    const impact = r.impact?.trim() || '';
+    const business = r.businessRisk?.trim() || '';
+    if (!business || impact.includes(business)) return impact;
+    return impact ? `${impact}\n\n${business}` : business;
+  }
+
+  get hasScannerDetails(): boolean {
+    const d = this.detail;
+    return !!(d && (d.description || d.mitigation || this.scannerFieldList.length || d.references));
+  }
+
+  diagSourceLabel(source: string | null | undefined): string {
+    return SOURCE_LABELS[(source || '').toUpperCase()] || 'Hypothèse';
+  }
+
+  diagSourceClass(source: string | null | undefined): string {
+    const s = (source || '').toUpperCase();
+    return SOURCE_LABELS[s] ? s.toLowerCase().replace('_', '-') : 'hypothesis';
+  }
+
+  layerLabel(layer: string | null | undefined): string {
+    return LAYER_LABELS[(layer || '').toUpperCase()] || 'Autre';
+  }
+
+  certaintyLabel(status: string | null | undefined): string {
+    switch ((status || '').toUpperCase()) {
+      case 'CONFIRMED': return 'Confirmée';
+      case 'PROBABLE': return 'Probable';
+      case 'UNDETERMINED': return 'À déterminer';
+      default: return '';
+    }
+  }
+
+  certaintyClass(status: string | null | undefined): string {
+    return (status || '').toLowerCase();
+  }
+
+  get confidenceLevel(): 'high' | 'medium' | 'low' | null {
+    const c = (this._aiResult?.confidence || '').toUpperCase();
+    if (c === 'HIGH') return 'high';
+    if (c === 'LOW') return 'low';
+    return c ? 'medium' : null;
+  }
+
+  get confidenceText(): string {
+    switch (this.confidenceLevel) {
+      case 'high': return 'Confiance élevée';
+      case 'low': return 'Confiance faible';
+      case 'medium': return 'Confiance moyenne';
+      default: return '';
+    }
+  }
+
+  cweLabel(cwe: string | null | undefined): string {
+    const v = (cwe || '').trim();
+    if (!v || v === '0') return '';
+    return /^\d+$/.test(v) ? `CWE-${v}` : v;
+  }
+
+  severityClass(): string {
+    return (this.detail?.severity || 'info').toLowerCase();
+  }
+
+  get liveHeaders(): Array<{ name: string; value: string }> {
+    const h = this.detail?.liveCheck?.headers;
+    if (!h) return [];
+    return Object.keys(h).map(name => ({ name, value: h[name] }));
+  }
+
+  /** Résumé d'une ligne du contrôle HTTP de la plateforme. */
+  get liveCheckSummary(): string {
+    const c = this.detail?.liveCheck;
+    if (!c) return '';
+    if (c.error && !c.status) return c.error;
+    const missing = c.missingHeaders?.length ?? 0;
+    const status = c.status ? `HTTP ${c.status}` : '';
+    return [status, missing ? `${missing} en-tête${missing > 1 ? 's' : ''} de sécurité absent${missing > 1 ? 's' : ''}` : 'en-têtes de sécurité présents']
+      .filter(Boolean).join(' · ');
+  }
+
+  private languageFromPath(path: string | null | undefined): string {
+    const p = (path || '').toLowerCase();
+    if (p.endsWith('.py')) return 'python';
+    if (/\.(m?js|cjs|ts|tsx|jsx)$/.test(p)) return 'js';
+    if (/\.(java|kt)$/.test(p)) return 'java';
+    if (/\.(ya?ml)$/.test(p)) return 'yaml';
+    if (p.endsWith('.json')) return 'json';
+    if (p.endsWith('.conf')) return 'nginx';
+    if (p.endsWith('dockerfile') || this.detail?.codeContextSource === 'DOCKERFILE') return 'docker';
+    if (p.endsWith('.sh')) return 'bash';
+    return '';
   }
 
   /** Métadonnées techniques extraites de la description brute du scanner (PURL, méthode…). */
@@ -496,6 +714,15 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
           .join('\n')
       : '';
     if (!r) return header || undefined;
-    return [header, r.problemSummary, r.rootCause, r.impact, r.businessRisk, ...(r.remediationSteps ?? [])].filter(Boolean).join('\n');
+    return [
+      header,
+      r.problemSummary,
+      ...(r.diagnosis ?? []).map(d => `[${this.diagSourceLabel(d.source)}] ${d.statement}`),
+      r.rootCause,
+      r.location,
+      r.impact,
+      r.businessRisk,
+      ...(r.remediationSteps ?? [])
+    ].filter(Boolean).join('\n');
   }
 }

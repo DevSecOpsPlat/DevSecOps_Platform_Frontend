@@ -11,6 +11,7 @@ import {
   matchesEnvironmentFilter
 } from '../../models/environment/status-types';
 import { FormatService } from '../../models/environment/format.service';
+import { platformPreviewUrl } from '../../shared/preview-url.util';
 
 @Component({
   selector: 'app-project-deployments',
@@ -238,7 +239,7 @@ export class ProjectDeploymentsComponent implements OnInit {
   }
 
   trustedEmbed(url: string): SafeResourceUrl {
-    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+    return this.sanitizer.bypassSecurityTrustResourceUrl(platformPreviewUrl(url) || url);
   }
 
   isDeploymentInProgress(env: DeploymentHistoryItem): boolean {

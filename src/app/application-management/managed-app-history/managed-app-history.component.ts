@@ -505,7 +505,7 @@ export class ManagedAppHistoryComponent implements OnChanges, OnDestroy {
       ?? null;
 
     if (pipelineId == null) {
-      this.scanPipelineError = 'Aucun pipeline GitLab associé à ce lot de scan.';
+      this.scanPipelineError = 'Aucun pipeline associé à ce lot de scan.';
       this.scanPipelineLoading = false;
       return;
     }

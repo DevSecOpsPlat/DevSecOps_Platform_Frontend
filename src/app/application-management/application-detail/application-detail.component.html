@@ -1171,7 +1171,7 @@
       </header>
 
       <div class="ad-pipe-drill" *ngIf="pipelineIdFilter != null">
-        <span>Filtré sur pipeline GitLab <span class="am-mono">#{{ pipelineIdFilter }}</span></span>
+        <span>Filtré sur le pipeline <span class="am-mono">#{{ pipelineIdFilter }}</span></span>
         <button type="button" class="am-btn am-btn-ghost am-btn-sm" (click)="clearPipelineIdFilter()">Effacer le filtre</button>
       </div>
       <div class="ad-pipe-drill ad-pipe-drill--kind" *ngIf="pipelineIdFilter == null && pipelineKindFilter !== 'ALL'">
@@ -1312,8 +1312,6 @@
                     </span>
                   </div>
                   <span class="ad-pipe-stage-st">{{ job.status }}</span>
-                  <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" rel="noopener noreferrer"
-                     class="ad-pipe-job-link" (click)="$event.stopPropagation()">Job</a>
                 </div>
               </div>
             </div>
@@ -1324,7 +1322,7 @@
               </div>
               <p class="ad-pipe-stages-empty-msg">
                 Stages non encore synchronisés pour ce service — actualise la liste
-                (même pipeline GitLab #{{ item.pipelineId }}).
+                (même pipeline #{{ item.pipelineId }}).
               </p>
             </div>
           </div>
@@ -1345,10 +1343,6 @@
                     (click)="cancelAppPipeline(item)">
               {{ pipelineCancelingId === item.pipelineId ? 'Annulation…' : 'Annuler' }}
             </button>
-            <a *ngIf="item.webUrl" [href]="item.webUrl" target="_blank" rel="noopener noreferrer"
-               class="ad-pipe-action ad-pipe-action--gitlab">
-              GitLab
-            </a>
           </div>
         </article>
       </div>
@@ -1378,58 +1372,18 @@
 
     </div>
 
-    <!-- ========== Post-déploiement (app) — DAST/ZAP, smoke test, scan container par service ========== -->
+    <!-- ========== Post-déploiement (app) — même page que le service, au niveau application ========== -->
     <div class="ad-qg-page" *ngIf="activeTab === 'post-deploy'">
       <header class="ad-qg-page-header">
         <div>
-          <p class="ad-qg-page-eyebrow">Analyse · application</p>
-          <h1 class="ad-qg-page-title">Post-déploiement — {{ app.name }}</h1>
+          <p class="ad-qg-page-eyebrow">Post-déploiement · application</p>
+          <h1 class="ad-qg-page-title">Après le déploiement — {{ app.name }}</h1>
           <p class="ad-qg-page-sub">
-            DAST (ZAP), smoke test et scan container — signaux qui n'existent qu'après un déploiement
-            réel. Détail par service (environnement, findings) dans le hub de chaque service.
+            Scan dynamique OWASP ZAP sur l'adresse publique de l'application et disponibilité de chacun de ses services.
           </p>
         </div>
       </header>
-
-      <div class="ad-qg-empty" *ngIf="!app.services?.length">
-        <p>Aucun service dans cette application.</p>
-      </div>
-
-      <div class="ad-dojo-svc-grid" *ngIf="app.services?.length">
-        <article class="ad-dojo-svc" *ngFor="let s of app.services">
-          <div class="ad-dojo-svc-top">
-            <div>
-              <strong>{{ s.name }}</strong>
-              <span class="ad-role" *ngIf="s.role">{{ s.role }}</span>
-            </div>
-          </div>
-          <ng-container *ngIf="s.id && postDeploySummaries[s.id] as sum">
-            <p class="ad-dojo-svc-reason" *ngIf="sum.loading">Chargement…</p>
-            <p class="ad-dojo-svc-reason" *ngIf="!sum.loading && sum.error">Résultat indisponible.</p>
-            <p class="ad-dojo-svc-reason" *ngIf="!sum.loading && !sum.error && !sum.dastApplicable">
-              Aucun déploiement DAST pour ce service.
-            </p>
-            <div class="ad-dojo-svc-reason" *ngIf="!sum.loading && sum.dastApplicable">
-              <span class="ad-verdict-pill ad-verdict-pill--sm ad-verdict-bad" *ngIf="sum.dastCritical">
-                {{ sum.dastCritical }} DAST critique(s)
-              </span>
-              <span class="ad-verdict-pill ad-verdict-pill--sm ad-verdict-warn" *ngIf="sum.dastHigh">
-                {{ sum.dastHigh }} DAST high
-              </span>
-              <span class="ad-verdict-pill ad-verdict-pill--sm ad-verdict-ok"
-                    *ngIf="!sum.dastCritical && !sum.dastHigh">
-                DAST OK
-              </span>
-            </div>
-          </ng-container>
-          <div class="ad-dojo-svc-actions">
-            <button type="button" class="am-btn am-btn-primary am-btn-sm"
-                    (click)="openServicePostDeploy(s.id)">
-              Post-déploiement service →
-            </button>
-          </div>
-        </article>
-      </div>
+      <app-post-deploy [appScopeId]="appId" [appScopeName]="app.name"></app-post-deploy>
     </div>
 
     <!-- ========== DefectDojo centralisé (même UX que hub service) ========== -->

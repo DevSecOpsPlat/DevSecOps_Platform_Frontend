@@ -156,18 +156,7 @@
               <path d="M3 6H21M19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6M8 4V2H16V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             {{ deletingId === item.pipelineId ? 'Suppression...' : 'Supprimer' }}
-          </button>
-
-          <a *ngIf="item.webUrl"
-             [href]="item.webUrl"
-             target="_blank"
-             rel="noopener noreferrer"
-             class="action-btn gitlab-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51 1.22 3.78a.84.84 0 0 1-.3.92z" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
-            GitLab
-          </a>
+          </button>
         </div>
       </div>
     </div>

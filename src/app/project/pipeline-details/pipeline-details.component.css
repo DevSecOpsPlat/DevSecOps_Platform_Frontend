@@ -864,6 +864,13 @@
   margin: 0;
 }
 
+.job-step-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--et-muted, #64748b);
+  max-width: 46rem;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

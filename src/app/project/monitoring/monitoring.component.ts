@@ -39,7 +39,11 @@ export class MonitoringComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((pm) => {
+    // ':appId' est porté par la route PARENTE (project/:appId) : la route enfant « monitoring »
+    // n'en hérite pas (pas de paramsInheritanceStrategy 'always'). Lire le paramMap enfant
+    // laissait la page sur « Chargement du monitoring… » sans jamais rien charger.
+    const params$ = this.route.parent ? this.route.parent.paramMap : this.route.paramMap;
+    params$.pipe(takeUntil(this.destroy$)).subscribe((pm) => {
       const id = pm.get('appId'); // nom du paramètre de route ('project/:appId'), désigne en réalité le service
       if (id && id !== this.serviceId) {
         this.serviceId = id;

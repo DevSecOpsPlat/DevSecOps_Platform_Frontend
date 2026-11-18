@@ -48,14 +48,7 @@
                   type="button"
                   (click)="openSecurityDashboard()">
             Dashboard sécurité
-          </button>
-          <a *ngIf="data.webUrl"
-             [href]="data.webUrl"
-             target="_blank"
-             rel="noopener noreferrer"
-             class="btn-gitlab">
-            Ouvrir dans GitLab
-          </a>
+          </button>
         </ng-container>
       </app-page-hero>
 
@@ -189,7 +182,7 @@
                 <ul class="jobs-list" *ngIf="!isStageCollapsed(stage)">
                   <li *ngFor="let job of stage.jobs"
                       (click)="selectJob(job)"
-                      [class.selected]="job.id === selectedJob?.id"
+                      [class.selected]="isJobSelected(job)"
                       [class.job-success]="jobCssStatus(job.status) === 'success'"
                       [class.job-failed]="jobCssStatus(job.status) === 'failed'"
                       [class.job-running]="jobCssStatus(job.status) === 'running'">
@@ -204,11 +197,7 @@
                     <div class="job-meta">
                       <span *ngIf="job.duration" class="job-duration">
                         {{ formatDuration(job.duration) }}
-                      </span>
-                      <a *ngIf="job.webUrl" [href]="job.webUrl" target="_blank" class="job-link"
-                         (click)="$event.stopPropagation()">
-                        Voir GitLab
-                      </a>
+                      </span>
                       <button
                         type="button"
                         class="job-ask-ai"
@@ -252,11 +241,12 @@
             <div *ngIf="selectedJob">
               <div class="job-detail-header">
                 <div>
-                  <h3 class="job-detail-title">{{ selectedJob.name }}</h3>
+                  <h3 class="job-detail-title">{{ selectedJobTitle }}</h3>
                   <p class="job-info">
-                    <span class="badge badge-muted">{{ selectedJob.stage }}</span>
-                    <span class="badge" [ngClass]="statusClass(selectedJob.status)">{{ selectedJob.status }}</span>
+                    <span class="badge badge-muted">{{ selectedJobStageLabel }}</span>
+                    <span class="badge" [ngClass]="statusClass(selectedJobStatus)">{{ selectedJobStatus }}</span>
                   </p>
+                  <p class="job-step-hint" *ngIf="selectedShipStepHint">{{ selectedShipStepHint }}</p>
                 </div>
                 <button *ngIf="isSonarJob(selectedJob)"
                         class="sonar-btn"
@@ -282,7 +272,7 @@
                 </div>
                 <div class="logs-console-wrap">
                   <div class="logs-console" #logsConsole (scroll)="onLogsScroll()"
-                       [innerHTML]="formatLogsForDisplay(selectedJobLogs)"></div>
+                       [innerHTML]="formatLogsForDisplay(displayedJobLogs || '')"></div>
                   <button type="button" class="logs-resume-btn"
                           *ngIf="!logsFollowing && selectedJobRunning"
                           (click)="resumeLogsFollow()">
@@ -353,7 +343,7 @@
               <div class="log-ai-actions">
                 <strong class="log-ai-title">Assistant pipeline</strong>
                 <span class="log-ai-context">
-                  {{ selectedJob ? (selectedJob.name + ' · ' + selectedJob.stage) : 'vue d’ensemble du pipeline' }}
+                  {{ selectedJob ? (selectedJobTitle + ' · ' + selectedJobStageLabel) : 'vue d’ensemble du pipeline' }}
                 </span>
                 <button type="button" class="log-ai-clear-btn" *ngIf="chatMessages.length"
                         (click)="clearChat()" [disabled]="logAiLoading">

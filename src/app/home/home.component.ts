@@ -36,24 +36,20 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     { name: 'OWASP ZAP', kind: 'Application' }
   ];
 
-  readonly capabilities: Capability[] = [
+  readonly capabilities: { title: string; text: string }[] = [
     {
-      icon: '🚀',
-      title: 'Déployer pour tester',
-      text: 'Mettez une version en ligne dans un environnement qui lui est propre, puis laissez-le se supprimer automatiquement.'
+      title: 'Déploiement automatisé',
+      text: 'Chaque version est mise en ligne dans un environnement qui lui est propre, puis supprimée automatiquement.'
     },
     {
-      icon: '🛡',
-      title: 'Analyser la sécurité',
-      text: 'Lancez une analyse quand vous le souhaitez : code, dépendances, secrets et configuration, avec un verdict clair.'
+      title: 'Analyse de sécurité automatisée',
+      text: 'Code, dépendances, secrets et configuration sont examinés, avec un verdict clair.'
     },
     {
-      icon: '✦',
       title: 'Corriger plus vite',
-      text: 'Chaque vulnérabilité est expliquée en français, avec un plan de correction concret.'
+      text: 'Chaque vulnérabilité est expliquée par l\'IA, avec un plan de correction concret.'
     },
     {
-      icon: '◉',
       title: 'Suivre en direct',
       text: 'Disponibilité, consommation et alertes de vos environnements en cours d\'exécution.'
     }

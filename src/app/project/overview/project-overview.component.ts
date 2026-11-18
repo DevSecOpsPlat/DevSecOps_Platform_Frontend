@@ -306,7 +306,8 @@ export class ProjectOverviewComponent implements OnInit, OnDestroy {
   toolList: { key: string; value: number }[] = [];
   hasOpenSeverityChart = false;
   openSeverityGranularity: 'hour' | 'day' | 'week' | 'month' = 'day';
-  deploymentPeriod: 'day' | 'week' | 'month' = 'day';
+  /** Mois par défaut : sur un jour, le graphique est souvent vide. */
+  deploymentPeriod: 'day' | 'week' | 'month' = 'month';
 
   loading = false;
   error: string | null = null;

@@ -282,6 +282,13 @@ export class ApplicationManagementService {
     );
   }
 
+  /** DAST (ZAP) + smoke test d'un déploiement de l'application (défaut : celui en cours, sinon le dernier). */
+  getPostDeploySummary(appId: string, deploymentId?: string | null): Observable<PostDeploySummary> {
+    const params: Record<string, string> = {};
+    if (deploymentId) params['deploymentId'] = deploymentId;
+    return this.http.get<PostDeploySummary>(`${API}/${appId}/post-deploy`, { headers: this.headers(), params });
+  }
+
   /** Pipeline GitLab CI lié au déploiement (jobs + statut). */
   getDeploymentCiPipeline(appId: string, deploymentId: string): Observable<PipelineScanResponse> {
     return this.http.get<PipelineScanResponse>(
@@ -371,4 +378,25 @@ export class ApplicationManagementService {
       { headers: this.headers() }
     );
   }
+}
+
+/** Résumé post-déploiement (GET /api/managed-applications/{id}/post-deploy). */
+export interface PostDeploySummary {
+  deployments: Array<{ id: string; namespace: string; status: string; createdAt?: string; deployedAt?: string }>;
+  services: Array<{ id: string; name: string; role?: string }>;
+  deploymentId: string | null;
+  namespace?: string;
+  status?: string;
+  deployedAt?: string;
+  createdAt?: string;
+  appUrl?: string | null;
+  smokeTest?: { allOk: boolean; checkedAt?: string; results: Record<string, { ok: boolean; statusCode?: number | null; message?: string; probedUrl?: string }> } | null;
+  dast?: {
+    state: 'ok' | 'findings' | 'running' | 'failed' | 'unavailable' | 'never';
+    critical?: number; high?: number; medium?: number; low?: number;
+    pipelineId?: number | null;
+    evaluatedAt?: string | null;
+    findingsServiceId?: string | null;
+    branch?: string | null;
+  };
 }

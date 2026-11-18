@@ -9,6 +9,7 @@ import {
   AdminUserMetrics
 } from '../../services/admin/admin.service';
 import { environmentStatusLabel, pipelineStatusLabel, statusTone } from '../shared/admin-status';
+import { platformPreviewUrl } from '../../shared/preview-url.util';
 
 interface EnvRow extends AdminUserEnvironmentDetail {}
 
@@ -140,7 +141,7 @@ export class AdminApplicationDetailComponent implements OnInit {
         const url = detail.appUrl || active.url;
         if (url && this.canEmbedPreview(url)) {
           this.previewRawUrl = url;
-          this.previewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+          this.previewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(platformPreviewUrl(url) || url);
         }
 
         const workloads = detail.workloads || [];

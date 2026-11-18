@@ -144,6 +144,16 @@ export class QualityGateComponent implements OnInit, OnDestroy {
 
 
 
+  /** Ouvre le détail du pipeline dans la plateforme (scan, ou déploiement si le résultat vient d'un environnement). */
+  openPipelineDetail(event?: Event): void {
+    event?.preventDefault();
+    const pipelineId = this.result?.pipelineId;
+    if (!this.appId || !pipelineId) return;
+    this.router.navigate(['/project', this.appId, 'pipeline-detail', String(pipelineId)], {
+      queryParams: { kind: this.result?.environmentId ? 'DEPLOY' : 'SCAN' }
+    });
+  }
+
   ngOnInit(): void {
 
     this.route.parent?.paramMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
@@ -842,7 +852,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     if (labels.length === 0) {
       return '';
     }
-    return `Recommandation peu fiable — ${labels.join(', ')} : vérifiez le job dans le pipeline GitLab, corrigez l'erreur puis relancez le job security-validation.`;
+    return `Recommandation peu fiable — ${labels.join(', ')} : vérifiez le job dans le détail du pipeline, corrigez l'erreur puis relancez le job security-validation.`;
   }
 
   get showReliabilityBanner(): boolean {
@@ -938,13 +948,13 @@ export class QualityGateComponent implements OnInit, OnDestroy {
     const hasRecommendation = ['RECOMMENDED', 'WITH_WARNINGS', 'NOT_RECOMMENDED']
       .includes((this.result?.verdict || '').toUpperCase());
     const verdictNote = hasRecommendation
-      ? ' Le pipeline GitLab comporte des jobs en échec ou non exécutés — corrigez-les avant de vous fier à la recommandation.'
+      ? ' Le pipeline comporte des jobs en échec ou non exécutés — corrigez-les avant de vous fier à la recommandation.'
       : ' Cette recommandation ne peut pas être considérée comme fiable.';
     if (this.result?.reliabilityMessage) {
       return `Important : ${this.result.reliabilityMessage}${verdictNote}`;
     }
     return `Important : le ou les jobs GitLab suivants ne se sont pas terminés avec succès : ${labels}.${verdictNote} `
-      + 'Corrigez les jobs en échec dans GitLab puis relancez le pipeline.';
+      + 'Corrigez les jobs en échec depuis le détail du pipeline, puis relancez-le.';
   }
 
   /** Conditions indéterminées parce que le pipeline est incomplet (pas une panne DefectDojo/Sonar seule). */
@@ -962,7 +972,7 @@ export class QualityGateComponent implements OnInit, OnDestroy {
   get pipelineIndeterminateConditionsMessage(): string {
     if (this.securityValidationFailed) {
       return 'Toutes les conditions sont indéterminées car le stage security-validation a échoué. '
-        + 'Ne considérez pas cette recommandation comme valide — vérifiez les erreurs dans le pipeline GitLab.';
+        + 'Ne considérez pas cette recommandation comme valide — vérifiez les erreurs dans le détail du pipeline.';
     }
     const labels = this.pipelineRelatedIndeterminateConditions
       .map(c => c.label)
@@ -1187,10 +1197,10 @@ export class QualityGateComponent implements OnInit, OnDestroy {
       return this.result.incompleteRecommendationMessage;
     }
     if (!sources.length) {
-      return 'Impossible de garantir l\'absence de vulnérabilité critique. Vérifiez les erreurs dans le pipeline GitLab, corrigez les jobs en échec puis actualisez.';
+      return 'Impossible de garantir l\'absence de vulnérabilité critique. Vérifiez les erreurs dans le détail du pipeline, corrigez les jobs en échec puis actualisez.';
     }
     return `Recommandation incomplète — ${sources.join(', ')} indisponible(s), métriques non prises en compte. `
-      + 'Vérifiez les erreurs dans le pipeline GitLab puis relancez les stages concernés.';
+      + 'Vérifiez les erreurs dans le détail du pipeline puis relancez les stages concernés.';
   }
 
   /** DefectDojo inaccessible mais métriques pipeline / snapshot disponibles. */

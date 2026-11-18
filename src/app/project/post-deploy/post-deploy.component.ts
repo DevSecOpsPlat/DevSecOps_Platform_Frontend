@@ -1,20 +1,26 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subject, of } from 'rxjs';
 import { catchError, takeUntil } from 'rxjs/operators';
 
-import { Router } from '@angular/router';
 import {
   QualityGateEnvironmentOption,
   QualityGateResult,
   QualityGateService,
   QualityGateToolMetric
 } from '../../services/quality-gate/quality-gate.service';
-import { ApplicationManagementService } from '../../services/application-management/application-management.service';
+import {
+  ApplicationManagementService,
+  PostDeploySummary
+} from '../../services/application-management/application-management.service';
 import { AppDeployment } from '../../models/application-management/application-management.models';
-import { DefectDojoFindingItem, DefectDojoService } from '../../services/defectdojo/defectdojo.service';
+import {
+  DefectDojoFindingItem,
+  DefectDojoFindingsPage,
+  DefectDojoService
+} from '../../services/defectdojo/defectdojo.service';
 import { PageHeroComponent } from '../shared/page-hero/page-hero.component';
 
 interface SmokeTestState {
@@ -23,10 +29,7 @@ interface SmokeTestState {
   results: Record<string, { ok: boolean; statusCode?: number | null; message?: string; probedUrl?: string }>;
 }
 
-/** Les 5 états visuels partagés par les deux cartes outil (ZAP, smoke test) — voir §5 du chantier
- *  "Post-déploiement v2". "obsolete" est volontairement absent d'ici : ce n'est pas un état
- *  exclusif, c'est un indicateur orthogonal (voir `stale` séparé) qui peut se combiner avec
- *  'ok' / 'findings' / 'running'. */
+/** États visuels des deux cartes (ZAP, smoke test). « Obsolète » est un indicateur à part. */
 type ToolStatus = 'never' | 'running' | 'ok' | 'findings' | 'failed';
 
 interface ToolCardState {
@@ -35,33 +38,40 @@ interface ToolCardState {
   staleSince?: string | null;
 }
 
+type SeverityKey = 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
+
+interface DastCounts {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  total: number;
+  /** true = comptés sur les findings ZAP réels (Info compris) ; false = résumé du pipeline. */
+  fromFindings: boolean;
+}
+
+/** Au-delà, la liste est tronquée (5 pages de 100). */
+const MAX_FINDING_PAGES = 5;
+
 /**
- * Page "Post-déploiement" (par service) — regroupe les signaux qui n'existent QU'APRÈS un
- * déploiement réel (DAST/ZAP, smoke test), scopés à un environnement précis. Le scan container
- * (Grype) a été retiré de cette page (chantier "Post-déploiement v2", Objectif 1) : Grype tourne
- * structurellement aussi bien en scan-only qu'en déploiement (grype-image-scan, .gitlab-ci.yml,
- * extends: .scan-rules) — ce n'est donc pas un signal post-déploiement par nature, contrairement
- * à ZAP (attaque une URL live) et au smoke test (ping des pods vivants). Les résultats Grype
- * restent consultables via la page Quality Gate "par service" existante, pas dupliqués ici.
+ * Page « Post-déploiement » : signaux qui n'existent qu'après un déploiement réel (DAST/ZAP,
+ * smoke test). Utilisée à deux niveaux :
+ *  - SERVICE (/project/:id/post-deploy) : résultats du déploiement de l'application dont le
+ *    service fait partie (ZAP analyse l'adresse publique de toute l'application), son propre
+ *    smoke test en premier ;
+ *  - APPLICATION (onglet Post-déploiement de l'application, via [appScopeId]) : même vue, tous
+ *    les services au même niveau.
+ * Un service autonome (hors application gérée) garde l'ancien flux par environnement.
  *
- * La relance DAST à la demande (ACTION=dast-only) a été retirée après coup : une relance sans
- * redéploiement n'a pas de valeur réelle -- un résultat ZAP ne change que si le code change, ce
- * qui exige de toute façon un redéploiement complet (qui relance deploy:zap-dast normalement).
- * Seul le smoke test garde un bouton de relance (coût quasi nul, pas de rebuild nécessaire).
- *
- * Volontairement séparée de la Quality Gate service : DAST ne peut jamais être un vrai gate
- * pré-déploiement (son résultat n'existe qu'après coup), donc pas de score/verdict ici,
- * uniquement de l'information.
+ * Les compteurs du DAST viennent des findings ZAP réels (Critique → Info), pour correspondre à la
+ * table affichée en dessous ; le résumé du pipeline ne sert qu'en l'absence de findings lisibles.
  */
 @Component({
   selector: 'app-post-deploy',
   standalone: true,
   imports: [CommonModule, FormsModule, PageHeroComponent],
   templateUrl: './post-deploy.component.html',
-  // app-management.shared.css / security-list.styles.css : classes utilitaires (am-btn/am-alert,
-  // vuln-detail-btn, severity-*) à encapsulation Angular scopée par composant -- il faut les
-  // réimporter explicitement ici pour qu'elles s'appliquent, même si elles semblent "globales" en
-  // les voyant déjà réutilisées ailleurs (ex. security-dashboard.component).
   styleUrls: [
     '../../application-management/shared/app-management.shared.css',
     '../shared/security-list.styles.css',
@@ -69,37 +79,50 @@ interface ToolCardState {
   ]
 })
 export class PostDeployComponent implements OnInit, OnDestroy {
+  /** Page « application » : id de l'application gérée (aucun service sélectionné). */
+  @Input() appScopeId: string | null = null;
+  @Input() appScopeName: string | null = null;
+
   private readonly destroy$ = new Subject<void>();
 
   serviceId: string | null = null;
   managedAppId: string | null = null;
 
+  /** true = service ou application gérée : données par déploiement de l'application. */
+  managedMode = false;
+  summary: PostDeploySummary | null = null;
+  selectedDeploymentId: string | null = null;
+  currentServiceName: string | null = null;
+
+  // Service autonome (ancien flux)
   branches: string[] = [];
   selectedBranch = 'main';
-
   environments: QualityGateEnvironmentOption[] = [];
   selectedEnvironmentId: string | null = null;
-
   result: QualityGateResult | null = null;
   deployment: AppDeployment | null = null;
 
   loading = false;
   error: string | null = null;
 
-  /** Déclenchement initial de scan sur un environnement totalement vide (page-level, pas une carte outil). */
   rebuilding = false;
   rebuildMessage: string | null = null;
   rebuildError: string | null = null;
 
-  /** Relance manuelle smoke test (§Objectif 3) — pas de restriction, pas de cooldown. */
   smokeTestRerunning = false;
   smokeTestRerunError: string | null = null;
 
-  /** Findings détaillés ZAP, scopés au pipeline de l'environnement sélectionné. */
-  readonly severities = ['Critical', 'High', 'Medium', 'Low', 'Info'];
-  findingsSeverity = '';
+  readonly severityRows: Array<{ key: SeverityKey; label: string; cls: string }> = [
+    { key: 'Critical', label: 'Critique', cls: 'critical' },
+    { key: 'High', label: 'Élevée', cls: 'high' },
+    { key: 'Medium', label: 'Moyenne', cls: 'medium' },
+    { key: 'Low', label: 'Faible', cls: 'low' },
+    { key: 'Info', label: 'Info', cls: 'info' }
+  ];
+  severityFilter: SeverityKey | '' = '';
   zapFindings: DefectDojoFindingItem[] = [];
   zapFindingsTotal = 0;
+  findingsLoaded = false;
   findingsLoading = false;
   findingsError: string | null = null;
 
@@ -112,20 +135,28 @@ export class PostDeployComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Même convention que quality-gate.component.ts : le segment de route ':appId' porte en
-    // réalité l'AppService id dans le contexte service (/project/:appId/...).
+    if (this.appScopeId) {
+      this.managedAppId = this.appScopeId;
+      this.managedMode = true;
+      this.loadSummary();
+      return;
+    }
+    // ':appId' porte l'AppService id dans le contexte service (/project/:appId/...).
     this.route.parent?.paramMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
       this.serviceId = params.get('appId');
       if (!this.serviceId) return;
+      this.loading = true;
       this.loadDeployContext();
-      this.loadBranches();
-      this.loadEnvironments(true);
     });
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  get appScope(): boolean {
+    return !!this.appScopeId;
   }
 
   private loadDeployContext(): void {
@@ -135,8 +166,66 @@ export class PostDeployComponent implements OnInit, OnDestroy {
       catchError(() => of(null))
     ).subscribe(ctx => {
       this.managedAppId = ctx?.managedApplicationId || null;
+      this.managedMode = !!this.managedAppId;
+      if (this.managedMode) {
+        this.loadSummary();
+      } else {
+        this.loadBranches();
+        this.loadEnvironments(true);
+      }
     });
   }
+
+  // ── Application gérée ───────────────────────────────────────────────────────────────────────
+
+  loadSummary(): void {
+    if (!this.managedAppId) return;
+    this.loading = true;
+    this.error = null;
+    this.rebuildMessage = null;
+    this.appMgmt.getPostDeploySummary(this.managedAppId, this.selectedDeploymentId).pipe(
+      takeUntil(this.destroy$),
+      catchError(err => {
+        this.error = err?.error?.message || 'Impossible de charger le résultat post-déploiement.';
+        return of(null);
+      })
+    ).subscribe(summary => {
+      this.summary = summary;
+      this.selectedDeploymentId = summary?.deploymentId ?? null;
+      this.currentServiceName = this.serviceId
+        ? (summary?.services?.find(s => s.id === this.serviceId)?.name ?? null)
+        : null;
+      this.loading = false;
+      this.loadFindings();
+    });
+  }
+
+  onDeploymentChange(): void {
+    this.loadSummary();
+  }
+
+  deploymentStatusLabel(status: string | undefined | null): string {
+    switch ((status || '').toUpperCase()) {
+      case 'RUNNING': return 'En ligne';
+      case 'DEPLOYING': return 'En déploiement';
+      case 'PENDING': return 'En attente';
+      case 'FAILED': return 'Échec';
+      case 'STOPPED': return 'Arrêté';
+      default: return status || '—';
+    }
+  }
+
+  get deploymentTone(): 'ok' | 'warn' | 'bad' | 'off' {
+    switch ((this.summary?.status || '').toUpperCase()) {
+      case 'RUNNING': return 'ok';
+      case 'DEPLOYING':
+      case 'PENDING': return 'warn';
+      case 'FAILED': return 'bad';
+      default: return 'off';
+    }
+  }
+
+  // ── Service autonome (ancien flux) ──────────────────────────────────────────────────────────
 
   loadBranches(): void {
     if (!this.serviceId) return;
@@ -153,7 +242,6 @@ export class PostDeployComponent implements OnInit, OnDestroy {
 
   loadEnvironments(andThenLoad = false): void {
     if (!this.serviceId) return;
-    // scanOnly=false (défaut) -- on veut les environnements DEPLOY, pas les pipelines scan.
     this.qualityGateService.listEnvironments(this.serviceId, this.selectedBranch, false).pipe(
       takeUntil(this.destroy$),
       catchError(() => of([] as QualityGateEnvironmentOption[]))
@@ -211,95 +299,89 @@ export class PostDeployComponent implements OnInit, OnDestroy {
     ).subscribe(res => {
       this.result = res;
       this.loading = false;
-    });
-    this.loadDeploymentForSelectedEnvironment();
-    this.loadFindings();
-  }
-
-  /**
-   * Findings détaillés (titres, pas seulement des compteurs) pour l'environnement sélectionné.
-   * Résout d'abord le testId exact de ZAP pour ce pipeline, puis interroge
-   * GET /api/defectdojo/findings scopé à ce testId.
-   */
-  loadFindings(): void {
-    this.zapFindings = [];
-    this.zapFindingsTotal = 0;
-    const pipelineId = this.selectedEnvironment?.pipelineId;
-    if (!this.serviceId || !pipelineId) {
-      return;
-    }
-    this.findingsLoading = true;
-    this.findingsError = null;
-    this.defectDojoService.getTestsForPipeline(this.serviceId, this.selectedBranch, pipelineId).pipe(
-      takeUntil(this.destroy$),
-      catchError(err => {
-        this.findingsError = err?.error?.message || 'Impossible de résoudre le scan DefectDojo.';
-        return of([] as Array<{ testId: number; scanType: string }>);
-      })
-    ).subscribe(tests => {
-      const zapTest = tests.find(t => PostDeployComponent.isZapScanType(t.scanType));
-      if (!zapTest) {
-        this.findingsLoading = false;
-        return;
-      }
-      this.defectDojoService.getFindings(
-        this.serviceId!, this.selectedBranch, 'open', 0, 100,
-        this.findingsSeverity || undefined, undefined, undefined, undefined, zapTest.testId
-      ).pipe(
-        takeUntil(this.destroy$),
-        catchError(() => of(null))
-      ).subscribe(page => {
-        this.zapFindings = page?.content || [];
-        this.zapFindingsTotal = page?.totalElements ?? this.zapFindings.length;
-        this.findingsLoading = false;
-      });
+      this.loadFindings();
     });
   }
 
-  onFindingsSeverityChange(): void {
-    this.loadFindings();
-  }
-
-  private static isZapScanType(scanType: string | undefined): boolean {
-    const s = (scanType || '').toLowerCase();
-    return s.includes('zap') || s.includes('dast');
-  }
-
-  /** Échelle de sévérité partagée avec security-dashboard/managed-security-dashboard
-   *  (security-list.styles.css, .severity-critical/high/medium/low/info) -- pas de nouvelle
-   *  teinte propre à cette page (deux échelles différentes sur deux pages serait incohérent). */
-  severityBadgeClass(severity: string | undefined): string {
-    return 'severity-' + (severity || 'info').toLowerCase();
-  }
-
-  openFinding(findingId: number): void {
-    if (!this.serviceId || findingId == null) return;
-    this.router.navigate(['/project', this.serviceId, 'security-dashboard', 'finding', String(findingId)]);
-  }
-
-  /** Smoke test vit sur AppDeployment.servicesState, pas sur la Quality Gate -- même lecture que
-   *  pipeline-details.component.ts (deployResult, trouvé par gitlabPipelineId). */
-  private loadDeploymentForSelectedEnvironment(): void {
-    const pipelineId = this.selectedEnvironment?.pipelineId;
-    if (!this.managedAppId || !pipelineId) {
-      this.deployment = null;
-      return;
-    }
-    const pid = Number(pipelineId);
-    this.appMgmt.listDeployments(this.managedAppId).pipe(
-      takeUntil(this.destroy$),
-      catchError(() => of([] as AppDeployment[]))
-    ).subscribe(list => {
-      this.deployment = (list || []).find(d => d.gitlabPipelineId === pid) || null;
-    });
-  }
+  // ── Commun ──────────────────────────────────────────────────────────────────────────────────
 
   refresh(): void {
-    this.load();
+    if (this.managedMode) {
+      this.loadSummary();
+    } else {
+      this.load();
+    }
   }
 
-  get zapTool(): QualityGateToolMetric | null {
+  get hasData(): boolean {
+    return this.managedMode ? !!this.summary : !!this.result;
+  }
+
+  get hasDeployment(): boolean {
+    return this.managedMode ? !!this.summary?.deploymentId : this.environments.length > 0;
+  }
+
+  /** État DAST brut du mode application (inclut 'unavailable'). */
+  get dastState(): string | null {
+    return this.managedMode ? (this.summary?.dast?.state ?? 'never') : null;
+  }
+
+  get dastPipelineId(): number | string | null {
+    return this.managedMode
+      ? (this.summary?.dast?.pipelineId ?? null)
+      : (this.selectedEnvironment?.pipelineId ?? null);
+  }
+
+  get dastEvaluatedAt(): string | null {
+    return this.managedMode ? (this.summary?.dast?.evaluatedAt ?? null) : (this.result?.evaluatedAt ?? null);
+  }
+
+  private get zapTool(): QualityGateToolMetric | null {
     return this.result?.toolMetrics?.find(t => t.id === 'zap') || null;
+  }
+
+  /** Compteurs DAST : findings ZAP réels quand ils sont chargés (Info compris), sinon résumé du pipeline. */
+  get dastCounts(): DastCounts {
+    if (this.findingsLoaded && this.zapFindings.length) {
+      const by = (k: SeverityKey) => this.zapFindings.filter(f => this.normSeverity(f.severity) === k).length;
+      const c = { critical: by('Critical'), high: by('High'), medium: by('Medium'), low: by('Low'), info: by('Info') };
+      return { ...c, total: c.critical + c.high + c.medium + c.low + c.info, fromFindings: true };
+    }
+    const d = this.managedMode ? this.summary?.dast : null;
+    const t = this.zapTool;
+    const c = {
+      critical: (d ? d.critical : t?.critical) || 0,
+      high: (d ? d.high : t?.high) || 0,
+      medium: (d ? d.medium : t?.medium) || 0,
+      low: (d ? d.low : t?.low) || 0,
+      info: 0
+    };
+    return { ...c, total: c.critical + c.high + c.medium + c.low, fromFindings: false };
+  }
+
+  countOf(key: SeverityKey): number {
+    const c = this.dastCounts;
+    switch (key) {
+      case 'Critical': return c.critical;
+      case 'High': return c.high;
+      case 'Medium': return c.medium;
+      case 'Low': return c.low;
+      default: return c.info;
+    }
+  }
+
+  get vulnerabilityCount(): number {
+    const c = this.dastCounts;
+    return c.critical + c.high + c.medium + c.low;
+  }
+
+  private normSeverity(s: string | undefined): SeverityKey {
+    const v = (s || '').toLowerCase();
+    if (v.startsWith('crit')) return 'Critical';
+    if (v.startsWith('high')) return 'High';
+    if (v.startsWith('med')) return 'Medium';
+    if (v.startsWith('low')) return 'Low';
+    return 'Info';
   }
 
   get dastApplicable(): boolean {
@@ -311,24 +393,40 @@ export class PostDeployComponent implements OnInit, OnDestroy {
   }
 
   get smokeTest(): SmokeTestState | null {
-    return (this.deployment?.servicesState?.smokeTest as SmokeTestState) || null;
+    if (this.managedMode) {
+      return (this.summary?.smokeTest as SmokeTestState) || null;
+    }
+    return (this.deployment?.servicesState?.['smokeTest'] as SmokeTestState) || null;
   }
 
+  /** Ce service en premier. */
   get smokeTestEntries(): Array<{ name: string; ok: boolean; statusCode?: number | null; message?: string; probedUrl?: string }> {
     const results = this.smokeTest?.results || {};
-    return Object.entries(results).map(([name, r]) => ({ name, ...r }));
+    const rows = Object.entries(results).map(([name, r]) => ({ name, ...r }));
+    return rows.sort((a, b) => (a.name === this.currentServiceName ? -1 : b.name === this.currentServiceName ? 1 : 0));
   }
 
-  /** Aucun des 2 signaux n'a de donnée pour cet environnement -- environnement jamais scanné. */
+  serviceIdByName(name: string): string | null {
+    return this.summary?.services?.find(s => s.name === name)?.id ?? null;
+  }
+
+  /** Aucun résultat (DAST ni smoke test) pour le déploiement sélectionné. */
   get isEmpty(): boolean {
-    return !this.loading && !this.zapTool && !this.dastApplicable && !this.smokeTest;
+    if (this.loading) return false;
+    if (this.managedMode) {
+      return this.dastState === 'never' && !this.smokeTest;
+    }
+    return !this.zapTool && !this.dastApplicable && !this.smokeTest;
+  }
+
+  get showFindings(): boolean {
+    return this.zapCardState.status === 'ok' || this.zapCardState.status === 'findings';
   }
 
   canRebuild(): boolean {
-    return !!this.managedAppId && !!this.serviceId && !this.rebuilding;
+    return !this.appScope && !!this.managedAppId && !!this.serviceId && !this.rebuilding;
   }
 
-  /** Déclenchement initial (page vide) : seul un build+déploiement complet peut produire un premier résultat. */
   triggerScan(): void {
     if (!this.managedAppId || !this.serviceId) return;
     if (!confirm('Relancer un build + déploiement de ce service (même namespace) ? Ça relance aussi le scan ZAP sur l\'URL live. Les autres services ne seront pas reconstruits.')) {
@@ -351,14 +449,17 @@ export class PostDeployComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** État 2 (carte smoke test) : coût quasi nul, sans restriction -- corrige le bug historique
-   *  qui n'enregistrait que le tout premier résultat (hasSmokeTestResult() côté backend, pensé
-   *  pour le poll CI automatique, jamais pour un déclenchement manuel explicite). */
+  /** Le smoke test sonde tous les services du déploiement ; en vue application, via le premier service. */
+  private get smokeServiceId(): string | null {
+    return this.serviceId ?? this.summary?.services?.[0]?.id ?? null;
+  }
+
   rerunSmokeTest(): void {
-    if (!this.managedAppId || !this.serviceId || this.smokeTestRerunning) return;
+    const serviceId = this.smokeServiceId;
+    if (!this.managedAppId || !serviceId || this.smokeTestRerunning) return;
     this.smokeTestRerunning = true;
     this.smokeTestRerunError = null;
-    this.appMgmt.rerunSmokeTest(this.managedAppId, this.serviceId).pipe(
+    this.appMgmt.rerunSmokeTest(this.managedAppId, serviceId).pipe(
       takeUntil(this.destroy$),
       catchError(err => {
         this.smokeTestRerunError = err?.error?.message || 'Échec du smoke test.';
@@ -366,9 +467,10 @@ export class PostDeployComponent implements OnInit, OnDestroy {
       })
     ).subscribe(smoke => {
       this.smokeTestRerunning = false;
-      if (smoke && this.deployment) {
-        // Rafraîchit l'état local immédiatement (pas besoin d'un rechargement complet de la
-        // page pour voir le nouveau résultat -- la relance ELLE-MÊME vient de le produire).
+      if (!smoke) return;
+      if (this.managedMode && this.summary) {
+        this.summary = { ...this.summary, smokeTest: smoke as PostDeploySummary['smokeTest'] };
+      } else if (this.deployment) {
         this.deployment = {
           ...this.deployment,
           servicesState: { ...(this.deployment.servicesState || {}), smokeTest: smoke }
@@ -377,11 +479,131 @@ export class PostDeployComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── Objectif 5 : matrice d'états ────────────────────────────────────────────────────────────
+  openPipelineDetail(): void {
+    const pid = this.dastPipelineId;
+    if (!pid) return;
+    if (this.managedMode && this.managedAppId) {
+      this.router.navigate(['/projects', this.managedAppId, 'pipeline-detail', String(pid)], { queryParams: { kind: 'DEPLOY' } });
+    } else if (this.serviceId) {
+      this.router.navigate(['/project', this.serviceId, 'pipeline-detail', String(pid)], { queryParams: { kind: 'DEPLOY' } });
+    }
+  }
 
-  /** Un résultat existe mais date d'avant le déploiement actuellement actif (état 6, "obsolète"). */
+  openServicePostDeploy(serviceName: string): void {
+    const id = this.serviceIdByName(serviceName);
+    if (!id) return;
+    // Le hub service retrouve l'application d'origine (barre latérale, retour).
+    try {
+      if (this.managedAppId) localStorage.setItem('envirotest-last-managed-app-id', this.managedAppId);
+      if (this.appScopeName) localStorage.setItem('envirotest-last-managed-app-name', this.appScopeName);
+    } catch { /* stockage indisponible */ }
+    this.router.navigate(['/project', id, 'post-deploy']);
+  }
+
+  // ── Findings ZAP ────────────────────────────────────────────────────────────────────────────
+
+  /** Service sous lequel les findings ZAP ont été importés dans DefectDojo. */
+  private get findingsServiceId(): string | null {
+    return this.managedMode ? (this.summary?.dast?.findingsServiceId ?? null) : this.serviceId;
+  }
+
+  private get findingsBranch(): string {
+    return this.managedMode ? (this.summary?.dast?.branch || 'main') : this.selectedBranch;
+  }
+
+  get visibleFindings(): DefectDojoFindingItem[] {
+    if (!this.severityFilter) return this.zapFindings;
+    return this.zapFindings.filter(f => this.normSeverity(f.severity) === this.severityFilter);
+  }
+
+  setSeverityFilter(key: SeverityKey | ''): void {
+    this.severityFilter = this.severityFilter === key ? '' : key;
+  }
+
+  loadFindings(): void {
+    this.zapFindings = [];
+    this.zapFindingsTotal = 0;
+    this.findingsLoaded = false;
+    this.findingsError = null;
+    this.severityFilter = '';
+    const serviceId = this.findingsServiceId;
+    const pipelineId = this.dastPipelineId;
+    const hasResult = this.managedMode
+      ? (this.dastState === 'ok' || this.dastState === 'findings')
+      : this.dastEvaluable;
+    if (!serviceId || !pipelineId || !hasResult) {
+      return;
+    }
+    this.findingsLoading = true;
+    this.defectDojoService.getTestsForPipeline(serviceId, this.findingsBranch, String(pipelineId)).pipe(
+      takeUntil(this.destroy$),
+      catchError(err => {
+        this.findingsError = err?.error?.message || 'Impossible de retrouver le scan ZAP dans DefectDojo.';
+        return of([] as Array<{ testId: number; scanType: string }>);
+      })
+    ).subscribe(tests => {
+      const zapTest = tests.find(t => PostDeployComponent.isZapScanType(t.scanType));
+      if (!zapTest) {
+        this.findingsLoading = false;
+        this.findingsLoaded = true;
+        return;
+      }
+      this.loadFindingPages(serviceId, zapTest.testId, 0);
+    });
+  }
+
+  /** Toutes les pages (100 par page, plafond backend) pour compter et filtrer sans rechargement. */
+  private loadFindingPages(serviceId: string, testId: number, page: number): void {
+    const req: Observable<DefectDojoFindingsPage | null> = this.defectDojoService.getFindings(
+      serviceId, this.findingsBranch, 'open', page, 100, undefined, undefined, undefined, undefined, testId
+    ).pipe(takeUntil(this.destroy$), catchError(() => of(null)));
+    req.subscribe(res => {
+      const items = res?.content || [];
+      this.zapFindings = [...this.zapFindings, ...items];
+      this.zapFindingsTotal = res?.totalElements ?? this.zapFindings.length;
+      const more = this.zapFindings.length < this.zapFindingsTotal && items.length > 0 && page + 1 < MAX_FINDING_PAGES;
+      if (more) {
+        this.loadFindingPages(serviceId, testId, page + 1);
+      } else {
+        this.findingsLoading = false;
+        this.findingsLoaded = true;
+      }
+    });
+  }
+
+  private static isZapScanType(scanType: string | undefined): boolean {
+    const s = (scanType || '').toLowerCase();
+    return s.includes('zap') || s.includes('dast');
+  }
+
+  severityClass(severity: string | undefined): string {
+    return this.severityRows.find(r => r.key === this.normSeverity(severity))?.cls || 'info';
+  }
+
+  severityLabel(severity: string | undefined): string {
+    return this.severityRows.find(r => r.key === this.normSeverity(severity))?.label || 'Info';
+  }
+
+  cweLabel(cwe: string | undefined | null): string {
+    const v = (cwe || '').trim();
+    if (!v || v === '0') return '—';
+    return /^\d+$/.test(v) ? `CWE-${v}` : v;
+  }
+
+  openFinding(findingId: number): void {
+    const serviceId = this.findingsServiceId;
+    if (!serviceId || findingId == null) return;
+    this.router.navigate(['/project', serviceId, 'security-dashboard', 'finding', String(findingId)]);
+  }
+
+  // ── États des cartes ────────────────────────────────────────────────────────────────────────
+
+  private get deployedAt(): string | null | undefined {
+    return this.managedMode ? this.summary?.deployedAt : this.deployment?.deployedAt;
+  }
+
   private isStale(resultTimestamp: string | null | undefined): boolean {
-    const deployedAt = this.deployment?.deployedAt;
+    const deployedAt = this.deployedAt;
     if (!resultTimestamp || !deployedAt) return false;
     const resultMs = Date.parse(resultTimestamp);
     const deployedMs = Date.parse(deployedAt);
@@ -390,21 +612,40 @@ export class PostDeployComponent implements OnInit, OnDestroy {
   }
 
   get zapCardState(): ToolCardState {
-    if (!this.dastEvaluable) {
-      return { status: 'running', stale: false };
+    if (this.managedMode) {
+      const d = this.summary?.dast;
+      const state = d?.state ?? 'never';
+      const withResult = state === 'ok' || state === 'findings';
+      let status: ToolStatus = state === 'unavailable' ? 'failed' : (state as ToolStatus);
+      if (withResult && this.dastCounts.fromFindings) {
+        status = this.vulnerabilityCount ? 'findings' : 'ok';
+      }
+      return { status, stale: withResult && this.isStale(d?.evaluatedAt), staleSince: d?.evaluatedAt ?? null };
     }
-    const tool = this.zapTool;
-    if (!tool) {
-      // Évaluable côté pipeline mais aucun détail outil -- import DefectDojo probablement en
-      // échec (état 5, jamais confondu silencieusement avec "0 finding", §Objectif 5 point 3).
+    if (!this.dastApplicable) {
+      return { status: 'never', stale: false };
+    }
+    if (!this.dastEvaluable) {
+      return { status: this.result?.pipelineFinished === false ? 'running' : 'failed', stale: false };
+    }
+    if (!this.zapTool) {
       return { status: 'failed', stale: false };
     }
-    const total = (tool.critical || 0) + (tool.high || 0) + (tool.medium || 0) + (tool.low || 0);
     return {
-      status: total === 0 ? 'ok' : 'findings',
+      status: this.vulnerabilityCount === 0 ? 'ok' : 'findings',
       stale: this.isStale(this.result?.evaluatedAt),
       staleSince: this.result?.evaluatedAt
     };
+  }
+
+  get zapStatusLabel(): string {
+    switch (this.zapCardState.status) {
+      case 'never': return 'Pas encore analysé';
+      case 'running': return 'Analyse en cours';
+      case 'ok': return this.dastCounts.info ? 'Aucune vulnérabilité' : 'Aucune alerte';
+      case 'findings': return `${this.vulnerabilityCount} vulnérabilité${this.vulnerabilityCount > 1 ? 's' : ''}`;
+      default: return this.dastState === 'unavailable' ? 'Résultat non reçu' : 'Échec';
+    }
   }
 
   get smokeCardState(): ToolCardState {
@@ -419,5 +660,17 @@ export class PostDeployComponent implements OnInit, OnDestroy {
       stale: this.isStale(this.smokeTest.checkedAt),
       staleSince: this.smokeTest.checkedAt
     };
+  }
+
+  get smokeStatusLabel(): string {
+    switch (this.smokeCardState.status) {
+      case 'never': return 'Pas encore testé';
+      case 'running': return 'Test en cours';
+      case 'ok': return 'Tous disponibles';
+      default: {
+        const bad = this.smokeTestEntries.filter(e => !e.ok).length;
+        return `${bad} service${bad > 1 ? 's' : ''} en échec`;
+      }
+    }
   }
 }

@@ -47,7 +47,7 @@
   <div class="qg-banner qg-banner--warn" *ngIf="!loading && securityValidationFailed">
     <span class="qg-banner-ico">⚠</span>
     <span>{{ result?.incompleteRecommendationMessage || 'Le stage security-validation a échoué — recommandation indisponible.' }}</span>
-    <a *ngIf="result?.pipelineWebUrl" [href]="result?.pipelineWebUrl" target="_blank" rel="noopener" class="qg-banner-link">Voir le pipeline GitLab</a>
+    <a *ngIf="result?.pipelineId" href="#" (click)="openPipelineDetail($event)" class="qg-banner-link">Voir le détail du pipeline</a>
   </div>
 
   <!-- Loading -->
@@ -61,8 +61,8 @@
   <div class="qg-banner qg-banner--warn" *ngIf="!loading && !error && result?.verdictSource === 'SNAPSHOT_MISSING'">
     <span class="qg-banner-ico">⚠</span>
     <span>Aucun snapshot disponible — le stage <strong>security-validation</strong> ne s'est probablement pas exécuté dans le pipeline.
-      Vérifiez le pipeline GitLab et relancez-le si nécessaire.</span>
-    <a *ngIf="result?.pipelineWebUrl" [href]="result?.pipelineWebUrl" target="_blank" rel="noopener" class="qg-banner-link">Pipeline GitLab</a>
+      Vérifiez le détail du pipeline et relancez-le si nécessaire.</span>
+    <a *ngIf="result?.pipelineId" href="#" (click)="openPipelineDetail($event)" class="qg-banner-link">Détail du pipeline</a>
   </div>
 
   <ng-container *ngIf="!loading && !error && result && result.verdictSource !== 'SNAPSHOT_MISSING'">
@@ -81,7 +81,7 @@
         <div class="qg-vh-meta">
           <span *ngIf="result.pipelineId">Pipeline #{{ result.pipelineId }}</span>
           <span *ngIf="result.evaluatedAt">· {{ result.evaluatedAt | date:'short' }}</span>
-          <a *ngIf="result.pipelineWebUrl" [href]="result.pipelineWebUrl" target="_blank" rel="noopener">GitLab →</a>
+          <a *ngIf="result.pipelineId" href="#" (click)="openPipelineDetail($event)">Détail du pipeline →</a>
         </div>
       </div>
 
@@ -114,7 +114,7 @@
     <div class="qg-banner qg-banner--warn qg-banner--strong" *ngIf="showUnsuccessfulStagesWarning">
       <span class="qg-banner-ico">⚠</span>
       <span>{{ unsuccessfulStagesWarningText }}</span>
-      <a *ngIf="result.pipelineWebUrl" [href]="result.pipelineWebUrl!" target="_blank" rel="noopener" class="qg-banner-link">Pipeline GitLab</a>
+      <a *ngIf="result.pipelineId" href="#" (click)="openPipelineDetail($event)" class="qg-banner-link">Détail du pipeline</a>
     </div>
 
     <!-- Barème A→E avec curseur -->
