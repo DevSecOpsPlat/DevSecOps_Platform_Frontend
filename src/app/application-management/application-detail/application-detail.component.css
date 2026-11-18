@@ -6088,3 +6088,22 @@ button.ad-path-seg:active { transform: scale(0.97); }
 :host-context([data-theme="dark"]) .ad-alert-hist-msg { color: #e2e8f0; }
 :host-context([data-theme="dark"]) .ad-alert-hist-time { color: #a5b4c8; }
 /* === Fin du mode nuit généré === */
+
+/* Renommage de l'application (en-tête sur fond sombre) */
+.ad-title-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.ad-rename-btn {
+  appearance: none; border: 1px solid rgba(186, 230, 253, 0.35); background: rgba(255, 255, 255, 0.08);
+  color: #e0f2fe; font: inherit; font-size: 0.74rem; font-weight: 600; padding: 0.22rem 0.6rem;
+  border-radius: 999px; cursor: pointer; margin-top: 0.2rem;
+}
+.ad-rename-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(186, 230, 253, 0.6); }
+.ad-rename-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.ad-rename-input {
+  min-width: min(100%, 18rem); flex: 1 1 18rem; max-width: 30rem; box-sizing: border-box;
+  padding: 0.5rem 0.7rem; border-radius: 10px; border: 1px solid rgba(186, 230, 253, 0.45);
+  background: rgba(15, 23, 42, 0.55); color: #fff; font: inherit; font-size: 1.05rem; font-weight: 700;
+}
+.ad-rename-input:focus { outline: none; border-color: #f36c21; box-shadow: 0 0 0 3px rgba(243, 108, 33, 0.3); }
+.ad-rename-error { margin: 0.35rem 0 0; font-size: 0.8rem; color: #fca5a5; }
+.ad-rename-note { margin: 0.35rem 0 0; font-size: 0.76rem; color: rgba(224, 242, 254, 0.75); }
+.ad-rename-note code { font-size: 0.74rem; }
