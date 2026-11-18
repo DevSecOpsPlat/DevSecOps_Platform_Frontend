@@ -172,6 +172,10 @@
                   [disabled]="isLoading || resendLoading" *ngIf="twoFactorMethod === 'EMAIL'">
             {{ resendLoading ? 'Envoi…' : 'Renvoyer le code par e-mail' }}
           </button>
+          <button type="button" class="auth-link auth-link--block" (click)="useEmailCodeInstead()"
+                  [disabled]="isLoading || resendLoading" *ngIf="twoFactorMethod === 'TOTP'">
+            {{ resendLoading ? 'Envoi…' : 'Recevoir plutôt un code par e-mail' }}
+          </button>
           <button type="button" class="auth-link auth-link--block" (click)="backToPasswordStep()" [disabled]="isLoading">
             ← Retour au mot de passe
           </button>

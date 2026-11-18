@@ -194,6 +194,25 @@ export class SignInComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Méthode application, téléphone indisponible : recevoir plutôt un code à l'e-mail du compte. */
+  useEmailCodeInstead(): void {
+    if (!this.pendingLoginId || this.twoFactorMethod !== 'TOTP' || this.resendLoading) return;
+    this.resendLoading = true;
+    this.errorMessage = '';
+    this.authService.resendLoginTwoFactor(this.pendingLoginId).subscribe({
+      next: res => {
+        this.resendLoading = false;
+        this.twoFactorMethod = 'EMAIL';
+        this.twoFactorInfoMessage = res.message;
+        this.totpForm.reset();
+      },
+      error: err => {
+        this.resendLoading = false;
+        this.errorMessage = err?.error?.message || 'Envoi du code par e-mail impossible.';
+      }
+    });
+  }
+
   backToPasswordStep(): void {
     this.twoFactorStep = false;
     this.pendingLoginId = null;

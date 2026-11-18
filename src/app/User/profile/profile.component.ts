@@ -69,6 +69,8 @@ export class ProfileComponent implements OnInit {
   showCurrentPassword = false;
   showNewPassword = false;
   showConfirmPassword = false;
+  /** Mot de passe actuel demandé pour changer de méthode 2FA. */
+  showSwitchPassword = false;
 
   constructor(
     public authService: AuthService,
