@@ -34,7 +34,13 @@ export class ServiceFormComponent implements OnInit {
       name: new FormControl(s?.name || '', [Validators.required]),
       role: new FormControl<AppServiceRole>(s?.role || 'FRONTEND', [Validators.required]),
       gitRepositoryUrl: new FormControl(s?.gitRepositoryUrl || '', [Validators.required]),
-      gitToken: new FormControl(s?.hasGitToken ? SECRET_MASK : ''),
+      // Jeton d'accès (ghp_…, github_pat_…, glpat-…), pas un mot de passe : un « @ » cassait l'URL de clone du pipeline.
+      gitToken: new FormControl(s?.hasGitToken ? SECRET_MASK : '', [
+        (c) => {
+          const v = String(c.value ?? '').trim();
+          return !v || v === SECRET_MASK || /^[A-Za-z0-9_.-]{20,255}$/.test(v) ? null : { gitToken: true };
+        }
+      ]),
       gitBranch: new FormControl(s?.gitBranch || 'main'),
       dockerfilePath: new FormControl(s?.dockerfilePath || 'Dockerfile'),
       buildContext: new FormControl(s?.buildContext || '.'),

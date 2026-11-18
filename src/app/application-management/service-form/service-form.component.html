@@ -20,9 +20,14 @@
   <div class="am-grid-2">
     <div class="am-field">
       <label class="am-label">Token Git</label>
-      <input class="am-input" type="password" formControlName="gitToken"
-             placeholder="{{ isEdit ? 'Laisser masqué pour conserver' : 'ghp_… (repo privé)' }}" />
-      <span class="am-hint">Chiffré au repos, jamais renvoyé en clair.</span>
+      <input class="am-input" type="password" formControlName="gitToken" autocomplete="off"
+             placeholder="{{ isEdit ? 'Laisser masqué pour conserver' : 'Vide si le dépôt est public' }}" />
+      <span class="am-hint am-hint--error" *ngIf="form.get('gitToken')?.errors?.['gitToken']">
+        Saisissez un jeton d'accès (ghp_…, github_pat_…, glpat-…), pas un mot de passe.
+      </span>
+      <span class="am-hint" *ngIf="!form.get('gitToken')?.errors?.['gitToken']">
+        Vide pour un dépôt public. S'il est renseigné, la plateforme le vérifie auprès de GitHub / GitLab à l'enregistrement. Chiffré au repos, jamais renvoyé en clair.
+      </span>
     </div>
     <div class="am-field">
       <label class="am-label">Branche</label>
