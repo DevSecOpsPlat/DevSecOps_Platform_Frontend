@@ -66,6 +66,14 @@
             </dd>
           </div>
 
+          <div class="rx-fact" *ngIf="isDast && detail.respondingService">
+            <dt>Service qui a répondu</dt>
+            <dd>
+              <span>{{ detail.respondingService }}</span>
+              <span class="rx-muted" *ngIf="detail.routingReason"> · {{ detail.routingReason }}</span>
+            </dd>
+          </div>
+
           <div class="rx-fact">
             <dt>Code source</dt>
             <dd>
@@ -85,7 +93,11 @@
           </div>
         </dl>
 
-        <p class="rx-hint" *ngIf="hasSnippet && detail.codeContextHint">{{ detail.codeContextHint }}</p>
+        <p class="rx-hint" *ngIf="hasSnippet && detail.codeContextHint && !detail.repositoryFacts?.length">{{ detail.codeContextHint }}</p>
+
+        <ul class="rx-repo-facts" *ngIf="detail.repositoryFacts?.length">
+          <li *ngFor="let f of detail.repositoryFacts">{{ f }}</li>
+        </ul>
 
         <div class="rx-panel" *ngIf="liveCheckOpen && detail.liveCheck">
           <p class="rx-panel-note">
@@ -93,11 +105,13 @@
             <ng-container *ngIf="detail.liveCheck.corsTestOrigin"> avec l'origine <span class="rx-mono">{{ detail.liveCheck.corsTestOrigin }}</span></ng-container>
             — état actuel, qui peut différer du moment du scan.
           </p>
-          <p class="rx-warn-text" *ngIf="detail.liveCheck.error && detail.liveCheck.status">{{ detail.liveCheck.error }}</p>
+          <p class="rx-warn-text" *ngIf="detail.liveCheck.error && detail.liveCheck.status">
+            Réponse HTTP {{ detail.liveCheck.status }} : elle ne provient pas de l'application scannée et n'est pas utilisée comme preuve.
+          </p>
           <table class="rx-headers" *ngIf="liveHeaders.length">
             <tr *ngFor="let h of liveHeaders"><th>{{ h.name }}</th><td class="rx-mono">{{ h.value }}</td></tr>
           </table>
-          <p class="rx-panel-note" *ngIf="detail.liveCheck.missingHeaders?.length">
+          <p class="rx-panel-note" *ngIf="detail.liveCheck.missingHeaders?.length && !detail.liveCheck.error">
             Absents : <span class="rx-mono">{{ detail.liveCheck.missingHeaders?.join(', ') }}</span>
           </p>
           <ng-container *ngIf="detail.exposureChain?.length">

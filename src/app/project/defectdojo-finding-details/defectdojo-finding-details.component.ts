@@ -254,8 +254,14 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: r => {
-          this.aiResult = r;
           this.logAiModelInConsole(r, 'termine');
+          // Analyse écartée par le backend (hors sujet, anglais, modèles saturés) : message, pas de faux résultat.
+          if (r?.status === 'FAILED') {
+            this.aiResult = null;
+            this.aiError = r.problemSummary || 'Analyse IA indisponible pour le moment.';
+            return;
+          }
+          this.aiResult = r;
         },
         error: err => {
           const msg = err?.name === 'TimeoutError'
@@ -586,7 +592,7 @@ export class DefectDojoFindingDetailsComponent implements OnInit, OnDestroy {
   get liveCheckSummary(): string {
     const c = this.detail?.liveCheck;
     if (!c) return '';
-    if (c.error && !c.status) return c.error;
+    if (c.error) return c.error;
     const missing = c.missingHeaders?.length ?? 0;
     const status = c.status ? `HTTP ${c.status}` : '';
     return [status, missing ? `${missing} en-tête${missing > 1 ? 's' : ''} de sécurité absent${missing > 1 ? 's' : ''}` : 'en-têtes de sécurité présents']
