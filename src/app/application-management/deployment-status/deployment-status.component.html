@@ -376,7 +376,7 @@
             </div>
             <div class="ds-pd-logs-label">Logs</div>
             <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
-            <pre class="ds-pd-logs">{{ logsLoading ? 'Chargement…' : (logs || (logsError ? '' : '—')) }}</pre>
+            <pre class="ds-pd-logs">{{ logsLoading && !logs ? 'Chargement…' : (logs || (logsError ? '' : '—')) }}</pre>
           </ng-container>
         </div>
       </div>
@@ -431,7 +431,7 @@
             </div>
             <div class="ds-pd-logs-label">Logs</div>
             <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
-            <pre class="ds-pd-logs">{{ logsLoading ? 'Chargement…' : (logs || (logsError ? '' : '—')) }}</pre>
+            <pre class="ds-pd-logs">{{ logsLoading && !logs ? 'Chargement…' : (logs || (logsError ? '' : '—')) }}</pre>
           </ng-container>
         </div>
       </div>
@@ -482,9 +482,9 @@
         <div class="ds-pd-card-body ds-pd-scroll">
           <ul class="ds-pd-jobs">
             <li *ngFor="let p of pods"
-                [class.selected]="selectedWorkload === (p.workload || p.name)"
+                [class.selected]="isPodSelected(p)"
                 [ngClass]="podRowClass(p.phase, p.ready)"
-                (click)="openLogs(p.name)">
+                (click)="openPodLogs(p)">
               <div class="ds-pd-job-main">
                 <span class="ds-pd-job-name am-mono">{{ p.name }}</span>
                 <span class="ds-pd-pill" [ngClass]="ciJobStatusClass(podStatusLabel(p.phase, p.ready))">
@@ -525,7 +525,7 @@
             </div>
             <div class="ds-pd-logs-label">Logs</div>
             <div class="am-alert am-alert-error" *ngIf="logsError">{{ logsError }}</div>
-            <pre class="ds-pd-logs" *ngIf="!logsError">{{ logsLoading ? 'Chargement…' : logs }}</pre>
+            <pre class="ds-pd-logs" *ngIf="!logsError">{{ logsLoading && !logs ? 'Chargement…' : logs }}</pre>
           </ng-container>
         </div>
       </div>

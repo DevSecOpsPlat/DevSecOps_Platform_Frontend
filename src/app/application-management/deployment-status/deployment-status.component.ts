@@ -220,6 +220,26 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['deployment'] && this.deployment) {
+      const previous = changes['deployment'].previousValue as AppDeployment | null | undefined;
+      // La page parente retransmet le même déploiement à chaque rafraîchissement : avant, tout était
+      // réinitialisé (logs vidés puis rechargés), on ne pouvait plus lire les logs d'un pod.
+      if (previous && previous.id === this.deployment.id) {
+        const statusChanged = previous.status !== this.deployment.status;
+        this.dep = this.deployment;
+        this.setupTtlCountdown();
+        this.syncPreviewUrl();
+        if (statusChanged) {
+          this.setupPolling();
+          this.setupPodsPolling();
+          if (this.isStopped) {
+            this.pods = [];
+            this.closeLogs();
+          } else {
+            this.refreshPods(true);
+          }
+        }
+        return;
+      }
       this.dep = this.deployment;
       this.closeLogs();
       this.closeCiLogs();
@@ -728,10 +748,14 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
   openLogs(workload: string): void {
     if (!workload || !this.appId || !this.dep?.id) return;
     this.closeCiLogs();
+    // « Rafraîchir » sur le même pod : le texte reste affiché pendant le chargement (pas de clignotement).
+    const refreshingSame = this.selectedWorkload === workload && !!this.logs;
     this.selectedWorkload = workload;
     this.logsLoading = true;
     this.logsError = null;
-    this.logs = '';
+    if (!refreshingSame) {
+      this.logs = '';
+    }
     this.api.getDeploymentLogs(this.appId, this.dep.id, workload, 400).subscribe({
       next: (res) => {
         this.logs = res.logs || '(vide)';
@@ -758,6 +782,19 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
     return this.resolveEntryWorkload(entry, kind) || entry.name;
   }
 
+  /** Service (workload) du pod dont on lit les logs : retrouvé si le pod est remplacé (redémarrage). */
+  private selectedPodWorkload: string | null = null;
+
+  /** Clic sur un pod de la liste. */
+  openPodLogs(p: DeploymentPodInfo): void {
+    this.selectedPodWorkload = p.workload || null;
+    this.openLogs(p.name || p.workload || '');
+  }
+
+  isPodSelected(p: DeploymentPodInfo): boolean {
+    return !!this.selectedWorkload && (this.selectedWorkload === p.name || this.selectedWorkload === p.workload);
+  }
+
   /** Premier pod sélectionné par défaut (onglet Pods). */
   private ensureDefaultPodSelected(force = false): void {
     if (!force && this.showOpsTabs && this.opsTab !== 'pods') return;
@@ -766,11 +803,19 @@ export class DeploymentStatusComponent implements OnChanges, OnDestroy {
       return;
     }
     if (!force && this.selectedWorkload) {
-      const still = this.pods.some(p => (p.workload || p.name) === this.selectedWorkload);
-      if (still) return;
+      // Le pod sélectionné est comparé à son NOM (c'est ce qu'ouvre openLogs) : avant, la comparaison
+      // au nom du workload échouait toujours et les logs étaient rechargés toutes les 10 s.
+      const sel = this.selectedWorkload;
+      if (this.pods.some(p => p.name === sel || p.workload === sel)) return;
+      const sameWorkload = this.selectedPodWorkload
+        ? this.pods.find(p => p.workload === this.selectedPodWorkload)
+        : undefined;
+      if (sameWorkload) {
+        this.openPodLogs(sameWorkload);
+        return;
+      }
     }
-    const first = this.pods[0];
-    this.openLogs(first.name || first.workload || '');
+    this.openPodLogs(this.pods[0]);
   }
 
   private ensureDefaultServiceSelected(force = false): void {

@@ -132,6 +132,19 @@ export class MonitoringDashboardComponent implements OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Même déploiement retransmis par la page parente (rafraîchissement) : on garde graphiques et logs.
+    const dep = changes['deployment'];
+    if (dep && !changes['appId'] && dep.previousValue && dep.currentValue
+        && dep.previousValue.id === dep.currentValue.id) {
+      if (dep.previousValue.status !== dep.currentValue.status) {
+        if (this.isInactive) {
+          this.stopPoll();
+        } else if (this.appId && this.deployment?.id && this.rangeMode === 'live') {
+          this.startLivePoll();
+        }
+      }
+      return;
+    }
     if (changes['deployment'] || changes['appId']) {
       this.stopPoll();
       this.destroyCharts();

@@ -415,6 +415,7 @@
 .am-field:focus-within .am-label::before { background: var(--am-primary); transform: scale(1.3); }
 
 .am-hint { font-size: .75rem; color: var(--am-muted); }
+.am-hint--error { color: #b91c1c; }
 
 .am-checkbox-row {
   display: flex; align-items: center; gap: .55rem;
@@ -1525,3 +1526,5 @@
 :host-context([data-theme="dark"]) .ds-tile-n { color: #f1f5f9; }
 :host-context([data-theme="dark"]) .ds-tile-l { color: #a5b4c8; }
 /* === Fin du mode nuit généré === */
+
+:host-context([data-theme="dark"]) .am-hint--error { color: hsl(0, 74%, 70%); }
