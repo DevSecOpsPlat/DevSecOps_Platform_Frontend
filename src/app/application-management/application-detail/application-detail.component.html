@@ -11,7 +11,28 @@
       <div class="ad-id-top">
         <div class="ad-id-main">
           <span class="ad-hero-eyebrow">Application</span>
-          <h1 class="ad-hero-title">{{ app.name }}</h1>
+          <div class="ad-title-row" *ngIf="!renaming">
+            <h1 class="ad-hero-title">{{ app.name }}</h1>
+            <button type="button" class="ad-rename-btn" (click)="startRename()" title="Renommer l'application">
+              ✎ Renommer
+            </button>
+          </div>
+          <form class="ad-rename-form" *ngIf="renaming" (ngSubmit)="saveRename()">
+            <input class="ad-rename-input" name="appName" [(ngModel)]="nameDraft" maxlength="200"
+                   aria-label="Nom de l'application" autocomplete="off" #renameInput
+                   (keydown.escape)="cancelRename()" [disabled]="renameSaving" />
+            <button type="submit" class="ad-hero-btn ad-hero-btn--primary"
+                    [disabled]="renameSaving || !nameDraft.trim() || nameDraft.trim() === app.name">
+              {{ renameSaving ? 'Enregistrement…' : 'Enregistrer' }}
+            </button>
+            <button type="button" class="ad-hero-btn ad-hero-btn--ghost" (click)="cancelRename()" [disabled]="renameSaving">
+              Annuler
+            </button>
+          </form>
+          <p class="ad-rename-error" *ngIf="renameError">{{ renameError }}</p>
+          <p class="ad-rename-note" *ngIf="renaming">
+            Seul le nom affiché change : l'adresse publique et l'environnement déployé (<code>{{ app.slug }}</code>) restent identiques.
+          </p>
           <p class="ad-id-slugline" *ngIf="app.slug"><code>{{ app.slug }}</code></p>
           <p class="ad-id-desc" *ngIf="app.description">{{ app.description }}</p>
           <p class="ad-id-desc ad-id-desc--muted" *ngIf="!app.description">

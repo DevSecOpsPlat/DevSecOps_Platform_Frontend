@@ -1,5 +1,6 @@
 import { Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EMPTY, forkJoin, interval, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, switchMap, takeUntil, takeWhile, timeout } from 'rxjs/operators';
@@ -71,6 +72,7 @@ interface AlertNameAgg {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ServiceFormComponent,
     DatabaseFormComponent,
     DeploymentStatusComponent,
@@ -106,6 +108,12 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   deployError: string | null = null;
   syncingServiceId: string | null = null;
   customHostnameDraft = '';
+
+  /** Renommage de l'application (nom affiché ; le slug, donc l'adresse publique, ne change pas). */
+  renaming = false;
+  nameDraft = '';
+  renameSaving = false;
+  renameError: string | null = null;
   savingHostname = false;
   hostnameMessage: string | null = null;
   hostnameError: string | null = null;
@@ -357,6 +365,53 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   private syncApp(app: ManagedApp): void {
     this.app = app;
     this.appState.patch(app);
+  }
+
+  startRename(): void {
+    if (!this.app) return;
+    this.nameDraft = this.app.name;
+    this.renameError = null;
+    this.renaming = true;
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('.ad-rename-input');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  cancelRename(): void {
+    this.renaming = false;
+    this.renameError = null;
+  }
+
+  saveRename(): void {
+    const name = (this.nameDraft || '').trim();
+    if (!this.app || !name || this.renameSaving) return;
+    if (name === this.app.name) {
+      this.cancelRename();
+      return;
+    }
+    this.renameSaving = true;
+    this.renameError = null;
+    this.api.update(this.appId, {
+      name,
+      description: this.app.description,
+      customHostname: this.app.customHostname ?? null
+    }).subscribe({
+      next: (updated) => {
+        this.renameSaving = false;
+        this.renaming = false;
+        this.syncApp(updated);
+        try {
+          localStorage.setItem('envirotest-last-managed-app-name', updated.name);
+        } catch { /* stockage indisponible */ }
+        this.toastService.push('success', 'Application renommée', `Nouveau nom : « ${updated.name} ».`);
+      },
+      error: (e) => {
+        this.renameSaving = false;
+        this.renameError = e?.error?.message || "Impossible de renommer l'application.";
+      }
+    });
   }
 
   back(): void {
