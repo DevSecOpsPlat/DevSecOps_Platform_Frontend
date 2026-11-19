@@ -107,7 +107,7 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
           id: 'scan',
           label: 'Scan',
           items: [
-            { key: 'defectdojo', label: 'DefectDojo', path: 'defectdojo' },
+            { key: 'defectdojo', label: 'Vulnérabilités', path: 'defectdojo' },
             { key: 'quality-gate', label: 'Quality Gate', path: 'quality-gate' },
             { key: 'pipelines', label: 'Pipelines', path: 'pipelines', queryParams: { kind: 'SCAN' } },
             {
@@ -149,7 +149,7 @@ export class EnvirotestNavSidebarComponent implements OnInit, OnDestroy {
         id: 'scan',
         label: 'Scan',
         items: [
-          { key: 'defectdojo', label: 'DefectDojo', path: 'security-dashboard' },
+          { key: 'defectdojo', label: 'Vulnérabilités', path: 'security-dashboard' },
           { key: 'quality-gate', label: 'Quality Gate', path: 'quality-gate' },
           { key: 'sonarqube', label: 'Sonar', path: 'sonarqube' },
           { key: 'pipelines', label: 'Pipelines', path: 'pipelines' },
